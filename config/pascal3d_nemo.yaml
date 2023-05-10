@@ -1,0 +1,17 @@
+defaults:
+  - logger: wandb
+  - methods@method.nemo: nemo
+  - datasets@train_dataset: pascal3d
+  - datasets@test_dataset: pascal3d
+
+metrics:
+  - metricA
+  - metricB
+
+#training:
+#    random_seed: 0
+#    scale_iterations_per_epoch: 1.0
+
+#inference:
+#    random_seed: 0
+#    visualize_num_samples: 0

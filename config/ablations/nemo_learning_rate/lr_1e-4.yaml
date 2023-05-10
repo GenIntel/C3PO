@@ -1,0 +1,6 @@
+# @package _global_
+method:
+    nemo:
+        training:
+            optimizer:
+                lr: 0.0001

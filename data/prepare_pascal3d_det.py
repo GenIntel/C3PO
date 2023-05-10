@@ -9,15 +9,15 @@ import wget
 import pycocotools.mask
 from tqdm import tqdm
 
-from nemo.models.mesh_memory_map import MeshConverter
-from nemo.utils import direction_calculator
-from nemo.utils import get_abs_path
-from nemo.utils import load_config
-from nemo.utils import prepare_pascal3d_sample_det
-from nemo.utils.pascal3d_utils import CATEGORIES
-from nemo.utils.pascal3d_utils import MESH_LEN
+from od3d.models.mesh_memory_map import MeshConverter
+from od3d import direction_calculator
+from od3d import get_abs_path
+from od3d import load_config
+from od3d import prepare_pascal3d_sample_det
+from od3d.utils.pascal3d_utils import CATEGORIES
+from od3d.utils.pascal3d_utils import MESH_LEN
 
-from create_cuboid_mesh import create_meshes
+from od3d.datasets.create_cuboid_mesh import create_meshes
 
 mesh_para_names = [
     "azimuth",

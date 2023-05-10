@@ -1,6 +1,7 @@
 includes: config/datasets/ood_cv.yaml
 
 name: ood-cv_cls
+class_name: OOD_CV
 root_path: data/OOD_CV_NeMo_cls
 
 image_sizes:

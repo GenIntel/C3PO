@@ -38,59 +38,29 @@ Features
 Installation
 ------------
 
-Environment (manual setup)
+Environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. Create :code:`conda` environment:
-
+1. Install :code:`python venv`:
 .. code::
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install pip --upgrade
 
-   conda create -n nemo python=3.9
-   conda activate nemo
+2. Install :code:`OD3D`:
 
-2. Install :code:`PyTorch` (see `pytorch.org <https://pytorch.org>`_):
-
+   Local Code
 .. code::
-
-   conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 cudatoolkit=10.2 -c pytorch
-
-3. Install :code:`PyTorch3D` (see `github.com/facebookresearch/pytorch3d <https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md>`_):
-
-.. code::
-
-   conda install -c fvcore -c iopath -c conda-forge fvcore iopath
-   conda install -c bottler nvidiacub
-   conda install pytorch3d -c pytorch3d
-
-4. Install other dependencies:
-
-.. code::
-
-   conda install numpy matplotlib scipy scikit-image
-   conda install pillow
-   conda install -c conda-forge timm tqdm pyyaml transformers
-   pip install git+https://github.com/NVlabs/nvdiffrast/
-   pip install wget gdown BboxTools opencv-python xatlas pycocotools seaborn wandb
-
-5. Install NeMo:
-
-.. code::
-
    pip install -e .
+   :
 
-Environment (from `yml`)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-In case the previous method failed, setup the environment from a compiled list of packages:
-
+   Github Code
 .. code::
+   pip install nemo@git+https://github.com/limpbot/nemo
 
-   conda env create -f environment.yml
-   pip install git+https://github.com/NVlabs/nvdiffrast/
-   pip install -e .
-
-Data Preparation
+Datasets Setup
 ^^^^^^^^^^^^^^^^
+
 
 See `data/README </data>`_.
 

@@ -1,7 +1,7 @@
 includes: config/datasets/ood_cv.yaml
 
 name: ood-cv_det
-class_name: nemo.datasets.pascal3d_det.Pascal3DPlusDet
+class_name: OOD_CV_Det
 root_path: data/OOD_CV_NeMo_det
 
 image_sizes:

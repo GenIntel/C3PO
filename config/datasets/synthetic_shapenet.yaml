@@ -1,5 +1,5 @@
 name: synthetic_shapenet
-class_name: nemo.datasets.synthetic_shapenet.SyntheticShapeNet
+class_name: SyntheticShapeNet
 root_path: data/synthetic_shapenet
 
 shapenet_path: data/ShapeNetCore.v1

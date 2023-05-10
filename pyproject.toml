@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "OD3D"
+authors = [
+    {name = "Bla Bla", email = "blaa@bla.bla"},
+]
+description = "Neural Mesh, Render and Compare"
+readme = "README.rst"
+requires-python = ">=3.7"
+keywords = ["3D", "detection", "object"]
+license = {text = "BSD-3-Clause"}
+dependencies = [
+    "wget",
+    "opencv-python",
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "fvcore",
+    "iopath",
+    "pytorch3d@git+https://github.com/facebookresearch/pytorch3d",
+    "nvdiffrast@git+https://github.com/NVlabs/nvdiffrast",
+    "wandb",
+    "cython",
+    "pycocotools",
+    "bboxtools",
+    "scipy",
+    "scikit-image",
+    "gdown",
+    "typer",
+    "hydra-core"
+]
+
+dynamic = ["version"]
+
+#[project.optional-dependencies]
+
+[project.scripts]
+nemo = "nemo.cli._entry:main"

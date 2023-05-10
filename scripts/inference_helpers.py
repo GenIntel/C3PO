@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from tqdm import tqdm
 
-from nemo.utils import pose_error
+from od3d import pose_error
 
 
 def inference_3d_pose_estimation(

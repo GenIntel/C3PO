@@ -1,11 +1,8 @@
 import argparse
 import os
 
-from tqdm import tqdm
-import wget
-
-from nemo.utils import get_abs_path
-from nemo.utils import load_config
+from od3d import get_abs_path
+from od3d import load_config
 
 
 def parse_args():

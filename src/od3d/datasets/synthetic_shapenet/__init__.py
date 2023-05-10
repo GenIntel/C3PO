@@ -1,0 +1,1 @@
+from od3d.datasets.synthetic_shapenet.dataset import SyntheticShapeNet

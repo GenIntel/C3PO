@@ -4,16 +4,13 @@ import os
 
 import numpy as np
 import torch
-import torch.nn as nn
 import wandb
 
-from nemo.models.feature_banks import mask_remove_near
-from nemo.utils import construct_class_by_name
-from nemo.utils import load_config
-from nemo.utils import load_off
-from nemo.utils import save_src_files
-from nemo.utils import set_seed
-from nemo.utils import setup_logging
+from od3d.utils import construct_class_by_name
+from od3d.utils import load_config
+from od3d.utils import save_src_files
+from od3d.utils import set_seed
+from od3d.utils import setup_logging
 
 
 def parse_args():

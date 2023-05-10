@@ -5,12 +5,12 @@ import os
 import torch
 from inference_helpers import helper_func_by_task
 
-from nemo.utils import construct_class_by_name
-from nemo.utils import get_abs_path
-from nemo.utils import load_config
-from nemo.utils import save_src_files
-from nemo.utils import set_seed
-from nemo.utils import setup_logging
+from od3d import construct_class_by_name
+from od3d import get_abs_path
+from od3d import load_config
+from od3d import save_src_files
+from od3d import set_seed
+from od3d import setup_logging
 
 
 def parse_args():
