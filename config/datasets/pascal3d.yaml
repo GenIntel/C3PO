@@ -1,19 +1,24 @@
 name: pascal3d
-class_name: Pascal3DPlus
-root_path: data/PASCAL3D_NeMo
+class_name: Pascal3D
 
-pascal3d_raw_path: data/PASCAL3D+_release1.1
-pascal3d_raw_url: ftp://cs.stanford.edu/cs/cvgl/PASCAL3D+_release1.1.zip
-pascal3d_occ_raw_path: data/OccludedPASCAL3D
-pascal3d_occ_script_url: https://raw.githubusercontent.com/Angtian/OccludedPASCAL3D/master/download_FG.sh
-image_subsets_url: https://docs.google.com/uc?export=download&id=1NsoVXW8ngQCqTHHFSW8YYsCim9EjiXS7
-seg_data_url: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGlQMyl2_03gXDTQw3Qm
-seg_data_path: data/PASCAL3D_segmentation
-dtd_raw_path: data/dtd
-mesh_path: data/PASCAL3D+_release1.1/CAD_single
+url_pascal3d_raw: ftp://cs.stanford.edu/cs/cvgl/PASCAL3D+_release1.1.zip
+rpath_pascal3d_raw: PASCAL3D+_release1.1
+path_pascal3d_raw: ${platform.path_datasets}/${.rpath_pascal3d_raw}
+
+rpath_pascal3d_preproc: PASCAL3D_PreProc
+path_pascal3d_preproc: ${platform.path_datasets}/${.rpath_pascal3d_preproc}
+
+rpath_dtd_raw: DTD
+path_dtd_raw: ${platform.path_datasets}/${.rpath_dtd_raw}
+
+rpath_meshes: ${.rpath_pascal3d_preproc}/CAD_single
+path_meshes: ${platform.path_datasets}/${.rpath_meshes}
+
+url_pascal3d_seg: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGlQMyl2_03gXDTQw3Qm
+rpath_pascal3d_seg: PASCAL3D_Seg
+path_pascal3d_seg: ${platform.path_datasets}/${.rpath_pascal3d_seg}
 
 pad_texture: false
-single_mesh: true
 training_only: false
 evaluation_only: false
 augment_by_dist: false
@@ -41,10 +46,13 @@ image_sizes:
     tvmonitor: [480, 448]
 
 enable_cache: true
-subtypes: None
 weighted: true
 remove_no_bg: 8
-transforms:
-    - class_name: od3d.datasets.transforms.ToTensor
 
-sampler: None
+#transforms:
+#    - class_name: od3d.datasets.transforms.ToTensor
+#sampler: None
+
+# root_path: data/PASCAL3D_NeMo
+#seg_data_url: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGlQMyl2_03gXDTQw3Qm
+#seg_data_path: data/PASCAL3D_segmentation

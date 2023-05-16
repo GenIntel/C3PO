@@ -1,11 +1,11 @@
 import os
 import cv2
 import numpy as np
-from od3d.datasets.dataset import OD3DDataset
+from od3d.datasets.dataset import OD3D_Dataset
 from od3d.datasets.synthetic_shapenet.setup import download_shapenet, prepare_shapenet
 from omegaconf import DictConfig
 
-class SyntheticShapeNet(OD3DDataset):
+class SyntheticShapeNet(OD3D_Dataset):
     def __init__(self,
                  config: DictConfig,
                  # data_type,
@@ -22,7 +22,7 @@ class SyntheticShapeNet(OD3DDataset):
 
         self.root_path = self.config.root_path
         self.category = self.config.get("category", "all")
-        self.subtypes = self.config.subtypes if self.config.subtypes is not None else {}
+        self.subtypes = {}
         self.occ_level = self.config.occ_level
         self.enable_cache = self.config.enable_cache
         self.weighted = self.config.weighted

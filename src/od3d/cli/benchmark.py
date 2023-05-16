@@ -18,14 +18,14 @@ def multiple(benchmark: str = typer.Option('pascal3d_nemo', '-b', '--benchmark')
     initialize(version_base=None, config_path=config_dir_rel, job_name="test_app")
 
     if ablation is None:
-        cfgs = [compose(config_name=benchmark, overrides=[])]
+        cfgs = [compose(config_name=benchmark, overrides=["+platform=" + platform])]
     else:
         cfgs = []
         # create one config per ablation
         ablation_dir = ablations_root_dir.joinpath(ablation)
         for ablation_file_fpath in ablation_dir.iterdir():
             ablation_fpath_rel = str(ablation_file_fpath.relative_to(ablations_root_dir).with_suffix(''))
-            cfgs.append(compose(config_name=benchmark, overrides=["+ablations=" + ablation_fpath_rel]))
+            cfgs.append(compose(config_name=benchmark, overrides=["+ablations=" + ablation_fpath_rel, "+platform=" + platform]))
 
     # create one config per method
     methods_cfgs = []
@@ -43,15 +43,15 @@ def multiple(benchmark: str = typer.Option('pascal3d_nemo', '-b', '--benchmark')
 
     print(f"{len(methods_cfgs)} configs with single method.")
     for method_cfg in methods_cfgs:
-        if platform == 'local':
+        if method_cfg.platform.link == 'local':
             bench_single_method_local(method_cfg)
-        elif platform == 'local-separate-venv':
+        elif method_cfg.platform.link == 'local-separate-venv':
             bench_single_method_local_separate_venv(method_cfg)
-        elif platform == 'local-docker':
+        elif method_cfg.platform.link == 'local-docker':
             bench_single_method_local_docker(method_cfg)
-        elif platform == 'torque':
+        elif method_cfg.platform.link == 'torque':
             bench_single_method_torque(method_cfg)
-        elif platform == 'slurm':
+        elif method_cfg.platform.link == 'slurm':
             bench_single_method_slurm(method_cfg)
 
 @app.command()

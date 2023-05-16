@@ -1,0 +1,7 @@
+defaults:
+  - pascal3d
+
+subsets:
+  - train
+category:
+  - car

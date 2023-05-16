@@ -1,107 +1,232 @@
 import copy
 import os
-
+import logging
 import BboxTools as bbt
 import numpy as np
-import torch
+import pytorch3d.renderer
+import torch.nn
 import torchvision
 from PIL import Image
 import skimage
+import scipy.io
 
 from od3d.utils import construct_class_by_name
-from od3d.utils import get_abs_path
 from od3d.utils import load_off
-from od3d.utils.pascal3d_utils import CATEGORIES
-from od3d.datasets.dataset import OD3DDataset
+
+from od3d.datasets.dataset import OD3D_Dataset
 from od3d.datasets.pascal3d.setup import download_pascal3d, prepare_pascal3d
 from omegaconf import DictConfig
+from od3d.datasets.dtd import DTD
+from pathlib import Path
+import math
+import PIL.Image
+import cv2
+import torchvision.io
 
-class Pascal3DPlus(OD3DDataset):
+CATEGORIES = [
+    "aeroplane",
+    "bicycle",
+    "boat",
+    "bottle",
+    "bus",
+    "car",
+    "chair",
+    "diningtable",
+    "motorbike",
+    "sofa",
+    "train",
+    "tvmonitor",
+]
+
+SUBSETS = [
+    "train",
+    "val"
+]
+
+
+class Pascal3DFrame:
+    def __init__(self, fpath_annotation: Path, fpath_rgb: Path, path_meshes: Path):
+        self.device = "cuda:1"
+        self.dtype = torch.float32
+        self.rgb = torchvision.io.read_image(str(fpath_rgb)).to(self.device)
+        annotation = scipy.io.loadmat(fpath_annotation)
+
+        self.name = annotation['record']['filename'][0][0][0].split('.')[0]
+
+        objects = annotation['record']['objects'][0][0][0]
+        # assert len(objects) == 1
+        object = objects[0]
+        self.category = object['class'][0]
+
+        self.mesh_index = object['cad_index'][0][0] - 1
+        self.bbox = torch.from_numpy(object['bbox'][0]).to(device=self.device, dtype=self.dtype)
+        self.names_kpoints = list(object['anchors'][0][0].dtype.names)
+        self.kpoints = np.stack([object['anchors'][0][0][n]['location'][0][0][0] if object['anchors'][0][0][n]['status'] == 1 else np.array([0, 0]) for n in self.names_kpoints])
+        self.mask_kpoints_visible = np.array([True if object['anchors'][0][0][n]['status'] == 1 else False for n in self.names_kpoints])
+        self.mask_kpoints_visible = torch.from_numpy(self.mask_kpoints_visible).to(device=self.device)
+        self.width, self.height = self.rgb.shape[1:]
+        self.size = torch.Tensor([self.width, self.height]).to(device=self.device, dtype=self.dtype)
+        viewpoint = object['viewpoint']
+        self.azimuth = viewpoint['azimuth'][0][0][0][0] * math.pi / 180
+        self.elevation = viewpoint['elevation'][0][0][0][0] * math.pi / 180
+        self.distance = viewpoint['distance'][0][0][0][0]
+        focal = viewpoint['focal'][0][0][0][0]
+
+        self.theta = viewpoint['theta'][0][0][0][0] * math.pi / 180
+        principal = np.array([viewpoint['px'][0][0][0][0],
+                              viewpoint['py'][0][0][0][0]])
+        self.principal = torch.from_numpy(principal).to(device=self.device, dtype=self.dtype)
+        viewport = viewpoint['viewport'][0][0][0][0]
+
+        self.focal_length = torch.Tensor([viewpoint['focal'][0][0][0][0] * viewport,] ).to(device=self.device, dtype=self.dtype)
+        self.principal_point = torch.Tensor([viewpoint['px'][0][0][0][0], viewpoint['py'][0][0][0][0]]).to(device=self.device, dtype=self.dtype)
+        # self.K
+        self.cam_tform_obj = self.calc_cam_tform_obj(azimuth=self.azimuth, elevation=self.elevation, theta=self.theta, distance=self.distance)
+        cam_intr3x3 = np.array([[1. * viewport * focal, 0, principal[0]],
+                           [0, 1. * viewport * focal, principal[1]],
+                           [0, 0, 1.]])
+        self.cam_intr4x4 = np.hstack((cam_intr3x3, [[0], [0], [0]]))
+        self.cam_intr4x4 = np.vstack((self.cam_intr4x4, [0, 0, 0, 1]))
+        self.cam_intr4x4 = torch.from_numpy(self.cam_intr4x4).to(device=self.device, dtype=self.dtype)
+
+        self.cam_tform_obj = torch.Tensor(self.cam_tform_obj).to(self.device)
+        self.cam_proj_obj = torch.matmul(self.cam_intr4x4, self.cam_tform_obj)
+
+        self.fpath_mesh = path_meshes.joinpath(self.category, f"{(self.mesh_index + 1):02d}.off")
+
+        fpath_mesh_kpoints3d = path_meshes.joinpath(f"{self.category}.mat")
+        annotation_mesh3d = scipy.io.loadmat(fpath_mesh_kpoints3d)
+        kpoints3d = np.stack([annotation_mesh3d[self.category][n][0][self.mesh_index][0] for n in self.names_kpoints])
+        self.kpoints3d = torch.from_numpy(kpoints3d).to(device=self.device, dtype=self.dtype)
+    def visualize(self):
+
+        from od3d.cv.visual.draw import draw_pixels, draw_bbox
+        from od3d.cv.geometry.transform import proj3d2d
+        from od3d.cv.visual.render import render_mesh
+        from od3d.cv.visual.blend import blend_rgb
+        from od3d.cv.visual.show import show_img
+        from od3d.cv.visual.crop import crop
+
+        rgb_synthetic = render_mesh(fpath_mesh=self.fpath_mesh,
+                                    cam_tform_obj=self.cam_tform_obj,
+                                    cam_intr=self.cam_intr4x4, img_size=self.size)
+
+        logging.info(f"Frame name {self.name}")
+
+
+
+        #shift_uv = torch.Tensor([100, 100])
+        #tform2d_sim = self.Tensor([scale, ])
+        mix_real_with_synthetic = blend_rgb(self.rgb, rgb_synthetic)
+
+        W_out = 400
+        H_out = 200
+        distance = 5.
+        center = torch.LongTensor([500, 200]).to(device=self.device)
+        center = torch.Tensor([(self.bbox[0] + self.bbox[2]) / 2., (self.bbox[1] + self.bbox[3]) / 2.]).to(
+            device=self.device, dtype=self.dtype)
+        center = proj3d2d(pts3d=torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype), proj4x4=self.cam_proj_obj)[0]
+
+        scale = self.distance / distance
+        mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale)
+        show_img(mix_real_with_synthetic)
+
+        print(self.cam_proj_obj)
+        cam_crop_proj_obj = torch.matmul(cam_crop_tform_cam, self.cam_proj_obj)
+        pts2d_transf_proj = proj3d2d(pts3d=self.kpoints3d[self.mask_kpoints_visible], proj4x4=cam_crop_proj_obj)
+
+        mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, pts2d_transf_proj)
+        show_img(mix_real_with_synthetic)
+
+
+    def calc_cam_tform_obj(self, azimuth, elevation, theta, distance):
+        if distance == 0:
+            # return None
+            distance = 0.1
+
+        # camera center
+        C = np.zeros((3, 1))
+        C[0] = distance * math.cos(elevation) * math.sin(azimuth)
+        C[1] = -distance * math.cos(elevation) * math.cos(azimuth)
+        C[2] = distance * math.sin(elevation)
+
+        # rotate coordinate system by theta is equal to rotating the model by theta
+        azimuth = -azimuth
+        elevation = - (math.pi / 2 - elevation)
+
+        # rotation matrix
+        Rz = np.array([
+            [math.cos(azimuth), -math.sin(azimuth), 0],
+            [math.sin(azimuth), math.cos(azimuth), 0],
+            [0, 0, 1],
+        ])  # rotation by azimuth
+        Rx = np.array([
+            [1, 0, 0],
+            [0, math.cos(elevation), -math.sin(elevation)],
+            [0, math.sin(elevation), math.cos(elevation)],
+        ])  # rotation by elevation
+
+        R_rot = np.dot(Rx, Rz)
+        R = np.hstack((R_rot, np.dot(-R_rot, C)))
+        R = np.vstack((R, [0, 0, 0, 1]))
+
+        R_theta = np.array(
+            [[math.cos(self.theta), -math.sin(self.theta), 0, 0],
+             [math.sin(self.theta), math.cos(self.theta), 0, 0],
+             [0, 0, 1, 0],
+             [0, 0, 0, 1]])
+        R = np.dot(R_theta, R)
+
+        #T = R
+        T = np.eye(4)
+        T[0, :] = R[0, :]
+        T[1, :] = -R[1, :]
+        T[2, :] = -R[2, :]
+        return T
+
+
+class Pascal3D(OD3D_Dataset):
     def __init__(
         self,
         config: DictConfig,
-        #data_type,
-        #category,
-        #root_path,
-        #transforms,
-        #mesh_path,
-        #subtypes=None,
-        #occ_level=0,
-        #enable_cache=True,
-        #weighted=True,
-        #remove_no_bg=None,
-        #skip_kp=False,
-        #segmentation_masks=[],
-        # **kwargs,
     ):
         super().__init__(config=config)
-        self.data_type = self.config.get("data_type", None)
-        if self.data_type is None:
-            return
+        self.setup(self.config)
 
-        self.root_path = self.config.root_path
-        self.category = self.config.get("category", "all")
-        self.subtypes = self.config.subtypes if self.config.subtypes is not None else {}
-        self.occ_level = self.config.occ_level
-        self.enable_cache = self.config.enable_cache
-        self.weighted = self.config.weighted
-        self.remove_no_bg = self.config.remove_no_bg
-        self.skip_kp = self.config.get("skip_kp", False)
-        self.segmentation_masks = self.config.get("segmentation_masks", [])
-        self.mesh_path = self.config.mesh_path
-        self.transforms = torchvision.transforms.Compose(
-            [construct_class_by_name(**t) for t in self.config.transforms]
-        )
+        self.path = Path(self.config.path_pascal3d_raw)
+        self.path_meshes = self.path.joinpath("CAD")
+        self.subsets = self.config.get("subsets", SUBSETS)
+        self.categories = self.config.get("category", CATEGORIES)
+        self.frame_names = []
+        self.frame_rfpaths = []
+        for subset in self.subsets:
+            for category in self.categories:
+                fpath_frame_names_partial = self.path.joinpath("Image_sets", f"{category}_imagenet_{subset}.txt")
+                with fpath_frame_names_partial.open() as f:
+                    frame_names_partial = f.read().splitlines()
+                    frame_rfpaths_partial = [f"{category}_imagenet/{name}" for name in frame_names_partial]
+                    self.frame_rfpaths += frame_rfpaths_partial
+                    self.frame_names += frame_names_partial
 
-        if self.category == 'all':
-            self.category = CATEGORIES
-        if not isinstance(self.category, list):
-            self.category = [self.category]
-        self.multi_cate = len(self.category) > 1
+    @staticmethod
+    def setup(config):
+        DTD.setup(config)
+        download_pascal3d(config)
+        # prepare_pascal3d(config)
 
-        self.image_path = os.path.join(self.root_path, self.data_type, "images")
-        self.annotation_path = os.path.join(self.root_path, self.data_type, "annotations")
-        self.list_path = os.path.join(self.root_path, self.data_type, "lists")
+    def __len__(self):
+        return len(self.frame_names)
 
+    def __getitem__(self, item):
+        item = item
+        fpath_annotation = self.path.joinpath("Annotations", f"{self.frame_rfpaths[item]}.mat")
+        fpath_rgb = self.path.joinpath("Images", f"{self.frame_rfpaths[item]}.JPEG")
+        frame = Pascal3DFrame(fpath_annotation=fpath_annotation, fpath_rgb=fpath_rgb, path_meshes=self.path_meshes)
+        return frame
 
-        num_verts = []
-        for cate in self.category:
-            num_verts.append(load_off(os.path.join(self.mesh_path, cate, '01.off'))[0].shape[0])
-        self.max_n = max(num_verts)
-
-        file_list = []
-        for cate in self.category:
-            if self.occ_level == 0:
-                _list_path = os.path.join(self.list_path, cate)
-            else:
-                _list_path = os.path.join(self.list_path, f"{cate}FGL{self.occ_level}_BGL{self.occ_level}")
-
-            if cate not in self.subtypes:
-                self.subtypes[cate] = [t.split(".")[0] for t in os.listdir(_list_path)]
-
-            _file_list = sum(
-                (
-                    [
-                        os.path.join(cate if self.occ_level == 0 else f"{cate}FGL{self.occ_level}_BGL{self.occ_level}", l.strip())
-                        for l in open(
-                            os.path.join(_list_path, subtype_ + ".txt")
-                        ).readlines()
-                    ]
-                    for subtype_ in self.subtypes[cate]
-                ),
-                [],
-            )
-            file_list += [(f, cate) for f in _file_list]
-        # OOD-CV seems to have duplicate samples -- remove duplicates from file list
-        self.file_list = list(set(file_list))
-        self.cache = {}
-
-        self.filter()
-
-    def setup(self):
-        download_pascal3d(self.config)
-        prepare_pascal3d(self.config)
-
+    def visualize(self, item: int):
+        frame: Pascal3DFrame = self.__getitem__(item=item)
+        frame.visualize()
     def filter(self):
         if self.remove_no_bg is not None:
             filtered_file_list = []
@@ -123,89 +248,6 @@ class Pascal3DPlus(OD3DDataset):
                 filtered_file_list.append(self.file_list[i])
             self.file_list = filtered_file_list
 
-    def __len__(self):
-        return len(self.file_list)
-
-    def __getitem__(self, item):
-        name_img, cate = self.file_list[item]
-
-        if self.enable_cache and name_img in self.cache.keys():
-            sample = copy.deepcopy(self.cache[name_img])
-        else:
-            img = Image.open(os.path.join(self.image_path, f"{name_img}.JPEG"))
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-            annotation_file = np.load(
-                os.path.join(self.annotation_path, name_img.split(".")[0] + ".npz"),
-                allow_pickle=True,
-            )
-
-            if "cropped_kp_list" in annotation_file and "visible" in annotation_file:
-                kp = annotation_file["cropped_kp_list"]
-                iskpvisible = annotation_file["visible"] == 1
-
-                if self.weighted:
-                    iskpvisible = iskpvisible * annotation_file["kp_weights"]
-
-                iskpvisible = np.logical_and(
-                    iskpvisible, np.all(kp >= np.zeros_like(kp), axis=1)
-                )
-                iskpvisible = np.logical_and(
-                    iskpvisible, np.all(kp < np.array([img.size[::-1]]), axis=1)
-                )
-
-                kp = np.max([np.zeros_like(kp), kp], axis=0)
-                kp = np.min(
-                    [np.ones_like(kp) * (np.array([img.size[::-1]]) - 1), kp], axis=0
-                )
-            else:
-                kp = np.zeros((100, 2), dtype=np.float32)
-                iskpvisible = np.zeros((100,), dtype=np.int32)
-
-            this_name = name_img.split(".")[0]
-
-            try:
-                box_obj = bbt.from_numpy(annotation_file["box_obj"])
-                obj_mask = np.zeros(box_obj.boundary, dtype=np.float32)
-                box_obj.assign(obj_mask, 1)
-            except KeyboardInterrupt:
-                obj_mask = np.zeros((img.size[1], img.size[0]))
-
-            label = 0 if len(self.category) == 0 else self.category.index(cate)
-            pad_size = self.max_n - kp.shape[0]
-            kp = np.pad(kp, pad_width=((0, pad_size), (0, 0)), mode='constant', constant_values=0)
-            iskpvisible = np.pad(iskpvisible, pad_width=(0, pad_size), mode='constant', constant_values=False)
-            index = np.array([self.max_n * label + k for k in range(self.max_n)])
-
-            sample = {
-                "this_name": this_name,
-                "cad_index": int(annotation_file["cad_index"]),
-                "azimuth": float(annotation_file["azimuth"]),
-                "elevation": float(annotation_file["elevation"]),
-                "theta": float(annotation_file["theta"]),
-                "distance": 5.0,
-                "bbox": annotation_file["box_obj"],
-                "obj_mask": obj_mask,
-                "img": img,
-                "original_img": np.array(img),
-                "label": label,
-                "index": index,
-            }
-            if 'amodal' in self.segmentation_masks:
-                sample['amodal_mask'] = annotation_file['amodal_mask']
-            if 'inmodal' in self.segmentation_masks:
-                sample['inmodal_mask'] = annotation_file['inmodal_mask']
-            if not self.skip_kp:
-                sample['kp'] = kp.astype(np.float32)
-                sample['kpvis'] = iskpvisible.astype(bool)
-
-            if self.enable_cache:
-                self.cache[name_img] = copy.deepcopy(sample)
-
-        if self.transforms:
-            sample = self.transforms(sample)
-
-        return sample
 
     def debug(self, item, save_dir=""):
         sample = self.__getitem__(item)

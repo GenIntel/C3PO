@@ -38,7 +38,6 @@ def prepare_pascal3d_sample(
     img_name,
     img_path,
     anno_path,
-    occ_level,
     save_image_path,
     save_annotation_path,
     out_shape,
@@ -351,22 +350,12 @@ def prepare_pascal3d_sample_det(
     img_name,
     img_path,
     anno_path,
-    occ_level,
     save_image_path,
     save_annotation_path,
     out_shape,
-    occ_path=None,
     prepare_mode="first",
-    augment_by_dist=False,
-    texture_filenames=None,
     texture_path=None,
-    single_mesh=True,
-    mesh_manager=None,
-    direction_dicts=None,
     obj_ids=None,
-    extra_anno=None,
-    seg_mask_path=None,
-    center_and_resize=True
 ):
     """
     Prepare a sample for training and validation.

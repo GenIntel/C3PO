@@ -7,9 +7,20 @@ max_group: 512
 down_sample_rate: 8
 
 transforms:
-    - class_name: nemo.datasets.pascal3d.Normalize
+    - class_name: od3d.datasets.pascal3d.Normalize
 
 training:
+    batch_size: 27 # 108 #
+    workers: 8
+    total_epochs: 10 # 800
+    log_interval: 1
+    ckpt_interval: 10 # 200
+    visualize_training_data: false
+    remove_no_bg: 8
+
+    random_seed: 0
+    scale_iterations_per_epoch: 1.0
+
     separate_bank: false
     distance_thr: 48
     weight_noise: 0.005
@@ -30,6 +41,58 @@ training:
         gamma: 0.2
 
 inference:
+    random_seed: 0
+    visualize_num_samples: 0
+
+    loss: od3d.models.solve_pose.loss_fg_bg
+
+    search_translation: false
+    optimize_translation: false
+
+    px_sample:
+        min: 0.0
+        max: 0.0
+        num: 1
+    py_sample:
+        min: 0.0
+        max: 0.0
+        num: 1
+    azim_sample:
+        min_pi: 0.0
+        max_pi: 2.0
+        num: 12
+    elev_sample:
+        min_pi: -0.1667
+        max_pi: 0.3333
+        num: 4
+    theta_sample:
+        min_pi: -0.1667
+        max_pi: 0.1667
+        num: 3
+    dist_sample:
+        min: 4.0
+        max: 6.0
+        num: 3
+
+    min_distance: 2
+    pre_rendering_thr: 80
+    blur_radius: 0.0
+    inter_mode: bilinear
+    epochs: 300
+    translation_scale: 0.1
+
+    optimizer:
+        class_name: torch.optim.Adam
+        lr: 0.05
+        betas:
+            - 0.4
+            - 0.6
+
+    scheduler:
+        class_name: torch.optim.lr_scheduler.ExponentialLR
+        gamma: 0.2
+
+
     cameras:
         class_name: pytorch3d.renderer.OpenGLPerspectiveCameras
         fov: 12.0
@@ -44,7 +107,7 @@ inference:
         class_name: pytorch3d.renderer.MeshRasterizer
 
 backbone:
-    class_name: nemo.models.keypoint_representation_net.NetE2E
+    class_name: od3d.models.keypoint_representation_net.NetE2E
     net_type: resnetext
     local_size:
         - 1
@@ -56,7 +119,7 @@ backbone:
     n_noise_points: 5
 
 memory_bank:
-    class_name: nemo.models.feature_banks.NearestMemoryManager
+    class_name: od3d.models.feature_banks.NearestMemoryManager
     input_size: 128
     K: 1
     momentum: 0.96

@@ -56,7 +56,9 @@ Environment
 
    Github Code
 .. code::
-   pip install nemo@git+https://github.com/limpbot/nemo
+    pip install torch
+    FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+    pip install nemo@git+https://github.com/limpbot/nemo
 
 Datasets Setup
 ^^^^^^^^^^^^^^^^

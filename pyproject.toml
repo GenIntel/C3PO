@@ -30,7 +30,8 @@ dependencies = [
     "scikit-image",
     "gdown",
     "typer",
-    "hydra-core"
+    "hydra-core",
+    "plotly"
 ]
 
 dynamic = ["version"]
@@ -38,4 +39,4 @@ dynamic = ["version"]
 #[project.optional-dependencies]
 
 [project.scripts]
-nemo = "nemo.cli._entry:main"
+od3d = "od3d.cli._entry:main"

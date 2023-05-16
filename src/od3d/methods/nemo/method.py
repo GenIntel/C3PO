@@ -1,7 +1,13 @@
 
 from od3d.methods.method import OD3DMethod
+from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
 
+from torch.utils.data import RandomSampler
+import logging
+import torch
+import numpy as np
+import wandb
 class NeMo(OD3DMethod):
     def __init__(
         self,
@@ -12,14 +18,12 @@ class NeMo(OD3DMethod):
     def setup(self):
         pass
 
-    def train(self):
+    def train(self, train_dataset: OD3D_Dataset):
         cfg = self.config
-        dataset_kwargs = {"data_type": "train", "category": cfg.args.cate}
-        train_dataset = construct_class_by_name(**cfg.dataset, **dataset_kwargs)
-        if cfg.dataset.sampler is not None:
-            train_dataset_sampler = construct_class_by_name(
-                **cfg.dataset.sampler, dataset=train_dataset, rank=0, num_replicas=1,
-                seed=cfg.training.random_seed)
+        # dataset_kwargs = {"data_type": "train", "category": cfg.args.cate}
+        # train_dataset = construct_class_by_name(**cfg.dataset, **dataset_kwargs)
+        if train_dataset.config.sampler is not None:
+            train_dataset_sampler = RandomSampler(train_dataset, replacement=True, num_samples=int(1e10))
             shuffle = False
         else:
             train_dataset_sampler = None
@@ -70,3 +74,23 @@ class NeMo(OD3DMethod):
 
     def test(self):
         pass
+
+
+    """
+    # single_mesh: true
+    
+        mesh_d = "single" if config.single_mesh else "multi"
+    save_mesh_path = path_pascal3d_raw.joinpath(f"CAD_{mesh_d}")
+    if os.path.isdir(save_mesh_path):
+        print(f"Found {mesh_d} meshes at {save_mesh_path}")
+    else:
+        print(f"Generating {mesh_d} meshes at {save_mesh_path}")
+        create_meshes(
+            mesh_d,
+            path_pascal3d_raw.joinpath("CAD"),
+            path_pascal3d_raw.joinpath(f"CAD_{mesh_d}"),
+            number_vertices=1000,
+            linear_coverage=0.99,
+        )
+    
+    """

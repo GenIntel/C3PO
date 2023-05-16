@@ -10,11 +10,11 @@ from od3d.utils import construct_class_by_name
 from od3d.utils import get_abs_path
 from od3d.utils import load_off
 from od3d.utils.pascal3d_utils import CATEGORIES, CATEGORIES_OODCV
-from od3d.datasets.dataset import OD3DDataset
+from od3d.datasets.dataset import OD3D_Dataset
 from od3d.datasets.pascal3d_det.setup import prepare_pascal3d, download_pascal3d
 from omegaconf import DictConfig
 
-class Pascal3DPlusDet(OD3DDataset):
+class Pascal3DPlusDet(OD3D_Dataset):
     def __init__(
         self,
         config: DictConfig,
@@ -33,13 +33,14 @@ class Pascal3DPlusDet(OD3DDataset):
         #**kwargs,
     ):
         super().__init__(config=config)
+        self.setup()
         self.data_type = self.config.get("data_type", None)
         if self.data_type is None:
             return
 
         self.root_path = self.config.root_path
         self.category = self.config.get("category", "all")
-        self.subtypes = self.config.subtypes if self.config.subtypes is not None else {}
+        self.subtypes = {}
         self.occ_level = self.config.occ_level
         self.enable_cache = self.config.enable_cache
         self.weighted = self.config.weighted

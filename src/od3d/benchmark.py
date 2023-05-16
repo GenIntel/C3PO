@@ -1,32 +1,28 @@
 from omegaconf import DictConfig
 import wandb
-from od3d.datasets.dataset import OD3DDataset
+from od3d.datasets.dataset import OD3D_Dataset
 from od3d.methods.method import OD3DMethod
 from pathlib import Path
 import datetime
 
 print(dir(datetime))
 
-def bench_single_method_local(cfg: DictConfig):
+def bench_single_method_local(config: DictConfig):
 
     # 1. setup logger
     now = datetime.datetime.now()
     run_name = now.strftime("%m-%d_%H-%M-%S")
-    logging_dir = Path(cfg.logger.local_dir).joinpath(run_name)
+    logging_dir = Path(config.logger.local_dir).joinpath(run_name)
     logging_dir.mkdir(parents=True)
-    if cfg.logger.use_wandb:
-        wandb.init(project=cfg.logger.wandb_project_name, config=cfg, dir=Path(cfg.logger.local_dir), name=run_name)
+    if config.logger.use_wandb:
+        wandb.init(project=config.logger.wandb_project_name, config=config, dir=Path(config.logger.local_dir), name=run_name)
 
     # 2. setup datasets
-    print(cfg.test_dataset)
-    dataset_test = OD3DDataset.subclasses[cfg.test_dataset.class_name](cfg.test_dataset)
-    dataset_test.setup()
-    dataset_train = OD3DDataset.subclasses[cfg.train_dataset.class_name](cfg.train_dataset)
-    dataset_train.setup()
+    dataset_test = OD3D_Dataset.subclasses[config.test_dataset.class_name](config.test_dataset)
+    dataset_train = OD3D_Dataset.subclasses[config.train_dataset.class_name](config.train_dataset)
 
     # 3. setup method
-    method = OD3DMethod.subclasses[cfg.method.class_name](cfg.method)
-    method.setup()
+    method = OD3DMethod.subclasses[config.method.class_name](config.method)
 
     # 4. train method
     method.train(dataset_train)

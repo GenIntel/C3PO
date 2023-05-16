@@ -1,9 +1,9 @@
 
-from od3d.datasets.dataset import OD3DDataset
+from od3d.datasets.dataset import OD3D_Dataset
 from od3d.datasets.ood_cv_det.setup import download_ood_cv, prepare_ood_cv
 from omegaconf import DictConfig
 
-class OOD_CV_Det(OD3DDataset):
+class OOD_CV_Det(OD3D_Dataset):
     def __init__(
         self,
         config: DictConfig

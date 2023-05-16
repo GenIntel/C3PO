@@ -1,8 +1,6 @@
-import argparse
+import logging
 import multiprocessing
 import os
-import ssl
-import sys
 
 import numpy as np
 import scipy.io as sio
@@ -16,7 +14,10 @@ from od3d.utils import prepare_pascal3d_sample
 from od3d.utils.pascal3d_utils import CATEGORIES
 from od3d.utils.pascal3d_utils import MESH_LEN
 
-from od3d.datasets.create_cuboid_mesh import create_meshes
+# from od3d.datasets.create_cuboid_mesh import create_meshes
+from omegaconf import DictConfig
+from pathlib import Path
+import od3d.io
 
 mesh_para_names = [
     "azimuth",
@@ -51,72 +52,37 @@ def rle_to_mask(rle):
     return pycocotools.mask.decode(compressed_rle).astype(np.uint8)
 
 
-def download_pascal3d(cfg):
-    pascal3d_raw_path = cfg.pascal3d_raw_path
-    pascal3d_occ_raw_path = cfg.pascal3d_occ_raw_path
-    dtd_raw_path = cfg.dtd_raw_path
+def download_pascal3d(config: DictConfig):
+    path_pascal3d_raw = Path(config.path_pascal3d_raw)
 
-    if os.path.isdir(pascal3d_raw_path):
-        print(f"Found Pascal3D+ dataset at {pascal3d_raw_path}")
+    if path_pascal3d_raw.exists():
+        logging.info(f"Found Pascal3D+ dataset at {path_pascal3d_raw}")
     else:
-        print(f"Downloading Pascal3D+ dataset at {pascal3d_raw_path}")
-        wget.download(cfg.pascal3d_raw_url)
-        os.system("unzip PASCAL3D+_release1.1.zip")
-        os.system("rm PASCAL3D+_release1.1.zip")
+        logging.info(f"Downloading Pascal3D+ dataset at {path_pascal3d_raw}")
+        fpath = path_pascal3d_raw.joinpath("pascal3d.zip")
+        od3d.io.download(url=config.url_pascal3d_raw, fpath=fpath)
+        od3d.io.unzip(fpath=fpath, dst=fpath.parent)
+        od3d.io.move_dir(src=fpath.parent.joinpath(Path(config.url_pascal3d_raw).with_suffix("").name), dst=fpath.parent)
 
-    if not os.path.isdir(os.path.join(pascal3d_raw_path, "Image_subsets")):
-        ssl._create_default_https_context = ssl._create_unverified_context
-        wget.download(cfg.image_subsets_url, "Image_subsets.zip")
-        os.system("unzip Image_subsets.zip")
-        os.system("rm Image_subsets.zip")
-        os.system(f"mv Image_subsets {pascal3d_raw_path}")
-
-    if max(cfg.occ_levels.train) == 0 and max(cfg.occ_levels.val) == 0:
-        print("Skipping OccludedPASCAL3D+")
-    elif os.path.isdir(pascal3d_occ_raw_path):
-        print(f"Found OccludedPascal3D+ dataset at {pascal3d_occ_raw_path}")
+    """
+    path_pascal3d_seg = Path(config.path_pascal3d_seg)
+    if path_pascal3d_seg.exists():
+        logging.info(f"Found Pascal3D+ segmentation dataset at {path_pascal3d_seg}")
     else:
-        os.makedirs(pascal3d_occ_raw_path, exist_ok=True)
-        os.chdir(pascal3d_occ_raw_path)
-        print(f"Downloading OccludedPascal3D+ dataset at {pascal3d_occ_raw_path}")
-        wget.download(cfg.pascal3d_occ_script_url)
-        os.system("chmod +x download_FG.sh")
-        os.system("sh download_FG.sh")
-        os.chdir("..")
+        logging.info(f"Downloading Pascal3D+ segmentation dataset at {path_pascal3d_seg}")
+        fpath = path_pascal3d_seg.joinpath("pascal3d_seg.zip")
+        od3d.io.download(url=config.url_pascal3d_seg, fpath=fpath)
+        od3d.io.unzip(fpath, fpath.parent)
 
-    if not cfg.pad_texture:
-        print("Skipping Describable Textures Dataset")
-    elif os.path.isdir(dtd_raw_path):
-        print(f"Found Decribable Textures Dataset at {dtd_raw_path}")
-    else:
-        wget.download(
-            "https://www.robots.ox.ac.uk/~vgg/data/dtd/download/dtd-r1.0.1.tar.gz"
-        )
-        os.system("tar -xf dtd-r1.0.1.tar.gz")
-        os.system("rm dtd-r1.0.1.tar.gz")
-
-    mesh_d = "single" if cfg.single_mesh else "multi"
-    save_mesh_path = os.path.join(pascal3d_raw_path, f"CAD_{mesh_d}")
-    if os.path.isdir(save_mesh_path):
-        print(f"Found {mesh_d} meshes at {save_mesh_path}")
-    else:
-        print(f"Generating {mesh_d} meshes at {save_mesh_path}")
-        create_meshes(
-            mesh_d,
-            os.path.join(pascal3d_raw_path, "CAD"),
-            os.path.join(pascal3d_raw_path, f"CAD_{mesh_d}"),
-            number_vertices=1000,
-            linear_coverage=0.99,
-        )
-
-    if hasattr(cfg, 'segmentation_masks') and len(getattr(cfg, 'segmentation_masks')) > 0:
-        seg_data_path = cfg.seg_data_path
+    
+    if hasattr(config, 'segmentation_masks') and len(getattr(config, 'segmentation_masks')) > 0:
+        seg_data_path = config.seg_data_path
         if os.path.isdir(seg_data_path):
             print(f"Found segmentation data at {seg_data_path}")
         else:
             print(f"Generating segmentation data at {seg_data_path}")
-            os.system(f'gdown {cfg.seg_data_url}')
-            gdown.download(cfg.seg_data_url, output="Occluded_Vehicles.zip", fuzzy=True)
+            os.system(f'gdown {config.seg_data_url}')
+            gdown.download(config.seg_data_url, output="Occluded_Vehicles.zip", fuzzy=True)
             os.system('unzip Occluded_Vehicles.zip')
             os.system('rm Occluded_Vehicles.zip')
 
@@ -163,7 +129,7 @@ def download_pascal3d(cfg):
                             continue
     else:
         print("Skipping segmentation data")
-
+    """
 
 def get_target_distances():
     ranges = np.linspace(4.0, 32.0, num=15)
@@ -268,7 +234,6 @@ def worker(params):
     os.makedirs(save_list_path, exist_ok=True)
 
     list_dir = os.path.join(pascal3d_raw_path, "Image_sets")
-    pkl_dir = os.path.join(pascal3d_raw_path, "Image_subsets")
     anno_dir = os.path.join(pascal3d_raw_path, "Annotations", f"{cate}_imagenet")
     if occ == 0:
         img_dir = os.path.join(pascal3d_raw_path, "Images", f"{cate}_imagenet")
@@ -300,6 +265,7 @@ def worker(params):
         else:
             seg_mask_path=None
 
+
         prepared_sample_names = prepare_pascal3d_sample(
             cate,
             img_name,
@@ -309,9 +275,6 @@ def worker(params):
             save_image_path=save_image_path,
             save_annotation_path=save_annotation_path,
             out_shape=out_shape,
-            occ_path=None
-            if occ == 0
-            else os.path.join(occ_mask_dir, f"{img_name}.npz"),
             prepare_mode=cfg.prepare_mode,
             augment_by_dist=(set_type == "train" and cfg.augment_by_dist),
             texture_filenames=dtd_filenames,
@@ -323,6 +286,7 @@ def worker(params):
             center_and_resize=cfg.center_and_resize,
             skip_3d_anno=cfg.skip_3d_anno
         )
+
         if prepared_sample_names is None:
             num_errors += 1
             continue

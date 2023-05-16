@@ -49,10 +49,12 @@ def rle_to_mask(rle):
     return pycocotools.mask.decode(compressed_rle).astype(np.uint8)
 
 
+
 def download_pascal3d(cfg):
     pascal3d_raw_path = cfg.pascal3d_raw_path
     pascal3d_occ_raw_path = cfg.pascal3d_occ_raw_path
     dtd_raw_path = cfg.dtd_raw_path
+
 
     if os.path.isdir(pascal3d_raw_path):
         print(f"Found Pascal3D+ dataset at {pascal3d_raw_path}")
@@ -61,13 +63,6 @@ def download_pascal3d(cfg):
         wget.download(cfg.pascal3d_raw_url)
         os.system("unzip PASCAL3D+_release1.1.zip")
         os.system("rm PASCAL3D+_release1.1.zip")
-
-    if not os.path.isdir(os.path.join(pascal3d_raw_path, "Image_subsets")):
-        ssl._create_default_https_context = ssl._create_unverified_context
-        wget.download(cfg.image_subsets_url, "Image_subsets.zip")
-        os.system("unzip Image_subsets.zip")
-        os.system("rm Image_subsets.zip")
-        os.system("mv Image_subsets PASCAL3D+_release1.1")
 
     if max(cfg.occ_levels.train) == 0 and max(cfg.occ_levels.val) == 0:
         print("Skipping OccludedPASCAL3D+")
