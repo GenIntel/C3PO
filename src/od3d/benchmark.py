@@ -9,11 +9,14 @@ import datetime
 
 print(dir(datetime))
 
+def get_timestamp_as_string():
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%m-%d_%H-%M-%S")
+    return timestamp
 def bench_single_method_local(config: DictConfig):
 
     # 1. setup logger
-    now = datetime.datetime.now()
-    run_name = now.strftime("%m-%d_%H-%M-%S")
+    run_name = get_timestamp_as_string()
     logging_dir = Path(config.logger.local_dir).joinpath(run_name)
     logging_dir.mkdir(parents=True)
     if config.logger.use_wandb:
@@ -68,8 +71,9 @@ def bench_single_method_torque(cfg: DictConfig):
         ram = "10gb"
         feat_cuda_min = "nvidiaMinCC75"
         walltime = "24:00:00"
+        timestamp = get_timestamp_as_string()
         script_as_string = f'''#!/bin/bash
-#PBS -N bench123
+#PBS -N {timestamp}_{cfg.test_dataset.name}_{cfg.method.name}
 #PBS -S /bin/bash
 #PBS -l nodes={node_count}:ppn={cpu_count}:gpus={gpu_count}:{feat_cuda_min},mem={ram},walltime={walltime}
 #PBS -q default-cpu
@@ -80,9 +84,25 @@ def bench_single_method_torque(cfg: DictConfig):
 # For interactive jobs: #PBS -I
 # For array jobs: #PBS -t START-END[%SIMULTANEOUS]
 
-cat "bench123" > /tmp/dummy.txt
-sleep 10
-echo "Hello World"
+PATH=${{PATH}}:/scratch/sommerl/cudas/cuda-11.7/bin
+LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:/scratch/sommerl/cudas/cuda-11.7/lib64
+CUDA_HOME=/scratch/sommerl/cudas/cuda-11.7
+export PATH
+export LD_LIBRARY_PATH
+export CUDA_HOME
+
+echo PATH=${{PATH}}
+echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
+echo CUDA_HOME=${{CUDA_HOME}}
+
+echo Working directory is \n: $(pwd)
+cd ~
+echo Working directory is \n: $(pwd)
+
+PYTHONUNBUFFERED=1 
+CUDA_VISIBLE_DEVICES=1
+# git clone {cfg.platform.url_od3d} 
+
 exit 0
         '''
         rsh.write(script_as_string)
@@ -90,7 +110,7 @@ exit 0
     subprocess.run(f'ssh torque "qsub {tmp_script_fpath}"', capture_output=True, shell=True)
 
     #f'scp {tmp_script_fpath} torque:{Path(cfg.platform.path_exps).joinpath(tmp_script_fpath)}'
-
+    # FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
     raise NotImplementedError
 
 def bench_single_method_slurm(cfg: DictConfig):
