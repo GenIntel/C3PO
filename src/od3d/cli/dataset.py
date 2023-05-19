@@ -27,8 +27,8 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
 
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=5, shuffle=False, collate_fn=dataset.collate_fn)
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=dataset.collate_fn)
     logging.info(f"Dataset contains {len(dataset)} frames.")
     for batch in iter(dataloader):
-        batch[0].visualize()
+        batch.visualize()
         # dataset.visualize(i)

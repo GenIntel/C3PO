@@ -284,6 +284,10 @@ class Pascal3D(OD3D_Dataset):
         frame = Pascal3DFrame(fpath_annotation=fpath_annotation, fpath_rgb=fpath_rgb, path_meshes=self.path_meshes, fpath_txtr=fpath_txtr)
         return frame
 
+    @staticmethod
+    def collate_fn(bla):
+        frames = Pascal3DFrames(bla)
+        return frames
     def visualize(self, item: int):
         frame: Pascal3DFrame = self.__getitem__(item=item)
         frame.visualize()
@@ -331,3 +335,32 @@ class Pascal3D(OD3D_Dataset):
         Image.fromarray(gray_img).save(
             os.path.join(save_dir, f'debug_{sample["this_name"].replace("/", "_")}.png')
         )
+
+class Pascal3DFrames:
+    def __init__(self, frames: list[Pascal3DFrame]):
+        frame0 = frames[0]
+        self.dtype = frame0.dtype
+        self.device = frame0.device
+        self.rgb = torch.stack([frame.rgb for frame in frames], dim=0)
+        self.mask = torch.stack([frame.mask for frame in frames], dim=0)
+        self.depth = torch.stack([frame.depth for frame in frames], dim=0)
+        self.cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0)
+        self.cam_proj4x4_obj = torch.stack([frame.cam_proj4x4_obj for frame in frames], dim=0)
+        self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0)
+        self.kpts3d = torch.stack([frame.kpts3d for frame in frames], dim=0)
+        self.kpts2d = torch.stack([frame.kpts2d for frame in frames], dim=0)
+        self.kpts3d_vsbl = torch.stack([frame.kpts3d_vsbl for frame in frames], dim=0)
+        self.kpts2d_annot = torch.stack([frame.kpts2d_annot for frame in frames], dim=0)
+        self.kpts2d_annot_vsbl = torch.stack([frame.kpts2d_annot_vsbl for frame in frames], dim=0)
+
+    def visualize(self):
+        pts3d = torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype)
+        mix_real_with_synthetic = blend_rgb(self.rgb[0], self.mask[0])
+
+        mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
+                                              proj3d2d(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),
+                                                       proj4x4=self.cam_proj4x4_obj[0]), colors=(0, 255, 0))
+        mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, self.kpts2d_annot[0, self.kpts2d_annot_vsbl[0]],
+                                              colors=(0, 0, 255), radius_in=2, radius_out=4)
+
+        show_img(mix_real_with_synthetic)
