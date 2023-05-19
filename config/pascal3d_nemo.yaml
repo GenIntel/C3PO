@@ -3,7 +3,7 @@ defaults:
   - methods@method.nemo: nemo
   - datasets@train_dataset: pascal3d_train_car
   - datasets@test_dataset: pascal3d_test_car
-  - platform: roycoffee
+  - platform: local
 
 metrics:
   - metricA

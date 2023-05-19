@@ -8,6 +8,8 @@ import zipfile
 import shutil
 import os
 import gdown
+from hydra import compose, initialize
+
 def reporthook(count, block_size, total_size):
     global start_time
     if count == 0:
@@ -48,3 +50,13 @@ def move_dir(src: Path, dst: Path):
     for _fpath in src.iterdir():
         shutil.move(_fpath, dst)
     shutil.rmtree(src)
+
+
+def load_config(benchmark="defaults", platform="local", ablation=None):
+    config_dir_rel = "../../config"
+    with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):
+        if ablation is None:
+            cfg = compose(config_name=benchmark, overrides=["platform=" + platform])
+        else:
+            cfg = compose(config_name=benchmark, overrides=["ablations=" + ablation, "platform=" + platform])
+    return cfg

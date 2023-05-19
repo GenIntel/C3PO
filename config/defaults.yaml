@@ -1,3 +1,6 @@
+defaults:
+    - platform: local
+
 use_wandb: true
 wandb_project_name: NeMo
 
@@ -8,3 +11,4 @@ training:
 inference:
     random_seed: 0
     visualize_num_samples: 0
+

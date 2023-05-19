@@ -1,5 +1,6 @@
 link: torque
+path_od3d: /misc/lmbraid19/sommerl/od3d
 path_datasets: /misc/lmbraid19/sommerl/datasets
 path_exps: /misc/lmbraid19/sommerl/exps
-path_cudas: /misc/lmbraid19/sommerl/cudas
+path_cuda: /misc/software/cuda/cuda-11.7
 url_od3d: git@github.com:Generative-Vision-Robust-Learning/od3d.git

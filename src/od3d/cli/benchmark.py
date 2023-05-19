@@ -1,4 +1,5 @@
 import typer
+import od3d.io
 from hydra import compose, initialize
 from omegaconf import OmegaConf
 from pathlib import Path
@@ -14,18 +15,17 @@ def multiple(benchmark: str = typer.Option('pascal3d_nemo', '-b', '--benchmark')
     config_dir_rel = "../../../config"
     config_dir_abs = file_fpath.joinpath(config_dir_rel)
     ablations_root_dir = config_dir_abs.joinpath("ablations")
-
-    initialize(version_base=None, config_path=config_dir_rel, job_name="test_app")
+    # initialize(version_base=None, config_path=config_dir_rel, job_name="test_app")
 
     if ablation is None:
-        cfgs = [compose(config_name=benchmark, overrides=["platform=" + platform])]
+        cfgs = [od3d.io.load_config(benchmark=benchmark, platform=platform)]
     else:
         cfgs = []
         # create one config per ablation
         ablation_dir = ablations_root_dir.joinpath(ablation)
         for ablation_file_fpath in ablation_dir.iterdir():
             ablation_fpath_rel = str(ablation_file_fpath.relative_to(ablations_root_dir).with_suffix(''))
-            cfgs.append(compose(config_name=benchmark, overrides=["+ablations=" + ablation_fpath_rel, "+platform=" + platform]))
+            cfgs.append(od3d.io.load_config(benchmark=benchmark, platform=platform, ablation=ablation_fpath_rel))
 
     # create one config per method
     methods_cfgs = []

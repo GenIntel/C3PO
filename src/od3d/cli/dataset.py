@@ -32,8 +32,3 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     for batch in iter(dataloader):
         batch[0].visualize()
         # dataset.visualize(i)
-
-
-@app.command()
-def hello_world():
-    logging.info("hello world")

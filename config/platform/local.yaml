@@ -1,4 +1,5 @@
 link: local
+path_logs: /home/sommerl
 path_od3d: /scratch/sommerl/od3d
 path_datasets: /scratch/sommerl/datasets
 path_exps: /scratch/sommerl/exps

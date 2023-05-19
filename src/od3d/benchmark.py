@@ -65,17 +65,20 @@ def bench_single_method_torque(cfg: DictConfig):
 
     with open(tmp_script_fpath, 'w') as rsh:
 
-        gpu_count = 1
+        gpu_count = 0
         node_count = 1
         cpu_count = 1
         ram = "10gb"
-        feat_cuda_min = "nvidiaMinCC75"
         walltime = "24:00:00"
+
         timestamp = get_timestamp_as_string()
+        gpu_cfg_str = f':gpus={gpu_count}' if gpu_count > 0 else ""
+        cuda_cfg_str = f':nvidiaMinCC75' if gpu_count > 0 else ""
+
         script_as_string = f'''#!/bin/bash
 #PBS -N {timestamp}_{cfg.test_dataset.name}_{cfg.method.name}
 #PBS -S /bin/bash
-#PBS -l nodes={node_count}:ppn={cpu_count}:gpus={gpu_count}:{feat_cuda_min},mem={ram},walltime={walltime}
+#PBS -l nodes={node_count}:ppn={cpu_count}{gpu_cfg_str}{cuda_cfg_str},mem={ram},walltime={walltime}
 #PBS -q default-cpu
 #PBS -m a
 #PBS -M sommerl@informatik.uni-freiburg.de
@@ -84,9 +87,9 @@ def bench_single_method_torque(cfg: DictConfig):
 # For interactive jobs: #PBS -I
 # For array jobs: #PBS -t START-END[%SIMULTANEOUS]
 
-PATH=${{PATH}}:/scratch/sommerl/cudas/cuda-11.7/bin
-LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:/scratch/sommerl/cudas/cuda-11.7/lib64
-CUDA_HOME=/scratch/sommerl/cudas/cuda-11.7
+PATH=${{PATH}}:{cfg.platform.path_cuda}/bin
+LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:{cfg.platform.path_cuda}/lib64
+CUDA_HOME={cfg.platform.path_cuda}
 export PATH
 export LD_LIBRARY_PATH
 export CUDA_HOME
@@ -95,13 +98,33 @@ echo PATH=${{PATH}}
 echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
 echo CUDA_HOME=${{CUDA_HOME}}
 
-echo Working directory is \n: $(pwd)
-cd ~
-echo Working directory is \n: $(pwd)
+# Setup Repository
+if [[ -d "{cfg.platform.path_od3d}" ]]; then
+    echo "OD3D is already cloned to {cfg.platform.path_od3d}."
+else
+    git clone {cfg.platform.url_od3d} {cfg.platform.path_od3d}
+fi
+
+cd {cfg.platform.path_od3d}
+git pull {cfg.platform.url_od3d}
+
+# Install OD3D in venv
+if [[ -d "venv" ]]; then
+    echo "Venv already exists at {cfg.platform.path_od3d}/venv."
+    source venv/bin/activate
+else
+    echo "Creating venv at {cfg.platform.path_od3d}/venv."
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install pip --upgrade
+    FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+    pip install -e .
+fi
+
+od3d debug hello-world
 
 PYTHONUNBUFFERED=1 
 CUDA_VISIBLE_DEVICES=1
-# git clone {cfg.platform.url_od3d} 
 
 exit 0
         '''
@@ -111,7 +134,7 @@ exit 0
 
     #f'scp {tmp_script_fpath} torque:{Path(cfg.platform.path_exps).joinpath(tmp_script_fpath)}'
     # FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-    raise NotImplementedError
+    # raise NotImplementedError
 
 def bench_single_method_slurm(cfg: DictConfig):
     # 1. save config
