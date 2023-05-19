@@ -41,24 +41,30 @@ Installation
 Environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. Install :code:`python venv`:
-.. code::
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install pip --upgrade
+1. Setup
 
-2. Install :code:`OD3D`:
-
-   Local Code
 .. code::
-   pip install -e .
-   :
+    CUDA_HOME=.../cuda-11.7
+    PATH=${PATH}:${CUDA_HOME}/bin
+    LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CUDA_HOME}/lib64
+    export PATH
+    export LD_LIBRARY_PATH
+    export CUDA_HOME
 
-   Github Code
-.. code::
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install pip --upgrade
+    git clone git@github.com:Generative-Vision-Robust-Learning/od3d.git
     pip install torch
     FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-    pip install nemo@git+https://github.com/limpbot/nemo
+    pip install -e .
+
+2. Run
+
+.. code::
+   od3d debug hello-world
+   od3d dataset visualize
+   od3d bench multiple -p `platform`
 
 Datasets Setup
 ^^^^^^^^^^^^^^^^
