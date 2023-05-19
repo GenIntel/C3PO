@@ -18,13 +18,14 @@ url_pascal3d_seg: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGl
 rpath_pascal3d_seg: PASCAL3D_Seg
 path_pascal3d_seg: ${platform.path_datasets}/${.rpath_pascal3d_seg}
 
-pad_texture: false
-training_only: false
-evaluation_only: false
-augment_by_dist: false
-prepare_mode: first
-center_and_resize: true
-skip_3d_anno: false
+pad_texture: true
+
+#training_only: false
+#evaluation_only: false
+#augment_by_dist: false
+#prepare_mode: first
+#center_and_resize: true
+#skip_3d_anno: false
 
 occ_level: 0
 occ_levels:
