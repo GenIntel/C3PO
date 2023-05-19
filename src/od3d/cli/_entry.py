@@ -1,3 +1,4 @@
+import logging
 import typer
 app = typer.Typer()
 from od3d.cli.benchmark import app as app_run
@@ -9,4 +10,5 @@ def main():
     app()
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     main()

@@ -1,4 +1,6 @@
 import logging
+
+import torch.utils.data
 import typer
 from hydra import compose, initialize
 from od3d.datasets.dataset import OD3D_Dataset
@@ -24,7 +26,14 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     initialize(version_base=None, config_path=config_dir_rel, job_name="test_app")
     config = compose(config_name="dummy", overrides=["+datasets@dataset=" + dataset, "+platform=" + platform])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
-    logging.info(f"Dataset contains {len(dataset)} frames.")
-    for i in range(len(dataset)):
-        dataset.visualize(i)
 
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=5, shuffle=False, collate_fn=dataset.collate_fn)
+    logging.info(f"Dataset contains {len(dataset)} frames.")
+    for batch in iter(dataloader):
+        batch[0].visualize()
+        # dataset.visualize(i)
+
+
+@app.command()
+def hello_world():
+    logging.info("hello world")

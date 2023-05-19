@@ -18,7 +18,7 @@ def multiple(benchmark: str = typer.Option('pascal3d_nemo', '-b', '--benchmark')
     initialize(version_base=None, config_path=config_dir_rel, job_name="test_app")
 
     if ablation is None:
-        cfgs = [compose(config_name=benchmark, overrides=["+platform=" + platform])]
+        cfgs = [compose(config_name=benchmark, overrides=["platform=" + platform])]
     else:
         cfgs = []
         # create one config per ablation

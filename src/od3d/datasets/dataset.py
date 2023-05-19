@@ -10,6 +10,9 @@ class OD3D_Dataset(Dataset):
         self.config = config
 
     @staticmethod
+    def collate_fn(bla):
+        return bla
+    @staticmethod
     def setup(config: DictConfig):
         raise NotImplementedError
     def visualize(self, item: int):

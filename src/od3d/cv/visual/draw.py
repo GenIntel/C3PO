@@ -21,7 +21,8 @@ def draw_bbox(img, bbox, color=(255, 255, 255), line_width=2):
 
     device = img.device
 
-    bbox = bbox = bbox.detach().cpu().numpy()
+    bbox = bbox.detach().cpu().numpy()
+    bbox = np.round(bbox).astype(np.int32)
     img = tensor_to_cv_img(img.clone())
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     img = img.astype(np.float32)
@@ -29,6 +30,7 @@ def draw_bbox(img, bbox, color=(255, 255, 255), line_width=2):
     img = torch.from_numpy(img).permute(2, 0, 1)
     img = img.to(device=device, dtype=torch.uint8)
     return img
+
 def draw_pixels(img, pxls, colors=None, radius_in=3, radius_out=5):
     # pxls: K x 2
     K, _ = pxls.shape
@@ -41,6 +43,8 @@ def draw_pixels(img, pxls, colors=None, radius_in=3, radius_out=5):
 
     if colors is None:
         colors = get_colors(K) * 0.
+    elif isinstance(colors, tuple) or isinstance(colors, list):
+        colors = torch.from_numpy(np.tile(np.array(colors), reps=(K, 1)) / 255)
     colors = (colors.detach().cpu().numpy() * 255).astype(np.uint8)
 
     # img = cv2.circle(img.copy(), (240, 240), 5, (255, 255, 255), -1)

@@ -1,17 +1,19 @@
-
+import math
 import torch
 from od3d.cv.visual.resize import resize
-def crop(img, center, H_out, W_out, scale=1.):
+from od3d.cv.visual.show import show_img
+def crop(img, center, H_out, W_out, scale=1., ctx=None):
     device = img.device
     dtype = center.dtype
     img_in_shape = img.shape[1:]
     bbox_in_shape_xhalf = 1. * (W_out / scale) / 2.
     bbox_in_shape_yhalf = 1. * (H_out / scale) / 2.
+
     #  x0", "y0", "x1", "y1"
-    bbox_in = torch.LongTensor([int(center[0] - bbox_in_shape_xhalf),
-                                int(center[1] - bbox_in_shape_yhalf),
-                                int(center[0] + bbox_in_shape_xhalf),
-                                int(center[1] + bbox_in_shape_yhalf)]).to(device)
+    bbox_in = torch.LongTensor([math.floor(center[0] - bbox_in_shape_xhalf),
+                                math.floor(center[1] - bbox_in_shape_yhalf),
+                                math.ceil(center[0] + bbox_in_shape_xhalf),
+                                math.ceil(center[1] + bbox_in_shape_yhalf)]).to(device)
 
     # x-, x+, y-, y+
     pad = [max(-bbox_in[0], 0), max(bbox_in[2] - img_in_shape[1], 0), max(-bbox_in[1], 0),
@@ -21,6 +23,15 @@ def crop(img, center, H_out, W_out, scale=1.):
     img_crop_bbox_in = img[:, bbox_in[1]+pad[2]: bbox_in[3]+pad[2], bbox_in[0]+pad[0]:bbox_in[2]+pad[0]]
 
     img_out = resize(img_crop_bbox_in, H_out=H_out, W_out=W_out)
+
+    if ctx is not None:
+        ctx = resize(ctx, H_out=H_out, W_out=W_out)
+        bbox_img = torch.LongTensor([math.ceil(pad[0] * scale),
+                                     math.ceil(pad[2] * scale),
+                                     math.floor(W_out - 1 - pad[1] * scale),
+                                     math.floor(H_out - 1 - pad[3] * scale)]).to(device)
+        ctx[:, bbox_img[1]:bbox_img[3], bbox_img[0]:bbox_img[2]] = img_out[:, bbox_img[1]: bbox_img[3], bbox_img[0]:bbox_img[2]]
+        img_out = ctx
 
     cam_crop_tform_cam = torch.Tensor([[scale, 0., -bbox_in[0] * scale, 0.],
                                        [0., scale, -bbox_in[1] * scale, 0.],

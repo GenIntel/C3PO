@@ -16,7 +16,14 @@ import matplotlib.pyplot as plt
 from pytorch3d.io import IO
 from od3d.cv.geometry.transform import proj3d2d
 
-def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size):
+def render_mask(fpath_mesh, cam_tform_obj, cam_intr, img_size):
+    rgba_synthetic = render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba")
+    return (rgba_synthetic[3:] > 0)
+def render_depth(fpath_mesh, cam_tform_obj, cam_intr, img_size):
+    depth_synthetic = render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="depth")
+    return depth_synthetic
+
+def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba"):
 
     dtype = cam_tform_obj.dtype
     device = cam_tform_obj.device
@@ -36,8 +43,6 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size):
         textures=textures
     )
     logging.info("we can visualize the Pascald3D frame here.")
-
-
 
     pscl3d_tform_t3d = torch.Tensor([[-1., 0., 0., 0.],
                                      [0., -1., 0., 0.],
@@ -64,26 +69,37 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size):
         faces_per_pixel=1,
     )
 
-    # Place a point light in front of the object. As mentioned above, the front of the cow is facing the
-    # -z direction.
-    lights = PointLights(device=device, location=[[0.0, 0.0, 10.0]])
-
-    # Create a Phong renderer by composing a rasterizer and a shader. The textured Phong shader will
-    # interpolate the texture uv coordinates for each vertex, sample from a texture image and
-    # apply the Phong lighting model
-    renderer = MeshRenderer(
-        rasterizer=MeshRasterizer(
+    if modality == "depth":
+        rasterizer = MeshRasterizer(
             cameras=cameras,
             raster_settings=raster_settings
-        ),
-        shader=HardPhongShader(
-            device=device,
-            cameras=cameras,
-            lights=lights
         )
-    )
+        fragments = rasterizer(mesh)
+        return (fragments.zbuf[0]).permute(2, 0, 1)
+    else:
+        # Place a point light in front of the object. As mentioned above, the front of the cow is facing the
+        # -z direction.
+        lights = PointLights(device=device, location=[[0.0, 0.0, 10.0]])
 
-    rgba_synthetic_batch = renderer(mesh)
+        # Create a Phong renderer by composing a rasterizer and a shader. The textured Phong shader will
+        # interpolate the texture uv coordinates for each vertex, sample from a texture image and
+        # apply the Phong lighting model
+        renderer = MeshRenderer(
+            rasterizer=MeshRasterizer(
+                cameras=cameras,
+                raster_settings=raster_settings
+            ),
+            shader=HardPhongShader(
+                device=device,
+                cameras=cameras,
+                lights=lights
+            )
+        )
 
-    rgb_synthetic = (rgba_synthetic_batch[0, ..., :3] * 255).to(torch.uint8).permute(2, 0, 1)
-    return rgb_synthetic
+        rgba_synthetic_batch = renderer(mesh)
+        rgba_synthetic = (rgba_synthetic_batch[0, ..., :] * 255).to(torch.uint8).permute(2, 0, 1)
+
+        if modality == "rgba":
+            return rgba_synthetic
+        else:
+            return rgba_synthetic[:3]
