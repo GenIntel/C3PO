@@ -1,8 +1,8 @@
 import typer
 import od3d.io
-from hydra import compose, initialize
 from omegaconf import OmegaConf
 from pathlib import Path
+import logging
 from od3d.benchmark import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
 app = typer.Typer()
 
@@ -10,22 +10,22 @@ app = typer.Typer()
 def multiple(benchmark: str = typer.Option('pascal3d_nemo', '-b', '--benchmark'),
         ablation: str = typer.Option(None, '-a', '--ablation'),
         platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.DEBUG)
 
     file_fpath = Path(__file__).parent.resolve()
     config_dir_rel = "../../../config"
     config_dir_abs = file_fpath.joinpath(config_dir_rel)
     ablations_root_dir = config_dir_abs.joinpath("ablations")
-    # initialize(version_base=None, config_path=config_dir_rel, job_name="test_app")
 
     if ablation is None:
-        cfgs = [od3d.io.load_config(benchmark=benchmark, platform=platform)]
+        cfgs = [od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform)]
     else:
         cfgs = []
         # create one config per ablation
         ablation_dir = ablations_root_dir.joinpath(ablation)
         for ablation_file_fpath in ablation_dir.iterdir():
             ablation_fpath_rel = str(ablation_file_fpath.relative_to(ablations_root_dir).with_suffix(''))
-            cfgs.append(od3d.io.load_config(benchmark=benchmark, platform=platform, ablation=ablation_fpath_rel))
+            cfgs.append(od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform, ablation=ablation_fpath_rel))
 
     # create one config per method
     methods_cfgs = []
@@ -56,6 +56,7 @@ def multiple(benchmark: str = typer.Option('pascal3d_nemo', '-b', '--benchmark')
 
 @app.command()
 def single_local(config_fpath: str = typer.Option(None, '-c', '--config')):
+    logging.basicConfig(level=logging.DEBUG)
     method_cfg = OmegaConf.load(config_fpath)
     bench_single_method_local(method_cfg)
 
@@ -67,5 +68,5 @@ def test(benchmark: str = typer.Option('timeseries_internal', '-b', '--benchmark
          constraint: str = typer.Option('4h8c', '-c', '--constraint'),
          frameworks: str = typer.Option(None, '-f', '--frameworks'),
          localcode: str = typer.Option(None, '-l', '--localcode')):
-
-    print("test")
+    logging.basicConfig(level=logging.DEBUG)
+    logger.info("test")

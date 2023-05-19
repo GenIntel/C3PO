@@ -52,11 +52,11 @@ def move_dir(src: Path, dst: Path):
     shutil.rmtree(src)
 
 
-def load_config(benchmark="defaults", platform="local", ablation=None):
+def load_hierarchical_config(benchmark="defaults", platform="local", ablation=None, overrides=[]):
     config_dir_rel = "../../config"
     with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):
         if ablation is None:
-            cfg = compose(config_name=benchmark, overrides=["platform=" + platform])
+            cfg = compose(config_name=benchmark, overrides=["platform=" + platform] + overrides)
         else:
-            cfg = compose(config_name=benchmark, overrides=["ablations=" + ablation, "platform=" + platform])
+            cfg = compose(config_name=benchmark, overrides=["ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg

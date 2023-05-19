@@ -65,9 +65,9 @@ def bench_single_method_torque(cfg: DictConfig):
 
     with open(tmp_script_fpath, 'w') as rsh:
 
-        gpu_count = 0
+        gpu_count = 1
         node_count = 1
-        cpu_count = 1
+        cpu_count = 4
         ram = "10gb"
         walltime = "24:00:00"
 
@@ -116,13 +116,16 @@ else
     echo "Creating venv at {cfg.platform.path_od3d}/venv."
     python3 -m venv venv
     source venv/bin/activate
-    pip install pip --upgrade
-    FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-    pip install -e .
 fi
+
+pip install pip --upgrade
+pip install torch
+FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install -e .
 
 od3d debug hello-world
 
+# od3d bench single-local -c {tmp_config_fpath}
 PYTHONUNBUFFERED=1 
 CUDA_VISIBLE_DEVICES=1
 
@@ -130,15 +133,98 @@ exit 0
         '''
         rsh.write(script_as_string)
     subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
+    subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
     subprocess.run(f'ssh torque "qsub {tmp_script_fpath}"', capture_output=True, shell=True)
-
-    #f'scp {tmp_script_fpath} torque:{Path(cfg.platform.path_exps).joinpath(tmp_script_fpath)}'
-    # FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-    # raise NotImplementedError
 
 def bench_single_method_slurm(cfg: DictConfig):
     # 1. save config
     # 2. setup od3d on slurm
     # 3. execute script with command: run od3d bench single -f `path-to-config`
+
+    from pathlib import Path
+    tmp_config_fpath = Path('/tmp/config.yaml').resolve()
+    if not tmp_config_fpath.parent.exists():
+        tmp_config_fpath.parent.mkdir(parents=True)
+    with open(tmp_config_fpath, 'w') as fp:
+        OmegaConf.save(config=cfg, f=fp.name)
+    tmp_script_fpath = Path('/tmp/run.sh').resolve()
+    if not tmp_script_fpath.parent.exists():
+        tmp_script_fpath.parent.mkdir(parents=True)
+
+    with open(tmp_script_fpath, 'w') as rsh:
+        gpu_count = 1
+        node_count = 1
+        cpu_count = 4
+        ram = "10gb"
+        walltime = "24:00:00"
+
+        timestamp = get_timestamp_as_string()
+        partition = cfg.get("platform").get("partition", None)
+        partition_cfg_str = f'#SBATCH --partition {partition}' if partition is not None else ''
+        script_as_string = f'''#!/bin/bash
+#SBATCH -J {timestamp}_{cfg.test_dataset.name}_{cfg.method.name}
+#SBATCH --nodes {node_count}
+#SBATCH --ntasks-per-node 1
+#SBATCH --time {walltime}
+#SBATCH --cpus-per-task {cpu_count}
+#SBATCH --gres gpu:{gpu_count}
+#SBATCH --mem {ram}
+#SBATCH -o /home/sommerl/%x_%j.o # x=job_name j=job_id
+#SBATCH --mail-type=END,FAIL # (recive mails about end and timeouts/crashes of your job)
+{partition_cfg_str}
+
+PATH=${{PATH}}:{cfg.platform.path_cuda}/bin
+LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:{cfg.platform.path_cuda}/lib64
+CUDA_HOME={cfg.platform.path_cuda}
+export PATH
+export LD_LIBRARY_PATH
+export CUDA_HOME
+
+echo PATH=${{PATH}}
+echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
+echo CUDA_HOME=${{CUDA_HOME}}
+
+# Setup Repository
+if [[ -d "{cfg.platform.path_od3d}" ]]; then
+    echo "OD3D is already cloned to {cfg.platform.path_od3d}."
+else
+    git clone {cfg.platform.url_od3d} {cfg.platform.path_od3d}
+fi
+
+cd {cfg.platform.path_od3d}
+git pull {cfg.platform.url_od3d}
+
+# Install OD3D in venv
+if [[ -d "venv" ]]; then
+    echo "Venv already exists at {cfg.platform.path_od3d}/venv."
+    source venv/bin/activate
+else
+    echo "Creating venv at {cfg.platform.path_od3d}/venv."
+    python3 -m venv venv
+    source venv/bin/activate
+fi
+
+pip install pip --upgrade
+pip install torch
+FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install -e .
+
+od3d debug hello-world
+
+# od3d bench single-local -c {tmp_config_fpath}
+PYTHONUNBUFFERED=1 
+CUDA_VISIBLE_DEVICES=1
+
+exit 0
+        '''
+        rsh.write(script_as_string)
+    subprocess.run(f'scp {tmp_script_fpath} slurm:{tmp_script_fpath}', capture_output=True, shell=True)
+    subprocess.run(f'scp {tmp_config_fpath} slurm:{tmp_config_fpath}', capture_output=True, shell=True)
+
+    subprocess.run(f'ssh slurm "sbatch {tmp_script_fpath}"', capture_output=True, shell=True)
+
+    # ws_allocate {cfg.platform.ws_name} 100 -m sommerl@informatik.uni-freiburg.de
+    # ws_allocate od3d 100 -m sommerl@informatik.uni-freiburg.de # /work/dlclarge1/sommerl-od3d
+    # ws_list
     # TODO
     raise NotImplementedError
