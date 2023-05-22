@@ -14,7 +14,6 @@ from od3d.utils import prepare_pascal3d_sample
 from od3d.utils.pascal3d_utils import CATEGORIES
 from od3d.utils.pascal3d_utils import MESH_LEN
 
-# from od3d.datasets.create_cuboid_mesh import create_meshes
 from omegaconf import DictConfig
 from pathlib import Path
 import od3d.io

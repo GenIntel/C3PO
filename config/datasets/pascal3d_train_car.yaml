@@ -1,6 +1,8 @@
 defaults:
   - pascal3d
 
+name: pascal3d_train
+
 subsets:
   - train
 category:

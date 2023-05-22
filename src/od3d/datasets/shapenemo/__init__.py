@@ -1,0 +1,1 @@
+from od3d.datasets.shapenemo.dataset import ShapeNemo

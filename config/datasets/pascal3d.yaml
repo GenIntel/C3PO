@@ -5,21 +5,31 @@ url_pascal3d_raw: ftp://cs.stanford.edu/cs/cvgl/PASCAL3D+_release1.1.zip
 rpath_pascal3d_raw: PASCAL3D+_release1.1
 path_pascal3d_raw: ${platform.path_datasets}/${.rpath_pascal3d_raw}
 
-rpath_pascal3d_preproc: PASCAL3D_PreProc
-path_pascal3d_preproc: ${platform.path_datasets}/${.rpath_pascal3d_preproc}
-
 rpath_dtd_raw: DTD
+rpath_dtd_cache: DTD_cache
 path_dtd_raw: ${platform.path_datasets}/${.rpath_dtd_raw}
+path_dtd_cache: ${platform.path_datasets}/${.rpath_dtd_cache}
 
-rpath_meshes: ${.rpath_pascal3d_preproc}/CAD_single
+rpath_meshes: ${.rpath_pascal3d_raw}/CAD
 path_meshes: ${platform.path_datasets}/${.rpath_meshes}
+
+path_shapenemo: ${platform.path_datasets}/ShapeNeMo/Pascal3D
 
 url_pascal3d_seg: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGlQMyl2_03gXDTQw3Qm
 rpath_pascal3d_seg: PASCAL3D_Seg
 path_pascal3d_seg: ${platform.path_datasets}/${.rpath_pascal3d_seg}
 
 pad_texture: true
+remove_no_bg: 8
+center: true
+resize: true
+resize_dists_min: 5.
+resize_dists_max: 10.
 
+cache: # None, Disk, RAM
+
+# enable_cache: true
+# weighted: true
 #training_only: false
 #evaluation_only: false
 #augment_by_dist: false
@@ -46,9 +56,7 @@ image_sizes:
     train: [256, 608]
     tvmonitor: [480, 448]
 
-enable_cache: true
-weighted: true
-remove_no_bg: 8
+
 
 #transforms:
 #    - class_name: od3d.datasets.transforms.ToTensor

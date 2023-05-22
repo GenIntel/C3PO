@@ -41,11 +41,8 @@ class Pascal3DPlusDet(OD3D_Dataset):
         self.root_path = self.config.root_path
         self.category = self.config.get("category", "all")
         self.subtypes = {}
-        self.occ_level = self.config.occ_level
         self.enable_cache = self.config.enable_cache
-        self.weighted = self.config.weighted
         self.remove_no_bg = self.config.remove_no_bg
-        self.skip_kp = self.config.get("skip_kp", False)
         self.segmentation_masks = self.config.get("segmentation_masks", [])
         self.mesh_path = self.config.mesh_path
         self.transforms = torchvision.transforms.Compose(

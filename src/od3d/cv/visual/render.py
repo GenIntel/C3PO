@@ -1,7 +1,7 @@
 import torch
 import logging
 from pytorch3d.renderer import (
-    look_at_view_transform,
+    # look_at_view_transform,
     PerspectiveCameras,
     PointLights,
     RasterizationSettings,
@@ -12,9 +12,13 @@ from pytorch3d.renderer import (
     TexturesVertex
 )
 from pytorch3d.structures.meshes import Meshes
-import matplotlib.pyplot as plt
 from pytorch3d.io import IO
-from od3d.cv.geometry.transform import proj3d2d
+
+def load_mesh_vertices(fpath_mesh, device):
+    io = IO()
+    mesh = io.load_mesh(fpath_mesh, device=device)
+    verts = mesh[0].verts_list()[0]
+    return verts
 
 def render_mask(fpath_mesh, cam_tform_obj, cam_intr, img_size):
     rgba_synthetic = render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba")

@@ -15,8 +15,6 @@ from od3d.utils import prepare_pascal3d_sample_det
 from od3d.utils.pascal3d_utils import CATEGORIES
 from od3d.utils.pascal3d_utils import MESH_LEN
 
-from od3d.datasets.create_cuboid_mesh import create_meshes
-
 mesh_para_names = [
     "azimuth",
     "elevation",
