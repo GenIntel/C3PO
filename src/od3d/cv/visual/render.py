@@ -13,6 +13,7 @@ from pytorch3d.renderer import (
 )
 from pytorch3d.structures.meshes import Meshes
 from pytorch3d.io import IO
+from pytorch3d.renderer.mesh.utils import interpolate_face_attributes
 
 def load_mesh_vertices(fpath_mesh, device):
     io = IO()
@@ -27,7 +28,7 @@ def render_depth(fpath_mesh, cam_tform_obj, cam_intr, img_size):
     depth_synthetic = render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="depth")
     return depth_synthetic
 
-def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba"):
+def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba", feats=None):
 
     dtype = cam_tform_obj.dtype
     device = cam_tform_obj.device
@@ -36,14 +37,14 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba"):
     principal_point = torch.Tensor([cam_intr[0, 2], cam_intr[1, 2]]).to(device=device, dtype=dtype)
     io = IO()
     mesh = io.load_mesh(fpath_mesh, device=device)
-    verts = mesh[0].verts_list()[0]
-    faces = mesh[0].faces_list()[0]
+    verts = mesh[0].verts_list()[0].to(device)
+    faces = mesh[0].faces_list()[0].to(device)
     verts_shape = verts.shape
-    verts_rgb = torch.ones(size=verts_shape)[None,] * 0.5  # (1, V, 3)
-    textures = TexturesVertex(verts_features=verts_rgb.to(device))
+    verts_rgb = torch.ones(size=verts_shape, device=device)[None,] * 0.5  # (1, V, 3)
+    textures = TexturesVertex(verts_features=verts_rgb)
     mesh = Meshes(
-        verts=[verts.to(device)],
-        faces=[faces.to(device)],
+        verts=[verts],
+        faces=[faces],
         textures=textures
     )
     logging.info("we can visualize the Pascald3D frame here.")
@@ -73,13 +74,42 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba"):
         faces_per_pixel=1,
     )
 
+    rasterizer = MeshRasterizer(
+        cameras=cameras,
+        raster_settings=raster_settings
+    )
+
     if modality == "depth":
-        rasterizer = MeshRasterizer(
-            cameras=cameras,
-            raster_settings=raster_settings
-        )
         fragments = rasterizer(mesh)
         return (fragments.zbuf[0]).permute(2, 0, 1)
+    elif modality == "mask_verts_vsbl":
+        fragments = rasterizer(mesh)
+        B = fragments.pix_to_face.shape[0]
+        verts_ids_vsbl = faces[fragments.pix_to_face.reshape(B, -1)].reshape(B, -1).unique(dim=1)
+        verts_vsbl_mask = torch.zeros(size=(B, verts_shape[0]), dtype=torch.bool, device=device)
+        verts_vsbl_mask[verts_ids_vsbl] = 1
+    elif modality == "interpolate":
+        # pix_to_face, zbuf, bary_coord, dists
+        fragments = rasterizer(mesh)
+        if feats is None:
+            verts_rgb_ncds = verts.clone()
+            verts_rgb_ncds = (verts_rgb_ncds - verts_rgb_ncds.min(dim=0).values[None,]) / (verts_rgb_ncds.max(dim=0).values[None,] - verts_rgb_ncds.min(dim=0).values[None,])
+            feats = verts_rgb_ncds
+        return interpolate_face_attributes(fragments.pix_to_face, fragments.bary_coords, feats[faces])[0, ..., 0, :].permute(2, 0, 1)
+    elif modality == "nearest":
+        pix_to_face, zbuf, bary_coord, dists = rasterizer(mesh)
+
+        ori_shape = bary_coord.shape
+        exr = bary_coord * (bary_coord < 0)
+        bary_coords_ = bary_coord.view(-1, bary_coord.shape[-1])
+        arg_max_idx = bary_coords_.argmax(1)
+        bary_coord = (
+                torch.zeros_like(bary_coords_)
+                .scatter(1, arg_max_idx.unsqueeze(1), 1.0)
+                .view(*ori_shape)
+                + exr
+        )
+        return interpolate_face_attributes(pix_to_face, bary_coord, verts_rgb).squeeze()
     else:
         # Place a point light in front of the object. As mentioned above, the front of the cow is facing the
         # -z direction.
@@ -89,10 +119,7 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba"):
         # interpolate the texture uv coordinates for each vertex, sample from a texture image and
         # apply the Phong lighting model
         renderer = MeshRenderer(
-            rasterizer=MeshRasterizer(
-                cameras=cameras,
-                raster_settings=raster_settings
-            ),
+            rasterizer=rasterizer,
             shader=HardPhongShader(
                 device=device,
                 cameras=cameras,
@@ -103,7 +130,7 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba"):
         rgba_synthetic_batch = renderer(mesh)
         rgba_synthetic = (rgba_synthetic_batch[0, ..., :] * 255).to(torch.uint8).permute(2, 0, 1)
 
-        if modality == "rgba":
+        if modality == "rgba" or modality == "all":
             return rgba_synthetic
         else:
             return rgba_synthetic[:3]

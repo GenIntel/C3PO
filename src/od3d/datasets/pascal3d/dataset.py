@@ -19,7 +19,7 @@ import od3d.io
 from od3d.cv.visual.draw import draw_pixels, draw_bbox
 from od3d.cv.geometry.transform import proj3d2d, reproj2d3d
 from od3d.cv.geometry.transform import transf3d
-from od3d.cv.visual.render import render_mask, render_depth, load_mesh_vertices
+from od3d.cv.visual.render import render_mask, render_depth, load_mesh_vertices, render_mesh
 from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.show import show_img
 from od3d.cv.visual.crop import crop
@@ -117,6 +117,11 @@ class Pascal3DFrame:
                                                                                        pts3d=self.shapenemo_vts3d)
         else:
             self.fpath_shapenemo = None
+            self.shapenemo_vts3d = None
+            self.shapenemo_mask = None
+            self.shapenemo_depth = None
+            self.vts2d = None
+            self.vts3d_vsbl = None
             # show_img(draw_pixels(self.rgb, self.vts2d[self.vts3d_vsbl], radius_in=2, radius_out=4))
         #this_size = cfg.image_sizes[cate]
         #out_shape = [
@@ -131,6 +136,42 @@ class Pascal3DFrame:
         # pts3d = torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype)
 
         # self.augment(H=H_out, W=W_out, dist=10, txtr=self.txtr)
+
+    def to(self, device: torch.device):
+        if self.device != device:
+            for k, a in self.__dict__.items():
+                if isinstance(a, torch.Tensor):
+                    setattr(self, k, a.to(device))
+                    # self.__dict__[k] = a.to(device)
+            self.device = device
+            """
+            self.rgb = self.rgb.to(device)
+            self.size
+            self.cam_intr4x4
+            self.cam_tform4x4_obj
+            self.cam_proj4x4_obj
+            self.bbox = self.bbox.to(device)
+            self.kpts2d_annot = self.kpts2d_annot.to(device)
+            self.kpts2d_annot_vsbl = self.kpts2d_annot_vsbl.to(device)
+            self.mask = self.mask.to(device)
+            self.depth = self.depth.to(device)
+            self.kpts2d = self.kpts2d.to(device)
+            self.kpts3d = self.kpts3d.to(device)
+            self.kpts3d_vsbl = self.kpts3d_vsbl.to(device)
+
+            if self.txtr is not None:
+                self.txtr
+            if self.shapenemo_vts3d is not None:
+                self.shapenemo_vts3d = self.shapenemo_vts3d.to(device)
+            if self.shapenemo_mask is not None:
+                self.shapenemo_mask = self.shapenemo_mask.to(device)
+            if self.
+            self.shapenemo_depth = None
+            self.vts2d = None
+            self.vts3d_vsbl = None
+
+            self.device = device
+            """
 
     def calc_mesh_proj(self, fpath_mesh, pts3d=None, vsbl_depth_eps=0.01):
 
@@ -408,6 +449,8 @@ class Pascal3D(OD3D_Dataset):
 
 class Pascal3DFrames:
     def __init__(self, frames: list[Pascal3DFrame]):
+        for frame in frames:
+            frame.to('cuda:0')
         frame0 = frames[0]
         self.dtype = frame0.dtype
         self.device = frame0.device
@@ -422,8 +465,14 @@ class Pascal3DFrames:
         self.kpts3d_vsbl = torch.stack([frame.kpts3d_vsbl for frame in frames], dim=0)
         self.kpts2d_annot = torch.stack([frame.kpts2d_annot for frame in frames], dim=0)
         self.kpts2d_annot_vsbl = torch.stack([frame.kpts2d_annot_vsbl for frame in frames], dim=0)
+        self.size = torch.stack([frame.size for frame in frames], dim=0)
+
+        self.fpath_mesh = [frame.fpath_mesh for frame in frames]
 
     def visualize(self):
+        rgb = render_mesh(fpath_mesh=self.fpath_mesh[0], cam_tform_obj=self.cam_tform4x4_obj[0], cam_intr=self.cam_intr4x4[0], img_size=self.size[0], modality="interpolate")
+        show_img(rgb)
+
         pts3d = torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype)
         mix_real_with_synthetic = blend_rgb(self.rgb[0], self.mask[0])
 
