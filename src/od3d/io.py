@@ -60,3 +60,4 @@ def load_hierarchical_config(benchmark="defaults", platform="local", ablation=No
         else:
             cfg = compose(config_name=benchmark, overrides=["ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg
+

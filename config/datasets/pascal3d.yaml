@@ -19,7 +19,7 @@ url_pascal3d_seg: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGl
 rpath_pascal3d_seg: PASCAL3D_Seg
 path_pascal3d_seg: ${platform.path_datasets}/${.rpath_pascal3d_seg}
 
-pad_texture: true
+pad_texture: false
 remove_no_bg: 8
 center: true
 resize: true
@@ -42,21 +42,48 @@ occ_levels:
     train: [0]
     val: [0, 1, 2, 3]
 
+
 image_sizes:
-    aeroplane: [320, 672]
-    bicycle: [608, 608]
-    boat: [384, 672]
-    bottle: [480, 800]
-    bus: [320, 736]
-    chair: [608, 384]
-    car: [256, 672]
-    diningtable: [384, 800]
+    aeroplane: [512, 512]
+    bicycle: [512, 512]
+    boat: [512, 512]
+    bottle: [512, 512]
+    bus: [512, 512]
+    chair: [512, 512]
+    car: [512, 512]
+    diningtable: [512, 512]
     motorbike: [512, 512]
-    sofa: [352, 736]
-    train: [256, 608]
-    tvmonitor: [480, 448]
+    sofa: [512, 512]
+    train: [512, 512]
+    tvmonitor: [512, 512]
 
+#image_sizes:
+#    aeroplane: [320, 672]
+#    bicycle: [608, 608]
+#    boat: [384, 672]
+#    bottle: [480, 800]
+#    bus: [320, 736]
+#    chair: [608, 384]
+#    car: [256, 672]
+#    diningtable: [384, 800]
+#    motorbike: [512, 512]
+#    sofa: [352, 736]
+#    train: [256, 608]
+#    tvmonitor: [480, 448]
 
+classes:
+    - aeroplane
+    - bicycle
+    - boat
+    - bottle
+    - bus
+    - chair
+    - car
+    - diningtable
+    - motorbike
+    - sofa
+    - train
+    - tvmonitor
 
 #transforms:
 #    - class_name: od3d.datasets.transforms.ToTensor

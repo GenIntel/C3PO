@@ -1,10 +1,16 @@
 name: nemo
-class_name: nemo.models.nemo_cls.NeMoCls
+class_name: NeMo
+# class_name: nemo.models.nemo_cls.NeMoCls
+
+checkpoint: ${platform.path_exps}/NeMo-Classification/2022_09_26/classification_saved_model_199.pth
 
 mesh_path: data/PASCAL3D+_release1.1/CAD_single/{:s}/01.off
 num_noise: 5
 max_group: 512
 down_sample_rate: 8
+
+classes: ${test_dataset.classes}
+path_shapenemo: ${test_dataset.path_shapenemo}
 
 transforms:
     - class_name: nemo.datasets.pascal3d.Normalize
@@ -38,6 +44,12 @@ inference:
         faces_per_pixel: 1
         bin_size: 0
 
+    optimizer:
+        beta0: 0.4
+        beta1: 0.6
+        lr: 5e-2 # 5e-2
+        epochs: 30
+
     rasterizer:
         class_name: pytorch3d.renderer.MeshRasterizer
 
@@ -51,7 +63,7 @@ backbone:
     output_dimension: 128
     reduce_function: None
     pretrain: true
-    n_noise_points: 5
+    # n_noise_points: 5 # duplicate of num_noise?
 
 memory_bank:
     class_name: nemo.models.feature_banks_cls.NearestMemoryManager

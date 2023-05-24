@@ -18,7 +18,7 @@ class OD3DMethod(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def test(self):
+    def test(self, dataset: OD3D_Dataset):
         raise NotImplementedError
     def install(self, package):
         subprocess.check_call([sys.executable, "-m", "pip", "install", package])

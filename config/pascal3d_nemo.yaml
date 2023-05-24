@@ -1,6 +1,6 @@
 defaults:
   - logger: wandb
-  - methods@method.nemo: nemo
+  - methods@method.nemo: nemo_cls
   - datasets@train_dataset: pascal3d_train_car
   - datasets@test_dataset: pascal3d_test_car
   - platform: local

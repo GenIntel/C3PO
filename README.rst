@@ -44,7 +44,7 @@ Environment
 1. Setup
 
 .. code::
-    CUDA_HOME=.../cuda-11.7
+    CUDA_HOME=/scratch/sommerl/cudas//cuda-11.7
     PATH=${PATH}:${CUDA_HOME}/bin
     LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CUDA_HOME}/lib64
     export PATH

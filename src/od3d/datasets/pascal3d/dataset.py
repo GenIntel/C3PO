@@ -19,7 +19,8 @@ import od3d.io
 from od3d.cv.visual.draw import draw_pixels, draw_bbox
 from od3d.cv.geometry.transform import proj3d2d, reproj2d3d
 from od3d.cv.geometry.transform import transf3d
-from od3d.cv.visual.render import render_mask, render_depth, load_mesh_vertices, render_mesh
+from od3d.cv.visual.render import render_mask, render_depth, render_mesh
+from od3d.cv.geometry.mesh import Mesh
 from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.show import show_img
 from od3d.cv.visual.crop import crop
@@ -27,6 +28,7 @@ from od3d.cv.visual.sample import sample_pxl2d_pts
 from od3d.datasets.dtd import DTD
 from od3d.datasets.shapenemo import ShapeNemo
 import pickle
+from od3d.cv.geometry.transform import transf4x4_from_spherical
 
 CATEGORIES = [
     "aeroplane",
@@ -52,7 +54,7 @@ SUBSETS = [
 class Pascal3DFrame:
 
 
-    def __init__(self, fpath_annotation: Path, fpath_rgb: Path, path_meshes: Path, dtd=None, dt_shape_nemo=None):
+    def __init__(self, fpath_annotation: Path, fpath_rgb: Path, path_meshes: Path, dtd=None, dt_shape_nemo=None, classes: list = None):
         self.device = "cpu"
         self.dtype = torch.float32
         self.rgb = torchvision.io.read_image(str(fpath_rgb)).to(self.device)
@@ -66,6 +68,7 @@ class Pascal3DFrame:
         self.category = object['class'][0]
 
         self.mesh_index = object['cad_index'][0][0] - 1
+        self.label = classes.index(self.category)
         self.bbox = torch.from_numpy(object['bbox'][0]).to(device=self.device, dtype=self.dtype)
         self.kpts_names = list(object['anchors'][0][0].dtype.names)
         kpts2d_annot = np.stack([object['anchors'][0][0][n]['location'][0][0][0] if object['anchors'][0][0][n]['status'] == 1 else np.array([0, 0]) for n in self.kpts_names])
@@ -112,7 +115,8 @@ class Pascal3DFrame:
         #self.dt_shape_nemo = dt_shape_nemo
         if dt_shape_nemo is not None:
             self.fpath_shapenemo = dt_shape_nemo.get_cat(self.category)
-            self.shapenemo_vts3d = load_mesh_vertices(fpath_mesh=self.fpath_shapenemo, device=self.device)
+            shapenemo_mesh = Mesh(fpath_mesh=self.fpath_shapenemo, device=self.device)
+            self.shapenemo_vts3d = shapenemo_mesh.verts # load_mesh_vertices(fpath_mesh=self.fpath_shapenemo, device=self.device)
             self.shapenemo_mask, self.shapenemo_depth, self.vts2d, self.vts3d_vsbl = self.calc_mesh_proj(fpath_mesh=self.fpath_shapenemo,
                                                                                        pts3d=self.shapenemo_vts3d)
         else:
@@ -136,6 +140,7 @@ class Pascal3DFrame:
         # pts3d = torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype)
 
         # self.augment(H=H_out, W=W_out, dist=10, txtr=self.txtr)
+        self.augment(H=512, W=512, dist=5.)
 
     def to(self, device: torch.device):
         if self.device != device:
@@ -191,7 +196,7 @@ class Pascal3DFrame:
             cam_tform_pts3d_depth = transf3d(pts3d, transf4x4=self.cam_tform4x4_obj)[:, 2]
             pts3d_vsbl = (cam_tform_pts3d_depth - vsbl_depth_eps < cam_tform_pts3d_depth_rendered) + (cam_tform_pts3d_depth_rendered <= 0.)
             return mask, depth, pts2d, pts3d_vsbl
-    def augment(self, H, W, dist, txtr):
+    def augment(self, H, W, dist):
         logger.info(f"Frame name {self.name}")
 
         #center = torch.LongTensor([500, 200]).to(device=self.device)
@@ -222,11 +227,19 @@ class Pascal3DFrame:
         self.bbox[[1, 3]] = self.bbox[[1, 3]] + cam_crop_tform_cam[1, 2]
 
         if self.fpath_shapenemo is not None:
-            self.shapenemo_vts3d = load_mesh_vertices(fpath_mesh=self.fpath_shapenemo, device=self.device)
+            shapenemo_mesh = Mesh(fpath_mesh=self.fpath_shapenemo, device=self.device)
+            self.shapenemo_vts3d = shapenemo_mesh.verts # load_mesh_vertices(fpath_mesh=self.fpath_shapenemo, device=self.device)
             self.shapenemo_mask, self.shapenemo_depth, self.vts2d, self.vts3d_vsbl = self.calc_mesh_proj(fpath_mesh=self.fpath_shapenemo,
                                                                                        pts3d=self.shapenemo_vts3d)
 
         self.mask, self.depth, self.kpts2d, self.kpts3d_vsbl = self.calc_mesh_proj(fpath_mesh=self.fpath_mesh, pts3d=self.kpts3d)
+
+        #this_size = config.image_sizes[cate]
+        #out_shape = [
+        #    ((this_size[0] - 1) // 32 + 1) * 32,
+        #    ((this_size[1] - 1) // 32 + 1) * 32,
+        #]
+        #out_shape = [int(out_shape[0]), int(out_shape[1])]
 
     def visualize(self):
         #this_size = cfg.image_sizes[cate]
@@ -253,19 +266,21 @@ class Pascal3DFrame:
 
 
     def calc_cam_tform_obj(self, azimuth, elevation, theta, distance):
+
+
+        """
         if distance == 0:
             # return None
             distance = 0.1
-
         # camera center
-        C = np.zeros((3, 1))
-        C[0] = distance * math.cos(elevation) * math.sin(azimuth)
-        C[1] = -distance * math.cos(elevation) * math.cos(azimuth)
-        C[2] = distance * math.sin(elevation)
-
+        obj_tform_cam_pos = np.zeros((3, 1))
+        obj_tform_cam_pos[0] = distance * math.cos(elevation) * math.sin(azimuth)
+        obj_tform_cam_pos[1] = -distance * math.cos(elevation) * math.cos(azimuth)
+        obj_tform_cam_pos[2] = distance * math.sin(elevation)
+        cam_tform_obj = -obj_tform_cam_pos
         # rotate coordinate system by theta is equal to rotating the model by theta
         azimuth = -azimuth
-        elevation = - (math.pi / 2 - elevation)
+        elevation = -(math.pi / 2 - elevation)
 
         # rotation matrix
         Rz = np.array([
@@ -279,23 +294,39 @@ class Pascal3DFrame:
             [0, math.sin(elevation), math.cos(elevation)],
         ])  # rotation by elevation
 
-        R_rot = np.dot(Rx, Rz)
-        R = np.hstack((R_rot, np.dot(-R_rot, C)))
-        R = np.vstack((R, [0, 0, 0, 1]))
-
         R_theta = np.array(
-            [[math.cos(theta), -math.sin(theta), 0, 0],
-             [math.sin(theta), math.cos(theta), 0, 0],
-             [0, 0, 1, 0],
-             [0, 0, 0, 1]])
-        R = np.dot(R_theta, R)
+            [[math.cos(theta), -math.sin(theta), 0],
+             [math.sin(theta), math.cos(theta), 0],
+             [0, 0, 1]])
+
+        camrot_tform_cam = np.dot(R_theta, np.dot(Rx, Rz))
+        camrot_tform_obj = np.hstack((camrot_tform_cam, np.dot(camrot_tform_cam, cam_tform_obj)))
+        camrot_tform_obj = np.vstack((camrot_tform_obj, [0, 0, 0, 1]))
+
+        #R_theta = np.array(
+        #    [[math.cos(theta), -math.sin(theta), 0, 0],
+        #     [math.sin(theta), math.cos(theta), 0, 0],
+        #     [0, 0, 1, 0],
+        #     [0, 0, 0, 1]])
+        #R = np.dot(R_theta, R)
 
         #T = R
+
         T = np.eye(4)
-        T[0, :] = R[0, :]
-        T[1, :] = -R[1, :]
-        T[2, :] = -R[2, :]
-        return T
+        T[0, :] = camrot_tform_obj[0, :]
+        T[1, :] = -camrot_tform_obj[1, :]
+        T[2, :] = -camrot_tform_obj[2, :]
+        """
+        cam_tform4x4_obj = transf4x4_from_spherical(
+            azim=torch.Tensor([azimuth]),
+            elev=torch.Tensor([elevation]),
+            theta=torch.Tensor([theta]),
+            dist=torch.Tensor([distance]))[0]
+        #cam_tform4x4_obj[0, :] = cam_tform4x4_obj[0, :]
+        #cam_tform4x4_obj[1, :] = -cam_tform4x4_obj[1, :]
+        # cam_tform4x4_obj[2, :] = -cam_tform4x4_obj[2, :]
+        # cam_tform4x4_obj[2, 2:3] = -cam_tform4x4_obj[2, 2:3]
+        return cam_tform4x4_obj
 
 
 class Pascal3D(OD3D_Dataset):
@@ -389,7 +420,7 @@ class Pascal3D(OD3D_Dataset):
     def get_item_raw(self, item):
         fpath_annotation = self.path.joinpath("Annotations", f"{self.frame_rfpaths[item]}.mat")
         fpath_rgb = self.path.joinpath("Images", f"{self.frame_rfpaths[item]}.JPEG")
-        frame = Pascal3DFrame(fpath_annotation=fpath_annotation, fpath_rgb=fpath_rgb, path_meshes=self.path_meshes, dtd=self.dtd, dt_shape_nemo=self.dt_shape_nemo)
+        frame = Pascal3DFrame(fpath_annotation=fpath_annotation, fpath_rgb=fpath_rgb, path_meshes=self.path_meshes, dtd=self.dtd, dt_shape_nemo=self.dt_shape_nemo, classes=self.config.classes)
         return frame
     def get_item_from_cache_disk(self, item):
         fpath_frame = self.path_cache.joinpath(self.frame_names[item])
@@ -466,8 +497,9 @@ class Pascal3DFrames:
         self.kpts2d_annot = torch.stack([frame.kpts2d_annot for frame in frames], dim=0)
         self.kpts2d_annot_vsbl = torch.stack([frame.kpts2d_annot_vsbl for frame in frames], dim=0)
         self.size = torch.stack([frame.size for frame in frames], dim=0)
-
+        self.bbox = torch.stack([frame.bbox for frame in frames], dim=0)
         self.fpath_mesh = [frame.fpath_mesh for frame in frames]
+        self.label = torch.LongTensor([frame.label for frame in frames]).to(device=self.device)
 
     def visualize(self):
         rgb = render_mesh(fpath_mesh=self.fpath_mesh[0], cam_tform_obj=self.cam_tform4x4_obj[0], cam_intr=self.cam_intr4x4[0], img_size=self.size[0], modality="interpolate")

@@ -15,11 +15,7 @@ from pytorch3d.structures.meshes import Meshes
 from pytorch3d.io import IO
 from pytorch3d.renderer.mesh.utils import interpolate_face_attributes
 
-def load_mesh_vertices(fpath_mesh, device):
-    io = IO()
-    mesh = io.load_mesh(fpath_mesh, device=device)
-    verts = mesh[0].verts_list()[0]
-    return verts
+
 
 def render_mask(fpath_mesh, cam_tform_obj, cam_intr, img_size):
     rgba_synthetic = render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba")
@@ -47,13 +43,12 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba", 
         faces=[faces],
         textures=textures
     )
-    logging.info("we can visualize the Pascald3D frame here.")
 
-    pscl3d_tform_t3d = torch.Tensor([[-1., 0., 0., 0.],
+    t3d_tform_pscl3d = torch.Tensor([[-1., 0., 0., 0.],
                                      [0., -1., 0., 0.],
                                      [0., 0., 1., 0.],
                                      [0., 0., 0., 1.]]).to(device=device, dtype=dtype)
-    t3d_cam_tform_obj = torch.matmul(pscl3d_tform_t3d, cam_tform_obj)
+    t3d_cam_tform_obj = torch.matmul(t3d_tform_pscl3d, cam_tform_obj)
 
     R = t3d_cam_tform_obj[:3, :3].T[None,]
     t = t3d_cam_tform_obj[:3, 3][None,]
@@ -98,17 +93,18 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba", 
         return interpolate_face_attributes(fragments.pix_to_face, fragments.bary_coords, feats[faces])[0, ..., 0, :].permute(2, 0, 1)
     elif modality == "nearest":
         pix_to_face, zbuf, bary_coord, dists = rasterizer(mesh)
-
-        ori_shape = bary_coord.shape
-        exr = bary_coord * (bary_coord < 0)
-        bary_coords_ = bary_coord.view(-1, bary_coord.shape[-1])
-        arg_max_idx = bary_coords_.argmax(1)
-        bary_coord = (
-                torch.zeros_like(bary_coords_)
-                .scatter(1, arg_max_idx.unsqueeze(1), 1.0)
-                .view(*ori_shape)
-                + exr
-        )
+        # TODO:
+        raise NotImplementedError
+        #ori_shape = bary_coord.shape
+        #exr = bary_coord * (bary_coord < 0)
+        #bary_coords_ = bary_coord.view(-1, bary_coord.shape[-1])
+        #arg_max_idx = bary_coords_.argmax(1)
+        #bary_coord = (
+        #        torch.zeros_like(bary_coords_)
+        #        .scatter(1, arg_max_idx.unsqueeze(1), 1.0)
+        #        .view(*ori_shape)
+        #        + exr
+        #)
         return interpolate_face_attributes(pix_to_face, bary_coord, verts_rgb).squeeze()
     else:
         # Place a point light in front of the object. As mentioned above, the front of the cow is facing the
