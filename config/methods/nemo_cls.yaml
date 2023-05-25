@@ -2,7 +2,8 @@ name: nemo
 class_name: NeMo
 # class_name: nemo.models.nemo_cls.NeMoCls
 
-checkpoint: ${platform.path_exps}/NeMo-Classification/2022_09_26/classification_saved_model_199.pth
+# checkpoint: ${platform.path_exps}/NeMo-Classification/2022_09_26/classification_saved_model_199.pth
+checkpoint: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
 
 mesh_path: data/PASCAL3D+_release1.1/CAD_single/{:s}/01.off
 num_noise: 5

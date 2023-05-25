@@ -5,5 +5,4 @@ name: pascal3d_train
 
 subsets:
   - train
-category:
-  - car
+

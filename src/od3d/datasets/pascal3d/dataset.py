@@ -17,7 +17,7 @@ import math
 import torchvision.io
 import od3d.io
 from od3d.cv.visual.draw import draw_pixels, draw_bbox
-from od3d.cv.geometry.transform import proj3d2d, reproj2d3d
+from od3d.cv.geometry.transform import proj3d2d, reproj2d3d, proj3d2d_broadcast, transf3d_broadcast
 from od3d.cv.geometry.transform import transf3d
 from od3d.cv.visual.render import render_mask, render_depth, render_mesh
 from od3d.cv.geometry.mesh import Mesh
@@ -55,12 +55,12 @@ class Pascal3DFrame:
 
 
     def __init__(self, fpath_annotation: Path, fpath_rgb: Path, path_meshes: Path, dtd=None, dt_shape_nemo=None, classes: list = None):
+        self.complete = False
         self.device = "cpu"
         self.dtype = torch.float32
-        self.rgb = torchvision.io.read_image(str(fpath_rgb)).to(self.device)
         annotation = scipy.io.loadmat(fpath_annotation)
-
         self.name = annotation['record']['filename'][0][0][0].split('.')[0]
+        self.rgb = torchvision.io.read_image(str(fpath_rgb), mode=torchvision.io.ImageReadMode.RGB).to(self.device)
 
         objects = annotation['record']['objects'][0][0][0]
         # assert len(objects) == 1
@@ -83,6 +83,10 @@ class Pascal3DFrame:
         distance = viewpoint['distance'][0][0][0][0]
         focal = viewpoint['focal'][0][0][0][0]
 
+        if focal == 0:
+            self.incomplete_reason = "focal = 0"
+            return
+
         theta = viewpoint['theta'][0][0][0][0] * math.pi / 180
         principal = np.array([viewpoint['px'][0][0][0][0],
                               viewpoint['py'][0][0][0][0]])
@@ -103,7 +107,7 @@ class Pascal3DFrame:
         self.fpath_mesh = path_meshes.joinpath(self.category, f"{(self.mesh_index + 1):02d}.off")
         fpath_mesh_kpoints3d = path_meshes.joinpath(f"{self.category}.mat")
         annotation_mesh3d = scipy.io.loadmat(fpath_mesh_kpoints3d)
-        kpts3d = np.stack([annotation_mesh3d[self.category][n][0][self.mesh_index][0] for n in self.kpts_names])
+        kpts3d = np.stack([annotation_mesh3d[self.category][n][0][self.mesh_index][0] if len(annotation_mesh3d[self.category][n][0][self.mesh_index]) > 0 else np.array([np.inf, np.inf, np.inf]) for n in self.kpts_names])
         self.kpts3d = torch.from_numpy(kpts3d).to(device=self.device, dtype=self.dtype)
         self.mask, self.depth, self.kpts2d, self.kpts3d_vsbl = self.calc_mesh_proj(fpath_mesh=self.fpath_mesh, pts3d=self.kpts3d)
 
@@ -140,6 +144,9 @@ class Pascal3DFrame:
         # pts3d = torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype)
 
         # self.augment(H=H_out, W=W_out, dist=10, txtr=self.txtr)
+
+        self.complete = True
+
         self.augment(H=512, W=512, dist=5.)
 
     def to(self, device: torch.device):
@@ -149,34 +156,6 @@ class Pascal3DFrame:
                     setattr(self, k, a.to(device))
                     # self.__dict__[k] = a.to(device)
             self.device = device
-            """
-            self.rgb = self.rgb.to(device)
-            self.size
-            self.cam_intr4x4
-            self.cam_tform4x4_obj
-            self.cam_proj4x4_obj
-            self.bbox = self.bbox.to(device)
-            self.kpts2d_annot = self.kpts2d_annot.to(device)
-            self.kpts2d_annot_vsbl = self.kpts2d_annot_vsbl.to(device)
-            self.mask = self.mask.to(device)
-            self.depth = self.depth.to(device)
-            self.kpts2d = self.kpts2d.to(device)
-            self.kpts3d = self.kpts3d.to(device)
-            self.kpts3d_vsbl = self.kpts3d_vsbl.to(device)
-
-            if self.txtr is not None:
-                self.txtr
-            if self.shapenemo_vts3d is not None:
-                self.shapenemo_vts3d = self.shapenemo_vts3d.to(device)
-            if self.shapenemo_mask is not None:
-                self.shapenemo_mask = self.shapenemo_mask.to(device)
-            if self.
-            self.shapenemo_depth = None
-            self.vts2d = None
-            self.vts3d_vsbl = None
-
-            self.device = device
-            """
 
     def calc_mesh_proj(self, fpath_mesh, pts3d=None, vsbl_depth_eps=0.01):
 
@@ -191,13 +170,13 @@ class Pascal3DFrame:
         if pts3d is None:
             return mask, depth
         else:
-            pts2d = proj3d2d(pts3d=pts3d, proj4x4=self.cam_proj4x4_obj)
+            pts2d = proj3d2d_broadcast(pts3d=pts3d, proj4x4=self.cam_proj4x4_obj)
             cam_tform_pts3d_depth_rendered = sample_pxl2d_pts(depth, pts2d)[:, 0]
-            cam_tform_pts3d_depth = transf3d(pts3d, transf4x4=self.cam_tform4x4_obj)[:, 2]
+            cam_tform_pts3d_depth = transf3d_broadcast(pts3d, transf4x4=self.cam_tform4x4_obj)[:, 2]
             pts3d_vsbl = (cam_tform_pts3d_depth - vsbl_depth_eps < cam_tform_pts3d_depth_rendered) + (cam_tform_pts3d_depth_rendered <= 0.)
             return mask, depth, pts2d, pts3d_vsbl
     def augment(self, H, W, dist):
-        logger.info(f"Frame name {self.name}")
+        # logger.info(f"Frame name {self.name}")
 
         #center = torch.LongTensor([500, 200]).to(device=self.device)
         #center = torch.Tensor([(self.bbox[0] + self.bbox[2]) / 2., (self.bbox[1] + self.bbox[3]) / 2.]).to(
@@ -403,19 +382,22 @@ class Pascal3D(OD3D_Dataset):
     def __len__(self):
         return len(self.frame_names)
 
-    def __getitem__(self, item):
+    def get_item(self, item):
         if self.cache is None:
             frame = self.get_item_raw(item)
-            if frame is not None:
-                return frame
-            else:
-                return self.get_item_raw((item + 1) % len(self))
+            if frame is None or not frame.complete:
+                if not frame.complete:
+                    logger.warning(f'Skipping frame {frame.name} due to: {frame.incomplete_reason}')
+                frame = self.get_item_raw((item + 1) % len(self))
         elif self.cache is 'Disk':
             raise NotImplementedError
         elif self.cache is 'RAM':
             raise NotImplementedError
         else:
             raise NotImplementedError
+
+        logger.info(f"Frame: id {item}, name {frame.name}")
+        return frame
 
     def get_item_raw(self, item):
         fpath_annotation = self.path.joinpath("Annotations", f"{self.frame_rfpaths[item]}.mat")
@@ -500,6 +482,7 @@ class Pascal3DFrames:
         self.bbox = torch.stack([frame.bbox for frame in frames], dim=0)
         self.fpath_mesh = [frame.fpath_mesh for frame in frames]
         self.label = torch.LongTensor([frame.label for frame in frames]).to(device=self.device)
+        self.name = [frame.name for frame in frames]
 
     def visualize(self):
         rgb = render_mesh(fpath_mesh=self.fpath_mesh[0], cam_tform_obj=self.cam_tform4x4_obj[0], cam_intr=self.cam_intr4x4[0], img_size=self.size[0], modality="interpolate")
