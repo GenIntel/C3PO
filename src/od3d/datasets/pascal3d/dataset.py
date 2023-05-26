@@ -473,11 +473,11 @@ class Pascal3DFrames:
         self.cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0)
         self.cam_proj4x4_obj = torch.stack([frame.cam_proj4x4_obj for frame in frames], dim=0)
         self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0)
-        self.kpts3d = torch.stack([frame.kpts3d for frame in frames], dim=0)
-        self.kpts2d = torch.stack([frame.kpts2d for frame in frames], dim=0)
-        self.kpts3d_vsbl = torch.stack([frame.kpts3d_vsbl for frame in frames], dim=0)
-        self.kpts2d_annot = torch.stack([frame.kpts2d_annot for frame in frames], dim=0)
-        self.kpts2d_annot_vsbl = torch.stack([frame.kpts2d_annot_vsbl for frame in frames], dim=0)
+        self.kpts3d = [frame.kpts3d for frame in frames] # no stack possible because #kpts change for classes
+        self.kpts2d = [frame.kpts2d for frame in frames] # no stack possible because #kpts change for classes
+        self.kpts3d_vsbl = [frame.kpts3d_vsbl for frame in frames] # no stack possible because #kpts change for classes
+        self.kpts2d_annot = [frame.kpts2d_annot for frame in frames] # no stack possible because #kpts change for classes
+        self.kpts2d_annot_vsbl = [frame.kpts2d_annot_vsbl for frame in frames] # no stack possible because #kpts change for classes
         self.size = torch.stack([frame.size for frame in frames], dim=0)
         self.bbox = torch.stack([frame.bbox for frame in frames], dim=0)
         self.fpath_mesh = [frame.fpath_mesh for frame in frames]
@@ -492,7 +492,7 @@ class Pascal3DFrames:
         mix_real_with_synthetic = blend_rgb(self.rgb[0], self.mask[0])
 
         mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
-                                              proj3d2d(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),
+                                              proj3d2d_broadcast(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),
                                                        proj4x4=self.cam_proj4x4_obj[0]), colors=(0, 255, 0))
         mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, self.kpts2d_annot[0, self.kpts2d_annot_vsbl[0]],
                                               colors=(0, 0, 255), radius_in=2, radius_out=4)

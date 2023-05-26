@@ -6,3 +6,5 @@ name: pascal3d_train
 subsets:
   - train
 
+subset_fraction: 0.001
+val_fraction: 0.2

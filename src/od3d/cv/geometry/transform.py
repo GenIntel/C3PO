@@ -1,26 +1,42 @@
 import torch
-from pytorch3d.renderer.cameras import look_at_view_transform
+from pytorch3d.renderer.cameras import look_at_view_transform, look_at_rotation
 import math
+from pytorch3d.transforms import axis_angle_to_matrix
 
 def transf4x4_from_pos_and_theta(pos, theta):
-    dist = pos.norm(dim=-1)
-    azim = torch.atan(pos[..., 0] / -pos[..., 1]) % math.pi + math.pi * (pos[..., 0] < 0) # torch.atan(pos[..., 0] / pos[..., 2])  % math.pi + math.pi * (pos[..., 0] < 0)
-    elev = torch.asin(pos[..., 2] / dist)
-    return transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
-
-def transf4x4_from_spherical(azim, elev, theta, dist):
-    in_shape = azim.shape
-    dtype = azim.dtype
-    device = azim.device
+    in_shape = theta.shape
+    dtype = theta.dtype
+    device = theta.device
     zeros = torch.zeros(size=in_shape, dtype=dtype, device=device).reshape(-1)
     ones = torch.ones(size=in_shape, dtype=dtype, device=device).reshape(-1)
+    camrot_pos_rot3x3_obj = look_at_rotation(pos, up=((0, 0, 1),), device=pos.device).transpose(-1, -2) # pytorch3d convention to store rotation matrix transposed
+    camrot_pos_rot3x3_obj[..., 0:2, :] = -camrot_pos_rot3x3_obj[..., 0:2, :] # pytorch3d convention to have negative x,y axis
 
+    camrot_theta_rot3x3_camrot_pos = torch.stack([
+        torch.cos(theta), -torch.sin(theta), zeros, torch.sin(theta), torch.cos(theta), zeros, zeros, zeros, ones
+    ], dim=-1).reshape(-1, 3, 3).transpose(-1, -2) # transpose is required because theta is usually given in -z axis instead of +z
+
+    camrot_rot3x3_obj = torch.bmm(camrot_theta_rot3x3_camrot_pos, camrot_pos_rot3x3_obj)
+    camrot_transl3_obj = rot3d(pts3d=-pos, rot3x3=camrot_rot3x3_obj)
+    camrot_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(camrot_rot3x3_obj, camrot_transl3_obj)
+
+    return camrot_tform4x4_obj
+
+    #dist = pos.norm(dim=-1)
+    #azim = torch.atan(pos[..., 0] / -pos[..., 1]) % math.pi + math.pi * (pos[..., 0] < 0) # torch.atan(pos[..., 0] / pos[..., 2])  % math.pi + math.pi * (pos[..., 0] < 0)
+    #elev = torch.asin(pos[..., 2] / dist)
+    #return transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+
+def transf4x4_from_spherical(azim, elev, theta, dist):
     # camera center
     obj_transl3_cam = torch.stack([
         dist * torch.cos(elev) * torch.sin(azim),
         -dist * torch.cos(elev) * torch.cos(azim),
         dist * torch.sin(elev)
     ], dim=-1)
+
+    return transf4x4_from_pos_and_theta(obj_transl3_cam, theta)
+    """
 
     cam_transl3_obj = -obj_transl3_cam
 
@@ -49,6 +65,8 @@ def transf4x4_from_spherical(azim, elev, theta, dist):
     camrot_tform4x4_obj[:, 1:3, :] = -camrot_tform4x4_obj[:, 1:3, :]
 
     return camrot_tform4x4_obj
+    
+    """
 
     #camrot_tform_obj = np.hstack((camrot_tform_cam, np.dot(camrot_tform_cam, cam_transl3_obj)))
     #camrot_tform_obj = np.vstack((camrot_tform_obj, [0, 0, 0, 1]))
@@ -59,11 +77,15 @@ def transf4x4_from_spherical(azim, elev, theta, dist):
 
     # return 0.
 
+
+@torch.jit.script
 def transf4x4_from_rot3x3(rot3x3):
-    transf4x4 = torch.eye(n=4, dtype=rot3x3.dtype, device=rot3x3.device)[(None,)*(rot3x3.dim()-2)].repeat(repeats=list(rot3x3.shape[:-2] + torch.Size([1, 1])))
+    transf4x4 = torch.zeros(rot3x3.shape[:-2] + torch.Size([4, 4]), device=rot3x3.device, dtype=rot3x3.dtype)
     transf4x4[..., :3, :3] = rot3x3
+    transf4x4[..., 3, 3] = 1.
     return transf4x4
 
+@torch.jit.script
 def transf4x4_from_rot3x3_and_transl3(rot3x3, transl3):
     transf4x4 = transf4x4_from_rot3x3(rot3x3)
     transf4x4[..., :3, 3] = transl3

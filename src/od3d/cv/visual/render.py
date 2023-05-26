@@ -67,6 +67,7 @@ def render_mesh(fpath_mesh, cam_tform_obj, cam_intr, img_size, modality="rgba", 
         image_size=[int(img_size[0]), int(img_size[1])],
         blur_radius=0.0,
         faces_per_pixel=1,
+        bin_size=0
     )
 
     rasterizer = MeshRasterizer(
