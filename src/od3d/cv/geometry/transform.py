@@ -107,6 +107,21 @@ def proj3d2d_broadcast(pts3d, proj4x4):
     shape_first_dims = torch.broadcast_shapes(pts3d.shape[:-1], proj4x4.shape[:-2])
     return proj3d2d(pts3d.expand(*shape_first_dims, 3), proj4x4.expand(*shape_first_dims, 4, 4))
 
+
+def pts3d_to_pts4d(pts3d):
+    device = pts3d.device
+    dtype = pts3d.dtype
+    ones1d = torch.ones(size=list(pts3d.shape[:-1]) + [1]).to(device=device, dtype=dtype)
+    pts4d = torch.concatenate([pts3d, ones1d], dim=-1)
+    return pts4d
+
+def pts2d_to_pts3d(pts2d):
+    device = pts2d.device
+    dtype = pts2d.dtype
+    ones1d = torch.ones(size=list(pts2d.shape[:-1]) + [1]).to(device=device, dtype=dtype)
+    pts3d = torch.concatenate([pts2d, ones1d], dim=-1)
+    return pts3d
+
 def proj3d2d(pts3d, proj4x4):
     device = pts3d.device
     dtype = pts3d.dtype

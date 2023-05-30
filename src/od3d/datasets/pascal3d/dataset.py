@@ -102,7 +102,7 @@ class Pascal3DFrame:
         cam_intr4x4 = np.vstack((cam_intr4x4, [0, 0, 0, 1]))
         self.cam_intr4x4 = torch.from_numpy(cam_intr4x4).to(device=self.device, dtype=self.dtype)
 
-        self.cam_proj4x4_obj = torch.matmul(self.cam_intr4x4, self.cam_tform4x4_obj)
+        self.cam_proj4x4_obj = torch.bmm(self.cam_intr4x4[None,], self.cam_tform4x4_obj[None,])[0]
 
         self.fpath_mesh = path_meshes.joinpath(self.category, f"{(self.mesh_index + 1):02d}.off")
         fpath_mesh_kpoints3d = path_meshes.joinpath(f"{self.category}.mat")
@@ -161,11 +161,15 @@ class Pascal3DFrame:
 
         mask = render_mask(fpath_mesh=fpath_mesh,
                                 cam_tform_obj=self.cam_tform4x4_obj.to("cuda:0"),
-                                cam_intr=self.cam_intr4x4.to("cuda:0"), img_size=self.size.to("cuda:0")).to(self.device)
+                                cam_intr=self.cam_intr4x4.to("cuda:0"),
+                                img_size=self.size.to("cuda:0")
+                           ).to(self.device)
 
         depth = render_depth(fpath_mesh=fpath_mesh,
                                  cam_tform_obj=self.cam_tform4x4_obj.to("cuda:0"),
-                                 cam_intr=self.cam_intr4x4.to("cuda:0"), img_size=self.size.to("cuda:0")).to(self.device)
+                                 cam_intr=self.cam_intr4x4.to("cuda:0"),
+                                 img_size=self.size.to("cuda:0")
+                             ).to(self.device)
 
         if pts3d is None:
             return mask, depth
@@ -498,3 +502,11 @@ class Pascal3DFrames:
                                               colors=(0, 0, 255), radius_in=2, radius_out=4)
 
         show_img(mix_real_with_synthetic)
+
+    def to(self, device: torch.device):
+        if self.device != device:
+            for k, a in self.__dict__.items():
+                if isinstance(a, torch.Tensor):
+                    setattr(self, k, a.to(device))
+                    # self.__dict__[k] = a.to(device)
+            self.device = device

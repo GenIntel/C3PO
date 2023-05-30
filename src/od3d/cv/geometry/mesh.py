@@ -184,9 +184,9 @@ class Meshes(torch.nn.Module):
         """
         cams_proj4x4_obj = torch.bmm(cams_intr4x4, cams_tform4x4_obj)
         verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=mesh_ids)
-        mask_verts_vsbl = self.render_feats(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4 / down_sample_rate, imgs_sizes=imgs_sizes // down_sample_rate, meshes_ids=mesh_ids, replace_feats_with_mask_vsbl=True)
         verts2d = proj3d2d_broadcast(verts3d, proj4x4=cams_proj4x4_obj[:, None])
 
+        mask_verts_vsbl = self.render_feats(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4 / down_sample_rate, imgs_sizes=imgs_sizes // down_sample_rate, meshes_ids=mesh_ids, replace_feats_with_mask_vsbl=True)
         mask_verts_vsbl *= (verts2d <= (imgs_sizes[:, None] - 1)).all(dim=-1)
         mask_verts_vsbl *= (verts2d >= 0).all(dim=-1)
 

@@ -21,7 +21,7 @@ def setup(config_fpath: str = typer.Option(None, '-c', '--config')):
     od3ddataset.setup()
 
 @app.command()
-def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
+def visualize(dataset: str = typer.Option('co3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.DEBUG)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])

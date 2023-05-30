@@ -6,6 +6,76 @@ from od3d.cv.visual.draw import tensor_to_cv_img
 from od3d.cv.visual.resize import resize
 import torch
 import math
+from pytorch3d.structures import Pointclouds
+from pytorch3d.vis.plotly_vis import plot_scene, AxisArgs
+from pytorch3d.renderer.cameras import PerspectiveCameras
+from od3d.cv.geometry.transform import transf3d_broadcast
+from od3d.cv.visual.draw import get_colors
+
+def pt3d_camera_from_tform4x4_intr4x4_imgs_size(cam_tform4x4_obj: torch.Tensor, cam_intr4x4: torch.Tensor, img_size: torch.Tensor):
+    if cam_tform4x4_obj.dim() == 2:
+        cam_tform4x4_obj = cam_tform4x4_obj[None,]
+        cam_intr4x4 = cam_intr4x4[None, ]
+        img_size = img_size[None, ]
+    t3d_tform_default = torch.Tensor([[-1., 0., 0., 0.],
+                                      [0., -1., 0., 0.],
+                                      [0., 0., 1., 0.],
+                                      [0., 0., 0., 1.]]).to(device=cam_tform4x4_obj.device,
+                                                            dtype=cam_tform4x4_obj.dtype)
+
+    cam_tform4x4_obj = torch.bmm(t3d_tform_default[None,], cam_tform4x4_obj)
+    focal_length = torch.stack([cam_intr4x4[:, 0, 0], cam_intr4x4[:, 1, 1]], dim=1)
+    principal_point = torch.stack([cam_intr4x4[:, 0, 2], cam_intr4x4[:, 1, 2]], dim=1)
+
+    R = cam_tform4x4_obj[:, :3, :3]
+    t = cam_tform4x4_obj[:, :3, 3]
+    cameras = PerspectiveCameras(R=R, T=t, focal_length=focal_length,
+                                 principal_point=principal_point, in_ndc=False,
+                                 image_size=img_size, device=cam_tform4x4_obj.device)
+
+    return cameras
+
+def show_pcl(verts: torch.Tensor, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tensor=None, img_size: torch.Tensor=None):
+    """
+
+    Args:
+        verts (torch.Tensor): Nx3 / BxNx3
+
+    """
+
+    if cam_tform4x4_obj is not None:
+        verts = transf3d_broadcast(pts3d=verts, transf4x4=cam_tform4x4_obj)
+
+        pt3d_cameras = pt3d_camera_from_tform4x4_intr4x4_imgs_size(cam_tform4x4_obj=cam_tform4x4_obj, cam_intr4x4=cam_intr4x4, img_size=img_size)
+    else:
+        pt3d_cameras = None
+
+    if verts.dim() == 3:
+        B, N, _ = verts.shape
+        colors = get_colors(B, device=verts.device)
+        rgb = colors[:, None].repeat(1, N, 1)
+        #rgb = rgb.reshape(-1, 3)
+    else:
+        N, _ = verts.shape
+        colors = get_colors(1, device=verts.device)
+        rgb = colors.repeat(N, 1)
+        rgb = rgb[None,]
+        verts = verts[None,]
+
+    point_cloud = Pointclouds(points=verts, features=rgb)
+
+    fig = plot_scene({
+        "Pointcloud": {
+            "pcl1": point_cloud[0],
+            "pcl2": point_cloud[1],
+            "pcl3": point_cloud[2],
+        }
+    }, viewpoint_cameras=pt3d_cameras, axis_args=AxisArgs(backgroundcolor="rgb(200, 200, 230)", showgrid=True, zeroline=True, showline=True,
+                          showaxeslabels=True, showticklabels=True))
+    fig.show()
+    input('bla')
+
+
 def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=None):
     # rgb: K x 3 x H x W / GH x GW x 3 x H x W
 

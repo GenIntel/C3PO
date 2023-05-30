@@ -22,6 +22,8 @@ import torchvision
 from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.geometry.transform import transf4x4_from_pos_and_theta
 from sklearn.metrics import confusion_matrix
+from od3d.cv.differentiation.gradient import calc_batch_gradients
+from od3d.cv.visual.sample import sample_pxl2d_pts
 class NeMo(OD3DMethod):
     def __init__(
         self,
@@ -301,15 +303,28 @@ class NeMo(OD3DMethod):
                 time_before_pose_iterative = time.time()
 
                 for epoch in range(self.config.inference.optimizer.epochs):
-
                     mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj, cams_intr4x4=batch.cam_intr4x4 / self.down_sample_rate,
                                               imgs_sizes=batch.size // self.down_sample_rate, meshes_ids=[int(pred_class_ids[0])],
                                               replace_feats_with_verts3d=False)[:, 0]
-                    #inner_feats2d_net_mesh = torch.sum(net_feats2d * mesh_feats2d_rendered, dim=-3, keepdim=True)
                     inner_feats2d_net_mesh = torch.einsum('bchw,bchw->bhw', net_feats2d, mesh_feats2d_rendered)[:, None]
                     inner_feats2d_net_clutter = torch.einsum('bchw,kc->bkhw', net_feats2d, self.clutter_feats).mean(dim=1, keepdim=True)
                     inner_feats2d_net_bank = torch.max(inner_feats2d_net_mesh, inner_feats2d_net_clutter)
                     mesh_cam_loss = 1. - (inner_feats2d_net_bank.flatten(-3).mean(dim=-1) - inner_feats2d_net_clutter.flatten(1).mean())
+
+
+                    """
+                    # using gradient of pixels instead of gradients of interpolated vertices -> no speed up
+                    vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
+                                                                 cams_tform4x4_obj=cam_transf4x4_obj,
+                                                                 imgs_sizes=batch.size, mesh_ids=batch.label.tolist(),
+                                                                 down_sample_rate=self.down_sample_rate)
+                    vts_feats = self.meshes.get_feats_with_mesh_id(batch.label.tolist()[0])
+                    vts_feats = vts_feats[mask_vts2d_vsbl[0, :vts_feats.shape[0]]]
+                    net_feats2d_sampled = sample_pxl2d_pts(net_feats2d, vts2d / self.down_sample_rate)[0, mask_vts2d_vsbl[0]]
+                    mesh_cam_loss = (net_feats2d_sampled - vts_feats).norm(dim=1)
+                    """
+
+
                     #show_img(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj, cams_intr4x4=batch.cam_intr4x4,
                     #                                  imgs_sizes=batch.size, meshes_ids=[int(pred_class_ids[0])],
                     #                                  replace_feats_with_verts3d=True)[0, 0] * 255).to(dtype=batch.rgb.dtype)))
@@ -327,9 +342,12 @@ class NeMo(OD3DMethod):
             #    f"predicted pose, took {(time_pred_pose - time_pred_class):.3f}")
 
             diff_rot3x3 = torch.matmul(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_transf4x4_obj[:, :3, :3])
-            diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3)
-            diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
-
+            try:
+                diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3)
+                diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
+            except ValueError:
+                logger.warning(f'Cannot calculate deviation in rotation angle due to rot3x3 trace being too small, setting deviation to 0.')
+                diff_rot_angle_rad = 0.
             results['rot_diff_rad'].append(diff_rot_angle_rad)
             results['label_gt'].append(batch.label)
             results['label_pred'].append(pred_class_ids)
