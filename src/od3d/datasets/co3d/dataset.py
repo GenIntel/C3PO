@@ -7,7 +7,7 @@ import torchvision
 import torch
 from od3d.cv.geometry.transform import transf4x4_from_rot3x3_and_transl3, transf3d_broadcast
 from pathlib import Path
-from od3d.cv.io import read_image
+from od3d.cv.io import read_image, read_co3d_depth_image
 from od3d.cv.visual.show import show_img
 from od3d.cv.visual.blend import blend_rgb
 import pytorch3d.transforms
@@ -103,8 +103,11 @@ class CO3D_Frame():
         self.frame_number = frame_annotation.frame_number
         self.name = f'{self.category}_{frame_annotation.sequence_name}_{frame_annotation.frame_number}'
         self.rgb = torchvision.io.read_image(str(self.path_co3d.joinpath(frame_annotation.image.path)), mode=torchvision.io.ImageReadMode.RGB).to(self.device)
-        self.mask = torchvision.io.read_image(str(self.path_co3d.joinpath(frame_annotation.mask.path)), mode=torchvision.io.ImageReadMode.UNCHANGED).to(self.device)
-        self.depth = read_image(self.path_co3d.joinpath(frame_annotation.depth.path)).to(self.device)
+        self.mask = read_image(self.path_co3d.joinpath(frame_annotation.mask.path)).to(self.device)
+        self.H, self.W = self.rgb.shape[1:]
+        s = min(self.H, self.W)
+        self.depth = read_co3d_depth_image(self.path_co3d.joinpath(frame_annotation.depth.path)).to(self.device) * frame_annotation.depth.scale_adjustment
+        self.depth_mask = read_image(self.path_co3d.joinpath(frame_annotation.depth.mask_path)).to(self.device)
 
         self.rfpath_pcl = rfpath_pcl
         self._pcl = None
@@ -118,11 +121,9 @@ class CO3D_Frame():
 
 
 
-        self.H, self.W = self.mask.shape[1:]
         self.size = torch.Tensor([self.W, self.H]).to(dtype=self.dtype, device=self.device)
-        s = min(self.H, self.W)
         focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length).to(dtype=self.dtype, device=self.device) * s / 2.
-        principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point).to(dtype=self.dtype, device=self.device) * s / 2. + self.size  / 2.
+        principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point).to(dtype=self.dtype, device=self.device) * s / 2. + self.size / 2.
         self.cam_intr4x4 = torch.Tensor([[focal_length[0], 0., principal_point[0], 0.],
                            [0., focal_length[1], principal_point[1], 0.],
                            [0., 0., 1., 0.],
@@ -155,10 +156,25 @@ class CO3D_Frames():
         self.rgb = torch.stack([frame.rgb for frame in frames], dim=0)
         self.mask = torch.stack([frame.mask for frame in frames], dim=0)
         self.depth = torch.stack([frame.depth for frame in frames], dim=0)
+        self.depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0)
         self.cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0)
         self.cam_proj4x4_obj = torch.stack([frame.cam_proj4x4_obj for frame in frames], dim=0)
         self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0)
         self.rfpath_pcl = [frame.rfpath_pcl for frame in frames]
+        if frame0._pcl is not None:
+            self._pcl = torch.stack([frame._pcl for frame in frames], dim=0)
+        else:
+            self._pcl = None
+
+    @property
+    def pcl(self):
+        if self._pcl is None:
+            self._pcl = []
+            for i in range(len(self.rfpath_pcl)):
+                np_verts, _ = load_ply(str(self.path_co3d.joinpath(self.rfpath_pcl[i])))
+                self._pcl.append(np_verts.to(dtype=self.dtype, device=self.device))
+            self._pcl = torch.stack(self._pcl)
+        return self._pcl
 
     def visualize(self):
 
@@ -201,7 +217,7 @@ class CO3D(OD3D_Dataset):
             #'carrot'
         ]
         self.sequences_require_pcl = True
-        self.frames_only_first_of_each_sequence = True
+        self.frames_only_first_of_each_sequence = False
         self.whitelist_frame_types = [CO3D_FRAME_TYPES.DEV_KNOWN, CO3D_FRAME_TYPES.DEV_UNSEEN, CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN, CO3D_FRAME_TYPES.TEST_KNOWN]
         self.sequences_names = []
         self.sequences_map_names_to_id = {}
@@ -213,6 +229,8 @@ class CO3D(OD3D_Dataset):
             if self.sequences_require_pcl:
                 count_sequences_before_pcl_filter = len(sequence_annotations)
                 sequence_annotations = list(filter(lambda sa: sa.point_cloud is not None, sequence_annotations))
+                # quality score lies in range [-2.35x, 1.04x]
+                sequence_annotations = list(filter(lambda sa: sa.point_cloud.quality_score > 0.8, sequence_annotations))
                 count_sequences_after_pcl_filter = len(sequence_annotations)
                 logger.info(f'Keep {count_sequences_after_pcl_filter}/{count_sequences_before_pcl_filter} sequences with pointclouds for class {cls}')
 
@@ -232,29 +250,88 @@ class CO3D(OD3D_Dataset):
                         cls_frame_annotations_filtered.append(fa)
                         cls_frame_annotations_filtered_sequence_names.append(fa.sequence_name)
                 cls_frame_annotations = cls_frame_annotations_filtered
+                # Note: should be already sorted but ensuring it here
+                cls_frame_annotations = sorted(cls_frame_annotations, key=lambda fa: (fa.sequence_name, fa.frame_number))
             self.frame_annotations += cls_frame_annotations
 
-            from scipy.linalg import orthogonal_procrustes
-            from od3d.cv.geometry.transform import pts3d_to_pts4d
+            pts3d_cls = None
+            frames_count = 0
+            pts3d_max_count = 10000
+            last_seq = None
+            for i in range(0, len(self)): # 202 606
 
-            frame1_pts3d_1 = self.__getitem__(0).pcl
-            frame2_pts3d_2 = self.__getitem__(1).pcl
-            #frame1_pts4d_1 = pts3d_to_pts4d(pts3d=frame1_pts3d_1)
-            #frame2_pts4d_2 = pts3d_to_pts4d(pts3d=frame2_pts3d_2)
-            #frame2_tform_frame1, res = orthogonal_procrustes(frame1_pts4d_1, frame2_pts4d_2, check_finite=False)
-            #frame2_tform_frame1 = torch.from_numpy(frame2_tform_frame1).to(device=self.device, dtype=self.dtype)
-            from pytorch3d.ops.points_alignment import iterative_closest_point
-            icp_sol = iterative_closest_point(X=frame1_pts3d_1[None,].cuda(), Y=frame2_pts3d_2[None,].cuda(), estimate_scale=True, verbose=False, max_iterations=20)
-            #icp_sol.RTs
-            #icp_sol.Xt
-            # frame2_tform_pts3d_1 = transf3d_broadcast(pts3d=frame1_pts3d_1, transf4x4=frame2_tform_frame1.inverse())
-            frame2_tform_frame1 = transf4x4_from_rot3x3_and_transl3(rot3x3=icp_sol.RTs.R.transpose(-1, -2), transl3=icp_sol.RTs.T)[0].cpu()
+                from od3d.cv.geometry.transform import depth2pts3d
+                frames_count += 1
+                frame = self[i]
+                frame.to('cuda:0')
+                logger.info(f'Frame {frame.frame_number}')
+
+                if last_seq is None:
+                    last_seq = frame.sequence_name
+                if last_seq != frame.sequence_name:
+                    show_pcl(pts3d_cls)
+                    last_seq = frame.sequence_name
+                    frames_count = 0
+                    pts3d_cls = None
+                else:
+                    logger.info(frame.sequence_name)
+
+                pts3d = depth2pts3d(depth=frame.depth, cam_intr4x4=frame.cam_intr4x4)
+                depth_mask = frame.depth_mask * (frame.mask > 0.99) # * frame.depth > 0. * frame.depth.isfinite()
+                pts3d = pts3d[:, depth_mask[0]].transpose(-2, -1)
+                pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=frame.cam_tform4x4_obj.inverse())
+
+                if pts3d.shape[0] > pts3d_max_count:
+                    sample_ids = torch.randperm(pts3d.shape[0])[:pts3d_max_count]
+                    pts3d = pts3d[sample_ids]
+
+                # pts3d_cls_prob = pts3d_cls_prob[sample_ids[:pts3d_max_count]]
+                # torch.rand(pts3d_cls.shape[0] * (1. - pts3d_cls_prob), device=self.device, dtype=self.dtype)
+                # prob_sampled = pts3d_cls.shape[0] / pts3d_max_count
+
+                if pts3d_cls is None:
+                    pts3d_cls = pts3d
+                else:
+                    pts3d_cls = torch.cat([pts3d_cls, pts3d], dim=0)
+
+                if pts3d_cls.shape[0] > pts3d_max_count:
+                    """
+                    import pytorch3d.ops
+                    pts3d_cls, _ = pytorch3d.ops.sample_farthest_points(pts3d_cls[None,], K=pts3d_max_count)
+                    pts3d_cls = pts3d_cls[0]
+                    """
+
+                    from od3d.cv.geometry.downsample import voxel_downsampling
+                    logger.info(pts3d_cls.shape)
+                    pts3d_cls = voxel_downsampling(pts3d_cls, pts3d_max_count)
+
+                    #sample_ids = torch.randperm(pts3d_cls.shape[0])
+                    #pts3d_cls = pts3d_cls[sample_ids[:pts3d_max_count]]
+                    #pts3d_cls_prob = pts3d_cls_prob[sample_ids[:pts3d_max_count]]
+                    #torch.rand(pts3d_cls.shape[0] * (1. - pts3d_cls_prob), device=self.device, dtype=self.dtype)
+                    #prob_sampled = pts3d_cls.shape[0] / pts3d_max_count
+
+
+
+            from od3d.cv.geometry.points_alignment import icp
+
+            frame1_pts3d_1 = self[0].pcl[:20000]
+            frame2_pts3d_2 = self[1].pcl[:20000]
+            #frame2_tform_frame1 = torch.Tensor([[1., 0., 0., -1.],
+            #                                    [0., 1., 0., 0.],
+            #                                    [0., 0., 1., 0.],
+            #                                    [0., 0., 0., 1.]])
+            #frame2_pts3d_2 = transf3d_broadcast(frame1_pts3d_1, frame2_tform_frame1)
+
+            frame2_tform_frame1 = icp(frame1_pts3d_1, frame2_pts3d_2)
             frame2_tform_pts3d_1 = transf3d_broadcast(pts3d=frame1_pts3d_1, transf4x4=frame2_tform_frame1)
             show_pcl(torch.stack([frame1_pts3d_1, frame2_pts3d_2, frame2_tform_pts3d_1], dim=0))
+
     def __len__(self):
         return len(self.frame_annotations)
 
     def __getitem__(self, item):
+        logger.warning(item)
         return CO3D_Frame(path_co3d=self.path, frame_annotation=self.frame_annotations[item], rfpath_pcl=self.sequences_rfpaths_pcl[self.sequences_map_names_to_id[self.frame_annotations[item].sequence_name]], dtype=self.dtype, device=self.device)
 
     def visualize(self, item: int):

@@ -122,6 +122,14 @@ def pts2d_to_pts3d(pts2d):
     pts3d = torch.concatenate([pts2d, ones1d], dim=-1)
     return pts3d
 
+def pts2d_to_pts4d(pts2d):
+    device = pts2d.device
+    dtype = pts2d.dtype
+    ones2d = torch.ones(size=list(pts2d.shape[:-1]) + [2]).to(device=device, dtype=dtype)
+    pts4d = torch.concatenate([pts2d, ones2d], dim=-1)
+    pts4d = pts4d.reshape(list(pts4d.shape) + [1])
+    return pts4d
+
 def proj3d2d(pts3d, proj4x4):
     device = pts3d.device
     dtype = pts3d.dtype
@@ -137,18 +145,27 @@ def proj3d2d(pts3d, proj4x4):
     pts2d_transf_proj = pts2d_transf_proj.squeeze(dim=-1)
     return pts2d_transf_proj
 
-def reproj2d3d(pxl2d, proj4x4):
-    device = pxl2d.device
-    dtype = pxl2d.dtype
-    ones2d = torch.ones(size=list(pxl2d.shape[:-1]) + [2]).to(device=device, dtype=dtype)
-    pts4d = torch.concatenate([pxl2d, ones2d], dim=-1)
-    pts4d = pts4d.reshape(list(pts4d.shape) + [1])
-    pts4d_reproj = torch.bmm(proj4x4.inverse().reshape(-1, 4, 4), pts4d.reshape(-1, 4, 1)).reshape(pts4d.shape)
-    dim_coords2d = pts4d_reproj.dim() - 2
-    pts2d_reproj = pts4d_reproj.index_select(dim=dim_coords2d, index=torch.LongTensor([0, 1]).to(device=device))
-    pts2d_reproj = pts2d_reproj.squeeze(dim=-1)
-    return pts2d_reproj
+def reproj2d3d_broadcast(pxl2d, proj4x4_inv):
+    shape_first_dims = torch.broadcast_shapes(pxl2d.shape[:-1], proj4x4_inv.shape[:-2])
+    return reproj2d3d(pxl2d.expand(*shape_first_dims, 2), proj4x4_inv.expand(*shape_first_dims, 4, 4))
 
+def reproj2d3d(pxl2d, proj4x4_inv):
+    device = pxl2d.device
+    pts4d = pts2d_to_pts4d(pxl2d)
+    pts4d_reproj = torch.bmm(proj4x4_inv.reshape(-1, 4, 4), pts4d.reshape(-1, 4, 1)).reshape(pts4d.shape)
+    dim_coords2d = pts4d_reproj.dim() - 2
+    pts3d_reproj = pts4d_reproj.index_select(dim=dim_coords2d, index=torch.LongTensor([0, 1, 2]).to(device=device))
+    pts3d_reproj = pts3d_reproj.squeeze(dim=-1)
+    return pts3d_reproj
+
+def depth2pts3d(depth, cam_intr4x4):
+    device = cam_intr4x4.device
+    dtype = cam_intr4x4.dtype
+    H, W = depth.shape[-2:]
+    pxl2d = torch.stack(torch.meshgrid(torch.arange(W), torch.arange(H), indexing='xy'), dim=-1).to(device=device, dtype=dtype)
+    pts3d_homog = reproj2d3d_broadcast(pxl2d, proj4x4_inv=cam_intr4x4.inverse()).transpose(-2, -1).transpose(-3, -2)
+    pts3d = pts3d_homog[(None, ) * (depth.dim() - 3)] * depth
+    return pts3d
 
 def transf3d_broadcast(pts3d, transf4x4):
     shape_first_dims = torch.broadcast_shapes(pts3d.shape[:-1], transf4x4.shape[:-2])

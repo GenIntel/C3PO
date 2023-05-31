@@ -54,26 +54,58 @@ def show_pcl(verts: torch.Tensor, cam_tform4x4_obj: torch.Tensor=None, cam_intr4
         B, N, _ = verts.shape
         colors = get_colors(B, device=verts.device)
         rgb = colors[:, None].repeat(1, N, 1)
-        #rgb = rgb.reshape(-1, 3)
+        cls = torch.arange(B)[:, None, None].repeat(1, N, 1).to(device=verts.device)
     else:
         N, _ = verts.shape
         colors = get_colors(1, device=verts.device)
         rgb = colors.repeat(N, 1)
+        cls = torch.arange(1)[:, None].repeat(N, 1).to(device=verts.device)
         rgb = rgb[None,]
         verts = verts[None,]
+        cls = cls[None,]
+
+    """
+    # o3d.camera.PinholeCameraIntrinsic(640, 480, 525, 525, 320, 240)
+    rgb = rgb.reshape(-1, 3)
+    verts = verts.reshape(-1, 3)
+    cls = cls.reshape(-1, 3)
+    import open3d as o3d
+    import numpy as np
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(verts)
+    pcd.colors = o3d.utility.Vector3dVector(rgb)
+    pcd.write_property('class', cls)
+    geometries = [pcd]
+    #o3d.visualization.draw_geometries([pcd],
+    #                                  zoom=0.3412,
+    #                                  front=[0.4257, -0.2125, -0.8795],
+    #                                  lookat=[2.6172, 2.0475, 1.532],
+    #                                  up=[-0.0694, -0.9768, 0.2024])
+    viewer = o3d.visualization.Visualizer()
+    o3d.visualization.gui.Label3D(color=[1., 0., 0.], position=[0., 0., 0.], scale=1., text='blub')
+    viewer.create_window()
+    for geometry in geometries:
+        viewer.add_geometry(geometry)
+    opt = viewer.get_render_option()
+    opt.show_coordinate_frame = True
+    opt.background_color = np.asarray([0.8, 0.8, 0.9])
+    viewer.run()
+    viewer.destroy_window()
+    """
+
 
     point_cloud = Pointclouds(points=verts, features=rgb)
 
     fig = plot_scene({
         "Pointcloud": {
-            "pcl1": point_cloud[0],
-            "pcl2": point_cloud[1],
-            "pcl3": point_cloud[2],
+            f"pcl{i+1}": point_cloud[i] for i in range(len(point_cloud))
         }
     }, viewpoint_cameras=pt3d_cameras, axis_args=AxisArgs(backgroundcolor="rgb(200, 200, 230)", showgrid=True, zeroline=True, showline=True,
                           showaxeslabels=True, showticklabels=True))
     fig.show()
     input('bla')
+
+
 
 
 def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=None):
