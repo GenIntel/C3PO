@@ -2,6 +2,7 @@ name: co3d
 class_name: CO3D
 
 path_co3d_raw: /misc/lmbraid19/sommerl/datasets/CO3D
+path_co3d_preprocess: /misc/lmbraid19/sommerl/datasets/CO3D_Preprocess
 
 classes:
   -apple

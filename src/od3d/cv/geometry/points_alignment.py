@@ -4,11 +4,20 @@ from od3d.cv.geometry.transform import rot3d
 import scipy.linalg
 import torch
 
+
+def get_pca_tform_world(pts3d):
+
+    origin = pts3d.mean(dim=-2)
+    U, S, V = torch.pca_lowrank(pts3d)
+    pca_tform_world = transf4x4_from_rot3x3_and_transl3(rot3x3=V.T, transl3=-rot3d(rot3x3=V.T, pts3d=origin))
+
+    return pca_tform_world
+
 def icp(frame1_pts3d_1, frame2_pts3d_2):
     """
     Args:
-        frame2_pts3d_2 (torch.Tensor): size Nx3
-        frame2_pts3d_2 (torch.Tensor): size Nx3
+        frame1_pts3d_1 (torch.Tensor): size N1x3
+        frame2_pts3d_2 (torch.Tensor): size N2x3
 
     Returns:
         frame2_tform_pts3d_1 (torch.Tensor): size 4x4

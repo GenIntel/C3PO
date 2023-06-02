@@ -29,40 +29,44 @@ def pt3d_camera_from_tform4x4_intr4x4_imgs_size(cam_tform4x4_obj: torch.Tensor, 
 
     R = cam_tform4x4_obj[:, :3, :3]
     t = cam_tform4x4_obj[:, :3, 3]
-    cameras = PerspectiveCameras(R=R, T=t, focal_length=focal_length,
+    cameras = PerspectiveCameras(R=R.transpose(-2, -1), T=t, focal_length=focal_length,
                                  principal_point=principal_point, in_ndc=False,
                                  image_size=img_size, device=cam_tform4x4_obj.device)
 
     return cameras
 
-def show_pcl(verts: torch.Tensor, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tensor=None, img_size: torch.Tensor=None):
+def show_pcl(verts, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tensor=None, img_size: torch.Tensor=None):
     """
 
     Args:
-        verts (torch.Tensor): Nx3 / BxNx3
+        verts: Nx3 / BxNx3 / list(torch.Tensor Nx3)
 
     """
 
     if cam_tform4x4_obj is not None:
-        verts = transf3d_broadcast(pts3d=verts, transf4x4=cam_tform4x4_obj)
 
         pt3d_cameras = pt3d_camera_from_tform4x4_intr4x4_imgs_size(cam_tform4x4_obj=cam_tform4x4_obj, cam_intr4x4=cam_intr4x4, img_size=img_size)
     else:
-        pt3d_cameras = None
+        pt3d_cameras = []
 
-    if verts.dim() == 3:
-        B, N, _ = verts.shape
-        colors = get_colors(B, device=verts.device)
+
+    if isinstance(verts, list) or verts.dim() == 3:
+        if isinstance(verts, list):
+            B = len(verts)
+            N, _ = verts[0].shape
+            device = verts[0].device
+        else:
+            B, N, _ = verts.shape
+            device = verts.device
+        colors = get_colors(B, device=device)
         rgb = colors[:, None].repeat(1, N, 1)
-        cls = torch.arange(B)[:, None, None].repeat(1, N, 1).to(device=verts.device)
     else:
         N, _ = verts.shape
         colors = get_colors(1, device=verts.device)
         rgb = colors.repeat(N, 1)
-        cls = torch.arange(1)[:, None].repeat(N, 1).to(device=verts.device)
         rgb = rgb[None,]
         verts = verts[None,]
-        cls = cls[None,]
+        #cls = cls[None,]
 
     """
     # o3d.camera.PinholeCameraIntrinsic(640, 480, 525, 525, 320, 240)
@@ -93,12 +97,15 @@ def show_pcl(verts: torch.Tensor, cam_tform4x4_obj: torch.Tensor=None, cam_intr4
     viewer.destroy_window()
     """
 
-
     point_cloud = Pointclouds(points=verts, features=rgb)
-
+    scene = {}
     fig = plot_scene({
-        "Pointcloud": {
+        "Pointcloud": {**{
             f"pcl{i+1}": point_cloud[i] for i in range(len(point_cloud))
+        },
+        **{
+            f"cam{i+1}": pt3d_cameras[i] for i in range(len(pt3d_cameras))
+        },
         }
     }, viewpoint_cameras=pt3d_cameras, axis_args=AxisArgs(backgroundcolor="rgb(200, 200, 230)", showgrid=True, zeroline=True, showline=True,
                           showaxeslabels=True, showticklabels=True))

@@ -2,6 +2,7 @@ from pathlib import Path
 from PIL import Image
 from torchvision import transforms
 from pytorch3d.io import load_ply
+from pytorch3d.io import save_ply
 import numpy as np
 
 def read_co3d_depth_image(path: Path):
@@ -28,5 +29,3 @@ def read_image(path: Path):
     # Convert the PIL image to Torch tensor
     img = transform(img)
     return img
-
-

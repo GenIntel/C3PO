@@ -19,11 +19,21 @@ def voxel_downsampling(pts3d_cls, K):
                        torch.linspace(start=bounds_min[1], end=bounds_max[1], steps=steps[1], device=device),
                        torch.linspace(start=bounds_min[2], end=bounds_max[2], steps=steps[2], device=device),
                        indexing='xy'), dim=-1)
-    dist = (pts3d_voxel.reshape(-1, 3)[None, :] - pts3d_cls[:, None, ]).norm(dim=-1)
-    _, dist_min_ids = dist.min(dim=0)
+    #dist = (pts3d_voxel.reshape(-1, 3)[None, :] - pts3d_cls[:, None, ]).norm(dim=-1)
+    dist = torch.cdist(pts3d_voxel.reshape(-1, 3)[None,], pts3d_cls[None, ])[0]
+    _, dist_min_ids = dist.min(dim=-1)
     pts3d_cls = pts3d_cls[dist_min_ids]
     del pts3d_voxel
     del dist
     del dist_min_ids
+    return pts3d_cls
+def farthest_point_sampling(pts3d_cls, K):
+    import pytorch3d.ops
+    pts3d_cls, _ = pytorch3d.ops.sample_farthest_points(pts3d_cls[None,], K=K)
+    pts3d_cls = pts3d_cls[0]
+    return pts3d_cls
 
+def random_sampling(pts3d_cls, pts3d_max_count):
+    sample_ids = torch.randperm(pts3d_cls.shape[0])
+    pts3d_cls = pts3d_cls[sample_ids[:pts3d_max_count]]
     return pts3d_cls

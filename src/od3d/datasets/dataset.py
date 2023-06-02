@@ -1,6 +1,17 @@
 
 from torch.utils.data import Dataset
 from omegaconf import OmegaConf, DictConfig
+from enum import Enum
+
+class OD3D_FRAME_MODALITIES(str, Enum):
+    RGB = 'rgb'
+    MASK = 'mask'
+    DEPTH = 'depth'
+    DEPTH_MASK = 'depth_mask'
+
+class OD3D_SEQ_MODALITIES(str, Enum):
+    PCL = 'pcl'
+
 class OD3D_Dataset(Dataset):
     subclasses = {}
     def __init_subclass__(cls, **kwargs):
@@ -17,8 +28,8 @@ class OD3D_Dataset(Dataset):
     def get_item(self, item):
         raise NotImplementedError
     @staticmethod
-    def collate_fn(bla):
-        return bla
+    def collate_fn(frames: list, modalities: list[OD3D_FRAME_MODALITIES]):
+        return frames
     @staticmethod
     def setup(config: DictConfig):
         raise NotImplementedError
