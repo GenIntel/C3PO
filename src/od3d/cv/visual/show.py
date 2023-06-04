@@ -35,6 +35,24 @@ def pt3d_camera_from_tform4x4_intr4x4_imgs_size(cam_tform4x4_obj: torch.Tensor, 
 
     return cameras
 
+
+
+def show_mesh():
+    raise NotImplementedError
+    """
+    from pytorch3d.structures.meshes import Meshes as PT3DMeshes
+    meshes = PT3DMeshes(verts=[verts], faces=[faces])
+    from pytorch3d.vis.plotly_vis import plot_scene, AxisArgs
+    fig = plot_scene({
+        "Meshes": {
+            f"mesh{i+1}": meshes[i] for i in range(len(meshes))
+        }}, axis_args=AxisArgs(backgroundcolor="rgb(200, 200, 230)", showgrid=True, zeroline=True, showline=True,
+                          showaxeslabels=True, showticklabels=True))
+    fig.show()
+    input('bla')
+    """
+
+
 def show_pcl(verts, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tensor=None, img_size: torch.Tensor=None):
     """
 
@@ -98,7 +116,6 @@ def show_pcl(verts, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tens
     """
 
     point_cloud = Pointclouds(points=verts, features=rgb)
-    scene = {}
     fig = plot_scene({
         "Pointcloud": {**{
             f"pcl{i+1}": point_cloud[i] for i in range(len(point_cloud))

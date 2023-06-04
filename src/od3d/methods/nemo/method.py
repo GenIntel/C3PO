@@ -47,16 +47,21 @@ class NeMo(OD3DMethod):
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
-        self.path_shapenemo = Path(config.path_shapenemo)
-        self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.classes]
-        self.meshes = Meshes(fpaths_meshes=self.fpaths_meshes_shapenemo)
+        #self.path_shapenemo = Path(config.path_shapenemo)
+        #self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.classes]
+        self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.classes]
+        self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes)
         self.verts_count_max = self.meshes.verts_counts_max
         self.mem_verts_feats_count = len(config.classes) * self.verts_count_max
         self.mem_clutter_feats_count = config.num_noise * config.max_group
         self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
 
+        self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.config.backbone.output_dimension)), requires_grad=True)
+        self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max, self.config.backbone.output_dimension)), requires_grad=True))
+
         # load checkpoint
-        self.load_checkpoint_old(config.checkpoint)
+        if config.get("checkpoint", None) is not None:
+            self.load_checkpoint_old(config.checkpoint)
         #load_mesh(config.path_shapenemo)
 
 
@@ -105,6 +110,7 @@ class NeMo(OD3DMethod):
 
 
         dataset_train, dataset_val = torch.utils.data.random_split(dataset_sub, [1. - dataset.config.val_fraction, dataset.config.val_fraction], generator=generator)
+
         dataset_val.collate_fn = dataset.collate_fn
         criterion = torch.nn.CrossEntropyLoss(reduction="none").cuda()
 
@@ -127,13 +133,13 @@ class NeMo(OD3DMethod):
 
             for i, batch in enumerate(iter(dataloader_train)):
                 # B x x N x 2
-                rgb = self.trans(batch.rgb / 255.)
+                # rgb = self.trans(batch.rgb / 255.)
                 vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4, cams_tform4x4_obj=batch.cam_tform4x4_obj, imgs_sizes=batch.size, mesh_ids=batch.label.tolist(), down_sample_rate=self.down_sample_rate)
                 N = vts2d.shape[1]
 
                 # from od3d.cv.visual.draw import draw_pixels
                 #show_img(draw_pixels(batch.rgb[0], vts2d[0, mask_vts2d_vsbl[0]]))
-                net_feats = self.net.forward(X=rgb, keypoint_positions=vts2d, obj_mask=1. - 1. * batch.mask[:, 0])
+                net_feats = self.net.forward(X=batch.rgb, keypoint_positions=vts2d, obj_mask=1. - 1. * batch.mask[:, 0])
                 # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
                 # returns: BxF+NxC
                 C = net_feats.shape[2]
@@ -227,10 +233,10 @@ class NeMo(OD3DMethod):
 
         for i, batch in enumerate(iter(dataloader)):
             # batch.visualize()
-            rgb = self.trans(batch.rgb / 255.)
+            #rgb = self.trans(batch.rgb / 255.)
             time_loaded = time.time()
             with torch.no_grad():
-                net_feats2d = self.net.module.forward_test(rgb)
+                net_feats2d = self.net.module.forward_test(batch.rgb)
                 time_pred_net_feats2d = time.time()
                 #logger.info(
                 #    f"predicted net feats2d, took {(time_pred_net_feats2d - time_loaded):.3f}")
@@ -260,7 +266,7 @@ class NeMo(OD3DMethod):
                 # show_img(inner_feats2d_net_bank_vts_max[0])
 
                 cams_intr4x4 = batch.cam_intr4x4[0][None,]
-                imgs_sizes = batch.size[0][None,]
+                imgs_sizes = batch.size[:][None,]
                 cams_intr4x4 = cams_intr4x4.expand(cams_multiview_tform4x4_obj.shape) / self.down_sample_rate
                 imgs_sizes = imgs_sizes.expand(cams_multiview_tform4x4_obj.shape[:-2] + torch.Size([2])) // self.down_sample_rate
 

@@ -106,6 +106,9 @@ class Cuboids():
             _pts3d = torch.stack(torch.meshgrid(linspaceX, linspaceY, linspaceZ, indexing='xy'), dim=-1)
             _pts3d_surface = _pts3d[(_pts3d[:, :, :, None] == self.cuboid_limits[b][None, None, None]).any(dim=-2).any(dim=-1)]
             _pts3d_edges = _pts3d[((_pts3d[:, :, :, None] == self.cuboid_limits[b][None, None, None]).any(dim=-2).sum(dim=-1)) >= 2]
+            #_pts3d_planes = _pts3d[((_pts3d[:, :, :, None] == self.cuboid_limits[b][None, None, None]).any(dim=-2).sum(dim=-1)) == 1]
+            #_pts3d_corners = _pts3d[((_pts3d[:, :, :, None] == self.cuboid_limits[b][None, None, None]).any(dim=-2).sum(dim=-1)) == 3]
+
             self.pts3d_edges.append(_pts3d_edges)
             self.pts3d_surface.append(_pts3d_surface)
 

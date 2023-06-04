@@ -4,55 +4,73 @@ class_name: CO3D
 path_co3d_raw: /misc/lmbraid19/sommerl/datasets/CO3D
 path_co3d_preprocess: /misc/lmbraid19/sommerl/datasets/CO3D_Preprocess
 
+preprocess_meta_override: False
+preprocess_pcls: False
+
+sequences:
+  - '106_12650_23736'
+  - '116_13655_29006'
+  - '185_19982_37678'
+  - '194_20898_41093'
+  - '194_20900_41097'
+  - '194_20939_43630'
+  - '206_21799_45886'
+  - '206_21805_45881'
+  - '206_21810_45890'
+  - '216_22790_47232'
+  - '216_22808_47498'
+  - '216_22836_48452'
+
 classes:
-  -apple
-  -backpack
-  -ball
-  -banana
-  -baseballbat
-  -baseballglove
-  -bench
-  -bicycle
-  -book
-  -bottle
-  -bowl
-  -broccoli
-  -cake
-  -car
-  -carrot
-  -cellphone
-  -chair
-  -couch
-  -cup
-  -donut
-  -frisbee
-  -hairdryer
-  -handbag
-  -hotdog
-  -hydrant
-  -keyboard
-  -kite
-  -laptop
-  -microwave
-  -motorcycle
-  -mouse
-  -orange
-  -parkingmeter
-  -pizza
-  -plant
-  -remote
-  -sandwich
-  -skateboard
-  -stopsign
-  -suitcase
-  -teddybear
-  -toaster
-  -toilet
-  -toybus
-  -toyplane
-  -toytrain
-  -toytruck
-  -tv
-  -umbrella
-  -vase
-  -wineglass
+  - car
+#  - apple
+#  - backpack
+#  - ball
+#  - banana
+#  - baseballbat
+#  - baseballglove
+#  - bench
+#  - bicycle
+#  - book
+#  - bottle
+#  - bowl
+#  - broccoli
+#  - cake
+#  - car
+#  - carrot
+#  - cellphone
+#  - chair
+#  - couch
+#  - cup
+#  - donut
+#  - frisbee
+#  - hairdryer
+#  - handbag
+#  - hotdog
+#  - hydrant
+#  - keyboard
+#  - kite
+#  - laptop
+#  - microwave
+#  - motorcycle
+#  - mouse
+#  - orange
+#  - parkingmeter
+#  - pizza
+#  - plant
+#  - remote
+#  - sandwich
+#  - skateboard
+#  - stopsign
+#  - suitcase
+#  - teddybear
+#  - toaster
+#  - toilet
+#  - toybus
+#  - toyplane
+#  - toytrain
+#  - toytruck
+#  - tv
+#  - umbrella
+#  - vase
+#  - wineglass

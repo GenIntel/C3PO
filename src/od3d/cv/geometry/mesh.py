@@ -9,32 +9,42 @@ from pytorch3d.renderer.mesh.utils import interpolate_face_attributes
 from od3d.cv.geometry.transform import proj3d2d, proj3d2d_broadcast
 from od3d.cv.visual.draw import draw_pixels
 from od3d.cv.visual.show import show_img
+from od3d.cv.io import load_ply
 
 logger = logging.getLogger(__name__)
 
 class Mesh:
-    def __init__(self, fpath_mesh, device='cpu', rgb=None, feats=None):
-        io = IO()
-        mesh = io.load_mesh(fpath_mesh, device=device)
-        self.verts = mesh[0].verts_list()[0]
-        self.faces = mesh[0].faces_list()[0]
+    def __init__(self, verts, faces, rgb=None, feats=None):
+        self.verts = verts
+        self.faces = faces
         self.rgb = rgb
         self.feats = feats
+
+    @staticmethod
+    def load_from_file(fpath: Path, device='cpu'):
+        io = IO()
+        mesh = io.load_mesh(fpath, device=device)
+        verts = mesh[0].verts_list()[0]
+        faces = mesh[0].faces_list()[0]
+        return Mesh(verts=verts, faces=faces)
+
+    @staticmethod
+    def load_from_file_ply(fpath: Path):
+        verts, faces = load_ply(fpath)
+        return Mesh(verts=verts, faces=faces)
+
     def verts_count(self):
         return self.verts.shape[0]
 class Meshes(torch.nn.Module):
-    def __init__(self, meshes: list[Mesh] = None, fpaths_meshes: list[Path] = None):
+    def __init__(self, verts: list[torch.Tensor], faces: list[torch.Tensor], rgb: list[torch.Tensor]= None, feats: list[torch.Tensor]=None):
         super().__init__()
-        if meshes is None:
-            meshes = []
-            for fpath_mesh in fpaths_meshes:
-                meshes.append(Mesh(fpath_mesh=fpath_mesh, device='cpu'))
-        mesh0 = meshes[0]
-        self.meshes_count = len(meshes)
-        self.verts = torch.nn.Parameter(torch.cat([mesh.verts for mesh in meshes], dim=0), requires_grad=False)
-        self.faces = torch.nn.Parameter(torch.cat([mesh.faces for mesh in meshes], dim=0), requires_grad=False)
-        self.verts_counts = [mesh.verts.shape[0] for mesh in meshes]
-        self.faces_counts = [mesh.faces.shape[0] for mesh in meshes]
+
+        self.meshes_count = len(verts)
+        self.verts = torch.nn.Parameter(torch.cat([_verts for _verts in verts], dim=0), requires_grad=False)
+        self.faces = torch.nn.Parameter(torch.cat([_faces for _faces in faces], dim=0), requires_grad=False)
+
+        self.verts_counts = [_verts.shape[0] for _verts in verts]
+        self.faces_counts = [_faces.shape[0] for _faces in faces]
         self.verts_counts_acc_from_0 = [0] + [sum(self.verts_counts[:i+1]) for i in range(self.meshes_count)]
         self.faces_counts_acc_from_0 = [0] + [sum(self.faces_counts[:i+1]) for i in range(self.meshes_count)]
         self.verts_counts_max = max(self.verts_counts)
@@ -44,32 +54,58 @@ class Meshes(torch.nn.Module):
         for i in range(len(self)):
             self.mask_verts_not_padded[i, self.verts_counts[i]:] = False
 
-        self.initialize_pytorch3d_meshes()
-
-        if mesh0.rgb is not None:
-            self.rgb = torch.nn.Parameter(torch.cat([mesh.rgb for mesh in meshes], dim=0), requires_grad=False)
+        if rgb is not None:
+            self.rgb = torch.nn.Parameter(torch.cat([_rgb for _rgb in rgb], dim=0), requires_grad=False)
         else:
             self.rgb = None
 
-        if mesh0.feats is not None:
-            self.feats = torch.nn.Parameter(torch.cat([mesh.feats for mesh in meshes], dim=0), requires_grad=True)
+        if feats is not None:
+            self.feats = torch.nn.Parameter(torch.cat([_feats for _feats in feats], dim=0), requires_grad=True)
             self.feats_from_faces = torch.nn.Parameter(torch.cat([self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)] for mesh_id in range(len(self))], dim=0))
-
         else:
             self.feats = None
             self.feats_from_faces = None
 
-    def __len__(self):
-        return self.meshes_count
-
-    def initialize_pytorch3d_meshes(self):
+    def init_pt3d(self):
         self.pt3dmeshes = PT3DMeshes(
             verts=[self.get_verts_with_mesh_id(i) for i in range(self.meshes_count)],
             faces=[self.get_faces_with_mesh_id(i) for i in range(self.meshes_count)]
         )
+
+    @staticmethod
+    def load_from_files(fpaths_meshes: list[Path]):
+        meshes = []
+        for fpath_mesh in fpaths_meshes:
+            meshes.append(Mesh.load_from_file(fpath=fpath_mesh))
+
+        verts = [mesh.verts for mesh in meshes]
+        faces = [mesh.faces for mesh in meshes]
+
+        return Meshes(verts=verts, faces=faces)
+
+    @staticmethod
+    def get_faces_from_verts(verts, ball_radius=0.3):
+        import open3d
+        import numpy as np
+        from od3d.cv.geometry.transform import transf3d_broadcast, transf4x4_from_spherical
+
+        verts_rot = transf3d_broadcast(pts3d=verts, transf4x4=transf4x4_from_spherical(azim=torch.Tensor([0.05]), elev=torch.Tensor([0.05]), theta=torch.Tensor([0.05]), dist=torch.Tensor([1.])))
+        verts_centered = verts_rot - verts_rot.mean(dim=-2, keepdim=True)
+        pcd = open3d.geometry.PointCloud()
+        pcd.points = open3d.utility.Vector3dVector(verts_centered)
+        pcd.normals = open3d.utility.Vector3dVector(verts_centered)
+        pcd.estimate_normals()
+        # mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd=pcd)
+        mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pcd=pcd, radii=open3d.utility.DoubleVector([ball_radius]))
+        faces = torch.from_numpy(np.asarray(mesh.triangles))
+        return faces
+
+    def __len__(self):
+        return self.meshes_count
     def _apply(self, fn):
         super()._apply(fn)
-        self.initialize_pytorch3d_meshes()
+        self.init_pt3d()
+
     def get_feats_from_faces_with_mesh_id(self, mesh_id):
         return self.feats_from_faces[self.faces_counts_acc_from_0[mesh_id]: self.faces_counts_acc_from_0[mesh_id+1]]
     def get_rgb_with_mesh_id(self, mesh_id):

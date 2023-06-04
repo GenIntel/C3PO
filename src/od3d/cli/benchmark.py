@@ -3,11 +3,12 @@ import od3d.io
 from omegaconf import OmegaConf
 from pathlib import Path
 import logging
+logger = logging.getLogger(__name__)
 from od3d.benchmark import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
 app = typer.Typer()
 
 @app.command()
-def multiple(benchmark: str = typer.Option('pascal3d_nemo', '-b', '--benchmark'),
+def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         ablation: str = typer.Option(None, '-a', '--ablation'),
         platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.DEBUG)

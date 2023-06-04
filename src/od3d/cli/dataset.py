@@ -1,5 +1,5 @@
 import logging
-
+logger = logging.getLogger(__name__)
 import torch.utils.data
 import typer
 import od3d.io
@@ -20,11 +20,19 @@ def setup(config_fpath: str = typer.Option(None, '-c', '--config')):
     config = OmegaConf.load(config_fpath)
     od3ddataset = OD3D_Dataset.subclasses[config.class_name](config)
     od3ddataset.setup()
+@app.command()
+def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
+              platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+    sequences_names_as_str = '\n'.join(dataset.sequences_names)
+    logger.info(f"Dataset sequences names: \n {sequences_names_as_str}")
 
 @app.command()
 def visualize(dataset: str = typer.Option('co3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.WARNING)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
 
@@ -32,4 +40,5 @@ def visualize(dataset: str = typer.Option('co3d', '-d', '--dataset'),
     logging.info(f"Dataset contains {len(dataset)} frames.")
     for batch in iter(dataloader):
         batch.visualize()
+        # batch[0].sequence_name
         # dataset.visualize(i)

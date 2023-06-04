@@ -147,7 +147,7 @@ class Pascal3DFrame:
 
         self.complete = True
 
-        self.augment(H=512, W=512, dist=5.)
+        # self.augment(H=512, W=512, dist=5.)
 
     def to(self, device: torch.device):
         if self.device != device:
@@ -316,8 +316,9 @@ class Pascal3D(OD3D_Dataset):
     def __init__(
         self,
         config: DictConfig,
+        transform=None
     ):
-        super().__init__(config=config)
+        super().__init__(config=config, transform=transform)
         self.setup(self.config)
         self.name = config.name
         self.path = Path(self.config.path_pascal3d_raw)
@@ -401,7 +402,7 @@ class Pascal3D(OD3D_Dataset):
             raise NotImplementedError
 
         logger.info(f"Frame: id {item}, name {frame.name}")
-        return frame
+        return self.transform(frame)
 
     def get_item_raw(self, item):
         fpath_annotation = self.path.joinpath("Annotations", f"{self.frame_rfpaths[item]}.mat")

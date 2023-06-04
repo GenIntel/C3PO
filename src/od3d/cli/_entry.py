@@ -1,5 +1,3 @@
-from pathlib import Path
-import logging
 import typer
 app = typer.Typer()
 from od3d.cli.benchmark import app as app_run

@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 import shutil
 from tqdm import tqdm
+import torch.utils.data
+from functools import partial
+from od3d.cv.geometry.downsample import voxel_downsampling, random_sampling
+
 
 class CO3D_FRAME_TYPES(str, Enum):
     DEV_KNOWN = 'dev_known'
@@ -256,22 +260,21 @@ class CO3D_Frames():
         self.device = device
         self.path_co3d = frame0.path_co3d
         self.size = frame0.size
-        self.cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0)
-        self.cam_proj4x4_obj = torch.stack([frame.cam_proj4x4_obj for frame in frames], dim=0)
-        self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0)
+        self.cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
+        self.cam_proj4x4_obj = torch.stack([frame.cam_proj4x4_obj for frame in frames], dim=0).to(device=device)
+        self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
 
         if OD3D_FRAME_MODALITIES.RGB in modalities:
-            self.rgb = torch.stack([frame.rgb for frame in frames], dim=0)
+            self.rgb = torch.stack([frame.rgb for frame in frames], dim=0).to(device=device)
 
         if OD3D_FRAME_MODALITIES.MASK in modalities:
-            self.mask = torch.stack([frame.mask for frame in frames], dim=0)
+            self.mask = torch.stack([frame.mask for frame in frames], dim=0).to(device=device)
 
         if OD3D_FRAME_MODALITIES.DEPTH in modalities:
-            self.depth = torch.stack([frame.depth for frame in frames], dim=0)
+            self.depth = torch.stack([frame.depth for frame in frames], dim=0).to(device=device)
 
         if OD3D_FRAME_MODALITIES.DEPTH_MASK in modalities:
-            self.depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0)
-
+            self.depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0).to(device=device)
 
     def visualize(self):
 
@@ -286,7 +289,7 @@ class CO3D_Frames():
 
 
         # verts, faces = load_ply(filename)
-        mix_real_with_synthetic = blend_rgb(self.rgb[0], self.mask[0])
+        #mix_real_with_synthetic = blend_rgb(self.rgb[0], self.mask[0] * 255)
 
         #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
         #                                      proj3d2d_broadcast(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),
@@ -294,13 +297,22 @@ class CO3D_Frames():
         #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, self.kpts2d_annot[0, self.kpts2d_annot_vsbl[0]],
         #                                     colors=(0, 0, 255), radius_in=2, radius_out=4)
 
-        show_img(mix_real_with_synthetic)
+        show_img(self.rgb[0])
+
+    def to(self, device: torch.device):
+        if self.device != device:
+            for k, a in self.__dict__.items():
+                if isinstance(a, torch.Tensor):
+                    setattr(self, k, a.to(device))
+                    # self.__dict__[k] = a.to(device)
+            self.device = device
 class CO3D(OD3D_Dataset):
     def __init__(
         self,
         config: DictConfig,
+        transform=None
     ):
-        super().__init__(config=config)
+        super().__init__(config=config, transform=transform)
         self.path = Path(config.path_co3d_raw)
         self.path_preprocess = Path(config.path_co3d_preprocess)
         self.path_meta = self.path_preprocess.joinpath('meta')
@@ -316,25 +328,26 @@ class CO3D(OD3D_Dataset):
             #'carrot'
         ]
 
-        self.preprocess_meta(override=False)
+        self.preprocess_meta(override=self.config.preprocess_meta_override)
         self.sequences_require_pcl = True
         self.frames_only_first_of_each_sequence = False
 
         logger.info("reading sequences meta...")
-        #self.sequences_names = list(self.path_meta.iterdir())
-        self.sequences = []
-        for sequence_fpath in self.path_meta.iterdir():
-            if sequence_fpath.is_file():
-                sequence_config = OmegaConf.load(sequence_fpath)
+
+        self.sequences_names = list(sorted([fpath.name.split('.')[0] for fpath in self.path_meta.iterdir() if fpath.is_file()], key= lambda n: int(n)))
+        if self.config.get('sequences', None) is not None:
+            self.sequences_names = list(filter(lambda sequence_name: sequence_name in self.config.sequences, self.sequences_names))
+
+        if self.sequences_require_pcl:
+            self.sequences = []
+            for sequence_name in self.sequences_names:
+                sequence_config = OmegaConf.load( self.path_meta.joinpath(sequence_name + '.yaml'))
                 sequence = CO3D_Sequence(**sequence_config)
                 self.sequences.append(sequence)
 
-
-        if self.sequences_require_pcl:
             # quality score lies in range [-2.35x, 1.04x]
             self.sequences = list(filter(lambda sequence: sequence.rfpath_pcl != Path('None') and sequence.pcl_quality_score > 0.8, self.sequences))
-
-        self.sequences_names = [seq.name for seq in self.sequences]
+            self.sequences_names = [seq.name for seq in self.sequences]
         self.sequences_count = len(self.sequences_names)
 
         logger.info("reading frames names of sequences...")
@@ -354,7 +367,9 @@ class CO3D(OD3D_Dataset):
             self.map_item_id_to_seq_id += list((len(self.sequences_lengths)-1, ) * self.sequences_lengths[-1])
             #self.sequences_map_name_to_id = {}
         #self.frames_map_name_to_id = {}
-        self.preprocess_pcls()
+
+        if self.config.preprocess_pcls:
+            self.preprocess_pcls()
         # sequence_names
     def get_sequence_by_name(self, sequence_name):
         sequence_config = OmegaConf.load(self.path_meta.joinpath(sequence_name + '.yaml'))
@@ -409,9 +424,6 @@ class CO3D(OD3D_Dataset):
                 OmegaConf.save(conf, fpath, resolve=True)
 
     def preprocess_pcls(self):
-        import torch.utils.data
-        from functools import partial
-        from od3d.cv.geometry.downsample import voxel_downsampling, random_sampling
 
         path_pcls = self.path_preprocess.joinpath('pcls')
         pts3d_max_count = 20000
@@ -463,20 +475,24 @@ class CO3D(OD3D_Dataset):
             cuboid_tform_pca = icp(cuboids.pts3d_surface[0], pca_pts3d_clean).inverse()
             cuboid_tform_world = cuboid_tform_pca[None,].bmm(pca_tform_world[None,])[0]
             fpath_pcl = path_pcls.joinpath(sequence.name, f'cuboid_max_{cuboid_pts3d_max_count}' + '.ply')
-            save_ply(fpath_pcl, transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse()))
+
+            from od3d.cv.geometry.mesh import Meshes
+            faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
+            verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
+
+            save_ply(fpath_pcl, verts=verts, faces=faces)
             # show_pcl([pts3d_clean, transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())])
 
     def __len__(self):
         return self.frames_count
 
     def __getitem__(self, item):
-        logger.warning(item)
         seq_id = self.map_item_id_to_seq_id[item]
         frame_id = self.map_item_id_to_frame_id[item]
-        return self.get_frame_by_id(seq_id=seq_id, frame_id=frame_id)
+        return self.transform(self.get_frame_by_id(seq_id=seq_id, frame_id=frame_id))
     def visualize(self, item: int):
         pass
     @staticmethod
-    def collate_fn(frames: list[CO3D_Frame], modalities: list[OD3D_FRAME_MODALITIES], device='cuda:0', dtype=torch.float32):
+    def collate_fn(frames: list[CO3D_Frame], modalities: list[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cuda:0', dtype=torch.float32):
         frames = CO3D_Frames(frames, modalities, dtype=dtype, device=device)
         return frames

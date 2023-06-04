@@ -7,8 +7,6 @@ from od3d.methods.method import OD3DMethod
 from pathlib import Path
 import datetime
 
-print(dir(datetime))
-
 def get_timestamp_as_string():
     now = datetime.datetime.now()
     timestamp = now.strftime("%m-%d_%H-%M-%S")
@@ -23,6 +21,8 @@ def bench_single_method_local(config: DictConfig):
         wandb.init(project=config.logger.wandb_project_name, config=config, dir=Path(config.logger.local_dir), name=run_name)
 
     # 2. setup datasets
+
+
     dataset_test = OD3D_Dataset.subclasses[config.test_dataset.class_name](config.test_dataset)
     dataset_train = OD3D_Dataset.subclasses[config.train_dataset.class_name](config.train_dataset)
 
@@ -30,7 +30,7 @@ def bench_single_method_local(config: DictConfig):
     method = OD3DMethod.subclasses[config.method.class_name](config.method)
 
     # 4. train method
-    # method.train(dataset_train)
+    method.train(dataset_train)
 
     # 5. bench method (logs results inside class)
     method.test(dataset_test)

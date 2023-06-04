@@ -1,0 +1,18 @@
+defaults:
+  - logger: wandb
+  - methods@method.nemo: nemo_cls
+  - datasets@train_dataset: co3d_train
+  - datasets@test_dataset: co3d_test
+  - platform: local
+
+metrics:
+  - metricA
+  - metricB
+
+#training:
+#    random_seed: 0
+#    scale_iterations_per_epoch: 1.0
+
+#inference:
+#    random_seed: 0
+#    visualize_num_samples: 0
