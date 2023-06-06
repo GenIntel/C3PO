@@ -15,6 +15,7 @@ transforms:
     - class_name: nemo.datasets.pascal3d.Normalize
 
 train:
+  apply_txtr: False
   epochs_to_next_ckpt: 1
   epochs: 20
   batch_accumulate_to_next_step: 1

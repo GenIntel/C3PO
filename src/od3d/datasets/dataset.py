@@ -8,6 +8,7 @@ import torch
 from od3d.cv.io import read_image, read_co3d_depth_image
 import torchvision
 from dataclasses import dataclass, field
+from typing import List
 
 
 class OD3D_FRAME_MODALITIES(str, Enum):
@@ -31,10 +32,10 @@ class OD3D_Frame:
     rfpath_depth: Path
     rfpath_depth_mask: Path
     # rfpath_pcl: Path
-    l_cam_tform4x4_obj: list[list[float]] #  torch.Tensor
-    l_cam_intr4x4: list[list[float]] # torch.Tensor
-    l_cam_proj4x4_obj: list[list[float]] # torch.Tensor
-    l_size: list[float] # torch.Tensor
+    l_cam_tform4x4_obj: List[List[float]] #  torch.Tensor
+    l_cam_intr4x4: List[List[float]] # torch.Tensor
+    l_cam_proj4x4_obj: List[List[float]] # torch.Tensor
+    l_size: List[float] # torch.Tensor
     H: int
     W: int
     label= None
@@ -93,7 +94,7 @@ class OD3D_Frame:
         return self._depth_mask
 
 class OD3D_Frames():
-    def __init__(self, frames: list[OD3D_Frame], modalities: list[OD3D_FRAME_MODALITIES], dtype, device):
+    def __init__(self, frames: List[OD3D_Frame], modalities: List[OD3D_FRAME_MODALITIES], dtype, device):
         self.modalities = OD3D_FRAME_MODALITIES
 
         frame0 = frames[0]
@@ -182,7 +183,7 @@ class OD3D_Dataset(Dataset):
         raise NotImplementedError
 
     @staticmethod
-    def collate_fn(frames: list[OD3D_Frame], modalities: list[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cpu', dtype=torch.float32):
+    def collate_fn(frames: List[OD3D_Frame], modalities: List[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cpu', dtype=torch.float32):
         frames = OD3D_Frames(frames, modalities, dtype=dtype, device=device)
         return frames
 

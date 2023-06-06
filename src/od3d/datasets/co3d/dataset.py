@@ -4,7 +4,7 @@ from co3d.dataset.data_types import (
     load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
 )
 from od3d.cv.geometry.mesh import Meshes
-
+from typing import List
 import torchvision
 import torch
 from od3d.cv.geometry.transform import transf4x4_from_rot3x3_and_transl3, transf3d_broadcast
@@ -297,7 +297,7 @@ class CO3D(OD3D_Dataset):
         for cls in self.classes:
             logger.info(f'preprocess meta for class {cls}')
             sequence_annotations = load_dataclass_jgzip(
-                f"{self.path}/{cls}/sequence_annotations.jgz", list[SequenceAnnotation]
+                f"{self.path}/{cls}/sequence_annotations.jgz", List[SequenceAnnotation]
             )
 
 
@@ -314,7 +314,7 @@ class CO3D(OD3D_Dataset):
                 OmegaConf.save(config, fpath, resolve=True)
 
             cls_frame_annotations = load_dataclass_jgzip(
-                f"{self.path}/{cls}/frame_annotations.jgz", list[FrameAnnotation]
+                f"{self.path}/{cls}/frame_annotations.jgz", List[FrameAnnotation]
             )
             cls_frame_annotations = [fa for fa in cls_frame_annotations if fa.meta[
                 'frame_type'] in self.whitelist_frame_types]

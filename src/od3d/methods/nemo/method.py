@@ -135,9 +135,10 @@ class NeMo(OD3DMethod):
     def train(self, dataset: OD3D_Dataset):
 
         dataset.transform = torchvision.transforms.Compose([
-                RGB_UInt8ToFloat(),
-                RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                CenterZoom3D(H=self.config.train.transform.height, W=self.config.train.transform.width, dist=self.config.train.transform.distance),
+            CenterZoom3D(H=self.config.train.transform.height, W=self.config.train.transform.width,
+                         dist=self.config.train.transform.distance, apply_txtr=self.config.train.apply_txtr, config=dataset.config),
+            RGB_UInt8ToFloat(),
+            RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
         self.net.train()

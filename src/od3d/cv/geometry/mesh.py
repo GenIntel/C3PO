@@ -11,6 +11,7 @@ from od3d.cv.visual.draw import draw_pixels
 from od3d.cv.visual.show import show_img
 from od3d.cv.io import load_ply
 from enum import Enum
+from typing import List
 logger = logging.getLogger(__name__)
 
 class MESH_RENDER_MODALITIES(str, Enum):
@@ -45,7 +46,7 @@ class Mesh:
     def verts_count(self):
         return self.verts.shape[0]
 class Meshes(torch.nn.Module):
-    def __init__(self, verts: list[torch.Tensor], faces: list[torch.Tensor], rgb: list[torch.Tensor]= None, feats: list[torch.Tensor]=None):
+    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None, feats: List[torch.Tensor]=None):
         super().__init__()
 
         self.meshes_count = len(verts)
@@ -84,7 +85,7 @@ class Meshes(torch.nn.Module):
         )
 
     @staticmethod
-    def load_from_files(fpaths_meshes: list[Path], device='cpu'):
+    def load_from_files(fpaths_meshes: List[Path], device='cpu'):
         meshes = []
         for fpath_mesh in fpaths_meshes:
             meshes.append(Mesh.load_from_file(fpath=fpath_mesh, device=device))

@@ -4,6 +4,11 @@ class_name: CO3D
 path_co3d_raw: /misc/lmbraid19/sommerl/datasets/CO3D
 path_co3d_preprocess: /misc/lmbraid19/sommerl/datasets/CO3D_Preprocess
 
+rpath_dtd_raw: DTD
+rpath_dtd_cache: DTD_cache
+path_dtd_raw: ${platform.path_datasets}/${.rpath_dtd_raw}
+path_dtd_cache: ${platform.path_datasets}/${.rpath_dtd_cache}
+
 preprocess_meta_override: False
 preprocess_meta_remove_previous: False
 preprocess_pcls: False

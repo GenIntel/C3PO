@@ -110,13 +110,14 @@ cd {cfg.platform.path_od3d}
 git pull {cfg.platform.url_od3d}
 
 # Install OD3D in venv
-if [[ -d "venv" ]]; then
-    echo "Venv already exists at {cfg.platform.path_od3d}/venv."
-    source venv/bin/activate
+VENV_NAME=venv310
+if [[ -d "${{VENV_NAME}}" ]]; then
+    echo "Venv already exists at {cfg.platform.path_od3d}/${{VENV_NAME}}."
+    source ${{VENV_NAME}}/bin/activate
 else
-    echo "Creating venv at {cfg.platform.path_od3d}/venv."
-    python3 -m venv venv
-    source venv/bin/activate
+    echo "Creating venv at {cfg.platform.path_od3d}/${{VENV_NAME}}."
+    python3 -m venv ${{VENV_NAME}}
+    source ${{VENV_NAME}}/bin/activate
 fi
 
 pip install pip --upgrade

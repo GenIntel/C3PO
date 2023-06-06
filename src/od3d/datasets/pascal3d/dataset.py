@@ -53,7 +53,7 @@ SUBSETS = [
     "train",
     "val"
 ]
-
+from typing import List
 from dataclasses import dataclass
 from od3d.datasets.dataset import OD3D_Frame
 from omegaconf import OmegaConf
@@ -61,11 +61,11 @@ from omegaconf import OmegaConf
 class Pascal3DFrame(OD3D_Frame):
     complete: bool
     path_preprocess: Path
-    kpts_names: list[str]
-    l_bbox: list[float]
-    l_kpts2d_annot: list[list[float]]
-    l_kpts2d_annot_vsbl: list[bool]
-    l_kpts3d: list[list[float]]
+    kpts_names: List[str]
+    l_bbox: List[float]
+    l_kpts2d_annot: List[List[float]]
+    l_kpts2d_annot_vsbl: List[bool]
+    l_kpts3d: List[List[float]]
     incomplete_reason: str
     rfpath_mesh: Path
     path_meshes: Path
@@ -322,7 +322,7 @@ class Pascal3D(OD3D_Dataset):
                 _ = frame.mask
 
     @staticmethod
-    def collate_fn(frames: list[Pascal3DFrame], modalities: list[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cpu', dtype=torch.float32):
+    def collate_fn(frames: List[Pascal3DFrame], modalities: List[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cpu', dtype=torch.float32):
         frames = Pascal3DFrames(frames, modalities, dtype=dtype, device=device)
         return frames
 
@@ -348,7 +348,7 @@ class Pascal3D(OD3D_Dataset):
 
 from od3d.datasets.dataset import OD3D_Frames
 class Pascal3DFrames(OD3D_Frames):
-    def __init__(self, frames: list[Pascal3DFrame], modalities: list[OD3D_FRAME_MODALITIES], dtype, device):
+    def __init__(self, frames: List[Pascal3DFrame], modalities: List[OD3D_FRAME_MODALITIES], dtype, device):
         super().__init__(frames=frames, modalities=modalities, dtype=dtype, device=device)
         frame0 = frames[0]
         self.rfpaths_meshes = [frame.rfpath_mesh for frame in frames]

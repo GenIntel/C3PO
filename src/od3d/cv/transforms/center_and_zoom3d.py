@@ -3,10 +3,12 @@
 import torch
 from od3d.cv.geometry.transform import proj3d2d
 from od3d.cv.visual.crop import crop
+from omegaconf import DictConfig
+from od3d.datasets.dtd import DTD
 
 class CenterZoom3D():
 
-    def __init__(self, H, W, dist, apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True):
+    def __init__(self, H, W, dist, apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None):
         self.H = H
         self.W = W
         self.dist = dist
@@ -14,6 +16,8 @@ class CenterZoom3D():
         self.apply_kpts2d_annot = apply_kpts2d_annot
         self.apply_bbox_annot= apply_bbox_annot
         self.apply_mask = apply_mask
+        if self.apply_txtr:
+            self.dtd = DTD(config=config)
 
     def __call__(self, frame):
 
@@ -38,7 +42,7 @@ class CenterZoom3D():
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
         if self.apply_txtr:
             frame._rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
-                                                 ctx=frame.txtr)
+                                                  ctx=self.dtd.get_random_item())
         else:
             frame._rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
                                                  ctx=None)
