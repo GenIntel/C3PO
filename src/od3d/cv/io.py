@@ -5,6 +5,7 @@ from pytorch3d.io import load_ply
 from pytorch3d.io import save_ply
 import numpy as np
 import torch
+import wandb
 
 def read_co3d_depth_image(path: Path):
     img = Image.open(path)
@@ -40,4 +41,11 @@ def read_image(path: Path):
 
     # Convert the PIL image to Torch tensor
     img = transform(img)
+    return img
+
+def image_as_wandb_image(img, caption="Caption Blub"):
+    img = wandb.Image(
+        img.permute(1, 2, 0).detach().cpu().numpy(),
+        caption=caption
+    )
     return img

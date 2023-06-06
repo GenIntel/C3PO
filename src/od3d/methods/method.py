@@ -8,8 +8,9 @@ class OD3DMethod(abc.ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.subclasses[cls.__name__] = cls
-    def __init__(self, config: DictConfig):
+    def __init__(self, config: DictConfig, logging_dir):
         self.config = config
+        self.logging_dir = logging_dir
     @abc.abstractmethod
     def setup(self):
         raise NotImplementedError

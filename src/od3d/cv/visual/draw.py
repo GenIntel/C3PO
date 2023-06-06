@@ -3,6 +3,7 @@
 import torch
 import cv2
 import numpy as np
+from od3d.cv.visual.blend import rgb_to_range01
 
 def tensor_to_cv_img(x_in):
     # x_in : CxHxW float32
@@ -10,7 +11,8 @@ def tensor_to_cv_img(x_in):
     if x_in.dtype == torch.uint8:
         x_in = x_in * 1.0
     else:
-        x_in = x_in * 255.0
+        x_in = rgb_to_range01(x_in) * 255.
+        # x_in = x_in * 255.0
     x_in = torch.clamp(x_in, min=0.0, max=255.0)
     x_out = (x_in.permute(1, 2, 0).cpu().detach().numpy()).astype(np.uint8)
     x_out = x_out[:, :, ::-1]
@@ -54,9 +56,9 @@ def draw_pixels(img, pxls, colors=None, radius_in=3, radius_out=5):
             (int(pxls[k, 0].item()), int(pxls[k, 1].item())),
             radius_out,
             (
-                colors[K - 1 - k, 0].item(),
-                colors[K - 1 - k, 1].item(),
-                colors[K - 1 - k, 2].item(),
+                colors[k, 0].item(),
+                colors[k, 1].item(),
+                colors[k, 2].item(),
             ),
             -1,
         )

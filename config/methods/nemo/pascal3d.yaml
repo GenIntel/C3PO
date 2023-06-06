@@ -17,6 +17,9 @@ fpaths_meshes:
     tvmonitor: ${..path_meshes}/tvmonitor/01.off
 
 train:
+    visualize:
+        verts_ncds_in_rgb: True
+
     val_fraction: 0.1
 
     dataloader:
@@ -30,6 +33,9 @@ train:
         distance: 5.
 
 test:
+    visualize:
+        verts_ncds_in_rgb: True
+
     dataloader:
         num_workers: 4
         batch_size: 16

@@ -18,7 +18,8 @@ def bench_single_method_local(config: DictConfig):
     logging_dir = Path(config.logger.local_dir).joinpath(run_name)
     logging_dir.mkdir(parents=True)
     if config.logger.use_wandb:
-        wandb.init(project=config.logger.wandb_project_name, config=config, dir=Path(config.logger.local_dir), name=run_name)
+        wandb.login()
+        wandb.init(project=config.logger.wandb_project_name, config=OmegaConf.to_container(config, resolve=True), dir=Path(config.logger.local_dir), name=run_name)
 
     # 2. setup datasets
 
@@ -27,14 +28,14 @@ def bench_single_method_local(config: DictConfig):
     dataset_train = OD3D_Dataset.subclasses[config.train_dataset.class_name](config.train_dataset)
 
     # 3. setup method
-    method = OD3DMethod.subclasses[config.method.class_name](config.method)
+    method = OD3DMethod.subclasses[config.method.class_name](config.method, logging_dir=logging_dir)
 
     # 4. train method
     method.train(dataset_train)
 
     # 5. bench method (logs results inside class)
-    method.test(dataset_test)
-
+    results = method.test(dataset_test)
+    wandb.log({'test_' + k: v for k, v in results.items()})
 def bench_single_method_local_separate_venv(cfg: DictConfig):
     # 1. save config
     # 2. setup od3d in separate virtual environment
@@ -65,11 +66,11 @@ def bench_single_method_torque(cfg: DictConfig):
 
     with open(tmp_script_fpath, 'w') as rsh:
 
-        gpu_count = 1
+        gpu_count = cfg.platform.gpu_count
         node_count = 1
-        cpu_count = 4
-        ram = "10gb"
-        walltime = "24:00:00"
+        cpu_count = cfg.platform.cpu_count
+        ram = cfg.platform.ram
+        walltime = cfg.platform.walltime
 
         timestamp = get_timestamp_as_string()
         gpu_cfg_str = f':gpus={gpu_count}' if gpu_count > 0 else ""
@@ -81,7 +82,7 @@ def bench_single_method_torque(cfg: DictConfig):
 #PBS -l nodes={node_count}:ppn={cpu_count}{gpu_cfg_str}{cuda_cfg_str},mem={ram},walltime={walltime}
 #PBS -q default-cpu
 #PBS -m a
-#PBS -M sommerl@informatik.uni-freiburg.de
+#PBS -M {cfg.platform.username}@informatik.uni-freiburg.de
 #PBS -j oe
 
 # For interactive jobs: #PBS -I

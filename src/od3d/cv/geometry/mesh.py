@@ -117,10 +117,13 @@ class Meshes(torch.nn.Module):
         super()._apply(fn)
         self.init_pt3d()
 
-    def get_verts_ncds_from_faces_with_mesh_id(self, mesh_id):
+    def get_verts_ncds_with_mesh_id(self, mesh_id):
         verts3d = self.get_verts_with_mesh_id(mesh_id)
         verts3d_ncds = (verts3d - verts3d.min(dim=0).values[None,]) / (
                 verts3d.max(dim=0).values[None,] - verts3d.min(dim=0).values[None,])
+        return verts3d_ncds
+    def get_verts_ncds_from_faces_with_mesh_id(self, mesh_id):
+        verts3d_ncds = self.get_verts_ncds_with_mesh_id(mesh_id)
         feats_from_faces = verts3d_ncds[self.get_faces_with_mesh_id(mesh_id)]
         return feats_from_faces
 
@@ -166,6 +169,9 @@ class Meshes(torch.nn.Module):
 
         self.feats_from_faces = torch.nn.Parameter(torch.cat([self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)] for mesh_id in range(len(self))], dim=0))
 
+    def set_feats_cat(self, feats):
+        self.feats = torch.nn.Parameter(feats, requires_grad=True)
+        self.feats_from_faces = torch.nn.Parameter(torch.cat([self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)] for mesh_id in range(len(self))], dim=0))
 
     def get_verts_stacked_with_mesh_ids(self, mesh_ids):
         if mesh_ids == None:

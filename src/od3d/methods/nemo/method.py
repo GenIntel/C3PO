@@ -12,6 +12,7 @@ import torch
 import numpy as np
 import wandb
 import math
+from od3d.cv.visual.draw import draw_pixels
 
 from nemo.models.KeypointRepresentationNet import NetE2E
 from od3d.cv.geometry.mesh import Meshes
@@ -28,13 +29,16 @@ from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
 from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D
+from od3d.cv.io import image_as_wandb_image
+
 
 class NeMo(OD3DMethod):
     def __init__(
         self,
-        config: DictConfig
+        config: DictConfig,
+        logging_dir,
     ):
-        super().__init__(config=config)
+        super().__init__(config=config, logging_dir=logging_dir)
 
         self.device = 'cuda:0'
 
@@ -47,8 +51,6 @@ class NeMo(OD3DMethod):
             n_noise_points=config.num_noise,
             pretrain=True,
         )
-        self.net = torch.nn.DataParallel(self.net).cuda()
-        self.net.eval()
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
@@ -65,11 +67,23 @@ class NeMo(OD3DMethod):
         self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.config.backbone.output_dimension)), requires_grad=True)
         self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.config.backbone.output_dimension)), requires_grad=True))
 
+        self.optim = torch.optim.Adam(list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats], lr=self.config.train.optimizer.lr,
+                                 weight_decay=self.config.train.optimizer.weight_decay)
+        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optim, gamma=self.config.train.scheduler.gamma,
+                                                         milestones=self.config.train.scheduler.milestones)
+
+        self.net = torch.nn.DataParallel(self.net).cuda()
+        self.net.eval()
+
         # load checkpoint
         if config.get("checkpoint", None) is not None:
+            self.load_checkpoint(config.checkpoint)
+        elif config.get("checkpoint_old", None) is not None:
             self.load_checkpoint_old(config.checkpoint)
         #load_mesh(config.path_shapenemo)
 
+        self.meshes.to(self.device)
+        self.clutter_feats = self.clutter_feats.to(self.device)
 
         #self.verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
         # note: somehow vertices are stored in wrong order of classes (starting with last class tvmonitor until first class aeroplane
@@ -89,9 +103,6 @@ class NeMo(OD3DMethod):
             std=[0.229, 0.224, 0.225],
         )
 
-        self.meshes.to(self.device)
-        self.clutter_feats = self.clutter_feats.to(self.device)
-
     def load_checkpoint_old(self, path_checkpoint):
         checkpoint = torch.load(path_checkpoint, map_location="cuda:0")
         self.net.load_state_dict(checkpoint["state"], strict=False)
@@ -101,6 +112,23 @@ class NeMo(OD3DMethod):
 
         verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
         self.meshes.set_feats_cat_with_pad(verts_feats)
+
+
+    def save_checkpoint(self, path_checkpoint):
+        torch.save({
+            'net_state_dict': self.net.state_dict(),
+            'optimizer_state_dict': self.optim.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
+            'meshes_feats': self.meshes.feats,
+            'clutter_feats': self.clutter_feats
+        }, path_checkpoint)
+    def load_checkpoint(self, path_checkpoint):
+        checkpoint = torch.load(path_checkpoint)
+        self.net.load_state_dict(checkpoint['net_state_dict'])
+        self.optim.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        self.meshes.set_feats_cat(checkpoint['meshes_feats'])
+        self.clutter_feats = checkpoint['clutter_feats']
     def setup(self):
         pass
 
@@ -129,23 +157,22 @@ class NeMo(OD3DMethod):
         dataset_val.collate_fn = dataset.collate_fn
         criterion = torch.nn.CrossEntropyLoss(reduction="none").cuda()
 
-        dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=self.config.test.dataloader.batch_size, shuffle=False,
-                                                       collate_fn=dataset.collate_fn, num_workers=self.config.test.dataloader.num_workers, pin_memory=self.config.test.dataloader.pin_memory)
+        dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=self.config.train.dataloader.batch_size, shuffle=True,
+                                                       collate_fn=dataset.collate_fn, num_workers=self.config.train.dataloader.num_workers, pin_memory=self.config.train.dataloader.pin_memory)
 
-        optim = torch.optim.Adam(list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats], lr=self.config.training.optimizer.lr,
-                                 weight_decay=self.config.training.optimizer.weight_decay)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, gamma=self.config.training.scheduler.gamma,
-                                                         milestones=self.config.training.scheduler.milestones)
+
 
         logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
-        for e in range(self.config.training.total_epochs):
-            self.test(dataset_val, complete_dataset=True, pose_iterative_refine=True)
+        for e in range(self.config.train.epochs):
+            results_val = self.test(dataset_val, complete_dataset=True, pose_iterative_refine=True)
+            wandb.log({'val_' + k: v for k, v in results_val.items()})
 
             self.net.train()
             self.meshes.feats.requires_grad = True
             self.clutter_feats = torch.nn.Parameter(self.clutter_feats)
 
+            results_train = {}
             for i, batch in enumerate(iter(dataloader_train)):
                 batch.to(device=self.device)
                 # B x x N x 2
@@ -153,6 +180,14 @@ class NeMo(OD3DMethod):
 
                 vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4, cams_tform4x4_obj=batch.cam_tform4x4_obj, imgs_sizes=batch.size, mesh_ids=batch.label, down_sample_rate=self.down_sample_rate)
                 N = vts2d.shape[1]
+
+                if self.config.train.visualize.verts_ncds_in_rgb:
+                    verts_ncds_in_rgb = blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
+                                                    imgs_sizes=batch.size, meshes_ids=batch.label[:1],
+                                                    modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
+
+                    results_train['verts_ncds_in_rgb'] = image_as_wandb_image(draw_pixels(verts_ncds_in_rgb, vts2d[0, mask_vts2d_vsbl[0]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[mask_vts2d_vsbl[0]]))
+
 
                 # from od3d.cv.visual.draw import draw_pixels
                 #show_img(draw_pixels(batch.rgb[0], vts2d[0, mask_vts2d_vsbl[0]]))
@@ -173,27 +208,32 @@ class NeMo(OD3DMethod):
 
                 sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
 
-                sim = sim / self.config.training.T
+                sim = sim / self.config.train.T
 
                 loss = criterion(sim, batch_vts_ids).mean()
                 loss.backward()
                 logger.info(f'loss {loss.item()}')
+                results_train['loss'] = loss
+                wandb.log({'train_' + k: v for k, v in results_train.items()})
 
                 accumulate_steps += 1
-                if accumulate_steps % self.config.training.train_accumulate == 0:
-                    optim.step()
-                    optim.zero_grad()
+                if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
+                    self.optim.step()
+                    self.optim.zero_grad()
 
-            scheduler.step()
 
-            if (e + 1) % self.config.training.log_interval == 0:
-                logging.info(
-                    f"[Epoch {e+1}/{self.config.training.total_epochs}]"
-                )
+            self.scheduler.step()
+            if (e + 1) % self.config.train.epochs_to_next_ckpt == 0:
+                self.save_checkpoint(path_checkpoint=self.logging_dir.joinpath('nemo.ckpt'))
 
-            if not accumulate_steps % self.config.training.train_accumulate == 0:
-                optim.step()
-                optim.zero_grad()
+            #if (e + 1) % self.config.training.log_interval == 0:
+            #    logging.info(
+            #        f"[Epoch {e+1}/{self.config.training.total_epochs}]"
+            #    )
+
+            if not accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
+                self.optim.step()
+                self.optim.zero_grad()
 
             #if (e + 1) % self.config.training.ckpt_interval == 0:
             #    torch.save(model.get_ckpt(epoch=e+1, cfg=cfg.asdict()), os.path.join(cfg.args.save_dir, "ckpts", f"model_{epo+1}.pth"))
@@ -324,19 +364,19 @@ class NeMo(OD3DMethod):
 
                 optim_inference = torch.optim.Adam(
                     params=[cam_pos, cam_theta],
-                    lr=self.config.inference.optimizer.lr,
-                    betas=(self.config.inference.optimizer.beta0, self.config.inference.optimizer.beta1),
+                    lr=self.config.test.optimizer.lr,
+                    betas=(self.config.test.optimizer.beta0, self.config.test.optimizer.beta1),
                 )
 
                 time_before_pose_iterative = time.time()
 
-                for epoch in range(self.config.inference.optimizer.epochs):
+                for epoch in range(self.config.test.optimizer.epochs):
                     mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj, cams_intr4x4=batch.cam_intr4x4 / self.down_sample_rate,
                                               imgs_sizes=batch.size // self.down_sample_rate, meshes_ids=pred_class_ids) # [:, 0]
                     inner_feats2d_net_mesh = torch.einsum('bchw,bchw->bhw', net_feats2d, mesh_feats2d_rendered)[:, None]
                     inner_feats2d_net_clutter = torch.einsum('bchw,kc->bkhw', net_feats2d, self.clutter_feats).mean(dim=1, keepdim=True)
-                    inner_feats2d_net_bank = torch.max(inner_feats2d_net_mesh, inner_feats2d_net_clutter)
-                    mesh_cam_loss = 1. - (inner_feats2d_net_bank.flatten(-3).mean(dim=-1) - inner_feats2d_net_clutter.flatten(1).mean())
+                    inner_feats2d_net_bank = inner_feats2d_net_mesh # torch.max(inner_feats2d_net_mesh, inner_feats2d_net_clutter)
+                    mesh_cam_loss = 1. - (inner_feats2d_net_bank.flatten(-3).mean(dim=-1)) # - inner_feats2d_net_clutter.flatten(1).mean())
 
 
                     """
@@ -360,6 +400,13 @@ class NeMo(OD3DMethod):
                     optim_inference.step()
                     optim_inference.zero_grad()
                     cam_transf4x4_obj = transf4x4_from_pos_and_theta(pos=cam_pos, theta=cam_theta)
+
+                if self.config.test.visualize.verts_ncds_in_rgb:
+                    results[batch.name[0]] = image_as_wandb_image(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
+                                             imgs_sizes=batch.size, meshes_ids=pred_class_ids[:1],
+                                             modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype)))
+
+
                 results['time_pose_iterative'].append(time.time() - time_before_pose_iterative)
                 # logger.info(f"predicted pose iterative took {(time.time() - time_before_pose_iterative):.3f}s")
 
@@ -393,10 +440,14 @@ class NeMo(OD3DMethod):
             results['pose_acc_pi18'] = (results['rot_diff_rad'] < math.pi / 18).to(dtype=float).mean()
             results['pose_err_median'] = 180 / math.pi * results['rot_diff_rad'].median()
 
-            for key, val in results.items():
-                if key not in ['label_gt', 'label_pred', 'rot_diff_rad']:
-                    logger.info(f'{key} : {val}')
             # cmatrix = confusion_matrix(results['label_gt'].detach().cpu().numpy(), results['label_pred'].detach().cpu().numpy())
             # logger.info(f'Confusion matrix:\n {cmatrix} ')
+
+            del results['label_gt']
+            del results['label_pred']
+            del results['rot_diff_rad']
+            for key, val in results.items():
+                logger.info(f'{key} : {val}')
+
 
         return results

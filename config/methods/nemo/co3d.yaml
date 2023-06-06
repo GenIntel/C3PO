@@ -2,20 +2,28 @@ path_meshes: ${test_dataset.path_co3d_preprocess}/pcls
 fpaths_meshes:
     car: ${..path_meshes}/106_12650_23736/cuboid_max_1000.ply
 
+# checkpoint: /scratch/sommerl/exps/06-06_14-36-03/nemo.ckpt
+
 train:
-    val_fraction: 0.1
+    visualize:
+        verts_ncds_in_rgb: False
+
+    val_fraction: 0.01
 
     dataloader:
         num_workers: 4
-        batch_size: 40
+        batch_size: 20
         pin_memory: True
 
     transform:
         width: 512
         height: 512
-        distance: 14.
+        distance: 24.
 
 test:
+    visualize:
+        verts_ncds_in_rgb: True
+
     dataloader:
         num_workers: 4
         batch_size: 4
@@ -24,21 +32,21 @@ test:
     transform:
         width: 512
         height: 512
-        distance: 14.
+        distance: 24.
 
     azim:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 13.
-        steps: 4
+        max: math.pi * 2 - (math.pi * 2) / 7.
+        steps: 6
     elev:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 13.
-        steps: 4
+        max: math.pi * 2 - (math.pi * 2) / 7.
+        steps: 6
     theta:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 13.
-        steps: 4
+        max: math.pi * 2 - (math.pi * 2) / 7.
+        steps: 6
     dist:
-        min: '14.'
-        max: '14.'
+        min: '24.'
+        max: '24.'
         steps: 1
