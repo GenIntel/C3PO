@@ -1,0 +1,59 @@
+# checkpoint: ${platform.path_exps}/NeMo-Classification/2022_09_26/classification_saved_model_199.pth
+checkpoint: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
+
+path_meshes: '${platform.path_datasets}/PASCAL3D+_release1.1/CAD_single'
+fpaths_meshes:
+    aeroplane: ${..path_meshes}/aeroplane/01.off
+    bicycle: ${..path_meshes}/bicycle/01.off
+    boat: ${..path_meshes}/boat/01.off
+    bottle: ${..path_meshes}/bottle/01.off
+    bus: ${..path_meshes}/bus/01.off
+    car: ${..path_meshes}/car/01.off
+    chair: ${..path_meshes}/chair/01.off
+    diningtable: ${..path_meshes}/diningtable/01.off
+    motorbike: ${..path_meshes}/motorbike/01.off
+    sofa: ${..path_meshes}/sofa/01.off
+    train: ${..path_meshes}/train/01.off
+    tvmonitor: ${..path_meshes}/tvmonitor/01.off
+
+train:
+    val_fraction: 0.1
+
+    dataloader:
+        num_workers: 4
+        batch_size: 40
+        pin_memory: True
+
+    transform:
+        width: 512
+        height: 512
+        distance: 5.
+
+test:
+    dataloader:
+        num_workers: 4
+        batch_size: 16
+        pin_memory: True
+
+    transform:
+        width: 512
+        height: 512
+        distance: 5.
+
+    azim:
+        min: '0.'
+        max: math.pi * 2 - (math.pi * 2) / 13.
+        steps: 12
+    elev:
+        min: -math.pi / 6.
+        max: math.pi / 3.
+        steps: 4
+    theta:
+        min: -math.pi / 6.
+        max: math.pi / 6
+        steps: 3
+    dist:
+        min: '5.'
+        max: '5.'
+        steps: 1
+

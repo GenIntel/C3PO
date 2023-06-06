@@ -1,34 +1,15 @@
+defaults:
+   - nemo/co3d@
+
 name: nemo
 class_name: NeMo
 # class_name: nemo.models.nemo_cls.NeMoCls
-
-# checkpoint: ${platform.path_exps}/NeMo-Classification/2022_09_26/classification_saved_model_199.pth
-#checkpoint: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
-
-#path_meshes: '${platform.path_datasets}/PASCAL3D+_release1.1/CAD_single'
-#fpaths_meshes:
-#    aeroplane: $.{path_meshes}/aeroplane/01.off
-#    bicycle: $.{path_meshes}/bicycle/01.off
-#    boat: $.{path_meshes}/boat/01.off
-#    bus: $.{path_meshes}/bus/01.off
-#    car: $.{path_meshes}/car/01.off
-#    chair: $.{path_meshes}/chair/01.off
-#    diningtable: $.{path_meshes}/diningtable/01.off
-#    motorbike: $.{path_meshes}/motorbike/01.off
-#    sofa: $.{path_meshes}/sofa/01.off
-#    train: $.{path_meshes}/train/01.off
-#   tvmonitor: $.{path_meshes}/tvmonitor/01.off
-
-path_meshes: ${test_dataset.path_co3d_preprocess}/pcls
-fpaths_meshes:
-    car: ${..path_meshes}/106_12650_23736/cuboid_max_1000.ply
 
 num_noise: 5
 max_group: 512
 down_sample_rate: 8
 
 classes: ${test_dataset.classes}
-
 
 transforms:
     - class_name: nemo.datasets.pascal3d.Normalize

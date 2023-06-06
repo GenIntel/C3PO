@@ -30,7 +30,7 @@ def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
     logger.info(f"Dataset sequences names: \n {sequences_names_as_str}")
 
 @app.command()
-def visualize(dataset: str = typer.Option('co3d', '-d', '--dataset'),
+def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.WARNING)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])

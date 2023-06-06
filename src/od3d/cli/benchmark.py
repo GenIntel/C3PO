@@ -11,7 +11,7 @@ app = typer.Typer()
 def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         ablation: str = typer.Option(None, '-a', '--ablation'),
         platform: str = typer.Option('local', '-p', '--platform')):
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
 
     file_fpath = Path(__file__).parent.resolve()
     config_dir_rel = "../../../config"
@@ -57,7 +57,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 
 @app.command()
 def single_local(config_fpath: str = typer.Option(None, '-c', '--config')):
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     method_cfg = OmegaConf.load(config_fpath)
     bench_single_method_local(method_cfg)
 

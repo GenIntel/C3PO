@@ -10,8 +10,17 @@ from od3d.cv.geometry.transform import proj3d2d, proj3d2d_broadcast
 from od3d.cv.visual.draw import draw_pixels
 from od3d.cv.visual.show import show_img
 from od3d.cv.io import load_ply
-
+from enum import Enum
 logger = logging.getLogger(__name__)
+
+class MESH_RENDER_MODALITIES(str, Enum):
+    DEPTH = 'depth'
+    MASK = 'mask'
+    RGB = 'rgb'
+    RGBA = 'rgba'
+    FEATS = 'feats'
+    MASK_VERTS_VSBL = 'mask_verts_vsbl'
+    VERTS_NCDS = 'verts_ncds'
 
 class Mesh:
     def __init__(self, verts, faces, rgb=None, feats=None):
@@ -66,6 +75,8 @@ class Meshes(torch.nn.Module):
             self.feats = None
             self.feats_from_faces = None
 
+        self.init_pt3d()
+
     def init_pt3d(self):
         self.pt3dmeshes = PT3DMeshes(
             verts=[self.get_verts_with_mesh_id(i) for i in range(self.meshes_count)],
@@ -73,10 +84,10 @@ class Meshes(torch.nn.Module):
         )
 
     @staticmethod
-    def load_from_files(fpaths_meshes: list[Path]):
+    def load_from_files(fpaths_meshes: list[Path], device='cpu'):
         meshes = []
         for fpath_mesh in fpaths_meshes:
-            meshes.append(Mesh.load_from_file(fpath=fpath_mesh))
+            meshes.append(Mesh.load_from_file(fpath=fpath_mesh, device=device))
 
         verts = [mesh.verts for mesh in meshes]
         faces = [mesh.faces for mesh in meshes]
@@ -105,6 +116,13 @@ class Meshes(torch.nn.Module):
     def _apply(self, fn):
         super()._apply(fn)
         self.init_pt3d()
+
+    def get_verts_ncds_from_faces_with_mesh_id(self, mesh_id):
+        verts3d = self.get_verts_with_mesh_id(mesh_id)
+        verts3d_ncds = (verts3d - verts3d.min(dim=0).values[None,]) / (
+                verts3d.max(dim=0).values[None,] - verts3d.min(dim=0).values[None,])
+        feats_from_faces = verts3d_ncds[self.get_faces_with_mesh_id(mesh_id)]
+        return feats_from_faces
 
     def get_feats_from_faces_with_mesh_id(self, mesh_id):
         return self.feats_from_faces[self.faces_counts_acc_from_0[mesh_id]: self.faces_counts_acc_from_0[mesh_id+1]]
@@ -206,39 +224,67 @@ class Meshes(torch.nn.Module):
         return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
 
 
-    def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: list=None, down_sample_rate=8.):
+    def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: torch.LongTensor, down_sample_rate=8.):
         """
             Args:
                 cams_tform4x4_obj (torch.Tensor): Bx4x4
                 cams_intr4x4 (torch.Tensor): Bx4x4
-                imgs_sizes (torch.Tensor): Bx2
+                imgs_sizes (torch.Tensor): Bx2 / 2
                 mesh_ids (list): len(mesh_ids) == B
 
             Returns:
                 verts2d (torch.Tensor): BxNx2
 
         """
+        B = cams_tform4x4_obj.shape[0]
+        #if imgs_sizes.dim() == 2:
+        #    imgs_sizes = imgs_sizes[None,].expand(B, imgs_sizes.shape[0], imgs_sizes.shape[1])
         cams_proj4x4_obj = torch.bmm(cams_intr4x4, cams_tform4x4_obj)
         verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=mesh_ids)
         verts2d = proj3d2d_broadcast(verts3d, proj4x4=cams_proj4x4_obj[:, None])
 
-        mask_verts_vsbl = self.render_feats(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4 / down_sample_rate, imgs_sizes=imgs_sizes // down_sample_rate, meshes_ids=mesh_ids, replace_feats_with_mask_vsbl=True)
-        mask_verts_vsbl *= (verts2d <= (imgs_sizes[:, None] - 1)).all(dim=-1)
+        mask_verts_vsbl = self.render_feats(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4 / down_sample_rate, imgs_sizes=imgs_sizes // down_sample_rate, meshes_ids=mesh_ids, modality=MESH_RENDER_MODALITIES.MASK_VERTS_VSBL)
+        mask_verts_vsbl *= (verts2d <= (imgs_sizes[None, None] - 1)).all(dim=-1)
         mask_verts_vsbl *= (verts2d >= 0).all(dim=-1)
 
         verts2d[~mask_verts_vsbl] = 0
         # verts2d.clamp()
         return verts2d, mask_verts_vsbl
-    def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, replace_feats_with_verts3d=False, replace_feats_with_mask_vsbl=False):
 
-        if meshes_ids is None:
-            meshes_ids = list(range(len(self)))
+    def show(self):
+        from pytorch3d.vis.plotly_vis import plot_scene, AxisArgs
+        fig = plot_scene({
+            "Meshes": {
+                f"mesh{i + 1}": self.pt3dmeshes[i] for i in range(len(self.pt3dmeshes))
+            }}, axis_args=AxisArgs(backgroundcolor="rgb(200, 200, 230)", showgrid=True, zeroline=True, showline=True,
+                                   showaxeslabels=True, showticklabels=True))
+        fig.show()
+        input('bla')
+    def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False):
         dtype = cams_tform4x4_obj.dtype
         device = cams_tform4x4_obj.device
 
+        if meshes_ids is None:
+            meshes_ids = torch.LongTensor(list(range(len(self)))).to(device=device)
+
+        meshes_count = meshes_ids.shape[0]
+        cams_count = cams_tform4x4_obj.shape[0]
+
+        if broadcast_batch_and_cams:
+            meshes_ids = meshes_ids
+            cams_tform4x4_obj = cams_tform4x4_obj[None, :].expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
+            cams_intr4x4 = cams_intr4x4[None, :].expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
+            meshes_ids = meshes_ids[:, None].expand(meshes_count, cams_count).reshape(-1)
+            render_count = meshes_count * cams_count
+        else:
+            if meshes_count != cams_count:
+                raise ValueError(f'Set `broadcast_batch_and_cams=True` to allow different number of cameras and meshes')
+            render_count = meshes_count
+
+
         # self.to(device)
 
-        num_cams = cams_tform4x4_obj.shape[0]
+        #num_cams = cams_tform4x4_obj.shape[0]
 
         #cams_tform4x4_obj = cams_tform4x4_obj.repeat_interleave(num_meshes, dim=0)
         #cams_intr4x4 = cams_intr4x4.repeat_interleave(num_meshes, dim=0)
@@ -256,7 +302,7 @@ class Meshes(torch.nn.Module):
 
         cameras = PerspectiveCameras(device=device, R=R, T=t, focal_length=focal_length,
                                      principal_point=principal_point, in_ndc=False,
-                                     image_size=imgs_sizes)
+                                     image_size=imgs_sizes[None, ].expand(render_count, 2))
 
           # K=self.K_4x4[None,]) #, K=K) # , K=K , znear=0.001, zfar=100000,
         #  znear=0.001, zfar=100000, fov=10
@@ -268,7 +314,7 @@ class Meshes(torch.nn.Module):
         # the difference between naive and coarse-to-fine rasterization.
 
         raster_settings = RasterizationSettings(
-            image_size=[int(imgs_sizes[0, 0]), int(imgs_sizes[0, 1])],
+            image_size=[int(imgs_sizes[0]), int(imgs_sizes[1])],
             blur_radius=0.0,
             faces_per_pixel=1,
             bin_size=None,
@@ -280,90 +326,37 @@ class Meshes(torch.nn.Module):
             raster_settings=raster_settings
         )
 
-        # this is not parallizable currently, because different meshes have different number of vertices
-        meshes_feats2d_rendered = []
-        for mesh_id in meshes_ids:
-            mesh_feats2d_rendered = []
-            # for cam_id in range(num_cams):
-            pt3dmeshes = self.pt3dmeshes[mesh_id]
+        pt3dmeshes = self.pt3dmeshes[meshes_ids]
+        fragments = rasterizer(pt3dmeshes)
+        # pix_to_face: BxHxWx1, zbuf: BxHxWx1, bary_coords: BxHxWx1x3, dists: BxHxWx1
+        if modality == MESH_RENDER_MODALITIES.MASK:
+            mask = fragments.zbuf.permute(0, 3, 1, 2) > 0.
+            if broadcast_batch_and_cams:
+                mask = mask.reshape(meshes_count, cams_count, *mask.shape[-3:])
+            return mask
 
-            # pix_to_face: BxHxWx1, zbuf, bary_coord: BxHxWx1x3, dists
-            fragments = rasterizer(pt3dmeshes.extend(num_cams)) # , R=R, t=t, focal_length=focal_length, principal_point=principal_point, imgs_sizes=imgs_sizes)
+        if modality == MESH_RENDER_MODALITIES.DEPTH:
+            depth = fragments.zbuf.permute(0, 3, 1, 2)
+            if broadcast_batch_and_cams:
+                depth = depth.reshape(meshes_count, cams_count, *depth.shape[-3:])
+            return depth
 
-            if replace_feats_with_mask_vsbl:
-                B = fragments.pix_to_face.shape[0]
-                verts_ids_vsbl = self.get_faces_with_mesh_id(mesh_id).repeat(num_cams, 1)[fragments.pix_to_face.reshape(B, -1)].reshape(B, -1) # .unique(dim=1)
-                verts_vsbl_mask = torch.zeros(size=(B, self.verts_counts_max), dtype=torch.bool, device=device)
-                for b in range(B):
-                    verts_vsbl_mask[b, verts_ids_vsbl[b]] = 1
-                return verts_vsbl_mask
-
-            if replace_feats_with_verts3d is False:
-                feats_from_faces = self.get_feats_from_faces_with_mesh_id(mesh_id) #  self.feats[mesh_id][self.faces[mesh_id]]
-            else:
-                verts3d = self.get_verts_with_mesh_id(mesh_id)
-                verts3d_ncds = (verts3d - verts3d.min(dim=0).values[None,]) / (verts3d.max(dim=0).values[None,] - verts3d.min(dim=0).values[None,])
-                feats_from_faces = verts3d_ncds[self.get_faces_with_mesh_id(mesh_id)]
-
-            mesh_feats2d_rendered = interpolate_face_attributes(fragments.pix_to_face, fragments.bary_coords, feats_from_faces.repeat(num_cams, 1, 1))[:, ..., 0, :].permute(0, 3, 1, 2)
-            meshes_feats2d_rendered.append(mesh_feats2d_rendered)
-        return torch.stack(meshes_feats2d_rendered, dim=0)
-
-        """
-        if modality == "depth":
-            fragments = rasterizer(meshes)
-            return (fragments.zbuf[0]).permute(2, 0, 1)
-        elif modality == "mask_verts_vsbl":
-            fragments = rasterizer(mesh)
+        if modality == MESH_RENDER_MODALITIES.MASK_VERTS_VSBL:
             B = fragments.pix_to_face.shape[0]
-            verts_ids_vsbl = faces[fragments.pix_to_face.reshape(B, -1)].reshape(B, -1).unique(dim=1)
-            verts_vsbl_mask = torch.zeros(size=(B, verts_shape[0]), dtype=torch.bool, device=device)
-            verts_vsbl_mask[verts_ids_vsbl] = 1
-        elif modality == "interpolate":
-            # pix_to_face, zbuf, bary_coord, dists
-            fragments = rasterizer(mesh)
-            if feats is None:
-                verts_rgb_ncds = verts.clone()
-                verts_rgb_ncds = (verts_rgb_ncds - verts_rgb_ncds.min(dim=0).values[None,]) / (verts_rgb_ncds.max(dim=0).values[None,] - verts_rgb_ncds.min(dim=0).values[None,])
-                feats = verts_rgb_ncds
-            return interpolate_face_attributes(fragments.pix_to_face, fragments.bary_coords, feats[faces])[0, ..., 0, :].permute(2, 0, 1)
-        elif modality == "nearest":
-            pix_to_face, zbuf, bary_coord, dists = rasterizer(mesh)
-            # TODO:
-            raise NotImplementedError
-            #ori_shape = bary_coord.shape
-            #exr = bary_coord * (bary_coord < 0)
-            #bary_coords_ = bary_coord.view(-1, bary_coord.shape[-1])
-            #arg_max_idx = bary_coords_.argmax(1)
-            #bary_coord = (
-            #        torch.zeros_like(bary_coords_)
-            #        .scatter(1, arg_max_idx.unsqueeze(1), 1.0)
-            #        .view(*ori_shape)
-            #        + exr
-            #)
-            return interpolate_face_attributes(pix_to_face, bary_coord, verts_rgb).squeeze()
+            verts_ids_vsbl = torch.cat([self.get_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0) [fragments.pix_to_face.reshape(B, -1)].reshape(B, -1)  # .unique(dim=1)
+            verts_vsbl_mask = torch.zeros(size=(B, self.verts_counts_max), dtype=torch.bool, device=device)
+            for b in range(B):
+                verts_vsbl_mask[b, verts_ids_vsbl[b]] = 1
+            return verts_vsbl_mask
+
+        if modality == MESH_RENDER_MODALITIES.FEATS:
+            feats_from_faces = torch.cat([self.get_feats_from_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0)
         else:
-            # Place a point light in front of the object. As mentioned above, the front of the cow is facing the
-            # -z direction.
-            lights = PointLights(device=device, location=[[0.0, 0.0, 10.0]])
+            feats_from_faces = torch.cat([self.get_verts_ncds_from_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0)
 
-            # Create a Phong renderer by composing a rasterizer and a shader. The textured Phong shader will
-            # interpolate the texture uv coordinates for each vertex, sample from a texture image and
-            # apply the Phong lighting model
-            renderer = MeshRenderer(
-                rasterizer=rasterizer,
-                shader=HardPhongShader(
-                    device=device,
-                    cameras=cameras,
-                    lights=lights
-                )
-            )
+        mesh_feats2d_rendered = interpolate_face_attributes(fragments.pix_to_face, fragments.bary_coords, feats_from_faces)[:, ..., 0,:].permute(0, 3, 1, 2)
 
-            rgba_synthetic_batch = renderer(mesh)
-            rgba_synthetic = (rgba_synthetic_batch[0, ..., :] * 255).to(torch.uint8).permute(2, 0, 1)
+        if broadcast_batch_and_cams:
+            mesh_feats2d_rendered = mesh_feats2d_rendered.reshape(meshes_count, cams_count, *mesh_feats2d_rendered.shape[-3:])
 
-            if modality == "rgba" or modality == "all":
-                return rgba_synthetic
-            else:
-                return rgba_synthetic[:3]
-        """
+        return mesh_feats2d_rendered

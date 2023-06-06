@@ -29,6 +29,10 @@ from od3d.datasets.dtd import DTD
 from od3d.datasets.shapenemo import ShapeNemo
 import pickle
 from od3d.cv.geometry.transform import transf4x4_from_spherical
+import shutil
+from tqdm import tqdm
+from od3d.datasets.dataset import OD3D_FRAME_MODALITIES
+from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D
 
 CATEGORIES = [
     "aeroplane",
@@ -50,33 +54,50 @@ SUBSETS = [
     "val"
 ]
 
+from dataclasses import dataclass
+from od3d.datasets.dataset import OD3D_Frame
+from omegaconf import OmegaConf
+@dataclass
+class Pascal3DFrame(OD3D_Frame):
+    complete: bool
+    path_preprocess: Path
+    kpts_names: list[str]
+    l_bbox: list[float]
+    l_kpts2d_annot: list[list[float]]
+    l_kpts2d_annot_vsbl: list[bool]
+    l_kpts3d: list[list[float]]
+    incomplete_reason: str
+    rfpath_mesh: Path
+    path_meshes: Path
+    _bbox = None
+    _kpts2d_annot = None
+    _kpts2d_annot_vsbl = None
+    _kpts3d = None
+    _mesh= None
 
-class Pascal3DFrame:
-
-
-    def __init__(self, fpath_annotation: Path, fpath_rgb: Path, path_meshes: Path, dtd=None, dt_shape_nemo=None, classes: list = None):
-        self.complete = False
-        self.device = "cpu"
-        self.dtype = torch.float32
-        annotation = scipy.io.loadmat(fpath_annotation)
-        self.name = annotation['record']['filename'][0][0][0].split('.')[0]
-        self.rgb = torchvision.io.read_image(str(fpath_rgb), mode=torchvision.io.ImageReadMode.RGB).to(self.device)
+    @staticmethod
+    def load_from_raw(path_dataset: Path, path_preprocess: Path, rfpath_annotation: Path, rfpath_rgb: Path, path_meshes: Path, dtd=None, dt_shape_nemo=None, classes: list = None):
+        annotation = scipy.io.loadmat(path_dataset.joinpath(rfpath_annotation))
+        name = annotation['record']['filename'][0][0][0].split('.')[0]
+        complete = True
+        incomplete_reason = ""
 
         objects = annotation['record']['objects'][0][0][0]
         # assert len(objects) == 1
         object = objects[0]
-        self.category = object['class'][0]
+        category = object['class'][0]
 
-        self.mesh_index = object['cad_index'][0][0] - 1
-        self.label = classes.index(self.category)
-        self.bbox = torch.from_numpy(object['bbox'][0]).to(device=self.device, dtype=self.dtype)
-        self.kpts_names = list(object['anchors'][0][0].dtype.names)
-        kpts2d_annot = np.stack([object['anchors'][0][0][n]['location'][0][0][0] if object['anchors'][0][0][n]['status'] == 1 else np.array([0, 0]) for n in self.kpts_names])
-        self.kpts2d_annot = torch.from_numpy(kpts2d_annot).to(device=self.device, dtype=self.dtype)
-        kpts2d_annot_vsbl = np.array([True if object['anchors'][0][0][n]['status'] == 1 else False for n in self.kpts_names])
-        self.kpts2d_annot_vsbl = torch.from_numpy(kpts2d_annot_vsbl).to(device=self.device)
-        width, height = self.rgb.shape[1:]
-        self.size = torch.Tensor([width, height]).to(device=self.device, dtype=self.dtype)
+        mesh_index = object['cad_index'][0][0] - 1
+        # label = classes.index(meta.category)
+        bbox = torch.from_numpy(object['bbox'][0])
+        kpts_names = list(object['anchors'][0][0].dtype.names)
+        kpts2d_annot = np.stack([object['anchors'][0][0][n]['location'][0][0][0] if object['anchors'][0][0][n]['status'] == 1 else np.array([0, 0]) for n in kpts_names])
+        kpts2d_annot = torch.from_numpy(kpts2d_annot)
+        kpts2d_annot_vsbl = np.array([True if object['anchors'][0][0][n]['status'] == 1 else False for n in kpts_names])
+        kpts2d_annot_vsbl = torch.from_numpy(kpts2d_annot_vsbl)
+        W = int(annotation['record'][0][0]['size']['width'][0][0][0][0])
+        H = int(annotation['record'][0][0]['size']['height'][0][0][0][0]) # self.rgb.shape[1:]
+        size = torch.Tensor([H, W])
         viewpoint = object['viewpoint']
         azimuth = viewpoint['azimuth'][0][0][0][0] * math.pi / 180
         elevation = viewpoint['elevation'][0][0][0][0] * math.pi / 180
@@ -84,229 +105,95 @@ class Pascal3DFrame:
         focal = viewpoint['focal'][0][0][0][0]
 
         if focal == 0:
-            self.incomplete_reason = "focal = 0"
-            return
-
+            complete = False
+            incomplete_reason = "focal = 0"
         theta = viewpoint['theta'][0][0][0][0] * math.pi / 180
         principal = np.array([viewpoint['px'][0][0][0][0],
                               viewpoint['py'][0][0][0][0]])
         viewport = viewpoint['viewport'][0][0][0][0]
 
-        cam_tform4x4_obj = self.calc_cam_tform_obj(azimuth=azimuth, elevation=elevation, theta=theta, distance=distance)
-        self.cam_tform4x4_obj = torch.Tensor(cam_tform4x4_obj).to(self.device)
+        cam_tform4x4_obj = Pascal3DFrame.calc_cam_tform_obj(azimuth=azimuth, elevation=elevation, theta=theta, distance=distance)
+        # cam_tform4x4_obj = torch.from_numpy(cam_tform4x4_obj)
 
         cam_intr3x3 = np.array([[1. * viewport * focal, 0, principal[0]],
-                           [0, 1. * viewport * focal, principal[1]],
-                           [0, 0, 1.]])
+                                [0, 1. * viewport * focal, principal[1]],
+                                [0, 0, 1.]])
         cam_intr4x4 = np.hstack((cam_intr3x3, [[0], [0], [0]]))
         cam_intr4x4 = np.vstack((cam_intr4x4, [0, 0, 0, 1]))
-        self.cam_intr4x4 = torch.from_numpy(cam_intr4x4).to(device=self.device, dtype=self.dtype)
+        cam_intr4x4 = torch.from_numpy(cam_intr4x4).to(dtype=cam_tform4x4_obj.dtype)
 
-        self.cam_proj4x4_obj = torch.bmm(self.cam_intr4x4[None,], self.cam_tform4x4_obj[None,])[0]
+        cam_proj4x4_obj = torch.bmm(cam_intr4x4[None,], cam_tform4x4_obj[None,])[0]
 
-        self.fpath_mesh = path_meshes.joinpath(self.category, f"{(self.mesh_index + 1):02d}.off")
-        fpath_mesh_kpoints3d = path_meshes.joinpath(f"{self.category}.mat")
+        rfpath_mesh = Path(category).joinpath(f"{(mesh_index + 1):02d}.off")
+
+        fpath_mesh_kpoints3d = path_meshes.joinpath(f"{category}.mat")
         annotation_mesh3d = scipy.io.loadmat(fpath_mesh_kpoints3d)
-        kpts3d = np.stack([annotation_mesh3d[self.category][n][0][self.mesh_index][0] if len(annotation_mesh3d[self.category][n][0][self.mesh_index]) > 0 else np.array([np.inf, np.inf, np.inf]) for n in self.kpts_names])
-        self.kpts3d = torch.from_numpy(kpts3d).to(device=self.device, dtype=self.dtype)
-        self.mask, self.depth, self.kpts2d, self.kpts3d_vsbl = self.calc_mesh_proj(fpath_mesh=self.fpath_mesh, pts3d=self.kpts3d)
+        kpts3d = np.stack([annotation_mesh3d[category][n][0][mesh_index][0] if len(annotation_mesh3d[category][n][0][mesh_index]) > 0 else np.array([np.inf, np.inf, np.inf]) for n in kpts_names])
+        kpts3d = torch.from_numpy(kpts3d)
 
-        if dtd is not None:
-            self.txtr = dtd.get_random_item()
-        else:
-            self.txtr = None
+        return Pascal3DFrame(name=name, complete=complete, incomplete_reason=incomplete_reason, path_dataset=path_dataset,
+                      rfpath_rgb=rfpath_rgb, rfpath_mesh=rfpath_mesh, path_meshes=path_meshes, path_preprocess=path_preprocess,
+                      l_bbox=bbox.tolist(), kpts_names=kpts_names, l_kpts2d_annot=kpts2d_annot.tolist(), l_kpts2d_annot_vsbl=kpts2d_annot_vsbl.tolist(), W=W, H=H, l_size=size.tolist(),
+                      l_cam_tform4x4_obj=cam_tform4x4_obj.tolist(), l_cam_intr4x4=cam_intr4x4.tolist(), l_cam_proj4x4_obj=cam_proj4x4_obj.tolist(), l_kpts3d=kpts3d.tolist(), category=category,
+                             rfpath_mask=Path('mask').joinpath(f'{name}.png'), rfpath_depth=Path("None"), rfpath_depth_mask=Path("None")
+                      )
 
-        #self.dt_shape_nemo = dt_shape_nemo
-        if dt_shape_nemo is not None:
-            self.fpath_shapenemo = dt_shape_nemo.get_cat(self.category)
-            shapenemo_mesh = Mesh(fpath_mesh=self.fpath_shapenemo, device=self.device)
-            self.shapenemo_vts3d = shapenemo_mesh.verts # load_mesh_vertices(fpath_mesh=self.fpath_shapenemo, device=self.device)
-            self.shapenemo_mask, self.shapenemo_depth, self.vts2d, self.vts3d_vsbl = self.calc_mesh_proj(fpath_mesh=self.fpath_shapenemo,
-                                                                                       pts3d=self.shapenemo_vts3d)
-        else:
-            self.fpath_shapenemo = None
-            self.shapenemo_vts3d = None
-            self.shapenemo_mask = None
-            self.shapenemo_depth = None
-            self.vts2d = None
-            self.vts3d_vsbl = None
-            # show_img(draw_pixels(self.rgb, self.vts2d[self.vts3d_vsbl], radius_in=2, radius_out=4))
-        #this_size = cfg.image_sizes[cate]
-        #out_shape = [
-        #    ((this_size[0] - 1) // 32 + 1) * 32,
-        #    ((this_size[1] - 1) // 32 + 1) * 32,
-        #]
-        #out_shape = [int(out_shape[0]), int(out_shape[1])]
-
-        # W_out = 400
-        # H_out = 200
-        # dist = 10.
-        # pts3d = torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype)
-
-        # self.augment(H=H_out, W=W_out, dist=10, txtr=self.txtr)
-
-        self.complete = True
-
-        # self.augment(H=512, W=512, dist=5.)
-
-    def to(self, device: torch.device):
-        if self.device != device:
-            for k, a in self.__dict__.items():
-                if isinstance(a, torch.Tensor):
-                    setattr(self, k, a.to(device))
-                    # self.__dict__[k] = a.to(device)
-            self.device = device
-
-    def calc_mesh_proj(self, fpath_mesh, pts3d=None, vsbl_depth_eps=0.01):
-
-        mask = render_mask(fpath_mesh=fpath_mesh,
-                                cam_tform_obj=self.cam_tform4x4_obj.to("cuda:0"),
-                                cam_intr=self.cam_intr4x4.to("cuda:0"),
-                                img_size=self.size.to("cuda:0")
-                           ).to(self.device)
-
-        depth = render_depth(fpath_mesh=fpath_mesh,
-                                 cam_tform_obj=self.cam_tform4x4_obj.to("cuda:0"),
-                                 cam_intr=self.cam_intr4x4.to("cuda:0"),
-                                 img_size=self.size.to("cuda:0")
-                             ).to(self.device)
-
-        if pts3d is None:
-            return mask, depth
-        else:
-            pts2d = proj3d2d_broadcast(pts3d=pts3d, proj4x4=self.cam_proj4x4_obj)
-            cam_tform_pts3d_depth_rendered = sample_pxl2d_pts(depth, pts2d)[:, 0]
-            cam_tform_pts3d_depth = transf3d_broadcast(pts3d, transf4x4=self.cam_tform4x4_obj)[:, 2]
-            pts3d_vsbl = (cam_tform_pts3d_depth - vsbl_depth_eps < cam_tform_pts3d_depth_rendered) + (cam_tform_pts3d_depth_rendered <= 0.)
-            return mask, depth, pts2d, pts3d_vsbl
-    def augment(self, H, W, dist):
-        # logger.info(f"Frame name {self.name}")
-
-        #center = torch.LongTensor([500, 200]).to(device=self.device)
-        #center = torch.Tensor([(self.bbox[0] + self.bbox[2]) / 2., (self.bbox[1] + self.bbox[3]) / 2.]).to(
-        #    device=self.device, dtype=self.dtype)
-        center = proj3d2d(pts3d=torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype), proj4x4=self.cam_proj4x4_obj)[0]
-        scale = self.cam_tform4x4_obj[2, 3] / dist
-        self.cam_tform4x4_obj[2, 3] = self.cam_tform4x4_obj[2, 3] / scale
-        self.cam_intr4x4[:2, 2] = self.cam_intr4x4[:2, 2] * scale
-        self.kpts2d_annot = self.kpts2d_annot * scale
-        self.bbox = self.bbox * scale
-        self.size[0] = H
-        self.size[1] = W
-        self.cam_proj4x4_obj = torch.matmul(self.cam_intr4x4, self.cam_tform4x4_obj)
-
-        #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
-
-        self.rgb, cam_crop_tform_cam = crop(img=self.rgb, center=center, H_out=H, W_out=W, scale=scale, ctx=self.txtr)
-
-        # we already account for the scale with the transformation, but we cannot do that for the padding
-        cam_crop_tform_cam[0, 0] = 1.
-        cam_crop_tform_cam[1, 1] = 1.
-        self.cam_intr4x4 = torch.matmul(cam_crop_tform_cam, self.cam_intr4x4)
-        self.cam_proj4x4_obj = torch.matmul(self.cam_intr4x4, self.cam_tform4x4_obj)
-
-        self.kpts2d_annot = self.kpts2d_annot + cam_crop_tform_cam[:2, 2]
-        self.bbox[[0, 2]] = self.bbox[[0, 2]] + cam_crop_tform_cam[0, 2]
-        self.bbox[[1, 3]] = self.bbox[[1, 3]] + cam_crop_tform_cam[1, 2]
-
-        if self.fpath_shapenemo is not None:
-            shapenemo_mesh = Mesh(fpath_mesh=self.fpath_shapenemo, device=self.device)
-            self.shapenemo_vts3d = shapenemo_mesh.verts # load_mesh_vertices(fpath_mesh=self.fpath_shapenemo, device=self.device)
-            self.shapenemo_mask, self.shapenemo_depth, self.vts2d, self.vts3d_vsbl = self.calc_mesh_proj(fpath_mesh=self.fpath_shapenemo,
-                                                                                       pts3d=self.shapenemo_vts3d)
-
-        self.mask, self.depth, self.kpts2d, self.kpts3d_vsbl = self.calc_mesh_proj(fpath_mesh=self.fpath_mesh, pts3d=self.kpts3d)
-
-        #this_size = config.image_sizes[cate]
-        #out_shape = [
-        #    ((this_size[0] - 1) // 32 + 1) * 32,
-        #    ((this_size[1] - 1) // 32 + 1) * 32,
-        #]
-        #out_shape = [int(out_shape[0]), int(out_shape[1])]
-
-    def visualize(self):
-        #this_size = cfg.image_sizes[cate]
-        #out_shape = [
-        #    ((this_size[0] - 1) // 32 + 1) * 32,
-        #    ((this_size[1] - 1) // 32 + 1) * 32,
-        #]
-        #out_shape = [int(out_shape[0]), int(out_shape[1])]
-
-        W_out = 400
-        H_out = 200
-        dist = 10.
-        pts3d = torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype)
-
-        self.augment(H=H_out, W=W_out, dist=10, txtr=self.txtr)
-        #logging.info(self.cam_tform4x4_obj.inverse()[:3, 3].norm())
-
-        mix_real_with_synthetic = blend_rgb(self.rgb, self.mask)
-
-        mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, proj3d2d(pts3d=torch.cat((pts3d, self.kpts3d[self.kpts3d_vsbl])), proj4x4=self.cam_proj4x4_obj), colors=(0, 255, 0))
-        mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, self.kpts2d_annot[self.kpts2d_annot_vsbl], colors=(0, 0, 255), radius_in=2, radius_out=4)
-
-        show_img(mix_real_with_synthetic)
+    @property
+    def bbox(self):
+        if self._bbox is None:
+            self._bbox = torch.Tensor(self.l_bbox)
+        return self._bbox
 
 
-    def calc_cam_tform_obj(self, azimuth, elevation, theta, distance):
+    @property
+    def mask(self):
+        if self._mask is None:
+            from od3d.cv.io import read_image, save_image_mask
+            from od3d.cv.geometry.mesh import Meshes
+            fpath = self.path_preprocess.joinpath(self.rfpath_mask)
+            if not fpath.exists():
+                if torch.cuda.is_available():
+                    device='cuda:0'
+                else:
+                    device = 'cpu'
+                meshes = Meshes.load_from_files([self.path_meshes.joinpath(self.rfpath_mesh)], device=device)
+                mask = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device), cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
+                                           imgs_sizes=self.size.to(device=device), modality='mask')[0]
+                save_image_mask(mask, path=fpath)
+            self._mask = read_image(fpath) == 255
+        return self._mask
 
+    @property
+    def kpts2d_annot(self):
+        if self._kpts2d_annot is None:
+            self._kpts2d_annot = torch.Tensor(self.l_kpts2d_annot)
+        return self._kpts2d_annot
 
-        """
-        if distance == 0:
-            # return None
-            distance = 0.1
-        # camera center
-        obj_tform_cam_pos = np.zeros((3, 1))
-        obj_tform_cam_pos[0] = distance * math.cos(elevation) * math.sin(azimuth)
-        obj_tform_cam_pos[1] = -distance * math.cos(elevation) * math.cos(azimuth)
-        obj_tform_cam_pos[2] = distance * math.sin(elevation)
-        cam_tform_obj = -obj_tform_cam_pos
-        # rotate coordinate system by theta is equal to rotating the model by theta
-        azimuth = -azimuth
-        elevation = -(math.pi / 2 - elevation)
+    @property
+    def kpts2d_annot_vsbl(self):
+        if self._kpts2d_annot_vsbl is None:
+            self._kpts2d_annot_vsbl = torch.Tensor(self.l_kpts2d_annot_vsbl)
+        return self._kpts2d_annot_vsbl
+    @property
+    def kpts3d(self):
+        if self._kpts3d is None:
+            self._kpts3d = torch.Tensor(self.l_kpts3d)
+        return self._kpts3d
+    @property
+    def mesh(self):
+        if self._mesh is None:
+            self._mesh = Mesh.load_from_file(fpath=self.path_meshes.joinpath(self.rfpath_mesh))
+        return self._mesh
 
-        # rotation matrix
-        Rz = np.array([
-            [math.cos(azimuth), -math.sin(azimuth), 0],
-            [math.sin(azimuth), math.cos(azimuth), 0],
-            [0, 0, 1],
-        ])  # rotation by azimuth
-        Rx = np.array([
-            [1, 0, 0],
-            [0, math.cos(elevation), -math.sin(elevation)],
-            [0, math.sin(elevation), math.cos(elevation)],
-        ])  # rotation by elevation
-
-        R_theta = np.array(
-            [[math.cos(theta), -math.sin(theta), 0],
-             [math.sin(theta), math.cos(theta), 0],
-             [0, 0, 1]])
-
-        camrot_tform_cam = np.dot(R_theta, np.dot(Rx, Rz))
-        camrot_tform_obj = np.hstack((camrot_tform_cam, np.dot(camrot_tform_cam, cam_tform_obj)))
-        camrot_tform_obj = np.vstack((camrot_tform_obj, [0, 0, 0, 1]))
-
-        #R_theta = np.array(
-        #    [[math.cos(theta), -math.sin(theta), 0, 0],
-        #     [math.sin(theta), math.cos(theta), 0, 0],
-        #     [0, 0, 1, 0],
-        #     [0, 0, 0, 1]])
-        #R = np.dot(R_theta, R)
-
-        #T = R
-
-        T = np.eye(4)
-        T[0, :] = camrot_tform_obj[0, :]
-        T[1, :] = -camrot_tform_obj[1, :]
-        T[2, :] = -camrot_tform_obj[2, :]
-        """
+    @staticmethod
+    def calc_cam_tform_obj(azimuth, elevation, theta, distance):
         cam_tform4x4_obj = transf4x4_from_spherical(
             azim=torch.Tensor([azimuth]),
             elev=torch.Tensor([elevation]),
             theta=torch.Tensor([theta]),
             dist=torch.Tensor([distance]))[0]
-        #cam_tform4x4_obj[0, :] = cam_tform4x4_obj[0, :]
-        #cam_tform4x4_obj[1, :] = -cam_tform4x4_obj[1, :]
+        # cam_tform4x4_obj[0, :] = cam_tform4x4_obj[0, :]
+        # cam_tform4x4_obj[1, :] = -cam_tform4x4_obj[1, :]
         # cam_tform4x4_obj[2, :] = -cam_tform4x4_obj[2, :]
         # cam_tform4x4_obj[2, 2:3] = -cam_tform4x4_obj[2, 2:3]
         return cam_tform4x4_obj
@@ -320,11 +207,25 @@ class Pascal3D(OD3D_Dataset):
     ):
         super().__init__(config=config, transform=transform)
         self.setup(self.config)
-        self.name = config.name
         self.path = Path(self.config.path_pascal3d_raw)
         self.path_meshes = self.path.joinpath("CAD")
+        self.path_preprocess = Path(config.path_pascal3d_preprocess)
+        self.path_meta = self.path_preprocess.joinpath('meta')
+
         self.subsets = self.config.get("subsets", SUBSETS)
-        self.categories = self.config.get("category", CATEGORIES)
+        self.categories = self.config.get("classes", CATEGORIES)
+
+        self.preprocess_meta(remove_previous=self.config.preprocess_meta_remove_previous,
+                             override=self.config.preprocess_meta_override)
+
+        frames_names_meta = sorted([fpath.name.split('.')[0] for fpath in list(self.path_meta.joinpath("frames").iterdir())])
+
+        self.frames_names, _ = self.get_frame_names_from_subsets_and_cateogories(subsets=self.subsets,categories=self.categories)
+        self.frames_names = list(filter(lambda fn: fn in frames_names_meta, self.frames_names))
+
+        self.name = config.name
+
+        """
         self.frame_names = []
         self.frame_rfpaths = []
 
@@ -334,15 +235,8 @@ class Pascal3D(OD3D_Dataset):
             self.dtd = None
 
         self.dt_shape_nemo = ShapeNemo(config=self.config, categories=self.categories)
-
-        for subset in self.subsets:
-            for category in self.categories:
-                fpath_frame_names_partial = self.path.joinpath("Image_sets", f"{category}_imagenet_{subset}.txt")
-                with fpath_frame_names_partial.open() as f:
-                    frame_names_partial = f.read().splitlines()
-                    frame_rfpaths_partial = [f"{category}_imagenet/{name}" for name in frame_names_partial]
-                    self.frame_rfpaths += frame_rfpaths_partial
-                    self.frame_names += frame_names_partial
+        
+        """
 
         self.cache = self.config.cache
         if self.cache == "Disk":
@@ -369,6 +263,24 @@ class Pascal3D(OD3D_Dataset):
                 with open(self.fpath_frame_names, 'w') as f:
                     for frame_name in self.frame_names:
                         f.write(frame_name)
+
+    def get_frame_names_from_subset_and_category(self, subset, category):
+        fpath_frame_names_partial = self.path.joinpath("Image_sets", f"{category}_imagenet_{subset}.txt")
+        with fpath_frame_names_partial.open() as f:
+            frame_names_partial = f.read().splitlines()
+            frame_rfpaths_partial = [f"{category}_imagenet/{name}" for name in frame_names_partial]
+        return frame_names_partial, frame_rfpaths_partial
+
+    def get_frame_names_from_subsets_and_cateogories(self, subsets, categories):
+        frames_rfpaths = []
+        frames_names = []
+        for subset in subsets:
+            for category in categories:
+                frame_names_partial, frame_rfpaths_partial = self.get_frame_names_from_subset_and_category(subset=subset, category=category)
+                frames_rfpaths += frame_rfpaths_partial
+                frames_names += frame_names_partial
+
+        return frames_names, frames_rfpaths
     @staticmethod
     def setup(config):
         DTD.setup(config)
@@ -384,130 +296,60 @@ class Pascal3D(OD3D_Dataset):
             od3d.io.move_dir(src=fpath.parent.joinpath(Path(config.url_pascal3d_raw).with_suffix("").name),
                              dst=fpath.parent)
 
+    def preprocess_meta(self, remove_previous=False, override=False):
+        if not override and self.path_meta.exists():
+            return
+
+        if remove_previous:
+            if self.path_meta.exists():
+                shutil.rmtree(self.path_meta)
+
+        frames_names, frames_rfpaths = self.get_frame_names_from_subsets_and_cateogories(subsets=self.subsets,categories=self.categories)
+
+        if self.config.get('frames', None) is not None:
+            frames_names = list(filter(lambda f: f in self.config.frames, frames_names))
+
+        for i in tqdm(range(len(frames_names))):
+            rfpath_annotation = Path("Annotations").joinpath(f"{frames_rfpaths[i]}.mat")
+            rfpath_rgb = Path("Images").joinpath(f"{frames_rfpaths[i]}.JPEG")
+            frame = Pascal3DFrame.load_from_raw(path_dataset=self.path, path_preprocess=self.path_preprocess, rfpath_rgb=rfpath_rgb, rfpath_annotation=rfpath_annotation, path_meshes=self.path_meshes)
+            if frame.complete:
+                conf = OmegaConf.structured(frame)
+                fpath = self.path_meta.joinpath("frames", frame.name + '.yaml')
+                if not fpath.parent.exists():
+                    fpath.parent.mkdir(parents=True)
+                OmegaConf.save(conf, fpath, resolve=True)
+                _ = frame.mask
+
+    @staticmethod
+    def collate_fn(frames: list[Pascal3DFrame], modalities: list[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cpu', dtype=torch.float32):
+        frames = Pascal3DFrames(frames, modalities, dtype=dtype, device=device)
+        return frames
+
     def __len__(self):
-        return len(self.frame_names)
+        return len(self.frames_names)
 
     def get_item(self, item):
-        if self.cache is None:
-            frame = self.get_item_raw(item)
-            if frame is None or not frame.complete:
-                if not frame.complete:
-                    logger.warning(f'Skipping frame {frame.name} due to: {frame.incomplete_reason}')
-                frame = self.get_item_raw((item + 1) % len(self))
-        elif self.cache is 'Disk':
-            raise NotImplementedError
-        elif self.cache is 'RAM':
-            raise NotImplementedError
-        else:
-            raise NotImplementedError
+        frame = self.get_item_raw(item)
+        frame = self.transform(frame)
+        frame.label = self.config.classes.index(frame.category)
+        return frame
 
-        logger.info(f"Frame: id {item}, name {frame.name}")
-        return self.transform(frame)
+    def get_frame_by_name(self, frame_name):
+        frame_config = OmegaConf.load(self.path_meta.joinpath('frames', frame_name + '.yaml'))
+        return Pascal3DFrame(**frame_config)
+
+    def get_frame_by_id(self, id):
+        return self.get_frame_by_name(frame_name=self.frames_names[id])
 
     def get_item_raw(self, item):
-        fpath_annotation = self.path.joinpath("Annotations", f"{self.frame_rfpaths[item]}.mat")
-        fpath_rgb = self.path.joinpath("Images", f"{self.frame_rfpaths[item]}.JPEG")
-        frame = Pascal3DFrame(fpath_annotation=fpath_annotation, fpath_rgb=fpath_rgb, path_meshes=self.path_meshes, dtd=self.dtd, dt_shape_nemo=self.dt_shape_nemo, classes=self.config.classes)
-        return frame
-    def get_item_from_cache_disk(self, item):
-        fpath_frame = self.path_cache.joinpath(self.frame_names[item])
-        frame = Pascal3DFrame(fpath_frame=fpath_frame)
-        return None
-    @staticmethod
-    def collate_fn(bla):
-        frames = Pascal3DFrames(bla)
-        return frames
-    def visualize(self, item: int):
-        frame: Pascal3DFrame = self.__getitem__(item=item)
-        frame.visualize()
-    def filter(self):
-        if self.remove_no_bg is not None:
-            filtered_file_list = []
-            for i in range(len(self.file_list)):
-                sample = self.__getitem__(i)
-                obj_mask = skimage.measure.block_reduce(sample['obj_mask'], (self.remove_no_bg, self.remove_no_bg), np.max)
-                if np.sum(1-obj_mask) >= 5:
-                    filtered_file_list.append(self.file_list[i])
-            self.file_list = filtered_file_list
-
-        if self.segmentation_masks is not None:
-            filtered_file_list = []
-            for i in range(len(self.file_list)):
-                sample = self.__getitem__(i)
-                if 'inmodal' in self.segmentation_masks and len(sample['inmodal_mask'].shape) < 2:
-                    continue
-                if 'amodal' in self.segmentation_masks and len(sample['amodal_mask'].shape) < 2:
-                    continue
-                filtered_file_list.append(self.file_list[i])
-            self.file_list = filtered_file_list
+        return self.get_frame_by_id(id=item)
 
 
-    def debug(self, item, save_dir=""):
-        sample = self.__getitem__(item)
-        img = sample["original_img"]
-        kp, kpvis = sample["kp"], sample["kpvis"]
-        y0, y1, x0, x1, _, _ = sample["bbox"]
-        obj_mask = sample["obj_mask"]
-
-        import cv2
-
-        for i in range(len(kp)):
-            if kpvis[i]:
-                img = cv2.circle(
-                    img, (int(kp[i, 1]), int(kp[i, 0])), 2, (255, 0, 0), -1
-                )
-        img = cv2.rectangle(img, (int(x0), int(y0)), (int(x1), int(y1)), (0, 255, 0), 2)
-
-        gray_img = (img * 0.3).astype(np.uint8)
-        gray_img[obj_mask == 1] = img[obj_mask == 1]
-
-        Image.fromarray(gray_img).save(
-            os.path.join(save_dir, f'debug_{sample["this_name"].replace("/", "_")}.png')
-        )
-
-class Pascal3DFrames:
-    def __init__(self, frames: list[Pascal3DFrame]):
-        for frame in frames:
-            frame.to('cuda:0')
+from od3d.datasets.dataset import OD3D_Frames
+class Pascal3DFrames(OD3D_Frames):
+    def __init__(self, frames: list[Pascal3DFrame], modalities: list[OD3D_FRAME_MODALITIES], dtype, device):
+        super().__init__(frames=frames, modalities=modalities, dtype=dtype, device=device)
         frame0 = frames[0]
-        self.dtype = frame0.dtype
-        self.device = frame0.device
-        self.rgb = torch.stack([frame.rgb for frame in frames], dim=0)
-        self.mask = torch.stack([frame.mask for frame in frames], dim=0)
-        self.depth = torch.stack([frame.depth for frame in frames], dim=0)
-        self.cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0)
-        self.cam_proj4x4_obj = torch.stack([frame.cam_proj4x4_obj for frame in frames], dim=0)
-        self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0)
-        self.kpts3d = [frame.kpts3d for frame in frames] # no stack possible because #kpts change for classes
-        self.kpts2d = [frame.kpts2d for frame in frames] # no stack possible because #kpts change for classes
-        self.kpts3d_vsbl = [frame.kpts3d_vsbl for frame in frames] # no stack possible because #kpts change for classes
-        self.kpts2d_annot = [frame.kpts2d_annot for frame in frames] # no stack possible because #kpts change for classes
-        self.kpts2d_annot_vsbl = [frame.kpts2d_annot_vsbl for frame in frames] # no stack possible because #kpts change for classes
-        self.size = torch.stack([frame.size for frame in frames], dim=0)
-        self.bbox = torch.stack([frame.bbox for frame in frames], dim=0)
-        self.fpath_mesh = [frame.fpath_mesh for frame in frames]
-        self.label = torch.LongTensor([frame.label for frame in frames]).to(device=self.device)
-        self.name = [frame.name for frame in frames]
-
-    def visualize(self):
-        rgb = render_mesh(fpath_mesh=self.fpath_mesh[0], cam_tform_obj=self.cam_tform4x4_obj[0], cam_intr=self.cam_intr4x4[0], img_size=self.size[0], modality="interpolate")
-        show_img(rgb)
-
-        pts3d = torch.zeros(size=(1, 3)).to(device=self.device, dtype=self.dtype)
-        mix_real_with_synthetic = blend_rgb(self.rgb[0], self.mask[0])
-
-        mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
-                                              proj3d2d_broadcast(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),
-                                                       proj4x4=self.cam_proj4x4_obj[0]), colors=(0, 255, 0))
-        mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, self.kpts2d_annot[0, self.kpts2d_annot_vsbl[0]],
-                                              colors=(0, 0, 255), radius_in=2, radius_out=4)
-
-        show_img(mix_real_with_synthetic)
-
-    def to(self, device: torch.device):
-        if self.device != device:
-            for k, a in self.__dict__.items():
-                if isinstance(a, torch.Tensor):
-                    setattr(self, k, a.to(device))
-                    # self.__dict__[k] = a.to(device)
-            self.device = device
+        self.rfpaths_meshes = [frame.rfpath_mesh for frame in frames]
+        self.path_meshes = frame0.path_meshes

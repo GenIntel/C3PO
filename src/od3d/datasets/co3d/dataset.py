@@ -1,8 +1,10 @@
-from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES
+from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_Frame
 from omegaconf import DictConfig, OmegaConf
 from co3d.dataset.data_types import (
     load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
 )
+from od3d.cv.geometry.mesh import Meshes
+
 import torchvision
 import torch
 from od3d.cv.geometry.transform import transf4x4_from_rot3x3_and_transl3, transf3d_broadcast
@@ -34,7 +36,7 @@ from tqdm import tqdm
 import torch.utils.data
 from functools import partial
 from od3d.cv.geometry.downsample import voxel_downsampling, random_sampling
-
+from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D
 
 class CO3D_FRAME_TYPES(str, Enum):
     DEV_KNOWN = 'dev_known'
@@ -119,22 +121,24 @@ class CO3D_Sequence():
     viewpoint_quality_score: float
 
     @staticmethod
-    def load_meta(path_co3d: Path, sequence_annotation: SequenceAnnotation):
-        meta = OmegaConf.create()
-        meta.path_co3d = path_co3d
-        meta.name = sequence_annotation.sequence_name
-        meta.category = sequence_annotation.category
+    def load_from_raw(path_co3d: Path, sequence_annotation: SequenceAnnotation):
+        name = sequence_annotation.sequence_name
+        category = sequence_annotation.category
         if sequence_annotation.point_cloud is not None:
-            meta.rfpath_pcl = sequence_annotation.point_cloud.path
-            meta.pcl_pts_count = sequence_annotation.point_cloud.n_points
-            meta.pcl_quality_score = sequence_annotation.point_cloud.quality_score
+            rfpath_pcl = sequence_annotation.point_cloud.path
+            pcl_pts_count = sequence_annotation.point_cloud.n_points
+            pcl_quality_score = sequence_annotation.point_cloud.quality_score
         else:
-            meta.rfpath_pcl = Path('None')
-            meta.pcl_pts_count = 0
-            meta.pcl_quality_score = float('nan')
+            rfpath_pcl = Path('None')
+            pcl_pts_count = 0
+            pcl_quality_score = float('nan')
 
-        meta.viewpoint_quality_score = sequence_annotation.viewpoint_quality_score
-        return meta
+        viewpoint_quality_score = sequence_annotation.viewpoint_quality_score
+
+        return CO3D_Sequence(path_co3d=path_co3d, name=name, category=category, rfpath_pcl=rfpath_pcl,
+                             pcl_pts_count=pcl_pts_count, pcl_quality_score=pcl_quality_score,
+                             viewpoint_quality_score=viewpoint_quality_score)
+
     @property
     def pcl(self):
         if self._pcl is None:
@@ -142,50 +146,36 @@ class CO3D_Sequence():
             self._pcl = verts
         return self._pcl
 
-
 @dataclass
-class CO3D_Frame():
-    path_co3d: Path
-    category: str
+class CO3D_Frame(OD3D_Frame):
     sequence_name: str
     frame_number: int
-    frame_type: str
-    name: str
-    rfpath_rgb: Path
-    rfpath_mask: Path
-    rfpath_depth: Path
-    rfpath_depth_mask: Path
-    # rfpath_pcl: Path
-    _cam_tform4x4_obj: list[list[float]] #  torch.Tensor
-    _cam_intr4x4: list[list[float]] # torch.Tensor
-    _cam_proj4x4_obj: list[float] # torch.Tensor
-    _size: list[float] # torch.Tensor
     depth_scale: float
-    H: int
-    W: int
-    _rgb = None
-    _mask = None
-    _depth = None
-    _depth_mask = None
+    frame_type: str
+
+    @property
+    def depth(self):
+        if self._depth is None:
+            self._depth = read_co3d_depth_image(self.path_dataset.joinpath(self.rfpath_depth)) * self.depth_scale
+        return self._depth
 
     @staticmethod
-    def load_meta(path_co3d: Path, frame_annotation: FrameAnnotation):
-        meta = OmegaConf.create()
-        meta.path_co3d = path_co3d
-        meta.category = frame_annotation.image.path.split('/')[0]
-        meta.sequence_name = frame_annotation.sequence_name
-        meta.frame_number = frame_annotation.frame_number
-        meta.frame_type = frame_annotation.meta['frame_type']
-        meta.name = f'{frame_annotation.frame_number}'
+    def load_from_raw(path_co3d: Path, frame_annotation: FrameAnnotation):
+        path_dataset = path_co3d
+        category = frame_annotation.image.path.split('/')[0]
+        sequence_name = frame_annotation.sequence_name
+        frame_number = frame_annotation.frame_number
+        frame_type = frame_annotation.meta['frame_type']
+        name = f'{frame_annotation.frame_number}'
 
-        meta.rfpath_mask = Path(frame_annotation.mask.path)
+        rfpath_mask = Path(frame_annotation.mask.path)
 
-        meta.rfpath_rgb = Path(frame_annotation.image.path)
+        rfpath_rgb = Path(frame_annotation.image.path)
 
-        meta.depth_scale = frame_annotation.depth.scale_adjustment
-        meta.rfpath_depth = Path(frame_annotation.depth.path)
+        depth_scale = frame_annotation.depth.scale_adjustment
+        rfpath_depth = Path(frame_annotation.depth.path)
 
-        meta.rfpath_depth_mask = Path(frame_annotation.depth.mask_path)
+        rfpath_depth_mask = Path(frame_annotation.depth.mask_path)
 
         cam_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(rot3x3=torch.Tensor(frame_annotation.viewpoint.R).T, transl3=torch.Tensor(frame_annotation.viewpoint.T))
         default_tform_t3d = torch.Tensor([[-1., 0., 0., 0.],
@@ -194,10 +184,10 @@ class CO3D_Frame():
                                          [0., 0., 0., 1.]])
         cam_tform4x4_obj = torch.bmm(default_tform_t3d[None,], cam_tform4x4_obj[None,])[0]
 
-        meta.H, meta.W = frame_annotation.image.size
-        size = torch.Tensor([meta.W, meta.H]) #
+        H, W = frame_annotation.image.size
+        size = torch.Tensor([H, W]) #
 
-        s = min(meta.H ,meta.W)
+        s = min(H, W)
         focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length)  * s / 2.
         principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size / 2.
         cam_intr4x4 = torch.Tensor([[focal_length[0], 0., principal_point[0], 0.],
@@ -206,106 +196,16 @@ class CO3D_Frame():
                            [0., 0., 0., 1.]])
         cam_proj4x4_obj = torch.bmm(cam_intr4x4[None,], cam_tform4x4_obj[None,])[0]
 
-        meta._size = size.tolist()
-        meta._cam_intr4x4 = cam_intr4x4.tolist()
-        meta._cam_tform4x4_obj = cam_tform4x4_obj.tolist()
-        meta._cam_proj4x4_obj = cam_proj4x4_obj.tolist()
-        return meta
+        l_size = size.tolist()
+        l_cam_intr4x4 = cam_intr4x4.tolist()
+        l_cam_tform4x4_obj = cam_tform4x4_obj.tolist()
+        l_cam_proj4x4_obj = cam_proj4x4_obj.tolist()
+        return CO3D_Frame(path_dataset=path_dataset, category=category, frame_number=frame_number, frame_type=frame_type,
+                   name=name, rfpath_mask=rfpath_mask, rfpath_depth=rfpath_depth, rfpath_depth_mask=rfpath_depth_mask,
+                   rfpath_rgb=rfpath_rgb, H=H, W=W, l_size=l_size, l_cam_intr4x4=l_cam_intr4x4,
+                   sequence_name=sequence_name,
+                   l_cam_tform4x4_obj=l_cam_tform4x4_obj, l_cam_proj4x4_obj=l_cam_proj4x4_obj, depth_scale=depth_scale)
 
-    @property
-    def size(self):
-        return torch.Tensor(self._size)
-
-    @property
-    def cam_intr4x4(self):
-        return torch.Tensor(self._cam_intr4x4)
-
-    @property
-    def cam_tform4x4_obj(self):
-        return torch.Tensor(self._cam_tform4x4_obj)
-
-    @property
-    def cam_proj4x4_obj(self):
-        return torch.Tensor(self._cam_proj4x4_obj)
-    @property
-    def mask(self):
-        if self._mask is None:
-            self._mask = read_image(self.path_co3d.joinpath(self.rfpath_mask)) / 255.
-        return self._mask
-
-    @property
-    def rgb(self):
-        if self._rgb is None:
-            self._rgb = torchvision.io.read_image(str(self.path_co3d.joinpath(self.rfpath_rgb)), mode=torchvision.io.ImageReadMode.RGB)
-        return self._rgb
-
-    @property
-    def depth(self):
-        if self._depth is None:
-            self._depth = read_co3d_depth_image(self.path_co3d.joinpath(self.rfpath_depth)) * self.depth_scale
-        return self._depth
-
-    @property
-    def depth_mask(self):
-        if self._depth_mask is None:
-            self._depth_mask = read_image(self.path_co3d.joinpath(self.rfpath_depth_mask))
-        return self._depth_mask
-
-class CO3D_Frames():
-    def __init__(self, frames: list[CO3D_Frame], modalities: list[OD3D_FRAME_MODALITIES], dtype, device):
-        self.modalities = OD3D_FRAME_MODALITIES
-
-        frame0 = frames[0]
-        self.dtype = dtype
-        self.device = device
-        self.path_co3d = frame0.path_co3d
-        self.size = frame0.size
-        self.cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
-        self.cam_proj4x4_obj = torch.stack([frame.cam_proj4x4_obj for frame in frames], dim=0).to(device=device)
-        self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
-
-        if OD3D_FRAME_MODALITIES.RGB in modalities:
-            self.rgb = torch.stack([frame.rgb for frame in frames], dim=0).to(device=device)
-
-        if OD3D_FRAME_MODALITIES.MASK in modalities:
-            self.mask = torch.stack([frame.mask for frame in frames], dim=0).to(device=device)
-
-        if OD3D_FRAME_MODALITIES.DEPTH in modalities:
-            self.depth = torch.stack([frame.depth for frame in frames], dim=0).to(device=device)
-
-        if OD3D_FRAME_MODALITIES.DEPTH_MASK in modalities:
-            self.depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0).to(device=device)
-
-    def visualize(self):
-
-        # show_pcl
-        # print(self.rfpath_pcl[0])
-        # show_img(self.rgb[0])
-
-        #verts, _ = load_ply(str(self.path_co3d.joinpath(self.rfpath_pcl[0])))
-        #verts = verts.to(self.device)
-
-        #how_pcl(verts, cam_tform4x4_obj=self.cam_tform4x4_obj[0], cam_intr4x4=self.cam_intr4x4[0], img_size=self.size)
-
-
-        # verts, faces = load_ply(filename)
-        #mix_real_with_synthetic = blend_rgb(self.rgb[0], self.mask[0] * 255)
-
-        #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
-        #                                      proj3d2d_broadcast(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),
-        #                                               proj4x4=self.cam_proj4x4_obj[0]), colors=(0, 255, 0))
-        #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, self.kpts2d_annot[0, self.kpts2d_annot_vsbl[0]],
-        #                                     colors=(0, 0, 255), radius_in=2, radius_out=4)
-
-        show_img(self.rgb[0])
-
-    def to(self, device: torch.device):
-        if self.device != device:
-            for k, a in self.__dict__.items():
-                if isinstance(a, torch.Tensor):
-                    setattr(self, k, a.to(device))
-                    # self.__dict__[k] = a.to(device)
-            self.device = device
 class CO3D(OD3D_Dataset):
     def __init__(
         self,
@@ -323,12 +223,13 @@ class CO3D(OD3D_Dataset):
                                       CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
                                       CO3D_FRAME_TYPES.TEST_KNOWN]
 
-        self.classes = [
-            'car',
-            #'carrot'
-        ]
+        self.classes = self.config.classes
+        # [
+        #    'car',
+        #    #'carrot'
+        #]
 
-        self.preprocess_meta(override=self.config.preprocess_meta_override)
+        self.preprocess_meta(remove_previous=self.config.preprocess_meta_remove_previous, override=self.config.preprocess_meta_override, sequences=self.config.get("sequences"))
         self.sequences_require_pcl = True
         self.frames_only_first_of_each_sequence = False
 
@@ -385,11 +286,13 @@ class CO3D(OD3D_Dataset):
         return self.get_sequence_by_name(sequence_name=self.sequences_names[seq_id])
 
 
-    def preprocess_meta(self, override=False):
+    def preprocess_meta(self, remove_previous=False, override=False, sequences=None):
         if not override and self.path_meta.exists():
             return
 
-        shutil.rmtree(self.path_meta)
+        if remove_previous:
+            if self.path_meta.exists():
+                shutil.rmtree(self.path_meta)
 
         for cls in self.classes:
             logger.info(f'preprocess meta for class {cls}')
@@ -400,7 +303,10 @@ class CO3D(OD3D_Dataset):
 
             logger.info('reading sequence annotations...')
             for sequence_annoation in tqdm(sequence_annotations):
-                sequence = CO3D_Sequence(**CO3D_Sequence.load_meta(path_co3d=self.path, sequence_annotation=sequence_annoation))
+                if sequences is not None and sequence_annoation.sequence_name not in sequences:
+                    continue
+
+                sequence = CO3D_Sequence.load_from_raw(path_co3d=self.path, sequence_annotation=sequence_annoation)
                 config = OmegaConf.structured(sequence)
                 fpath = self.path_meta.joinpath(sequence.name + '.yaml')
                 if not fpath.parent.exists():
@@ -415,8 +321,9 @@ class CO3D(OD3D_Dataset):
 
             logger.info('reading frame annotations...')
             for frame_annotation in tqdm(cls_frame_annotations):
-                frame = CO3D_Frame(
-                    **CO3D_Frame.load_meta(path_co3d=self.path, frame_annotation=frame_annotation))
+                if sequences is not None and frame_annotation.sequence_name not in sequences:
+                    continue
+                frame = CO3D_Frame.load_from_raw(path_co3d=self.path, frame_annotation=frame_annotation)
                 conf = OmegaConf.structured(frame)
                 fpath = self.path_meta.joinpath(frame.sequence_name, frame.name + '.yaml')
                 if not fpath.parent.exists():
@@ -476,7 +383,6 @@ class CO3D(OD3D_Dataset):
             cuboid_tform_world = cuboid_tform_pca[None,].bmm(pca_tform_world[None,])[0]
             fpath_pcl = path_pcls.joinpath(sequence.name, f'cuboid_max_{cuboid_pts3d_max_count}' + '.ply')
 
-            from od3d.cv.geometry.mesh import Meshes
             faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
             verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
 
@@ -486,13 +392,11 @@ class CO3D(OD3D_Dataset):
     def __len__(self):
         return self.frames_count
 
-    def __getitem__(self, item):
+    def get_item(self, item):
         seq_id = self.map_item_id_to_seq_id[item]
         frame_id = self.map_item_id_to_frame_id[item]
-        return self.transform(self.get_frame_by_id(seq_id=seq_id, frame_id=frame_id))
+        frame = self.transform(self.get_frame_by_id(seq_id=seq_id, frame_id=frame_id))
+        frame.label = self.config.classes.index(frame.category)
+        return frame
     def visualize(self, item: int):
         pass
-    @staticmethod
-    def collate_fn(frames: list[CO3D_Frame], modalities: list[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cuda:0', dtype=torch.float32):
-        frames = CO3D_Frames(frames, modalities, dtype=dtype, device=device)
-        return frames

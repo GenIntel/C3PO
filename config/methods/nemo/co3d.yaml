@@ -1,0 +1,44 @@
+path_meshes: ${test_dataset.path_co3d_preprocess}/pcls
+fpaths_meshes:
+    car: ${..path_meshes}/106_12650_23736/cuboid_max_1000.ply
+
+train:
+    val_fraction: 0.1
+
+    dataloader:
+        num_workers: 4
+        batch_size: 40
+        pin_memory: True
+
+    transform:
+        width: 512
+        height: 512
+        distance: 14.
+
+test:
+    dataloader:
+        num_workers: 4
+        batch_size: 4
+        pin_memory: True
+
+    transform:
+        width: 512
+        height: 512
+        distance: 14.
+
+    azim:
+        min: '0.'
+        max: math.pi * 2 - (math.pi * 2) / 13.
+        steps: 4
+    elev:
+        min: '0.'
+        max: math.pi * 2 - (math.pi * 2) / 13.
+        steps: 4
+    theta:
+        min: '0.'
+        max: math.pi * 2 - (math.pi * 2) / 13.
+        steps: 4
+    dist:
+        min: '14.'
+        max: '14.'
+        steps: 1
