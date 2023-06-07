@@ -16,13 +16,15 @@ transforms:
 
 train:
   apply_txtr: False
-  epochs_to_next_ckpt: 1
+  epochs_to_next_ckpt: 5
+  epochs_to_next_val: 5
+  epochs_to_next_test: 20
   epochs: 200
   batch_accumulate_to_next_step: 2
   T: 0.07
   optimizer:
     class_name: torch.optim.Adam
-    lr: 0.0001
+    lr: 0.0001 # 0.0001
     weight_decay: 0.0001
 
   scheduler:
@@ -41,7 +43,7 @@ test:
 
 
 backbone:
-    class_name: nemo.models.keypoint_representation_net.NetE2E
+    class_name: ResNetExt # ResNetExt DINOv2
     net_type: resnetext
     local_size:
         - 1

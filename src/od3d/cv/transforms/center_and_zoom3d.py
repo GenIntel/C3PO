@@ -37,7 +37,6 @@ class CenterZoom3D():
 
         frame._cam_tform4x4_obj[2, 3] = frame.cam_tform4x4_obj[2, 3] / scale
         frame._cam_intr4x4[:2, 2] = frame.cam_intr4x4[:2, 2] * scale
-        # frame._cam_intr4x4[:2] = frame.cam_intr4x4[:2]  * scale
 
         frame._size[0:1] = self.H
         frame._size[1:2] = self.W

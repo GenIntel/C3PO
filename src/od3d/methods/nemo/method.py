@@ -14,7 +14,6 @@ import wandb
 import math
 from od3d.cv.visual.draw import draw_pixels
 
-from od3d.methods.nemo.keypoint_representation_net import NetE2E
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
 from od3d.cv.geometry.transform import transf4x4_from_spherical
@@ -28,10 +27,9 @@ from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
-from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D
 from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize
-
+from od3d.methods.nemo.backbone import OD3D_Backbone
 
 class NeMo(OD3DMethod):
     def __init__(
@@ -44,14 +42,7 @@ class NeMo(OD3DMethod):
         self.device = 'cuda:0'
 
         # init Network
-        self.net = NetE2E(
-            net_type=config.backbone.net_type,
-            local_size=[config.backbone.local_size[0], config.backbone.local_size[1]],
-            output_dimension=config.backbone.output_dimension,
-            reduce_function=None,
-            n_noise_points=config.num_noise,
-            pretrain=True,
-        )
+        self.net = OD3D_Backbone.subclasses[config.backbone.class_name](config.backbone)
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
@@ -65,16 +56,12 @@ class NeMo(OD3DMethod):
         self.mem_clutter_feats_count = config.num_noise * config.max_group
         self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
 
-        self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.config.backbone.output_dimension)), requires_grad=True)
-        self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.config.backbone.output_dimension)), requires_grad=True))
+        self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.net.feat_dim), device=self.device), requires_grad=True)
+        self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.feat_dim), device=self.device), requires_grad=True))
 
-        self.optim = torch.optim.Adam(list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats], lr=self.config.train.optimizer.lr,
-                                 weight_decay=self.config.train.optimizer.weight_decay)
-        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optim, gamma=self.config.train.scheduler.gamma,
-                                                         milestones=self.config.train.scheduler.milestones)
 
-        self.net = torch.nn.DataParallel(self.net).cuda()
-        # self.net.cuda()
+        # self.net = torch.nn.DataParallel(self.net).cuda()
+        self.net.cuda()
         self.net.eval()
 
         # load checkpoint
@@ -84,8 +71,13 @@ class NeMo(OD3DMethod):
             self.load_checkpoint_old(config.checkpoint)
         #load_mesh(config.path_shapenemo)
 
-        self.meshes.to(self.device)
-        self.clutter_feats = self.clutter_feats.to(self.device)
+        self.meshes.cuda()
+
+        self.optim = torch.optim.Adam(list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats], lr=self.config.train.optimizer.lr,
+                                 weight_decay=self.config.train.optimizer.weight_decay)  #
+        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optim, gamma=self.config.train.scheduler.gamma,
+                                                         milestones=self.config.train.scheduler.milestones)
+
 
         #self.verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
         # note: somehow vertices are stored in wrong order of classes (starting with last class tvmonitor until first class aeroplane
@@ -100,17 +92,14 @@ class NeMo(OD3DMethod):
             self.classification_size[0] // self.down_sample_rate,
             self.classification_size[1] // self.down_sample_rate,
         )
-        self.trans = torchvision.transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
-        )
+
 
     def load_checkpoint_old(self, path_checkpoint):
         checkpoint = torch.load(path_checkpoint, map_location="cuda:0")
         self.net.load_state_dict(checkpoint["state"], strict=False)
-        self.clutter_feats = torch.nn.Parameter(
-            checkpoint["memory"][self.mem_verts_feats_count:].clone().detach().cpu(), requires_grad=True)
+        self.clutter_feats = checkpoint["memory"][self.mem_verts_feats_count:].clone().detach().cpu()
         self.clutter_feats = self.clutter_feats.mean(dim=0, keepdim=True)
+        self.cluuter_feats = torch.nn.Parameter(self.clutter_feats.to(device=self.device), requires_grad=True)
 
         verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
         self.meshes.set_feats_cat_with_pad(verts_feats)
@@ -134,22 +123,18 @@ class NeMo(OD3DMethod):
     def setup(self):
         pass
 
-    def train(self, dataset: OD3D_Dataset):
+    def train(self, dataset: OD3D_Dataset, dataset_test: OD3D_Dataset):
 
-        dataset.transform = torchvision.transforms.Compose([
-            CenterZoom3D(H=self.config.train.transform.height, W=self.config.train.transform.width,
-                         dist=self.config.train.transform.distance, apply_txtr=self.config.train.apply_txtr, config=self.config.train.transform.distance),
-            RGB_UInt8ToFloat(),
-            RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        dataset.transform = self.net.transform
+        dataset_test.transform = self.net.transform
 
         self.net.train()
         self.meshes.feats.requires_grad = True
-        self.clutter_feats = torch.nn.Parameter(self.clutter_feats)
 
         accumulate_steps = 0
 
         generator = torch.Generator().manual_seed(42)
+        # self.meshes.show(pts3d=dataset.get_sequence_by_id(0).pcl[None,])
         dataset_sub, _ = torch.utils.data.random_split(dataset, [dataset.config.subset_fraction, 1. - dataset.config.subset_fraction], generator=generator)
 
 
@@ -168,19 +153,21 @@ class NeMo(OD3DMethod):
         logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
         for e in range(self.config.train.epochs):
-            results_val = self.test(dataset_val, complete_dataset=True, pose_iterative_refine=True)
-            wandb.log({'val_' + k: v for k, v in results_val.items()})
+            if e % self.config.train.epochs_to_next_val == 0:
+                results_val = self.test(dataset_val, complete_dataset=True, pose_iterative_refine=True)
+                wandb.log({'val_' + k: v for k, v in results_val.items()})
+
+            if e % self.config.train.epochs_to_next_test == 0:
+                results_test = self.test(dataset_test, complete_dataset=True, pose_iterative_refine=True)
+                wandb.log({'test_' + k: v for k, v in results_val.items()})
 
             self.net.train()
             self.meshes.feats.requires_grad = True
-            self.clutter_feats = torch.nn.Parameter(self.clutter_feats)
 
             results_train = {}
             for i, batch in enumerate(iter(dataloader_train)):
                 batch.to(device=self.device)
                 # B x x N x 2
-                # rgb = self.trans(batch.rgb / 255.)
-
                 vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4, cams_tform4x4_obj=batch.cam_tform4x4_obj, imgs_sizes=batch.size, mesh_ids=batch.label, down_sample_rate=self.down_sample_rate)
                 N = vts2d.shape[1]
 
@@ -192,9 +179,8 @@ class NeMo(OD3DMethod):
                     results_train['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(draw_pixels(verts_ncds_in_rgb, vts2d[0, mask_vts2d_vsbl[0]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[mask_vts2d_vsbl[0]]))
 
 
-                # net_feats = self.net.forward(X=batch.rgb, keypoint_positions=vts2d.flip(dims=(-1,)), obj_mask=1. - 1. * batch.mask[:, 0])
                 # B x F+N x C
-                net_feats2d = self.net.module.forward_test(X=batch.rgb)
+                net_feats2d = self.net(batch.rgb)
                 H, W = net_feats2d.shape[-2:]
                 xy = torch.stack(torch.meshgrid(torch.arange(W,device=self.device), torch.arange(H, device=self.device), indexing='xy'), dim=0) # HxW
                 noise2d = xy.flatten(1)[:, torch.multinomial((1. - 1. * resize(batch.mask, scale_factor=1. / self.down_sample_rate)).flatten(1), self.config.num_noise)].permute(1, 2, 0)
@@ -240,17 +226,10 @@ class NeMo(OD3DMethod):
             if (e + 1) % self.config.train.epochs_to_next_ckpt == 0:
                 self.save_checkpoint(path_checkpoint=self.logging_dir.joinpath('nemo.ckpt'))
 
-            #if (e + 1) % self.config.training.log_interval == 0:
-            #    logging.info(
-            #        f"[Epoch {e+1}/{self.config.training.total_epochs}]"
-            #    )
-
             if not accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
                 self.optim.step()
                 self.optim.zero_grad()
 
-            #if (e + 1) % self.config.training.ckpt_interval == 0:
-            #    torch.save(model.get_ckpt(epoch=e+1, cfg=cfg.asdict()), os.path.join(cfg.args.save_dir, "ckpts", f"model_{epo+1}.pth"))
 
     def calc_loss_feat2d_net_bank(self, feats2d_net, feats2d_bank):
         pass
@@ -259,12 +238,8 @@ class NeMo(OD3DMethod):
     def test(self, dataset: OD3D_Dataset, complete_dataset=False, pose_iterative_refine=True):
         self.net.eval()
         self.meshes.feats.requires_grad = False
-        self.clutter_feats = self.clutter_feats.detach()
-        dataset.transform = torchvision.transforms.Compose([
-                CenterZoom3D(H=self.config.test.transform.height, W=self.config.test.transform.width, dist=self.config.test.transform.distance),
-                RGB_UInt8ToFloat(),
-                RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        clutter_feats = self.clutter_feats.detach()
+        dataset.transform = self.net.transform
 
         if complete_dataset:
             dataset_sub = dataset
@@ -308,11 +283,9 @@ class NeMo(OD3DMethod):
         cams_multiview_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
-            # batch.visualize()
-            #rgb = self.trans(batch.rgb / 255.)
             time_loaded = time.time()
             with torch.no_grad():
-                net_feats2d = self.net.module.forward_test(batch.rgb)
+                net_feats2d = self.net(batch.rgb)
                 time_pred_net_feats2d = time.time()
                 #logger.info(
                 #    f"predicted net feats2d, took {(time_pred_net_feats2d - time_loaded):.3f}")
@@ -321,7 +294,7 @@ class NeMo(OD3DMethod):
                 meshes_scores = []
                 for mesh_id in range(len(self.meshes)):
                     # logger.info(f'calc score for mesh {self.config.classes[mesh_id]}')
-                    bank_feats = torch.cat([self.meshes.get_feats_with_mesh_id(mesh_id), self.clutter_feats], dim=0)
+                    bank_feats = torch.cat([self.meshes.get_feats_with_mesh_id(mesh_id), clutter_feats], dim=0)
                     # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
                     out_shape = net_feats2d.shape[:1] + torch.Size([1]) + net_feats2d.shape[2:]
                     inner_feats2d_net_bank_vts_max_vals = torch.einsum('bchw,kc->bkhw', net_feats2d, bank_feats).max(dim=1, keepdim=True).values
@@ -329,7 +302,7 @@ class NeMo(OD3DMethod):
                     # show_img(self.meshes.get_verts_with_mesh_id[mesh_id][inner_feats2d_net_bank_vts_max_ids[0, 0]].permute(2, 0, 1), normalize=True)
                     # show_img(inner_feats2d_net_bank_vts_max_vals[0])
                     mesh_score = inner_feats2d_net_bank_vts_max_vals.flatten(1).mean(dim=1)
-                    #clutter_score = inner_feats2d[:, -self.clutter_feats.shape[0]:].mean(dim=1).flatten(1).mean(dim=1)
+                    #clutter_score = inner_feats2d[:, -clutter_feats.shape[0]:].mean(dim=1).flatten(1).mean(dim=1)
                     #mesh_score -= clutter_score
                     meshes_scores.append(mesh_score)
                 meshes_scores = torch.stack(meshes_scores, dim=-1)
@@ -343,7 +316,7 @@ class NeMo(OD3DMethod):
                 # OPTION A: Use 2d gradient of rendered features
                 mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cams_multiview_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4[:, None], imgs_sizes=batch.size, meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True)
                 inner_feats2d_net_mesh_multiple_cams = torch.einsum('bchw,bvchw->bvhw', net_feats2d, mesh_feats2d_rendered)[:, :, None]
-                inner_feats2d_net_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats)[:, None,].mean(dim=1, keepdim=True)
+                inner_feats2d_net_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, clutter_feats)[:, None,].mean(dim=1, keepdim=True)
                 inner_feats2d_net_bank_multiple_cams = torch.max(inner_feats2d_net_mesh_multiple_cams, inner_feats2d_net_clutter)
                 mesh_multiple_cams_loss = 1 - (inner_feats2d_net_bank_multiple_cams.flatten(-3).mean(dim=-1)) #  - inner_feats2d_net_clutter.flatten(1).mean())
 
@@ -386,7 +359,7 @@ class NeMo(OD3DMethod):
                     mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj, cams_intr4x4=batch.cam_intr4x4,
                                               imgs_sizes=batch.size, meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate) # [:, 0]
                     inner_feats2d_net_mesh = torch.einsum('bchw,bchw->bhw', net_feats2d, mesh_feats2d_rendered)[:, None]
-                    inner_feats2d_net_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats).mean(dim=1, keepdim=True)
+                    inner_feats2d_net_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, clutter_feats).mean(dim=1, keepdim=True)
                     inner_feats2d_net_bank = torch.max(inner_feats2d_net_mesh, inner_feats2d_net_clutter)
                     mesh_cam_loss = 1. - (inner_feats2d_net_bank.flatten(-3).mean(dim=-1)) # - inner_feats2d_net_clutter.flatten(1).mean())
 

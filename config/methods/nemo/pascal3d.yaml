@@ -28,11 +28,6 @@ train:
         batch_size: 40
         pin_memory: True
 
-    transform:
-        width: 512
-        height: 512
-        distance: 5.
-
 test:
     visualize:
         net_feats_nearest_verts: True
@@ -42,11 +37,6 @@ test:
         num_workers: 4
         batch_size: 16
         pin_memory: True
-
-    transform:
-        width: 512
-        height: 512
-        distance: 5.
 
     azim:
         min: '0.'
@@ -65,3 +55,8 @@ test:
         max: '5.'
         steps: 1
 
+backbone:
+    transform:
+        width: 512
+        height: 512
+        distance: 5.

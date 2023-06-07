@@ -31,7 +31,7 @@ def bench_single_method_local(config: DictConfig):
     method = OD3DMethod.subclasses[config.method.class_name](config.method, logging_dir=logging_dir)
 
     # 4. train method
-    method.train(dataset_train)
+    method.train(dataset_train, dataset_test)
 
     # 5. bench method (logs results inside class)
     results = method.test(dataset_test)

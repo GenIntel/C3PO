@@ -15,7 +15,7 @@ class OD3DMethod(abc.ABC):
     def setup(self):
         raise NotImplementedError
     @abc.abstractmethod
-    def train(self, train_dataset: OD3D_Dataset):
+    def train(self, train_dataset: OD3D_Dataset, dataset_test: OD3D_Dataset):
         raise NotImplementedError
 
     @abc.abstractmethod

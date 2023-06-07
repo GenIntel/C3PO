@@ -18,13 +18,8 @@ train:
 
     dataloader:
         num_workers: 4
-        batch_size: 20
+        batch_size: 16
         pin_memory: True
-
-    transform:
-        width: 512
-        height: 512
-        distance: 24.
 
 test:
     visualize:
@@ -35,11 +30,6 @@ test:
         num_workers: 4
         batch_size: 4
         pin_memory: True
-
-    transform:
-        width: 512
-        height: 512
-        distance: 24.
 
     azim:
         min: '0.'
@@ -57,3 +47,9 @@ test:
         min: '24.'
         max: '24.'
         steps: 1
+
+backbone:
+    transform:
+        width: 512
+        height: 512
+        distance: 24.

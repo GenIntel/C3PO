@@ -283,12 +283,21 @@ class Meshes(torch.nn.Module):
 
         return verts2d, mask_verts_vsbl
 
-    def show(self):
+    def show(self, pts3d=[], meshes_ids=None):
         from pytorch3d.vis.plotly_vis import plot_scene, AxisArgs
+        from pytorch3d.structures import Pointclouds
+        if meshes_ids is None:
+            meshes_ids = list(range(len(self.pt3dmeshes)))
+        pcls = Pointclouds(points=pts3d)
+        verts = Pointclouds(points=self.get_verts_stacked_with_mesh_ids(mesh_ids=meshes_ids))
         fig = plot_scene({
-            "Meshes": {
-                f"mesh{i + 1}": self.pt3dmeshes[i] for i in range(len(self.pt3dmeshes))
-            }}, axis_args=AxisArgs(backgroundcolor="rgb(200, 200, 230)", showgrid=True, zeroline=True, showline=True,
+            "Meshes":
+                {
+                    # **{f"mesh{i + 1}": self.pt3dmeshes[i] for i in meshes_ids},
+                    **{f"verts{i + 1}": verts[i] for i in meshes_ids},
+                    **{f"pcl{i + 1}": pcls[i] for i in range(len(pcls))}
+                }
+        }, axis_args=AxisArgs(backgroundcolor="rgb(200, 200, 230)", showgrid=True, zeroline=True, showline=True,
                                    showaxeslabels=True, showticklabels=True))
         fig.show()
         input('bla')

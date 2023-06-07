@@ -107,7 +107,7 @@ inference:
         class_name: pytorch3d.renderer.MeshRasterizer
 
 backbone:
-    class_name: od3d.models.keypoint_representation_net.NetE2E
+    class_name: ResNetExt # ResNetExt
     net_type: resnetext
     local_size:
         - 1
