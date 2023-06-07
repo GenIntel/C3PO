@@ -5,6 +5,9 @@ fpaths_meshes:
 # checkpoint: /scratch/sommerl/exps/06-06_14-36-03/nemo.ckpt
 
 train:
+    epochs: 200
+    batch_accumulate_to_next_step: 2
+
     visualize:
         verts_ncds_in_rgb: False
         net_feats_nearest_verts: False

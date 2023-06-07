@@ -88,9 +88,10 @@ def bench_single_method_torque(cfg: DictConfig):
 # For interactive jobs: #PBS -I
 # For array jobs: #PBS -t START-END[%SIMULTANEOUS]
 
-PATH=${{PATH}}:{cfg.platform.path_cuda}/bin
-LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:{cfg.platform.path_cuda}/lib64
+
 CUDA_HOME={cfg.platform.path_cuda}
+PATH=${{PATH}}:${{CUDA_HOME}}/bin
+LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:${{CUDA_HOME}}/lib64
 export PATH
 export LD_LIBRARY_PATH
 export CUDA_HOME
@@ -127,9 +128,9 @@ pip install -e .
 
 od3d debug hello-world
 
-# od3d bench single-local -c {tmp_config_fpath}
-PYTHONUNBUFFERED=1 
-CUDA_VISIBLE_DEVICES=1
+od3d bench single-local -c {tmp_config_fpath}
+#PYTHONUNBUFFERED=1 
+#CUDA_VISIBLE_DEVICES=1
 
 exit 0
         '''

@@ -17,8 +17,8 @@ transforms:
 train:
   apply_txtr: False
   epochs_to_next_ckpt: 1
-  epochs: 20
-  batch_accumulate_to_next_step: 1
+  epochs: 200
+  batch_accumulate_to_next_step: 2
   T: 0.07
   optimizer:
     class_name: torch.optim.Adam

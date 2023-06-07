@@ -36,7 +36,8 @@ dependencies = [
     "gdown",
     "typer",
     "hydra-core",
-    "plotly"
+    "plotly",
+    "scikit-learn"
 ]
 
 dynamic = ["version"]
