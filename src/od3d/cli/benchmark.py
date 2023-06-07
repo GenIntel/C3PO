@@ -6,6 +6,8 @@ import logging
 logger = logging.getLogger(__name__)
 from od3d.benchmark import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
 app = typer.Typer()
+import subprocess
+
 
 @app.command()
 def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
@@ -72,11 +74,28 @@ def test(benchmark: str = typer.Option('timeseries_internal', '-b', '--benchmark
     logging.basicConfig(level=logging.DEBUG)
     logger.info("test")
 
+
 @app.command()
-def stat():
+def status_slurm():
     logging.basicConfig(level=logging.INFO)
-    import subprocess
-    qstat_result = subprocess.run(f'ssh torque "qstat -a"', capture_output=True, shell=True)
-    qstat_jobs = qstat_result.stdout.decode("utf-8").split("\n")
-    for qstat_job in qstat_jobs:
-        logger.info(qstat_job)
+
+    slurm_result = subprocess.run(f'ssh slurm "squeue"', capture_output=True, shell=True)
+    slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
+    for slurm_job in slurm_jobs:
+        logger.info(slurm_job)
+@app.command()
+def status_torque():
+    logging.basicConfig(level=logging.INFO)
+
+    torque_result = subprocess.run(f'ssh torque "qstat -a"', capture_output=True, shell=True)
+    torque_jobs = torque_result.stdout.decode("utf-8").split("\n")
+    for torque_job in torque_jobs:
+        logger.info(torque_job)
+
+@app.command()
+def stop_torque(job: str = typer.Option(None, '-j', '--job')):
+    logging.basicConfig(level=logging.INFO)
+
+    torque_result = subprocess.run(f'ssh torque "qdel {job}"', capture_output=True, shell=True)
+    for line in torque_result.stdout.decode("utf-8").split("\n"):
+        logger.info(line)

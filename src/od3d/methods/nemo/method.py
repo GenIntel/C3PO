@@ -138,7 +138,7 @@ class NeMo(OD3DMethod):
 
         dataset.transform = torchvision.transforms.Compose([
             CenterZoom3D(H=self.config.train.transform.height, W=self.config.train.transform.width,
-                         dist=self.config.train.transform.distance, apply_txtr=self.config.train.apply_txtr, config=dataset.config),
+                         dist=self.config.train.transform.distance, apply_txtr=self.config.train.apply_txtr, config=self.config.train.transform.distance),
             RGB_UInt8ToFloat(),
             RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -192,15 +192,19 @@ class NeMo(OD3DMethod):
                     results_train['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(draw_pixels(verts_ncds_in_rgb, vts2d[0, mask_vts2d_vsbl[0]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[mask_vts2d_vsbl[0]]))
 
 
-                # from od3d.cv.visual.draw import draw_pixels
-                #show_img(draw_pixels(batch.rgb[0], vts2d[0, mask_vts2d_vsbl[0]]))
-                net_feats = self.net.forward(X=batch.rgb, keypoint_positions=vts2d, obj_mask=1. - 1. * batch.mask[:, 0])
+                # net_feats = self.net.forward(X=batch.rgb, keypoint_positions=vts2d.flip(dims=(-1,)), obj_mask=1. - 1. * batch.mask[:, 0])
+                # B x F+N x C
+                net_feats2d = self.net.module.forward_test(X=batch.rgb)
+                H, W = net_feats2d.shape[-2:]
+                xy = torch.stack(torch.meshgrid(torch.arange(W,device=self.device), torch.arange(H, device=self.device), indexing='xy'), dim=0) # HxW
+                noise2d = xy.flatten(1)[:, torch.multinomial((1. - 1. * resize(batch.mask, scale_factor=1. / self.down_sample_rate)).flatten(1), self.config.num_noise)].permute(1, 2, 0)
+                net_feats = sample_pxl2d_pts(net_feats2d, pxl2d =torch.cat([vts2d, noise2d], dim=1))
+
                 C = net_feats.shape[2]
                 # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
                 # returns: BxF+NxC
                 if self.config.train.visualize.net_feats_nearest_verts:
-                    net_feats2d = self.net.module.forward_test(X=batch.rgb[:1])
-                    net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d.flatten(-2), self.meshes.get_feats_with_mesh_id(0)).max(dim=-1)[1]
+                    net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(0)).max(dim=-1)[1]
                     net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(0)[net_mesh_nearest_feats_ids].reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
                     results_train['net_feats_nearest_verts_' + batch.name[0]] = image_as_wandb_image(blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0]))
 
@@ -257,9 +261,9 @@ class NeMo(OD3DMethod):
         self.meshes.feats.requires_grad = False
         self.clutter_feats = self.clutter_feats.detach()
         dataset.transform = torchvision.transforms.Compose([
+                CenterZoom3D(H=self.config.test.transform.height, W=self.config.test.transform.width, dist=self.config.test.transform.distance),
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                CenterZoom3D(H=self.config.test.transform.height, W=self.config.test.transform.width, dist=self.config.test.transform.distance),
         ])
 
         if complete_dataset:
@@ -335,26 +339,22 @@ class NeMo(OD3DMethod):
 
                 results['time_class'].append(time_pred_class - time_pred_net_feats2d)
 
-                # show_img(inner_feats2d_net_bank_vts_max[0])
 
-                cams_intr4x4 = batch.cam_intr4x4[0][None,]
-                #imgs_sizes = batch.size[:][None,]
-                cams_intr4x4 = cams_intr4x4.expand(cams_multiview_tform4x4_obj.shape) / self.down_sample_rate
-                #imgs_sizes = imgs_sizes.expand(cams_multiview_tform4x4_obj.shape[:-2] + torch.Size([2])) // self.down_sample_rate
+                # OPTION A: Use 2d gradient of rendered features
+                mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cams_multiview_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4[:, None], imgs_sizes=batch.size, meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True)
+                inner_feats2d_net_mesh_multiple_cams = torch.einsum('bchw,bvchw->bvhw', net_feats2d, mesh_feats2d_rendered)[:, :, None]
+                inner_feats2d_net_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats)[:, None,].mean(dim=1, keepdim=True)
+                inner_feats2d_net_bank_multiple_cams = torch.max(inner_feats2d_net_mesh_multiple_cams, inner_feats2d_net_clutter)
+                mesh_multiple_cams_loss = 1 - (inner_feats2d_net_bank_multiple_cams.flatten(-3).mean(dim=-1)) #  - inner_feats2d_net_clutter.flatten(1).mean())
 
-                # TODO: from here on no batch works...
 
-                mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cams_multiview_tform4x4_obj, cams_intr4x4=cams_intr4x4, imgs_sizes=batch.size // self.down_sample_rate, meshes_ids=pred_class_ids, broadcast_batch_and_cams=True)
-                # show_imgs(self.meshes.render_feats(cams_tform4x4_obj=cams_multiview_tform4x4_obj, cams_intr4x4=cams_intr4x4, imgs_sizes=imgs_sizes, meshes_ids=[int(pred_class_ids[0])], replace_feats_with_verts3d=True)[0])
+                # OPTION B: Use 2d gradient of net features
+                #vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4[:, None], cams_tform4x4_obj=cams_multiview_tform4x4_obj, imgs_sizes=batch.size, mesh_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True)
+                #net_feats = sample_pxl2d_pts(net_feats2d, pxl2d=vts2d.reshape(len(batch),-1 , 2)).reshape(*vts2d.shape[:3], -1)
+                #sim = torch.einsum('bvfc,bfc->bvf', net_feats, self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids)) * mask_vts2d_vsbl
+                #mesh_multiple_cams_loss = -sim.mean(dim=-1)
 
-                # self.calc_loss_feat2d_net_rendered(feats2d_net=mesh_feats2d_rendered, feats2d_rendered=net_feats2d)
-                # inner_feats2d_net_mesh_multiple_cams = torch.sum(net_feats2d[:, None] * mesh_feats2d_rendered[None, :], dim=-3, keepdim=True)
-                inner_feats2d_net_mesh_multiple_cams = torch.einsum('bchw,bkchw->bkhw', net_feats2d, mesh_feats2d_rendered)[:, :, None]
-                # inner_feats2d_net_clutter = torch.sum(net_feats2d[:, None] * self.clutter_feats[None, :, :, None, None], dim=2, keepdim=True).mean(dim=1)
-                inner_feats2d_net_clutter = torch.einsum('bchw,kc->bkhw', net_feats2d, self.clutter_feats)[:, :, None,].mean(dim=1)
 
-                inner_feats2d_net_bank_multiple_cams = inner_feats2d_net_mesh_multiple_cams # torch.max(inner_feats2d_net_mesh_multiple_cams, inner_feats2d_net_clutter[:, None,])
-                mesh_multiple_cams_loss = 1 - (inner_feats2d_net_bank_multiple_cams.flatten(-3).mean(dim=2)) #  - inner_feats2d_net_clutter.flatten(1).mean())
                 mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
                 cam_transf4x4_obj = cams_multiview_tform4x4_obj[mesh_cam_loss_min_id]
@@ -381,25 +381,26 @@ class NeMo(OD3DMethod):
                 time_before_pose_iterative = time.time()
 
                 for epoch in range(self.config.test.optimizer.epochs):
-                    mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj, cams_intr4x4=batch.cam_intr4x4 / self.down_sample_rate,
-                                              imgs_sizes=batch.size // self.down_sample_rate, meshes_ids=pred_class_ids) # [:, 0]
+
+                    # OPTION A: Use 2d gradient of rendered features
+                    mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj, cams_intr4x4=batch.cam_intr4x4,
+                                              imgs_sizes=batch.size, meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate) # [:, 0]
                     inner_feats2d_net_mesh = torch.einsum('bchw,bchw->bhw', net_feats2d, mesh_feats2d_rendered)[:, None]
-                    inner_feats2d_net_clutter = torch.einsum('bchw,kc->bkhw', net_feats2d, self.clutter_feats).mean(dim=1, keepdim=True)
-                    inner_feats2d_net_bank = inner_feats2d_net_mesh # torch.max(inner_feats2d_net_mesh, inner_feats2d_net_clutter)
+                    inner_feats2d_net_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats).mean(dim=1, keepdim=True)
+                    inner_feats2d_net_bank = torch.max(inner_feats2d_net_mesh, inner_feats2d_net_clutter)
                     mesh_cam_loss = 1. - (inner_feats2d_net_bank.flatten(-3).mean(dim=-1)) # - inner_feats2d_net_clutter.flatten(1).mean())
 
 
-                    """
-                    # using gradient of pixels instead of gradients of interpolated vertices -> no speed up
-                    vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
-                                                                 cams_tform4x4_obj=cam_transf4x4_obj,
-                                                                 imgs_sizes=batch.size, mesh_ids=batch.label.tolist(),
-                                                                 down_sample_rate=self.down_sample_rate)
-                    vts_feats = self.meshes.get_feats_with_mesh_id(batch.label.tolist()[0])
-                    vts_feats = vts_feats[mask_vts2d_vsbl[0, :vts_feats.shape[0]]]
-                    net_feats2d_sampled = sample_pxl2d_pts(net_feats2d, vts2d / self.down_sample_rate)[0, mask_vts2d_vsbl[0]]
-                    mesh_cam_loss = (net_feats2d_sampled - vts_feats).norm(dim=1)
-                    """
+                    # OPTION A: Use 2d gradient of net features
+                    #vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
+                    #                                             cams_tform4x4_obj=cam_transf4x4_obj,
+                    #                                             imgs_sizes=batch.size, mesh_ids=pred_class_ids,
+                    #                                             down_sample_rate=self.down_sample_rate)
+                    #net_feats = sample_pxl2d_pts(net_feats2d, pxl2d=vts2d.reshape(len(batch), -1, 2))
+                    #sim = torch.einsum('bfc,bfc->bf', net_feats,
+                    #                   self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids)) * mask_vts2d_vsbl
+                    #mesh_cam_loss = -sim.mean(dim=-1)
+
 
                     #show_img(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj, cams_intr4x4=batch.cam_intr4x4,
                     #                                  imgs_sizes=batch.size, meshes_ids=pred_class_ids,

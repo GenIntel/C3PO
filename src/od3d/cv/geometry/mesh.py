@@ -150,6 +150,8 @@ class Meshes(torch.nn.Module):
         pad = torch.Size([self.faces_counts_max - self.faces_counts[mesh_id]])
         return torch.cat([tensor, torch.zeros(size=pad + tensor.shape[1:], dtype=tensor.dtype, device=tensor.device)], dim=0)
 
+    def get_feats_padded_with_mesh_id(self, mesh_id):
+        return self.get_tensor_verts_with_pad(tensor=self.get_feats_with_mesh_id(mesh_id), mesh_id=mesh_id)
     def get_verts_padded_with_mesh_id(self, mesh_id):
         return self.get_tensor_verts_with_pad(tensor=self.get_verts_with_mesh_id(mesh_id), mesh_id=mesh_id)
     #def to(self, device):
@@ -178,6 +180,11 @@ class Meshes(torch.nn.Module):
         if mesh_ids == None:
             mesh_ids = list(range(len(self)))
         return torch.stack([self.get_verts_padded_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
+
+    def get_feats_stacked_with_mesh_ids(self, mesh_ids):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        return torch.stack([self.get_feats_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
 
     def get_faces_stacked_with_mesh_ids(self, mesh_ids):
         if mesh_ids == None:
@@ -231,7 +238,7 @@ class Meshes(torch.nn.Module):
         return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
 
 
-    def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: torch.LongTensor, down_sample_rate=8.):
+    def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: torch.LongTensor, down_sample_rate=1., broadcast_batch_and_cams=False):
         """
             Args:
                 cams_tform4x4_obj (torch.Tensor): Bx4x4
@@ -243,6 +250,17 @@ class Meshes(torch.nn.Module):
                 verts2d (torch.Tensor): BxNx2
 
         """
+        meshes_count = mesh_ids.shape[0]
+        cams_count = cams_tform4x4_obj.shape[0]
+
+        if broadcast_batch_and_cams:
+            mesh_ids = mesh_ids
+            cams_tform4x4_obj = cams_tform4x4_obj[None, :].expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
+            if cams_intr4x4.dim() == 3:
+                cams_intr4x4 = cams_intr4x4[None, :]
+            cams_intr4x4 = cams_intr4x4.expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
+            mesh_ids = mesh_ids[:, None].expand(meshes_count, cams_count).reshape(-1)
+
         B = cams_tform4x4_obj.shape[0]
         #if imgs_sizes.dim() == 2:
         #    imgs_sizes = imgs_sizes[None,].expand(B, imgs_sizes.shape[0], imgs_sizes.shape[1])
@@ -250,12 +268,19 @@ class Meshes(torch.nn.Module):
         verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=mesh_ids)
         verts2d = proj3d2d_broadcast(verts3d, proj4x4=cams_proj4x4_obj[:, None])
 
-        mask_verts_vsbl = self.render_feats(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4 / down_sample_rate, imgs_sizes=imgs_sizes // down_sample_rate, meshes_ids=mesh_ids, modality=MESH_RENDER_MODALITIES.MASK_VERTS_VSBL)
+        mask_verts_vsbl = self.render_feats(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, imgs_sizes=imgs_sizes, meshes_ids=mesh_ids, modality=MESH_RENDER_MODALITIES.MASK_VERTS_VSBL, down_sample_rate=down_sample_rate)
         mask_verts_vsbl *= (verts2d <= (imgs_sizes[None, None] - 1)).all(dim=-1)
         mask_verts_vsbl *= (verts2d >= 0).all(dim=-1)
 
         verts2d[~mask_verts_vsbl] = 0
         # verts2d.clamp()
+
+        if broadcast_batch_and_cams:
+            verts2d = verts2d.reshape(meshes_count, cams_count, *verts2d.shape[1:])
+            mask_verts_vsbl = mask_verts_vsbl.reshape(meshes_count, cams_count, *mask_verts_vsbl.shape[1:])
+
+        verts2d /= down_sample_rate
+
         return verts2d, mask_verts_vsbl
 
     def show(self):
@@ -267,9 +292,13 @@ class Meshes(torch.nn.Module):
                                    showaxeslabels=True, showticklabels=True))
         fig.show()
         input('bla')
-    def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False):
+    def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
         dtype = cams_tform4x4_obj.dtype
         device = cams_tform4x4_obj.device
+
+        if down_sample_rate != 1.:
+            cams_intr4x4 = cams_intr4x4 / down_sample_rate
+            imgs_sizes = imgs_sizes // down_sample_rate
 
         if meshes_ids is None:
             meshes_ids = torch.LongTensor(list(range(len(self)))).to(device=device)
@@ -280,7 +309,9 @@ class Meshes(torch.nn.Module):
         if broadcast_batch_and_cams:
             meshes_ids = meshes_ids
             cams_tform4x4_obj = cams_tform4x4_obj[None, :].expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
-            cams_intr4x4 = cams_intr4x4[None, :].expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
+            if cams_intr4x4.dim() == 3:
+                cams_intr4x4 = cams_intr4x4[None, :]
+            cams_intr4x4 = cams_intr4x4.expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
             meshes_ids = meshes_ids[:, None].expand(meshes_count, cams_count).reshape(-1)
             render_count = meshes_count * cams_count
         else:

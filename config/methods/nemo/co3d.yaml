@@ -3,6 +3,8 @@ fpaths_meshes:
     car: ${..path_meshes}/106_12650_23736/cuboid_max_1000.ply
 
 # checkpoint: /scratch/sommerl/exps/06-06_14-36-03/nemo.ckpt
+# checkpoint: /misc/lmbraid19/sommerl/exps/06-07_11-18-02/nemo.ckpt
+# checkpoint: /scratch/sommerl/exps/06-07_13-32-55/nemo.ckpt
 
 train:
     epochs: 200
@@ -26,8 +28,8 @@ train:
 
 test:
     visualize:
+        verts_ncds_in_rgb: True
         net_feats_nearest_verts: True
-        verts_ncds_in_rgb: False
 
     dataloader:
         num_workers: 4
