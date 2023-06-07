@@ -3,6 +3,7 @@ defaults:
   - methods@method.nemo: nemo_cls
   - datasets@train_dataset: co3d_train
   - datasets@test_dataset: co3d_test
+  - platform@platform_local: local
   - platform: local
 
 metrics:

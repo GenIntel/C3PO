@@ -26,7 +26,7 @@ train:
 
 test:
     visualize:
-        net_feats_nearest_verts: False
+        net_feats_nearest_verts: True
         verts_ncds_in_rgb: False
 
     dataloader:

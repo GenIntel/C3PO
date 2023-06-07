@@ -71,3 +71,12 @@ def test(benchmark: str = typer.Option('timeseries_internal', '-b', '--benchmark
          localcode: str = typer.Option(None, '-l', '--localcode')):
     logging.basicConfig(level=logging.DEBUG)
     logger.info("test")
+
+@app.command()
+def stat():
+    logging.basicConfig(level=logging.INFO)
+    import subprocess
+    qstat_result = subprocess.run(f'ssh torque "qstat -a"', capture_output=True, shell=True)
+    qstat_jobs = qstat_result.stdout.decode("utf-8").split("\n")
+    for qstat_job in qstat_jobs:
+        logger.info(qstat_job)

@@ -55,16 +55,18 @@ def bench_single_method_torque(cfg: DictConfig):
     # 3. execute script with command: run od3d bench single -f `path-to-config`
     # TODO
     from pathlib import Path
-    tmp_config_fpath = Path('/tmp/config.yaml').resolve()
-    if not tmp_config_fpath.parent.exists():
-        tmp_config_fpath.parent.mkdir(parents=True)
-    with open(tmp_config_fpath, 'w') as fp:
-        OmegaConf.save(config=cfg, f=fp.name)
-    tmp_script_fpath = Path('/tmp/run.sh').resolve()
-    if not tmp_script_fpath.parent.exists():
-        tmp_script_fpath.parent.mkdir(parents=True)
+    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', 'config.yaml') # .resolve() # .resolve()
+    if not local_tmp_config_fpath.resolve().parent.exists():
+        local_tmp_config_fpath.parent.mkdir(parents=True)
+    with open(local_tmp_config_fpath.resolve(), 'w') as fp:
+        OmegaConf.save(config=cfg, f=fp)
+    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', 'run.sh') # .resolve()
+    if not local_tmp_script_fpath.parent.exists():
+        local_tmp_script_fpath.parent.mkdir(parents=True)
 
-    with open(tmp_script_fpath, 'w') as rsh:
+    remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', 'config.yaml')
+    remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', 'run.sh')
+    with open(local_tmp_script_fpath, 'w') as rsh:
 
         gpu_count = cfg.platform.gpu_count
         node_count = 1
@@ -128,16 +130,16 @@ pip install -e .
 
 od3d debug hello-world
 
-od3d bench single-local -c {tmp_config_fpath}
+od3d bench single-local -c {remote_tmp_config_fpath}
 #PYTHONUNBUFFERED=1 
 #CUDA_VISIBLE_DEVICES=1
 
 exit 0
         '''
         rsh.write(script_as_string)
-    subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
-    subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
-    subprocess.run(f'ssh torque "qsub {tmp_script_fpath}"', capture_output=True, shell=True)
+    #subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
+    #subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
+    subprocess.run(f'ssh torque "qsub {remote_tmp_script_fpath}"', capture_output=True, shell=True)
 
 def bench_single_method_slurm(cfg: DictConfig):
     # 1. save config
@@ -145,21 +147,24 @@ def bench_single_method_slurm(cfg: DictConfig):
     # 3. execute script with command: run od3d bench single -f `path-to-config`
 
     from pathlib import Path
-    tmp_config_fpath = Path('/tmp/config.yaml').resolve()
-    if not tmp_config_fpath.parent.exists():
-        tmp_config_fpath.parent.mkdir(parents=True)
-    with open(tmp_config_fpath, 'w') as fp:
-        OmegaConf.save(config=cfg, f=fp.name)
-    tmp_script_fpath = Path('/tmp/run.sh').resolve()
-    if not tmp_script_fpath.parent.exists():
-        tmp_script_fpath.parent.mkdir(parents=True)
+    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', 'config.yaml') # .resolve() # .resolve()
+    if not local_tmp_config_fpath.resolve().parent.exists():
+        local_tmp_config_fpath.parent.mkdir(parents=True)
+    with open(local_tmp_config_fpath.resolve(), 'w') as fp:
+        OmegaConf.save(config=cfg, f=fp)
+    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', 'run.sh') # .resolve()
+    if not local_tmp_script_fpath.parent.exists():
+        local_tmp_script_fpath.parent.mkdir(parents=True)
 
-    with open(tmp_script_fpath, 'w') as rsh:
-        gpu_count = 1
+    remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', 'config.yaml')
+    remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', 'run.sh')
+
+    with open(local_tmp_script_fpath, 'w') as rsh:
+        gpu_count = cfg.platform.gpu_count
         node_count = 1
-        cpu_count = 4
-        ram = "10gb"
-        walltime = "24:00:00"
+        cpu_count = cfg.platform.cpu_count
+        ram = cfg.platform.ram
+        walltime = cfg.platform.walltime
 
         timestamp = get_timestamp_as_string()
         partition = cfg.get("platform").get("partition", None)
@@ -172,13 +177,13 @@ def bench_single_method_slurm(cfg: DictConfig):
 #SBATCH --cpus-per-task {cpu_count}
 #SBATCH --gres gpu:{gpu_count}
 #SBATCH --mem {ram}
-#SBATCH -o /home/sommerl/%x_%j.o # x=job_name j=job_id
+#SBATCH -o /home/{cfg.platform.username}/%x_%j.o # x=job_name j=job_id
 #SBATCH --mail-type=END,FAIL # (recive mails about end and timeouts/crashes of your job)
 {partition_cfg_str}
 
-PATH=${{PATH}}:{cfg.platform.path_cuda}/bin
-LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:{cfg.platform.path_cuda}/lib64
 CUDA_HOME={cfg.platform.path_cuda}
+PATH=${{PATH}}:${{CUDA_HOME}}/bin
+LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:${{CUDA_HOME}}/lib64
 export PATH
 export LD_LIBRARY_PATH
 export CUDA_HOME
@@ -198,13 +203,14 @@ cd {cfg.platform.path_od3d}
 git pull {cfg.platform.url_od3d}
 
 # Install OD3D in venv
-if [[ -d "venv" ]]; then
-    echo "Venv already exists at {cfg.platform.path_od3d}/venv."
-    source venv/bin/activate
+VENV_NAME=venv310
+if [[ -d "${{VENV_NAME}}" ]]; then
+    echo "Venv already exists at {cfg.platform.path_od3d}/${{VENV_NAME}}."
+    source ${{VENV_NAME}}/bin/activate
 else
-    echo "Creating venv at {cfg.platform.path_od3d}/venv."
-    python3 -m venv venv
-    source venv/bin/activate
+    echo "Creating venv at {cfg.platform.path_od3d}/${{VENV_NAME}}."
+    python3 -m venv ${{VENV_NAME}}
+    source ${{VENV_NAME}}/bin/activate
 fi
 
 pip install pip --upgrade
@@ -214,17 +220,15 @@ pip install -e .
 
 od3d debug hello-world
 
-# od3d bench single-local -c {tmp_config_fpath}
-PYTHONUNBUFFERED=1 
-CUDA_VISIBLE_DEVICES=1
+od3d bench single-local -c {remote_tmp_config_fpath}
 
 exit 0
         '''
         rsh.write(script_as_string)
-    subprocess.run(f'scp {tmp_script_fpath} slurm:{tmp_script_fpath}', capture_output=True, shell=True)
-    subprocess.run(f'scp {tmp_config_fpath} slurm:{tmp_config_fpath}', capture_output=True, shell=True)
+    #subprocess.run(f'scp {remote_tmp_script_fpath} slurm:{remote_tmp_script_fpath}', capture_output=True, shell=True)
+    #subprocess.run(f'scp {remote_tmp_config_fpath} slurm:{remote_tmp_config_fpath}', capture_output=True, shell=True)
 
-    subprocess.run(f'ssh slurm "sbatch {tmp_script_fpath}"', capture_output=True, shell=True)
+    subprocess.run(f'ssh slurm "sbatch {remote_tmp_script_fpath}"', capture_output=True, shell=True)
 
     # ws_allocate {cfg.platform.ws_name} 100 -m sommerl@informatik.uni-freiburg.de
     # ws_allocate od3d 100 -m sommerl@informatik.uni-freiburg.de # /work/dlclarge1/sommerl-od3d
