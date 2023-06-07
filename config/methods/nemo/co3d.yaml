@@ -7,6 +7,7 @@ fpaths_meshes:
 train:
     visualize:
         verts_ncds_in_rgb: False
+        net_feats_nearest_verts: False
 
     val_fraction: 0.01
 
@@ -22,7 +23,8 @@ train:
 
 test:
     visualize:
-        verts_ncds_in_rgb: True
+        net_feats_nearest_verts: False
+        verts_ncds_in_rgb: False
 
     dataloader:
         num_workers: 4
