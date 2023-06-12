@@ -73,6 +73,12 @@ def test(benchmark: str = typer.Option('timeseries_internal', '-b', '--benchmark
          localcode: str = typer.Option(None, '-l', '--localcode')):
     logging.basicConfig(level=logging.DEBUG)
     logger.info("test")
+@app.command()
+def info_slurm():
+    'scontrol show job'
+
+    'srun -p lmb_gpu-rtx2080 -w dagobert --pty bash'
+    pass
 
 
 @app.command()

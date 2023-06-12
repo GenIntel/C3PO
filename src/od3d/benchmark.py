@@ -57,18 +57,24 @@ def bench_single_method_torque(cfg: DictConfig):
     # 2. setup od3d on torque
     # 3. execute script with command: run od3d bench single -f `path-to-config`
     # TODO
+
+    timestamp = get_timestamp_as_string()
+    job_name = f'{timestamp}_{cfg.test_dataset.name}_{cfg.method.name}'
+
     from pathlib import Path
-    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', 'config.yaml') # .resolve() # .resolve()
+    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
     if not local_tmp_config_fpath.resolve().parent.exists():
         local_tmp_config_fpath.parent.mkdir(parents=True)
     with open(local_tmp_config_fpath.resolve(), 'w') as fp:
         OmegaConf.save(config=cfg, f=fp)
-    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', 'run.sh') # .resolve()
+    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'run_{job_name}.sh') # .resolve()
     if not local_tmp_script_fpath.parent.exists():
         local_tmp_script_fpath.parent.mkdir(parents=True)
 
-    remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', 'config.yaml')
-    remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', 'run.sh')
+
+    remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'config_{job_name}.yaml')
+    remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'run_{job_name}.sh')
+
     with open(local_tmp_script_fpath, 'w') as rsh:
 
         gpu_count = cfg.platform.gpu_count
@@ -77,12 +83,11 @@ def bench_single_method_torque(cfg: DictConfig):
         ram = cfg.platform.ram
         walltime = cfg.platform.walltime
 
-        timestamp = get_timestamp_as_string()
         gpu_cfg_str = f':gpus={gpu_count}' if gpu_count > 0 else ""
         cuda_cfg_str = f':nvidiaMinCC75' if gpu_count > 0 else ""
 
         script_as_string = f'''#!/bin/bash
-#PBS -N {timestamp}_{cfg.test_dataset.name}_{cfg.method.name}
+#PBS -N {job_name}
 #PBS -S /bin/bash
 #PBS -l nodes={node_count}:ppn={cpu_count}{gpu_cfg_str}{cuda_cfg_str},mem={ram},walltime={walltime}
 #PBS -q default-cpu
@@ -93,6 +98,7 @@ def bench_single_method_torque(cfg: DictConfig):
 # For interactive jobs: #PBS -I
 # For array jobs: #PBS -t START-END[%SIMULTANEOUS]
 
+echo $(curl google.com)
 
 CUDA_HOME={cfg.platform.path_cuda}
 PATH=${{PATH}}:${{CUDA_HOME}}/bin
@@ -117,19 +123,20 @@ git pull {cfg.platform.url_od3d}
 
 # Install OD3D in venv
 VENV_NAME=venv310
+export VENV_NAME
 if [[ -d "${{VENV_NAME}}" ]]; then
     echo "Venv already exists at {cfg.platform.path_od3d}/${{VENV_NAME}}."
-    source ${{VENV_NAME}}/bin/activate
+    source {cfg.platform.path_od3d}/${{VENV_NAME}}/bin/activate
 else
     echo "Creating venv at {cfg.platform.path_od3d}/${{VENV_NAME}}."
-    python3 -m venv ${{VENV_NAME}}
-    source ${{VENV_NAME}}/bin/activate
+    python3 -m venv {cfg.platform.path_od3d}/${{VENV_NAME}}
+    source {cfg.platform.path_od3d}/${{VENV_NAME}}/bin/activate
 fi
 
 pip install pip --upgrade
 pip install torch
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-pip install -e .
+pip install -e {cfg.platform.path_od3d}
 
 od3d debug hello-world
 
@@ -142,25 +149,29 @@ exit 0
         rsh.write(script_as_string)
     #subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
     #subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
-    subprocess.run(f'ssh torque "qsub {remote_tmp_script_fpath}"', capture_output=True, shell=True)
+    subprocess.run(f'ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', capture_output=True, shell=True)
 
 def bench_single_method_slurm(cfg: DictConfig):
     # 1. save config
     # 2. setup od3d on slurm
     # 3. execute script with command: run od3d bench single -f `path-to-config`
 
+    timestamp = get_timestamp_as_string()
+    job_name = f'{timestamp}_{cfg.test_dataset.name}_{cfg.method.name}'
+
     from pathlib import Path
-    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', 'config.yaml') # .resolve() # .resolve()
+    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
     if not local_tmp_config_fpath.resolve().parent.exists():
         local_tmp_config_fpath.parent.mkdir(parents=True)
     with open(local_tmp_config_fpath.resolve(), 'w') as fp:
         OmegaConf.save(config=cfg, f=fp)
-    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', 'run.sh') # .resolve()
+    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'run_{job_name}.sh') # .resolve()
     if not local_tmp_script_fpath.parent.exists():
         local_tmp_script_fpath.parent.mkdir(parents=True)
 
-    remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', 'config.yaml')
-    remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', 'run.sh')
+
+    remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'config_{job_name}.yaml')
+    remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'run_{job_name}.sh')
 
     with open(local_tmp_script_fpath, 'w') as rsh:
         gpu_count = cfg.platform.gpu_count
@@ -169,19 +180,18 @@ def bench_single_method_slurm(cfg: DictConfig):
         ram = cfg.platform.ram
         walltime = cfg.platform.walltime
 
-        timestamp = get_timestamp_as_string()
         partition = cfg.get("platform").get("partition", None)
         partition_cfg_str = f'#SBATCH --partition {partition}' if partition is not None else ''
         script_as_string = f'''#!/bin/bash
-#SBATCH -J {timestamp}_{cfg.test_dataset.name}_{cfg.method.name}
+#SBATCH -J {job_name}
 #SBATCH --nodes {node_count}
 #SBATCH --ntasks-per-node 1
 #SBATCH --time {walltime}
 #SBATCH --cpus-per-task {cpu_count}
 #SBATCH --gres gpu:{gpu_count}
 #SBATCH --mem {ram}
-#SBATCH -o /home/{cfg.platform.username}/%x_%j.o # x=job_name j=job_id
-#SBATCH --mail-type=END,FAIL # (recive mails about end and timeouts/crashes of your job)
+#SBATCH -o {cfg.platform.path_home}/slurm_jobs/%x_%j.o # x=job_name j=job_id
+#SBATCH --mail-type=FAIL  # END,FAIL # (recive mails about end and timeouts/crashes of your job)
 {partition_cfg_str}
 
 CUDA_HOME={cfg.platform.path_cuda}
@@ -190,6 +200,11 @@ LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:${{CUDA_HOME}}/lib64
 export PATH
 export LD_LIBRARY_PATH
 export CUDA_HOME
+
+HTTP_PROXY=http://tfsquid.informatik.intra.uni-freiburg.de:8080
+HTTPS_PROXY=http://tfsquid.informatik.intra.uni-freiburg.de:8080
+export HTTP_PROXY
+export HTTPS_PROXY
 
 echo PATH=${{PATH}}
 echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
@@ -207,19 +222,20 @@ git pull {cfg.platform.url_od3d}
 
 # Install OD3D in venv
 VENV_NAME=venv310
+export VENV_NAME
 if [[ -d "${{VENV_NAME}}" ]]; then
     echo "Venv already exists at {cfg.platform.path_od3d}/${{VENV_NAME}}."
-    source ${{VENV_NAME}}/bin/activate
+    source {cfg.platform.path_od3d}/${{VENV_NAME}}/bin/activate
 else
     echo "Creating venv at {cfg.platform.path_od3d}/${{VENV_NAME}}."
-    python3 -m venv ${{VENV_NAME}}
-    source ${{VENV_NAME}}/bin/activate
+    python3 -m venv {cfg.platform.path_od3d}/${{VENV_NAME}}
+    source {cfg.platform.path_od3d}/${{VENV_NAME}}/bin/activate
 fi
 
-pip install pip --upgrade
-pip install torch
-FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-pip install -e .
+pip3 install pip --upgrade
+pip3 install torch
+FORCE_CUDA=1 pip3 install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip3 install -e {cfg.platform.path_od3d}
 
 od3d debug hello-world
 
