@@ -130,6 +130,12 @@ def pts2d_to_pts4d(pts2d):
     pts4d = pts4d.reshape(list(pts4d.shape) + [1])
     return pts4d
 
+def proj3d2d_origin(proj4x4):
+    device = proj4x4.device
+    dtype = proj4x4.dtype
+    pts3d = torch.zeros(size=proj4x4.shape[:-2] + torch.Size([3,]), device=device, dtype=dtype)
+    return proj3d2d(pts3d=pts3d, proj4x4=proj4x4)
+
 def proj3d2d(pts3d, proj4x4):
     device = pts3d.device
     dtype = pts3d.dtype

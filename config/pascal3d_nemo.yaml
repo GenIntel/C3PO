@@ -1,13 +1,18 @@
 defaults:
   - logger: wandb
   - methods@method.nemo: nemo_cls
-  - datasets@train_dataset: pascal3d_train_car
-  - datasets@test_dataset: pascal3d_test_car
+  - methods/nemo@method.nemo: pascal3d
+  - datasets@train_dataset: pascal3d_train
+  - datasets@test_dataset: pascal3d_test
+  - platform@platform_local: local
   - platform: local
 
 metrics:
   - metricA
   - metricB
+
+train: False
+test: True
 
 #training:
 #    random_seed: 0

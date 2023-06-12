@@ -1,5 +1,5 @@
 # checkpoint: ${platform.path_exps}/NeMo-Classification/2022_09_26/classification_saved_model_199.pth
-checkpoint: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
+checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
 
 path_meshes: '${platform.path_datasets}/PASCAL3D+_release1.1/CAD_single'
 fpaths_meshes:
@@ -30,12 +30,12 @@ train:
 
 test:
     visualize:
-        net_feats_nearest_verts: True
         verts_ncds_in_rgb: True
+        net_feats_nearest_verts: True
 
     dataloader:
         num_workers: 4
-        batch_size: 16
+        batch_size: 1
         pin_memory: True
 
     azim:
@@ -54,6 +54,7 @@ test:
         min: '5.'
         max: '5.'
         steps: 1
+
 
 backbone:
     transform:

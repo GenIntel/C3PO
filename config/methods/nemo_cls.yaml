@@ -1,6 +1,3 @@
-defaults:
-   - nemo/co3d@
-
 name: nemo
 class_name: NeMo
 # class_name: nemo.models.nemo_cls.NeMoCls

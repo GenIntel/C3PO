@@ -185,11 +185,11 @@ class CO3D_Frame(OD3D_Frame):
         cam_tform4x4_obj = torch.bmm(default_tform_t3d[None,], cam_tform4x4_obj[None,])[0]
 
         H, W = frame_annotation.image.size
-        size = torch.Tensor([H, W]) #
+        size = torch.Tensor([H, W])
 
         s = min(H, W)
-        focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length)  * s / 2.
-        principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size / 2.
+        focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length) * s / 2.
+        principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size.flip(dims=(0,)) / 2.
         cam_intr4x4 = torch.Tensor([[focal_length[0], 0., principal_point[0], 0.],
                            [0., focal_length[1], principal_point[1], 0.],
                            [0., 0., 1., 0.],
@@ -383,8 +383,9 @@ class CO3D(OD3D_Dataset):
             cuboid_tform_world = cuboid_tform_pca[None,].bmm(pca_tform_world[None,])[0]
             fpath_pcl = path_pcls.joinpath(sequence.name, f'cuboid_max_{cuboid_pts3d_max_count}' + '.ply')
 
-            faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
-            verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
+            verts, faces = cuboids.meshelize(number_vertices=cuboid_pts3d_max_count)
+            #faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
+            #verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
 
             save_ply(fpath_pcl, verts=verts, faces=faces)
             # show_pcl([pts3d_clean, transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())])

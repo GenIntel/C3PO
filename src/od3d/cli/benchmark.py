@@ -91,7 +91,6 @@ def status_torque():
     torque_jobs = torque_result.stdout.decode("utf-8").split("\n")
     for torque_job in torque_jobs:
         logger.info(torque_job)
-
 @app.command()
 def stop_torque(job: str = typer.Option(None, '-j', '--job')):
     logging.basicConfig(level=logging.INFO)

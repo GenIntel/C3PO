@@ -14,7 +14,7 @@ def get_timestamp_as_string():
 def bench_single_method_local(config: DictConfig):
 
     # 1. setup logger
-    run_name = get_timestamp_as_string()
+    run_name = f'{get_timestamp_as_string()}_{config.test_dataset.class_name}_{config.method.class_name}_{config.platform.link}'
     logging_dir = Path(config.logger.local_dir).joinpath(run_name)
     logging_dir.mkdir(parents=True)
     if config.logger.use_wandb:
@@ -31,10 +31,13 @@ def bench_single_method_local(config: DictConfig):
     method = OD3DMethod.subclasses[config.method.class_name](config.method, logging_dir=logging_dir)
 
     # 4. train method
-    method.train(dataset_train, dataset_test)
+    if config.train:
+        method.train(dataset_train, dataset_test)
 
     # 5. bench method (logs results inside class)
-    results = method.test(dataset_test)
+    if config.test:
+        results = method.test(dataset_test)
+
     wandb.log({'test_' + k: v for k, v in results.items()})
 def bench_single_method_local_separate_venv(cfg: DictConfig):
     # 1. save config

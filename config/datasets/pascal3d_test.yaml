@@ -6,4 +6,4 @@ name: pascal3d_test
 subsets:
   - val
 
-subset_fraction: 0.01
+subset_fraction: 0.001

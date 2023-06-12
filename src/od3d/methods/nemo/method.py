@@ -60,7 +60,7 @@ class NeMo(OD3DMethod):
         self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.feat_dim), device=self.device), requires_grad=True))
 
 
-        # self.net = torch.nn.DataParallel(self.net).cuda()
+        #self.net = torch.nn.DataParallel(self.net).cuda()
         self.net.cuda()
         self.net.eval()
 
@@ -68,10 +68,11 @@ class NeMo(OD3DMethod):
         if config.get("checkpoint", None) is not None:
             self.load_checkpoint(config.checkpoint)
         elif config.get("checkpoint_old", None) is not None:
-            self.load_checkpoint_old(config.checkpoint)
+            self.load_checkpoint_old(config.checkpoint_old)
         #load_mesh(config.path_shapenemo)
 
         self.meshes.cuda()
+        # self.meshes.show()
 
         self.optim = torch.optim.Adam(list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats], lr=self.config.train.optimizer.lr,
                                  weight_decay=self.config.train.optimizer.weight_decay)  #
@@ -96,10 +97,12 @@ class NeMo(OD3DMethod):
 
     def load_checkpoint_old(self, path_checkpoint):
         checkpoint = torch.load(path_checkpoint, map_location="cuda:0")
-        self.net.load_state_dict(checkpoint["state"], strict=False)
+        self.net.net = torch.nn.DataParallel(self.net.net).cuda()
+        self.net.net.load_state_dict(checkpoint["state"], strict=False)
+        self.net.net = self.net.net.module
         self.clutter_feats = checkpoint["memory"][self.mem_verts_feats_count:].clone().detach().cpu()
         self.clutter_feats = self.clutter_feats.mean(dim=0, keepdim=True)
-        self.cluuter_feats = torch.nn.Parameter(self.clutter_feats.to(device=self.device), requires_grad=True)
+        self.clutter_feats = torch.nn.Parameter(self.clutter_feats.to(device=self.device), requires_grad=True)
 
         verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
         self.meshes.set_feats_cat_with_pad(verts_feats)
@@ -113,6 +116,7 @@ class NeMo(OD3DMethod):
             'meshes_feats': self.meshes.feats,
             'clutter_feats': self.clutter_feats
         }, path_checkpoint)
+
     def load_checkpoint(self, path_checkpoint):
         checkpoint = torch.load(path_checkpoint)
         self.net.load_state_dict(checkpoint['net_state_dict'])
@@ -159,7 +163,7 @@ class NeMo(OD3DMethod):
 
             if e % self.config.train.epochs_to_next_test == 0:
                 results_test = self.test(dataset_test, complete_dataset=True, pose_iterative_refine=True)
-                wandb.log({'test_' + k: v for k, v in results_val.items()})
+                wandb.log({'test_' + k: v for k, v in results_test.items()})
 
             self.net.train()
             self.meshes.feats.requires_grad = True
@@ -175,8 +179,11 @@ class NeMo(OD3DMethod):
                     verts_ncds_in_rgb = blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
                                                     imgs_sizes=batch.size, meshes_ids=batch.label[:1],
                                                     modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
-
-                    results_train['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(draw_pixels(verts_ncds_in_rgb, vts2d[0, mask_vts2d_vsbl[0]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[mask_vts2d_vsbl[0]]))
+                    from od3d.cv.geometry.transform import proj3d2d_origin
+                    verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(torch.bmm(batch.cam_intr4x4, batch.cam_tform4x4_obj)[:1]), colors=[1., 0., 0.])
+                    verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(batch.cam_proj4x4_obj[:1]), colors=[1., 0., 0.])
+                    results_train['verts_ncds_in_rgb'] = image_as_wandb_image(draw_pixels(verts_ncds_in_rgb, self.down_sample_rate * vts2d[0, mask_vts2d_vsbl[0]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[mask_vts2d_vsbl[0]]),
+                    caption=f'Frame Name {batch.name[0]}')
 
 
                 # B x F+N x C
@@ -184,7 +191,7 @@ class NeMo(OD3DMethod):
                 H, W = net_feats2d.shape[-2:]
                 xy = torch.stack(torch.meshgrid(torch.arange(W,device=self.device), torch.arange(H, device=self.device), indexing='xy'), dim=0) # HxW
                 noise2d = xy.flatten(1)[:, torch.multinomial((1. - 1. * resize(batch.mask, scale_factor=1. / self.down_sample_rate)).flatten(1), self.config.num_noise)].permute(1, 2, 0)
-                net_feats = sample_pxl2d_pts(net_feats2d, pxl2d =torch.cat([vts2d, noise2d], dim=1))
+                net_feats = sample_pxl2d_pts(net_feats2d, pxl2d=torch.cat([vts2d, noise2d], dim=1))
 
                 C = net_feats.shape[2]
                 # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
@@ -192,7 +199,8 @@ class NeMo(OD3DMethod):
                 if self.config.train.visualize.net_feats_nearest_verts:
                     net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(0)).max(dim=-1)[1]
                     net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(0)[net_mesh_nearest_feats_ids].reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
-                    results_train['net_feats_nearest_verts_' + batch.name[0]] = image_as_wandb_image(blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0]))
+                    results_train['net_feats_nearest_verts'] = image_as_wandb_image(blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0]),
+                                                                                                caption=f'Frame Name {batch.name[0]}')
 
 
 
@@ -418,9 +426,9 @@ class NeMo(OD3DMethod):
 
         for key, val in results.items():
             if key.startswith('time_'):
-                results[key] = np.mean(results[key]) / len(batch)
+                results[key] = np.sum(results[key]) / len(dataset_sub)
 
-        logger.info(f'Predicted {len(dataloader)} frames.')
+        logger.info(f'Predicted {len(dataset_sub)} frames.')
         if len(dataloader) > 0:
             results['rot_diff_rad'] = torch.cat(results['rot_diff_rad'], dim=0)
             results['label_gt'] = torch.cat(results['label_gt'], dim=0)

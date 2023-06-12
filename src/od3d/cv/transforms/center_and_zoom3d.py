@@ -2,7 +2,7 @@
 import logging
 logger = logging.getLogger(__name__)
 import torch
-from od3d.cv.geometry.transform import proj3d2d
+from od3d.cv.geometry.transform import proj3d2d_origin
 from od3d.cv.visual.crop import crop
 from omegaconf import DictConfig
 from od3d.datasets.dtd import DTD
@@ -21,22 +21,20 @@ class CenterZoom3D():
             self.dtd = DTD(config=config)
 
     def __call__(self, frame):
-
         # logger.info(f"Frame name {self.name}")
-
-        #center = torch.LongTensor([500, 200]).to(device=self.device)
-        #center = torch.Tensor([(self.bbox[0] + self.bbox[2]) / 2., (self.bbox[1] + self.bbox[3]) / 2.]).to(
-        #    device=self.device, dtype=self.dtype)
         _, _, _, _ = frame.size, frame.cam_intr4x4, frame.cam_tform4x4_obj, frame.cam_proj4x4_obj
-
-        center = proj3d2d(pts3d=torch.zeros(size=(1, 3)), proj4x4=frame.cam_proj4x4_obj)[0]
         scale = frame.cam_tform4x4_obj[2, 3] / self.dist
+
+        center = proj3d2d_origin(proj4x4=frame.cam_proj4x4_obj)
 
         if self.apply_mask:
             frame._mask, _ = crop(img=frame.mask, center=center, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
+        frame._cam_tform4x4_obj[:2, 3] = 0.
         frame._cam_tform4x4_obj[2, 3] = frame.cam_tform4x4_obj[2, 3] / scale
-        frame._cam_intr4x4[:2, 2] = frame.cam_intr4x4[:2, 2] * scale
+        frame._cam_intr4x4[0, 2] = self.W / 2.
+        frame._cam_intr4x4[1, 2] = self.H / 2.
+        frame._cam_proj4x4_obj[:, :] = torch.bmm(frame.cam_intr4x4[None,], frame.cam_tform4x4_obj[None,])[0]
 
         frame._size[0:1] = self.H
         frame._size[1:2] = self.W
@@ -49,11 +47,11 @@ class CenterZoom3D():
         else:
             frame._rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
                                                  ctx=None)
+
+
         # we already account for the scale with the transformation, but we cannot do that for the padding
         cam_crop_tform_cam[0, 0] = 1.
         cam_crop_tform_cam[1, 1] = 1.
-        frame._cam_intr4x4[:, :] = torch.bmm(cam_crop_tform_cam[None,], frame.cam_intr4x4[None,])[0]
-        frame._cam_proj4x4_obj[:, :] = torch.bmm(frame.cam_intr4x4[None,], frame.cam_tform4x4_obj[None,])[0]
 
         if self.apply_bbox_annot:
             frame._bbox = frame.bbox * scale

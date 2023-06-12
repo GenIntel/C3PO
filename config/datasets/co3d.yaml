@@ -9,7 +9,7 @@ rpath_dtd_cache: DTD_cache
 path_dtd_raw: ${platform.path_datasets}/${.rpath_dtd_raw}
 path_dtd_cache: ${platform.path_datasets}/${.rpath_dtd_cache}
 
-preprocess_meta_override: False
+preprocess_meta_override: True
 preprocess_meta_remove_previous: False
 preprocess_pcls: False
 
