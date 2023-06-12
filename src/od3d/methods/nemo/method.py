@@ -197,8 +197,11 @@ class NeMo(OD3DMethod):
                 # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
                 # returns: BxF+NxC
                 if self.config.train.visualize.net_feats_nearest_verts:
-                    net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(0)).max(dim=-1)[1]
-                    net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(0)[net_mesh_nearest_feats_ids].reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
+                    clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.clutter_feats).max(dim=-1)
+                    net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(batch.label[0])).max(dim=-1)
+                    net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[net_mesh_nearest_feats_ids]
+                    net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
+                    net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
                     results_train['net_feats_nearest_verts'] = image_as_wandb_image(blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0]),
                                                                                                 caption=f'Frame Name {batch.name[0]}')
 
@@ -399,12 +402,12 @@ class NeMo(OD3DMethod):
                                              modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype)))
 
                 if self.config.test.visualize.net_feats_nearest_verts:
-                    net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(0)).max(dim=-1)[1]
-                    net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(0)[net_mesh_nearest_feats_ids].reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
+                    clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.clutter_feats).max(dim=-1)
+                    net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(batch.label[0])).max(dim=-1)
+                    net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[net_mesh_nearest_feats_ids]
+                    net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
+                    net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
                     results['net_feats_nearest_verts_' + batch.name[0]] = image_as_wandb_image(blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0]))
-
-
-
 
                 results['time_pose_iterative'].append(time.time() - time_before_pose_iterative)
                 # logger.info(f"predicted pose iterative took {(time.time() - time_before_pose_iterative):.3f}s")
