@@ -61,4 +61,22 @@ def load_hierarchical_config(benchmark="defaults", platform="local", ablation=No
             cfg = compose(config_name=benchmark, overrides=["ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg
 
+import subprocess
+def run_cmd(cmd, logger, live=False):
+    logger.info(f'Run command {cmd}')
+    if live:
+        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with process.stdout:
+            for line in iter(process.stdout.readline, b''):  # b'\n'-separated lines
+                logger.info(line.decode('utf-8'))
+
+        logger.info(process.stderr.readlines())
+
+    else:
+        res = subprocess.run(cmd, capture_output=True, shell=True)
+        logger.info(res.stdout.decode("utf-8"))
+        logger.info(res.stderr.decode("utf-8"))
+
+
+
 

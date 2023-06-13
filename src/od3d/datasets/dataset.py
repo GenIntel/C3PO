@@ -1,7 +1,9 @@
+import logging
 
 from torch.utils.data import Dataset
 from omegaconf import OmegaConf, DictConfig
 from enum import Enum
+
 from dataclasses import dataclass
 from pathlib import Path
 import torch
@@ -9,6 +11,8 @@ from od3d.cv.io import read_image, read_co3d_depth_image
 import torchvision
 from dataclasses import dataclass, field
 from typing import List
+import logging
+logger = logging.getLogger(__name__)
 
 
 class OD3D_FRAME_MODALITIES(str, Enum):
@@ -17,6 +21,8 @@ class OD3D_FRAME_MODALITIES(str, Enum):
     DEPTH = 'depth'
     DEPTH_MASK = 'depth_mask'
     MESH = 'mesh'
+    KPTS = 'kpts'
+    BBOX = 'bbox'
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -122,12 +128,23 @@ class OD3D_Frames():
         if OD3D_FRAME_MODALITIES.DEPTH_MASK in modalities:
             self.depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0)# .to(device=device)
 
+        if OD3D_FRAME_MODALITIES.KPTS in modalities:
+            self.kpts2d_annot = [frame.kpts2d_annot for frame in frames]
+            self.kpts2d_annot_vsbl = [frame.kpts2d_annot_vsbl for frame in frames]
+            self.kpts_names = [frame.kpts_names for frame in frames]
+            self.kpts3d = [frame.kpts3d for frame in frames]
+
+        if OD3D_FRAME_MODALITIES.BBOX in modalities:
+            self.bbox = torch.stack([frame.bbox for frame in frames])
+        self.modalities = modalities
+
     def __len__(self):
         return self.length
     def visualize(self):
         from od3d.cv.visual.show import show_img
         from od3d.cv.visual.blend import blend_rgb
-
+        from od3d.cv.visual.draw import draw_pixels, draw_bbox
+        from od3d.cv.geometry.transform import proj3d2d_broadcast
         # show_pcl
         # print(self.rfpath_pcl[0])
         # show_img(self.rgb[0])
@@ -139,7 +156,21 @@ class OD3D_Frames():
 
 
         # verts, faces = load_ply(filename)
-        mix_real_with_synthetic = blend_rgb(self.rgb[0], self.mask[0] * 255)
+        img = blend_rgb(self.rgb[0], self.mask[0] * 255)
+
+        if OD3D_FRAME_MODALITIES.KPTS in self.modalities:
+            img = draw_pixels(pxls=self.kpts2d_annot[0][self.kpts2d_annot_vsbl[0]], img=img, colors=[0., 0., 255.])
+
+            kpts3d_inf_mask = torch.isinf(self.kpts3d[0]).any(dim=-1)
+            if kpts3d_inf_mask.sum() > 0:
+                logger.warn(f'There are {kpts3d_inf_mask.sum()} kpts with infinity for label {self.category[0]}')
+            kpts3d = self.kpts3d[0][~kpts3d_inf_mask]
+            kpts3d = torch.cat([kpts3d, torch.zeros(size=(1, 3,), device=self.device)])
+            kpts3d2d = proj3d2d_broadcast(proj4x4=self.cam_proj4x4_obj[0], pts3d=kpts3d)
+            img = draw_pixels(pxls=kpts3d2d, img=img, colors=[0., 255., 0.])
+
+        if OD3D_FRAME_MODALITIES.BBOX in self.modalities:
+            img = draw_bbox(img=img, bbox=self.bbox[0])
 
         #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
         #                                      proj3d2d_broadcast(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),
@@ -147,7 +178,7 @@ class OD3D_Frames():
         #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic, self.kpts2d_annot[0, self.kpts2d_annot_vsbl[0]],
         #                                     colors=(0, 0, 255), radius_in=2, radius_out=4)
 
-        show_img(mix_real_with_synthetic)
+        show_img(img)
 
     def to(self, device: torch.device):
         if self.device != device:

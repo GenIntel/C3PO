@@ -1,14 +1,7 @@
-import copy
-import os
 import logging
 logger = logging.getLogger(__name__)
-import BboxTools as bbt
 import numpy as np
-import pytorch3d.renderer
 import torch.nn
-import torchvision
-from PIL import Image
-import skimage
 import scipy.io
 from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
@@ -172,7 +165,7 @@ class Pascal3DFrame(OD3D_Frame):
     @property
     def kpts2d_annot_vsbl(self):
         if self._kpts2d_annot_vsbl is None:
-            self._kpts2d_annot_vsbl = torch.Tensor(self.l_kpts2d_annot_vsbl)
+            self._kpts2d_annot_vsbl = torch.Tensor(self.l_kpts2d_annot_vsbl).to(dtype=bool)
         return self._kpts2d_annot_vsbl
     @property
     def kpts3d(self):
@@ -286,10 +279,15 @@ class Pascal3D(OD3D_Dataset):
         DTD.setup(config)
 
         path_pascal3d_raw = Path(config.path_pascal3d_raw)
+
+        if path_pascal3d_raw.exists() and config.setup_remove_previous:
+            logger.info(f"Removing previous Pascal3D+")
+            shutil.rmtree(path_pascal3d_raw)
+
         if path_pascal3d_raw.exists():
-            logging.info(f"Found Pascal3D+ dataset at {path_pascal3d_raw}")
+            logger.info(f"Found Pascal3D+ dataset at {path_pascal3d_raw}")
         else:
-            logging.info(f"Downloading Pascal3D+ dataset at {path_pascal3d_raw}")
+            logger.info(f"Downloading Pascal3D+ dataset at {path_pascal3d_raw}")
             fpath = path_pascal3d_raw.joinpath("pascal3d.zip")
             od3d.io.download(url=config.url_pascal3d_raw, fpath=fpath)
             od3d.io.unzip(fpath=fpath, dst=fpath.parent)

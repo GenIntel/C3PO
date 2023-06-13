@@ -29,14 +29,34 @@ def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
     sequences_names_as_str = '\n'.join(dataset.sequences_names)
     logger.info(f"Dataset sequences names: \n {sequences_names_as_str}")
 
+
+@app.command()
+def setup(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
+          platform: str = typer.Option('local', '-p', '--platform'),
+          override: bool = typer.Option(False, '-o', '--override'),
+          remove_previous: bool = typer.Option(False, '-r', '--remove-previous')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    config.dataset.setup_remove_previous = remove_previous
+    config.dataset.setup_override = override
+    OD3D_Dataset.subclasses[config.dataset.class_name].setup(config.dataset)
+
 @app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+    import torchvision
+    from od3d.cv.transforms import CenterZoom3D
+    modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
+    dataset.transform = torchvision.transforms.Compose([
+        CenterZoom3D(H=512, W=512, dist=14., apply_mask=True, apply_kpts2d_annot=True, apply_bbox_annot=True, apply_txtr=True, config=config.dataset),
+        dataset.transform,
+    ]
+    )
 
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=partial(dataset.collate_fn, modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK]))
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=True, collate_fn=partial(dataset.collate_fn, modalities=modalities))
     logging.info(f"Dataset contains {len(dataset)} frames.")
     for batch in iter(dataloader):
         batch.visualize()

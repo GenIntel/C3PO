@@ -1,4 +1,5 @@
 import logging
+logger = logging.getLogger(__name__)
 from od3d.datasets.dataset import OD3D_Dataset
 import scipy.io as sio
 import numpy as np
@@ -43,9 +44,9 @@ class DTD(OD3D_Dataset):
     @staticmethod
     def setup(config: DictConfig):
         if Path(config.path_dtd_raw).exists():
-            logging.info(f"Found Describable Textures Dataset at {config.path_dtd_raw}")
+            logger.info(f"Found Describable Textures Dataset at {config.path_dtd_raw}")
         else:
-            logging.info(f"Download Describable Textures Dataset at {config.path_dtd_raw}")
+            logger.info(f"Download Describable Textures Dataset at {config.path_dtd_raw}")
             fpath = Path(config.path_dtd_raw).joinpath("dtd.tar.gz")
             od3d.io.download("https://www.robots.ox.ac.uk/~vgg/data/dtd/download/dtd-r1.0.1.tar.gz", fpath=fpath)
             od3d.io.untar(fpath=fpath, dst=fpath.parent)

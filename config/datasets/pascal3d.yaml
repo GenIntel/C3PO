@@ -1,6 +1,12 @@
 name: pascal3d
 class_name: Pascal3D
 
+modalities:
+    - 'rgb'
+    - 'mask'
+    - 'kpts'
+    - 'bbox'
+
 url_pascal3d_raw: ftp://cs.stanford.edu/cs/cvgl/PASCAL3D+_release1.1.zip
 rpath_pascal3d_raw: PASCAL3D+_release1.1
 path_pascal3d_raw: ${platform.path_datasets}/${.rpath_pascal3d_raw}
@@ -20,7 +26,9 @@ url_pascal3d_seg: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGl
 rpath_pascal3d_seg: PASCAL3D_Seg
 path_pascal3d_seg: ${platform.path_datasets}/${.rpath_pascal3d_seg}
 
-preprocess_meta_override: False
+setup_remove_previous: False
+setup_override: False
+preprocess_meta_override: True
 preprocess_meta_remove_previous: False
 
 index_shift: 0

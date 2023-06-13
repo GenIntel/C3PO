@@ -1,3 +1,5 @@
+import subprocess
+
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_Frame
 from omegaconf import DictConfig, OmegaConf
 from co3d.dataset.data_types import (
@@ -16,6 +18,8 @@ import pytorch3d.transforms
 import math
 from enum import Enum
 from od3d.cv.io import load_ply, save_ply
+from od3d.io import run_cmd
+
 from od3d.cv.visual.show import show_pcl
 
 from od3d.cv.geometry.transform import proj3d2d_broadcast
@@ -272,6 +276,25 @@ class CO3D(OD3D_Dataset):
         if self.config.preprocess_pcls:
             self.preprocess_pcls()
         # sequence_names
+
+
+    @staticmethod
+    def setup(config: DictConfig):
+        # logger.info(OmegaConf.to_yaml(config))
+        path_co3d_raw = Path(config.path_co3d_raw)
+        if path_co3d_raw.exists() and config.setup_remove_previous:
+            logger.info(f"Removing previous CO3D")
+            shutil.rmtree(path_co3d_raw)
+
+        if path_co3d_raw.exists() and not config.setup_override:
+            logger.info(f"Found CO3D dataset at {path_co3d_raw}")
+        else:
+            path_co3d_repo = path_co3d_raw.joinpath('co3d')
+            path_co3d_repo.mkdir(parents=True)
+            logger.info(f"Cloning CO3D github repository to {path_co3d_repo}")
+            run_cmd(cmd=f'cd {path_co3d_raw} && git clone git@github.com:facebookresearch/co3d.git', live=True, logger=logger)
+            logger.info(f"Downloading CO3D dataset at {path_co3d_raw}")
+            run_cmd(cmd=f'python {path_co3d_repo.joinpath("co3d/download_dataset.py")} --download_folder {path_co3d_raw}', live=True, logger=logger)
     def get_sequence_by_name(self, sequence_name):
         sequence_config = OmegaConf.load(self.path_meta.joinpath(sequence_name + '.yaml'))
         return CO3D_Sequence(**sequence_config)
