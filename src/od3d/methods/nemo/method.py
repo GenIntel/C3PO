@@ -161,7 +161,7 @@ class NeMo(OD3DMethod):
                 results_val = self.test(dataset_val, complete_dataset=True, pose_iterative_refine=True)
                 wandb.log({'val_' + k: v for k, v in results_val.items()})
 
-            if e % self.config.train.epochs_to_next_test == 0:
+            if self.config.train.epochs_to_next_test > 0 and e % self.config.train.epochs_to_next_test == 0:
                 results_test = self.test(dataset_test, complete_dataset=True, pose_iterative_refine=True)
                 wandb.log({'test_' + k: v for k, v in results_test.items()})
 

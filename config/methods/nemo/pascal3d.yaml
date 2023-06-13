@@ -17,6 +17,9 @@ fpaths_meshes:
     tvmonitor: ${..path_cuboids}/tvmonitor.ply
 
 train:
+    epochs_to_next_ckpt: 5
+    epochs_to_next_val: 5
+    epochs_to_next_test: -1
     visualize:
         verts_ncds_in_rgb: False
         net_feats_nearest_verts: False
