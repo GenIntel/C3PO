@@ -290,11 +290,12 @@ class CO3D(OD3D_Dataset):
             logger.info(f"Found CO3D dataset at {path_co3d_raw}")
         else:
             path_co3d_repo = path_co3d_raw.joinpath('co3d')
-            path_co3d_repo.mkdir(parents=True)
+            path_co3d_repo.mkdir(parents=True, exist_ok=True)
             logger.info(f"Cloning CO3D github repository to {path_co3d_repo}")
             run_cmd(cmd=f'cd {path_co3d_raw} && git clone git@github.com:facebookresearch/co3d.git', live=True, logger=logger)
             logger.info(f"Downloading CO3D dataset at {path_co3d_raw}")
             run_cmd(cmd=f'python {path_co3d_repo.joinpath("co3d/download_dataset.py")} --download_folder {path_co3d_raw}', live=True, logger=logger)
+            # --n_download_workers 1 --n_extract_workers 1
     def get_sequence_by_name(self, sequence_name):
         sequence_config = OmegaConf.load(self.path_meta.joinpath(sequence_name + '.yaml'))
         return CO3D_Sequence(**sequence_config)

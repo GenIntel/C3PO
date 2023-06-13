@@ -65,12 +65,19 @@ import subprocess
 def run_cmd(cmd, logger, live=False):
     logger.info(f'Run command {cmd}')
     if live:
-        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        with process.stdout:
-            for line in iter(process.stdout.readline, b''):  # b'\n'-separated lines
-                logger.info(line.decode('utf-8'))
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, shell=True)
 
-        logger.info(process.stderr.readlines())
+        for line in process.stdout:
+            # Print or process the live output as needed
+            logger.info(line)
+            # print(line, end='')
+
+        # Wait for the subprocess to complete
+        process.wait()
+
+        # Retrieve the return code of the subprocess
+        return_code = process.returncode
+        logger.info(f'Return Code {return_code}')
 
     else:
         res = subprocess.run(cmd, capture_output=True, shell=True)
