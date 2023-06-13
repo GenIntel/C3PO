@@ -390,10 +390,16 @@ class Meshes(torch.nn.Module):
 
         if modality == MESH_RENDER_MODALITIES.MASK_VERTS_VSBL:
             B = fragments.pix_to_face.shape[0]
-            verts_ids_vsbl = torch.cat([self.get_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0) [fragments.pix_to_face.reshape(B, -1)].reshape(B, -1)  # .unique(dim=1)
+            faces_ids = torch.cat([self.get_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0)
+            # verts_ids_vsbl = torch.cat([self.get_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0) [fragments.pix_to_face.reshape(B, -1)].reshape(B, -1)  # .unique(dim=1)
             verts_vsbl_mask = torch.zeros(size=(B, self.verts_counts_max), dtype=torch.bool, device=device)
             for b in range(B):
-                verts_vsbl_mask[b, verts_ids_vsbl[b]] = 1
+                # logger.info(f'meshes_ids {meshes_ids}')
+                faces_ids_vsbl = fragments.pix_to_face[b]
+                faces_ids_vsbl = faces_ids_vsbl.unique()
+                faces_ids_vsbl = faces_ids_vsbl[faces_ids_vsbl >= 0]
+                verts_ids_vsbl = faces_ids[faces_ids_vsbl].unique()
+                verts_vsbl_mask[b, verts_ids_vsbl] = 1
             return verts_vsbl_mask
 
         if modality == MESH_RENDER_MODALITIES.FEATS:

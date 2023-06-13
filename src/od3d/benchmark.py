@@ -101,8 +101,8 @@ def bench_single_method_torque(cfg: DictConfig):
 echo $(curl google.com)
 
 CUDA_HOME={cfg.platform.path_cuda}
-PATH=${{PATH}}:${{CUDA_HOME}}/bin
-LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:${{CUDA_HOME}}/lib64
+PATH=${{CUDA_HOME}}/bin:${{PATH}}
+LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
 export PATH
 export LD_LIBRARY_PATH
 export CUDA_HOME
@@ -195,8 +195,8 @@ def bench_single_method_slurm(cfg: DictConfig):
 {partition_cfg_str}
 
 CUDA_HOME={cfg.platform.path_cuda}
-PATH=${{PATH}}:${{CUDA_HOME}}/bin
-LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}:${{CUDA_HOME}}/lib64
+PATH=${{CUDA_HOME}}/bin:${{PATH}}
+LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
 export PATH
 export LD_LIBRARY_PATH
 export CUDA_HOME

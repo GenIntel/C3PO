@@ -9,6 +9,6 @@ url_od3d: git@github.com:Generative-Vision-Robust-Learning/od3d.git
 partition: lmbdlc_gpu-rtx2080 # lmb_gpu-teslaP100 lmb_gpu-1080ti, lmb_gpu-rtx2080, testdlc_gpu-rtx2080, alldlc_gpu-rtx3080, alldlc_gpu-rtx2080, lmbdlc_gpu-rtx2080
 username: sommerl
 gpu_count: 1
-cpu_count: 4
-ram: "10gb"
+cpu_count: 8
+ram: "40gb"
 walltime: "24:00:00"
