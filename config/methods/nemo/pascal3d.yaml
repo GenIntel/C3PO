@@ -28,7 +28,7 @@ train:
 
     dataloader:
         num_workers: 4
-        batch_size: 40
+        batch_size: 20
         pin_memory: True
 
 test:

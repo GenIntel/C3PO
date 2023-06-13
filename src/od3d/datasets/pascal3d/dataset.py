@@ -18,7 +18,6 @@ from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.show import show_img
 from od3d.cv.visual.crop import crop
 from od3d.cv.visual.sample import sample_pxl2d_pts
-from od3d.datasets.dtd import DTD
 from od3d.datasets.shapenemo import ShapeNemo
 import pickle
 from od3d.cv.geometry.transform import transf4x4_from_spherical
@@ -73,7 +72,7 @@ class Pascal3DFrame(OD3D_Frame):
     _mesh= None
 
     @staticmethod
-    def load_from_raw(path_dataset: Path, path_preprocess: Path, rfpath_annotation: Path, rfpath_rgb: Path, path_meshes: Path, dtd=None, dt_shape_nemo=None, classes: list = None):
+    def load_from_raw(path_dataset: Path, path_preprocess: Path, rfpath_annotation: Path, rfpath_rgb: Path, path_meshes: Path, dt_shape_nemo=None, classes: list = None):
         annotation = scipy.io.loadmat(path_dataset.joinpath(rfpath_annotation))
         name = annotation['record']['filename'][0][0][0].split('.')[0]
         complete = True
@@ -224,19 +223,6 @@ class Pascal3D(OD3D_Dataset):
 
         self.name = config.name
 
-        """
-        self.frame_names = []
-        self.frame_rfpaths = []
-
-        if config.pad_texture:
-            self.dtd = DTD(config=self.config)
-        else:
-            self.dtd = None
-
-        self.dt_shape_nemo = ShapeNemo(config=self.config, categories=self.categories)
-        
-        """
-
         self.cache = self.config.cache
         if self.cache == "Disk":
             self.path_cache = Path(self.config.path_pascal3d_raw).parent.joinpath("PASCAL3D_CACHE")
@@ -284,8 +270,6 @@ class Pascal3D(OD3D_Dataset):
         return frames_names, frames_rfpaths
     @staticmethod
     def setup(config):
-        DTD.setup(config)
-
         path_pascal3d_raw = Path(config.path_pascal3d_raw)
 
         if path_pascal3d_raw.exists() and config.setup_remove_previous:

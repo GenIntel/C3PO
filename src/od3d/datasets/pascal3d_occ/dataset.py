@@ -5,7 +5,6 @@ from omegaconf import DictConfig
 from pathlib import Path
 from od3d.datasets.pascal3d import Pascal3D
 from od3d.datasets.pascal3d.dataset import CATEGORIES, SUBSETS
-from od3d.datasets.dtd import DTD
 # import wget
 import shutil
 import od3d.io
@@ -21,7 +20,6 @@ class Pascal3D_Occ(Pascal3D):
 
     @staticmethod
     def setup(config: DictConfig):
-        DTD.setup(config=config)
         path_pascal3d_occ_raw = Path(config.path_pascal3d_occ_raw)
 
 
