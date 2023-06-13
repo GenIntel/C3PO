@@ -6,7 +6,8 @@ name: pascal3d_train
 subsets:
   - train
 
-subset_fraction: 1.0
+subset_fraction: 0.01
 
 preprocess_meta_override: False
 preprocess_meta_remove_previous: False
+preprocess_cuboids_override: False

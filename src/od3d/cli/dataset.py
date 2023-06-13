@@ -42,6 +42,17 @@ def setup(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     OD3D_Dataset.subclasses[config.dataset.class_name].setup(config.dataset)
 
 @app.command()
+def preprocess(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
+          platform: str = typer.Option('local', '-p', '--platform'),
+          override: bool = typer.Option(False, '-o', '--override'),
+          remove_previous: bool = typer.Option(False, '-r', '--remove-previous')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    config.dataset.preprocess_meta_remove_previous = remove_previous
+    config.dataset.preprocess_meta_override = override
+    OD3D_Dataset.subclasses[config.dataset.class_name].preprocess(config.dataset)
+
+@app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)

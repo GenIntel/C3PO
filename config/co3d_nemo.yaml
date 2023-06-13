@@ -11,7 +11,7 @@ metrics:
   - metricA
   - metricB
 
-train: False
+train: True
 test: True
 
 #training:

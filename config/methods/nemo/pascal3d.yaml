@@ -1,20 +1,20 @@
 # checkpoint: ${platform.path_exps}/NeMo-Classification/2022_09_26/classification_saved_model_199.pth
-checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
+# checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
 
-path_meshes: '${platform.path_datasets}/PASCAL3D+_release1.1/CAD_single'
+path_cuboids: '${test_dataset.path_pascal3d_preprocess}/cuboids'
 fpaths_meshes:
-    aeroplane: ${..path_meshes}/aeroplane/01.off
-    bicycle: ${..path_meshes}/bicycle/01.off
-    boat: ${..path_meshes}/boat/01.off
-    bottle: ${..path_meshes}/bottle/01.off
-    bus: ${..path_meshes}/bus/01.off
-    car: ${..path_meshes}/car/01.off
-    chair: ${..path_meshes}/chair/01.off
-    diningtable: ${..path_meshes}/diningtable/01.off
-    motorbike: ${..path_meshes}/motorbike/01.off
-    sofa: ${..path_meshes}/sofa/01.off
-    train: ${..path_meshes}/train/01.off
-    tvmonitor: ${..path_meshes}/tvmonitor/01.off
+    aeroplane: ${..path_cuboids}/aeroplane.ply
+    bicycle: ${..path_cuboids}/bicycle.ply
+    boat: ${..path_cuboids}/boat.ply
+    bottle: ${..path_cuboids}/bottle.ply
+    bus: ${..path_cuboids}/bus.ply
+    car: ${..path_cuboids}/car.ply
+    chair: ${..path_cuboids}/chair.ply
+    diningtable: ${..path_cuboids}/diningtable.ply
+    motorbike: ${..path_cuboids}/motorbike.ply
+    sofa: ${..path_cuboids}/sofa.ply
+    train: ${..path_cuboids}/train.ply
+    tvmonitor: ${..path_cuboids}/tvmonitor.ply
 
 train:
     visualize:
@@ -34,8 +34,8 @@ test:
         net_feats_nearest_verts: True
 
     dataloader:
-        num_workers: 0
-        batch_size: 1
+        num_workers: 4
+        batch_size: 10
         pin_memory: True
 
     azim:

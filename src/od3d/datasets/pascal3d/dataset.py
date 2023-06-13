@@ -27,6 +27,10 @@ from tqdm import tqdm
 from od3d.datasets.dataset import OD3D_FRAME_MODALITIES
 from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D
 
+from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.primitives import Cuboids
+from od3d.cv.io import save_ply
+
 CATEGORIES = [
     "aeroplane",
     "bicycle",
@@ -199,21 +203,23 @@ class Pascal3D(OD3D_Dataset):
         transform=None
     ):
         super().__init__(config=config, transform=transform)
-        self.setup(self.config)
+        Pascal3D.setup(self.config)
         self.path = Path(self.config.path_pascal3d_raw)
+
         self.path_meshes = self.path.joinpath("CAD")
-        self.path_preprocess = Path(config.path_pascal3d_preprocess)
+        self.path_preprocess = Path(self.config.path_pascal3d_preprocess)
+
+        self.path_cuboids = self.path_preprocess.joinpath("cuboids")
         self.path_meta = self.path_preprocess.joinpath('meta')
 
         self.subsets = self.config.get("subsets", SUBSETS)
         self.categories = self.config.get("classes", CATEGORIES)
 
-        self.preprocess_meta(remove_previous=self.config.preprocess_meta_remove_previous,
-                             override=self.config.preprocess_meta_override)
+        Pascal3D.preprocess(config=config)
 
         frames_names_meta = sorted([fpath.name.split('.')[0] for fpath in list(self.path_meta.joinpath("frames").iterdir())])
 
-        self.frames_names, _ = self.get_frame_names_from_subsets_and_cateogories(subsets=self.subsets,categories=self.categories)
+        self.frames_names, _ = Pascal3D.get_frame_names_from_subsets_and_cateogories(path_pascal3d_raw=self.path, subsets=self.subsets,categories=self.categories)
         self.frames_names = list(filter(lambda fn: fn in frames_names_meta, self.frames_names))
 
         self.name = config.name
@@ -257,19 +263,21 @@ class Pascal3D(OD3D_Dataset):
                     for frame_name in self.frame_names:
                         f.write(frame_name)
 
-    def get_frame_names_from_subset_and_category(self, subset, category):
-        fpath_frame_names_partial = self.path.joinpath("Image_sets", f"{category}_imagenet_{subset}.txt")
+    @staticmethod
+    def get_frame_names_from_subset_and_category(path_pascal3d_raw, subset, category):
+        fpath_frame_names_partial = path_pascal3d_raw.joinpath("Image_sets", f"{category}_imagenet_{subset}.txt")
         with fpath_frame_names_partial.open() as f:
             frame_names_partial = f.read().splitlines()
             frame_rfpaths_partial = [f"{category}_imagenet/{name}" for name in frame_names_partial]
         return frame_names_partial, frame_rfpaths_partial
 
-    def get_frame_names_from_subsets_and_cateogories(self, subsets, categories):
+    @staticmethod
+    def get_frame_names_from_subsets_and_cateogories(path_pascal3d_raw, subsets, categories):
         frames_rfpaths = []
         frames_names = []
         for subset in subsets:
             for category in categories:
-                frame_names_partial, frame_rfpaths_partial = self.get_frame_names_from_subset_and_category(subset=subset, category=category)
+                frame_names_partial, frame_rfpaths_partial = Pascal3D.get_frame_names_from_subset_and_category(path_pascal3d_raw=path_pascal3d_raw, subset=subset, category=category)
                 frames_rfpaths += frame_rfpaths_partial
                 frames_names += frame_names_partial
 
@@ -294,26 +302,78 @@ class Pascal3D(OD3D_Dataset):
             od3d.io.move_dir(src=fpath.parent.joinpath(Path(config.url_pascal3d_raw).with_suffix("").name),
                              dst=fpath.parent)
 
-    def preprocess_meta(self, remove_previous=False, override=False):
-        if not override and self.path_meta.exists():
+    @staticmethod
+    def preprocess(config: DictConfig):
+        Pascal3D.preprocess_cuboids(config=config)
+        Pascal3D.preprocess_meta(config=config)
+
+    @staticmethod
+    def preprocess_cuboids(config: DictConfig):
+
+        perc_axis_coverage = 0.99
+        verts_count = 1000
+
+        path = Path(config.path_pascal3d_raw)
+        path_meshes = path.joinpath("CAD")
+        path_preprocess = Path(config.path_pascal3d_preprocess)
+
+        path_cuboids = path_preprocess.joinpath("cuboids")
+
+        if not path_cuboids.exists() or config.preprocess_cuboids_override:
+            for path_meshes_category in path_meshes.iterdir():
+                if not path_meshes_category.is_dir():
+                    continue
+                paths_meshes_category = []
+                for path_mesh_category in path_meshes_category.iterdir():
+                    print(path_mesh_category)
+                    paths_meshes_category.append(path_mesh_category)
+
+                meshes = Meshes.load_from_files(paths_meshes_category)
+
+
+                verts_count_axis_coverage = int(meshes.verts.shape[0] * perc_axis_coverage)
+
+                verts_sorted = meshes.verts.sort(dim=0)[0]
+                verts_group = verts_sorted[verts_count_axis_coverage::] - verts_sorted[0:-verts_count_axis_coverage]
+                min_ids = verts_group.min(dim=0)[1]
+                cuboid_limits = verts_sorted[torch.stack([min_ids, min_ids + verts_count_axis_coverage], dim=0)].diagonal(dim1=-2, dim2=-1)
+
+                meshes = Cuboids.create_dense_from_limits(limits=cuboid_limits[None,], verts_count=verts_count)
+
+                fpath = path_cuboids.joinpath(f'{path_meshes_category.name}.ply')
+                fpath.parent.mkdir(parents=True, exist_ok=True)
+                save_ply(fpath, verts=meshes.verts, faces=meshes.faces)
+
+
+    @staticmethod
+    def preprocess_meta(config:DictConfig):
+        path = Path(config.path_pascal3d_raw)
+        path_meshes = path.joinpath("CAD")
+        path_preprocess = Path(config.path_pascal3d_preprocess)
+        categories = config.get("classes", CATEGORIES)
+        subsets = config.get("subsets", SUBSETS)
+
+        path_meta = path_preprocess.joinpath('meta')
+        # remove_previous = False, override = False
+        if not config.preprocess_meta_override and path_meta.exists():
             return
 
-        if remove_previous:
-            if self.path_meta.exists():
-                shutil.rmtree(self.path_meta)
+        if config.preprocess_meta_remove_previous:
+            if path_meta.exists():
+                shutil.rmtree(path_meta)
 
-        frames_names, frames_rfpaths = self.get_frame_names_from_subsets_and_cateogories(subsets=self.subsets,categories=self.categories)
+        frames_names, frames_rfpaths = Pascal3D.get_frame_names_from_subsets_and_cateogories(path_pascal3d_raw=path, subsets=subsets,categories=categories)
 
-        if self.config.get('frames', None) is not None:
-            frames_names = list(filter(lambda f: f in self.config.frames, frames_names))
+        if config.get('frames', None) is not None:
+            frames_names = list(filter(lambda f: f in config.frames, frames_names))
 
         for i in tqdm(range(len(frames_names))):
             rfpath_annotation = Path("Annotations").joinpath(f"{frames_rfpaths[i]}.mat")
             rfpath_rgb = Path("Images").joinpath(f"{frames_rfpaths[i]}.JPEG")
-            frame = Pascal3DFrame.load_from_raw(path_dataset=self.path, path_preprocess=self.path_preprocess, rfpath_rgb=rfpath_rgb, rfpath_annotation=rfpath_annotation, path_meshes=self.path_meshes)
+            frame = Pascal3DFrame.load_from_raw(path_dataset=path, path_preprocess=path_preprocess, rfpath_rgb=rfpath_rgb, rfpath_annotation=rfpath_annotation, path_meshes=path_meshes)
             if frame.complete:
                 conf = OmegaConf.structured(frame)
-                fpath = self.path_meta.joinpath("frames", frame.name + '.yaml')
+                fpath = path_meta.joinpath("frames", frame.name + '.yaml')
                 if not fpath.parent.exists():
                     fpath.parent.mkdir(parents=True)
                 OmegaConf.save(conf, fpath, resolve=True)

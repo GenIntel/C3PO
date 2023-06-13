@@ -30,6 +30,7 @@ setup_remove_previous: False
 setup_override: False
 preprocess_meta_override: True
 preprocess_meta_remove_previous: False
+preprocess_cuboids_override: False
 
 index_shift: 0
 pad_texture: false
