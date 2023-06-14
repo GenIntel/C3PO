@@ -64,6 +64,7 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     dataset.transform = torchvision.transforms.Compose([
         CenterZoom3D(H=512, W=512, dist=50., apply_mask=True, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_txtr=False, config=config.dataset),
         dataset.transform,
+
     ]
     )
 

@@ -4,7 +4,7 @@ from omegaconf import DictConfig
 from od3d.methods.nemo.keypoint_representation_net import NetE2E
 import torch
 from od3d.cv.visual.resize import resize
-from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D
+from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D, RGB_Random
 import torchvision
 
 class OD3D_Backbone(nn.Module):
@@ -47,6 +47,7 @@ class ResNetExt(OD3D_Backbone):
 
         self.transform = torchvision.transforms.Compose([
                 CenterZoom3D(H=config.transform.height, W=config.transform.width, dist=config.transform.distance),
+                RGB_Random(),
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])

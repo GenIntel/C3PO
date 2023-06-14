@@ -206,9 +206,10 @@ class OD3D_Dataset(Dataset):
         if transform is None:
             import torchvision
             from od3d.cv.transforms.center_and_zoom3d import CenterZoom3D
-            from od3d.cv.transforms.rgb import RGB_UInt8ToFloat, RGB_Normalize
+            from od3d.cv.transforms.rgb import RGB_UInt8ToFloat, RGB_Normalize, RGB_Random
             from od3d.cv.transforms.center_and_zoom3d import CenterZoom3D
             transform = torchvision.transforms.Compose([
+                RGB_Random(),
                 RGB_UInt8ToFloat(),
             ])
         self.transform = transform
