@@ -19,6 +19,7 @@ import math
 from enum import Enum
 from od3d.cv.io import load_ply, save_ply
 from od3d.io import run_cmd
+from copy import copy
 
 from od3d.cv.visual.show import show_pcl
 
@@ -469,6 +470,7 @@ class CO3D(OD3D_Dataset):
     @staticmethod
     def preprocess_cuboids(config: DictConfig):
         logger.info("preprocess cuboids")
+        config = copy(config)
         config.fpaths_cuboids = None
         config.setup = False
         config.preprocess = False
