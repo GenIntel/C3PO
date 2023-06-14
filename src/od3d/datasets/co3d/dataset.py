@@ -150,10 +150,7 @@ class CO3D_Sequence():
     @property
     def pcl(self):
         if self._pcl is None:
-            pts3d_max_count = 20000
-            pts3d_prob_thresh = 0.6
-            fpath_pcl = self.path_preprocess.joinpath('pcls', self.name,
-                                                      f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
+            fpath_pcl = self.path_co3d.joinpath(self.rfpath_pcl)
             verts, _ = load_ply(str(fpath_pcl))
             self._pcl = verts
         return self._pcl
