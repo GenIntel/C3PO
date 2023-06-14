@@ -143,9 +143,8 @@ class NeMo(OD3DMethod):
 
 
         dataset_train, dataset_val = torch.utils.data.random_split(dataset_sub, [1. - self.config.train.val_fraction, self.config.train.val_fraction], generator=generator)
-        # dataset_train.config = dataset.config
-        # dataset_val.config = dataset.config
-        # dataset_val.collate_fn = dataset.collate_fn
+        dataset_val.config = dataset.config
+        dataset_val.collate_fn = dataset.collate_fn
 
         criterion = torch.nn.CrossEntropyLoss().cuda() # (reduction="none").cuda()
 

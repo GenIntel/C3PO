@@ -104,3 +104,11 @@ def stop_torque(job: str = typer.Option(None, '-j', '--job')):
     torque_result = subprocess.run(f'ssh torque "qdel {job}"', capture_output=True, shell=True)
     for line in torque_result.stdout.decode("utf-8").split("\n"):
         logger.info(line)
+
+@app.command()
+def stop_slurm(job: str = typer.Option(None, '-j', '--job')):
+    logging.basicConfig(level=logging.INFO)
+
+    slurm_result = subprocess.run(f'ssh slurm "scancel {job}"', capture_output=True, shell=True)
+    for line in slurm_result.stdout.decode("utf-8").split("\n"):
+        logger.info(line)
