@@ -408,6 +408,7 @@ class CO3D(OD3D_Dataset):
 
     @staticmethod
     def preprocess(config: DictConfig):
+        logger.info("preprocess")
         CO3D.preprocess_meta(config=config)
         CO3D.preprocess_cuboids(config=config)
     @staticmethod
@@ -463,9 +464,12 @@ class CO3D(OD3D_Dataset):
 
     @staticmethod
     def preprocess_cuboids(config: DictConfig):
+        logger.info("preprocess cuboids")
         config.fpaths_cuboids = None
         dataset = CO3D(config=config)
         for sequence_name in dataset.sequences_names:
+            logger.info(f"preprocess cuboids, sequence {sequence_name}")
+
             sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
             _ = sequence.cuboid
 
