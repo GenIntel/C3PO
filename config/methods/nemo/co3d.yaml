@@ -8,12 +8,13 @@ fpaths_meshes: ${test_dataset.fpaths_cuboids}
 # checkpoint: /scratch/sommerl/exps/06-07_13-32-55/nemo.ckpt
 
 train:
+    epochs_to_next_test: -1
     epochs: 200
     batch_accumulate_to_next_step: 2
 
     visualize:
-        verts_ncds_in_rgb: False
-        net_feats_nearest_verts: False
+        verts_ncds_in_rgb: True
+        net_feats_nearest_verts: True
 
     val_fraction: 0.01
 
@@ -45,12 +46,12 @@ test:
         max: math.pi * 2 - (math.pi * 2) / 7.
         steps: 6
     dist:
-        min: '24.'
-        max: '24.'
+        min: '10.'
+        max: '10.'
         steps: 1
 
 backbone:
     transform:
         width: 512
         height: 512
-        distance: 24.
+        distance: 16.

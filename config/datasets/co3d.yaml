@@ -26,7 +26,7 @@ preprocess_meta_remove_previous: False
 sequences:
   - '106_12650_23736'
   - '116_13655_29006'
-  # - '185_19982_37678'
+  - '185_19982_37678'
   #- '194_20898_41093'
   #- '194_20900_41097'
   #- '194_20939_43630'
@@ -40,7 +40,7 @@ sequences:
 
 path_cuboids: ${.path_co3d_preprocess}/cuboids
 fpaths_cuboids:
-    car: ${..path_cuboids}/car/${..sequences[0]}.ply # /cuboid_max_1000.ply
+    car: ${..path_cuboids}/car/106_12650_23736.ply # /cuboid_max_1000.ply
 
 classes:
   - car
