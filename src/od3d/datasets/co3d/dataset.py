@@ -306,8 +306,10 @@ class CO3D(OD3D_Dataset):
     ):
         super().__init__(config=config, transform=transform)
 
-        CO3D.setup(config=config)
-        CO3D.preprocess(config=config)
+        if config.setup:
+            CO3D.setup(config=config)
+        if config.preprocess:
+            CO3D.preprocess(config=config)
 
         self.path_meta = Path(config.path_meta)
 
@@ -462,6 +464,8 @@ class CO3D(OD3D_Dataset):
     @staticmethod
     def preprocess_cuboids(config: DictConfig):
         config.fpaths_cuboids = None
+        config.setup = False
+        config.preprocess = False
         dataset = CO3D(config=config)
         for sequence_name in dataset.sequences_names:
             sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
