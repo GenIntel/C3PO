@@ -153,10 +153,17 @@ class CO3D_Sequence():
 @dataclass
 class CO3D_Frame(OD3D_Frame):
     sequence_name: str
+    path_meta: Path
     frame_number: int
     depth_scale: float
     frame_type: str
-
+    _sequence = None
+    @property
+    def sequence(self):
+        if self._sequence is None:
+            sequence_config = OmegaConf.load(self.path_meta .joinpath(self.sequence_name + '.yaml'))
+            self._sequence = CO3D_Sequence(**sequence_config)
+        return self._sequence
     @property
     def depth(self):
         if self._depth is None:
@@ -164,7 +171,7 @@ class CO3D_Frame(OD3D_Frame):
         return self._depth
 
     @staticmethod
-    def load_from_raw(path_co3d: Path, frame_annotation: FrameAnnotation):
+    def load_from_raw(path_co3d: Path, path_meta: Path, frame_annotation: FrameAnnotation):
         path_dataset = path_co3d
         category = frame_annotation.image.path.split('/')[0]
         sequence_name = frame_annotation.sequence_name
@@ -204,7 +211,7 @@ class CO3D_Frame(OD3D_Frame):
         l_cam_intr4x4 = cam_intr4x4.tolist()
         l_cam_tform4x4_obj = cam_tform4x4_obj.tolist()
         l_cam_proj4x4_obj = cam_proj4x4_obj.tolist()
-        return CO3D_Frame(path_dataset=path_dataset, category=category, frame_number=frame_number, frame_type=frame_type,
+        return CO3D_Frame(path_dataset=path_dataset, path_meta=path_meta, category=category, frame_number=frame_number, frame_type=frame_type,
                    name=name, rfpath_mask=rfpath_mask, rfpath_depth=rfpath_depth, rfpath_depth_mask=rfpath_depth_mask,
                    rfpath_rgb=rfpath_rgb, H=H, W=W, l_size=l_size, l_cam_intr4x4=l_cam_intr4x4,
                    sequence_name=sequence_name,
@@ -220,6 +227,8 @@ class CO3D(OD3D_Dataset):
         self.path = Path(config.path_co3d_raw)
         self.path_preprocess = Path(config.path_co3d_preprocess)
         self.path_meta = self.path_preprocess.joinpath('meta')
+        self.path_cuboids = Path(config.path_cuboids)
+
 
         self.device = "cpu"
         self.dtype = torch.float32
@@ -228,6 +237,8 @@ class CO3D(OD3D_Dataset):
                                       CO3D_FRAME_TYPES.TEST_KNOWN]
 
         self.classes = self.config.classes
+
+        self.cuboids = Meshes.load_from_files(fpaths_meshes=[self.config.fpaths_cuboids[cls] for cls in self.classes])
         # [
         #    'car',
         #    #'carrot'
@@ -347,7 +358,7 @@ class CO3D(OD3D_Dataset):
             for frame_annotation in tqdm(cls_frame_annotations):
                 if sequences is not None and frame_annotation.sequence_name not in sequences:
                     continue
-                frame = CO3D_Frame.load_from_raw(path_co3d=self.path, frame_annotation=frame_annotation)
+                frame = CO3D_Frame.load_from_raw(path_co3d=self.path, path_meta=self.path_meta, frame_annotation=frame_annotation)
                 conf = OmegaConf.structured(frame)
                 fpath = self.path_meta.joinpath(frame.sequence_name, frame.name + '.yaml')
                 if not fpath.parent.exists():
@@ -402,6 +413,7 @@ class CO3D(OD3D_Dataset):
 
             cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0], pca_pts3d_clean.max(dim=-2)[0]], dim=-2)[None,]
             cuboid_pts3d_max_count = 1000
+
             cuboids = Cuboids(cuboids_limits=cuboids_limits, max_pts_count=cuboid_pts3d_max_count)
             cuboid_tform_pca = icp(cuboids.pts3d_surface[0], pca_pts3d_clean).inverse()
             cuboid_tform_world = cuboid_tform_pca[None,].bmm(pca_tform_world[None,])[0]

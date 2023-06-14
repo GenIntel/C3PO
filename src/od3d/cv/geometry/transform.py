@@ -2,6 +2,31 @@ import torch
 from pytorch3d.renderer.cameras import look_at_view_transform, look_at_rotation
 import math
 from pytorch3d.transforms import axis_angle_to_matrix
+from pytorch3d.transforms import so3_exp_map
+
+
+def rot3x3_from_two_vectors(a: torch.Tensor, b: torch.Tensor):
+    """Rotation matrix for rotating vector a onto vector b
+        Args:
+            a (torch.Tensor): ...x3
+            b (torch.Tensor): ...x3
+
+        Returns:
+            rot3x3 (torch.Tensor): ...x3x3
+
+    """
+
+
+
+    v = torch.cross(a / a.norm(dim=-1, keepdim=True), b / b.norm(dim=-1, keepdim=True), dim=-1)
+
+    if a.dim() == 1:
+        v = v[None, ]
+    rot3x3 = so3_exp_map(v)  # .transpose(-1, -2)
+
+    if a.dim() == 1:
+        rot3x3 = rot3x3[0]
+    return rot3x3
 
 def transf4x4_from_pos_and_theta(pos, theta):
     in_shape = theta.shape

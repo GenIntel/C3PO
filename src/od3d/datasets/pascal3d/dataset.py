@@ -208,11 +208,12 @@ class Pascal3D(OD3D_Dataset):
         self.path_meshes = self.path.joinpath("CAD")
         self.path_preprocess = Path(self.config.path_pascal3d_preprocess)
 
-        self.path_cuboids = self.path_preprocess.joinpath("cuboids")
+        self.path_cuboids = self.config.path_cuboids
         self.path_meta = self.path_preprocess.joinpath('meta')
 
         self.subsets = self.config.get("subsets", SUBSETS)
         self.categories = self.config.get("classes", CATEGORIES)
+
 
         Pascal3D.preprocess(config=config)
 

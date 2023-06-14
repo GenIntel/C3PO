@@ -62,14 +62,14 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     from od3d.cv.transforms import CenterZoom3D
     modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
     dataset.transform = torchvision.transforms.Compose([
-        CenterZoom3D(H=512, W=512, dist=14., apply_mask=True, apply_kpts2d_annot=True, apply_bbox_annot=True, apply_txtr=True, config=config.dataset),
+        CenterZoom3D(H=512, W=512, dist=50., apply_mask=True, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_txtr=False, config=config.dataset),
         dataset.transform,
     ]
     )
 
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=True, collate_fn=partial(dataset.collate_fn, modalities=modalities))
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=partial(dataset.collate_fn, modalities=modalities))
     logging.info(f"Dataset contains {len(dataset)} frames.")
     for batch in iter(dataloader):
-        batch.visualize()
+        batch.visualize(cuboids=dataset.cuboids)
         # batch[0].sequence_name
         # dataset.visualize(i)

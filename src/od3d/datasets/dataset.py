@@ -3,6 +3,7 @@ import logging
 from torch.utils.data import Dataset
 from omegaconf import OmegaConf, DictConfig
 from enum import Enum
+from od3d.cv.geometry.mesh import Meshes, MESH_RENDER_MODALITIES
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -140,7 +141,7 @@ class OD3D_Frames():
 
     def __len__(self):
         return self.length
-    def visualize(self):
+    def visualize(self, cuboids: Meshes = None):
         from od3d.cv.visual.show import show_img
         from od3d.cv.visual.blend import blend_rgb
         from od3d.cv.visual.draw import draw_pixels, draw_bbox
@@ -171,6 +172,13 @@ class OD3D_Frames():
 
         if OD3D_FRAME_MODALITIES.BBOX in self.modalities:
             img = draw_bbox(img=img, bbox=self.bbox[0])
+
+        if cuboids is not None:
+            img = blend_rgb(img, (cuboids.render_feats(
+                                    cams_tform4x4_obj=self.cam_tform4x4_obj[:1],
+                                    cams_intr4x4=self.cam_intr4x4[:1],
+                                    imgs_sizes=self.size, meshes_ids=self.label[:1],
+                                    modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=self.rgb.dtype))
 
         #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
         #                                      proj3d2d_broadcast(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),

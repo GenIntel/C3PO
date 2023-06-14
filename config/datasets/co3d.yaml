@@ -8,6 +8,8 @@ modalities:
 path_co3d_raw: ${platform.path_datasets}/CO3D
 path_co3d_preprocess: ${platform.path_datasets}/CO3D_Preprocess
 
+
+
 rpath_dtd_raw: DTD
 rpath_dtd_cache: DTD_cache
 path_dtd_raw: ${platform.path_datasets}/${.rpath_dtd_raw}
@@ -15,14 +17,14 @@ path_dtd_cache: ${platform.path_datasets}/${.rpath_dtd_cache}
 
 setup_remove_previous: False
 setup_override: False
-preprocess_meta_override: True
+preprocess_meta_override: False
 preprocess_meta_remove_previous: False
 preprocess_pcls: False
 
 sequences:
   - '106_12650_23736'
-  #- '116_13655_29006'
-  - '185_19982_37678'
+  - '116_13655_29006'
+  # - '185_19982_37678'
   #- '194_20898_41093'
   #- '194_20900_41097'
   #- '194_20939_43630'
@@ -32,6 +34,11 @@ sequences:
   #- '216_22790_47232'
   #- '216_22808_47498'
   #- '216_22836_48452'
+
+
+path_cuboids: ${.path_co3d_preprocess}/pcls
+fpaths_cuboids:
+    car: ${..path_cuboids}/${..sequences[0]}/cuboid_max_1000.ply
 
 classes:
   - car
