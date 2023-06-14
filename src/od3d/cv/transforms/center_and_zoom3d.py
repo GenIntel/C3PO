@@ -42,13 +42,18 @@ class CenterZoom3D():
             frame._rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
                                                  ctx=None)
 
-        frame._cam_intr4x4 = torch.bmm(cam_crop_tform_cam[None,], frame._cam_intr4x4[None,])[0]
-
-        frame._cam_proj4x4_obj[:, :] = torch.bmm(frame.cam_intr4x4[None,], frame.cam_tform4x4_obj[None,])[0]
-
         # we already account for the scale with the transformation, but we cannot do that for the padding
         #cam_crop_tform_cam[0, 0] = 1.
         #cam_crop_tform_cam[1, 1] = 1.
+
+        frame._cam_intr4x4 = torch.bmm(cam_crop_tform_cam[None,], frame._cam_intr4x4[None,])[0]
+
+        frame._cam_intr4x4[:2, :2] /= scale
+        # frame._cam_intr4x4[1, 1] /= scale
+        frame._cam_tform4x4_obj[2, 3] = frame.cam_tform4x4_obj[2, 3] / scale
+
+        frame._cam_proj4x4_obj[:, :] = torch.bmm(frame.cam_intr4x4[None,], frame.cam_tform4x4_obj[None,])[0]
+
 
         if self.apply_bbox_annot:
             frame._bbox = frame.bbox * scale
