@@ -118,14 +118,17 @@ class CO3D_Sequence():
     name: str
     category: str
     _pcl = None
+    _cuboid = None
     path_co3d: Path
+    path_preprocess: Path
     rfpath_pcl: Path
     pcl_pts_count: int
     pcl_quality_score: float
     viewpoint_quality_score: float
+    path_meta: Path
 
     @staticmethod
-    def load_from_raw(path_co3d: Path, sequence_annotation: SequenceAnnotation):
+    def load_from_raw(path_co3d: Path, path_meta: Path, path_preprocess: Path, sequence_annotation: SequenceAnnotation):
         name = sequence_annotation.sequence_name
         category = sequence_annotation.category
         if sequence_annotation.point_cloud is not None:
@@ -139,7 +142,7 @@ class CO3D_Sequence():
 
         viewpoint_quality_score = sequence_annotation.viewpoint_quality_score
 
-        return CO3D_Sequence(path_co3d=path_co3d, name=name, category=category, rfpath_pcl=rfpath_pcl,
+        return CO3D_Sequence(path_co3d=path_co3d, path_meta=path_meta, path_preprocess=path_preprocess, name=name, category=category, rfpath_pcl=rfpath_pcl,
                              pcl_pts_count=pcl_pts_count, pcl_quality_score=pcl_quality_score,
                              viewpoint_quality_score=viewpoint_quality_score)
 
@@ -149,6 +152,84 @@ class CO3D_Sequence():
             verts, _ = load_ply(str(self.path_co3d.joinpath(self.rfpath_pcl)))
             self._pcl = verts
         return self._pcl
+
+    @property
+    def cuboid(self):
+        if self._cuboid is None:
+
+            fpath_cuboid = self.path_preprocess.joinpath('cuboids', self.category, self.name + '.ply')
+
+            if not fpath_cuboid.exists():
+                fpath_cuboid.parent.mkdir(parents=True, exist_ok=True)
+
+                cuboid_pts3d_max_count = 1000
+                pts3d_max_count = 20000
+                cuboid_pts3d_max_count = 1000
+                pts3d_prob_thresh = 0.6
+                fpath_pcl = self.path_preprocess.joinpath('pcls', self.name, f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
+                fpath_pcl.parent.mkdir(parents=True, exist_ok=True)
+
+
+                config = OmegaConf.create()
+                config.sequences = [self.name]
+                config.path = []
+                config.path_meta = self.path_meta
+                config.classes = [self.category]
+
+                dataset = CO3D(config=config)
+                dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
+                                                         collate_fn=partial(CO3D.collate_fn, modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK]), num_workers=4)
+
+                pts3d = self.pcl
+
+                pts3d = random_sampling(pts3d, pts3d_max_count=pts3d_max_count * 3)
+                pts3d = voxel_downsampling(pts3d, K=pts3d_max_count)
+                pts3d_prob = torch.ones(size=(pts3d.shape[0], 1), device=pts3d.device, dtype=pts3d.dtype)
+                for frames in iter(dataloader):
+                    pxl2d = proj3d2d_broadcast(pts3d=pts3d, proj4x4=frames.cam_proj4x4_obj[:, None])
+                    pts3d_prob += sample_pxl2d_pts(frames.mask, pxl2d=pxl2d, padding_mode='zeros').sum(dim=0)
+
+                    #pxl2d = proj3d2d_broadcast(pts3d=pts3d_co3d, proj4x4=frame.cam_proj4x4_obj)
+                    #gb_with_mask_with_pts3d = draw_pixels(img=blend_rgb(frame.rgb, frame.mask*255.), pxls=pxl2d)
+                    #show_img(rgb_with_mask_with_pts3d)
+
+                pts3d_prob = pts3d_prob / len(dataset)
+                # pts3d_co3ds = []
+                # for prob in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:  #0.5, 0.6, 0.7, 0.8, 0.9, 0.95
+                #    pts3d = torch.zeros_like(pts3d_co3d)
+                #    pts3d[pts3d_co3d_prob[..., 0] > prob] = pts3d[pts3d_prob[..., 0] > prob]
+                #    pts3d_co3ds.append(pts3d)
+                # show_pcl(torch.stack(pts3d_co3ds, dim=0))
+                # show_pcl(pts3d[pts3d_prob[..., 0] > 0.6])
+                pts3d_clean = pts3d[pts3d_prob[..., 0] > pts3d_prob_thresh]
+                #frame0: CO3D_Frame = seq_dataset[0]
+                #show_img(frame0.rgb)
+                #show_pcl(pts3d_clean, cam_tform4x4_obj=frame0.cam_tform4x4_obj, cam_intr4x4=frame0.cam_intr4x4, img_size=frame0.size)
+
+                save_ply(fpath_pcl, pts3d_clean)
+
+                pca_tform_world = get_pca_tform_world(pts3d_clean)
+                pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_world)
+
+                cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0], pca_pts3d_clean.max(dim=-2)[0]], dim=-2)[None,]
+
+                cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
+
+                # verts, faces = cuboids.meshelize(number_vertices=cuboid_pts3d_max_count)
+
+                cuboid_tform_pca = icp(cuboids.verts, pca_pts3d_clean).inverse()
+                cuboid_tform_world = cuboid_tform_pca[None,].bmm(pca_tform_world[None,])[0]
+                world_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=cuboid_tform_world.inverse())
+
+
+                #faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
+                #verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
+
+                save_ply(fpath_cuboid, verts=world_verts, faces=cuboids.faces)
+                # show_pcl([pts3d_clean, transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())])
+            self._cuboid = Cuboids.load_from_files(fpaths_meshes=[fpath_cuboid])
+        return self._cuboid
+
 
 @dataclass
 class CO3D_Frame(OD3D_Frame):
@@ -161,7 +242,7 @@ class CO3D_Frame(OD3D_Frame):
     @property
     def sequence(self):
         if self._sequence is None:
-            sequence_config = OmegaConf.load(self.path_meta .joinpath(self.sequence_name + '.yaml'))
+            sequence_config = OmegaConf.load(self.path_meta.joinpath(self.sequence_name + '.yaml'))
             self._sequence = CO3D_Sequence(**sequence_config)
         return self._sequence
     @property
@@ -224,11 +305,7 @@ class CO3D(OD3D_Dataset):
         transform=None
     ):
         super().__init__(config=config, transform=transform)
-        self.path = Path(config.path_co3d_raw)
-        self.path_preprocess = Path(config.path_co3d_preprocess)
-        self.path_meta = self.path_preprocess.joinpath('meta')
-        self.path_cuboids = Path(config.path_cuboids)
-
+        self.path_meta = Path(config.path_meta)
 
         self.device = "cpu"
         self.dtype = torch.float32
@@ -236,15 +313,19 @@ class CO3D(OD3D_Dataset):
                                       CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
                                       CO3D_FRAME_TYPES.TEST_KNOWN]
 
-        self.classes = self.config.classes
+        self.classes = self.config.get("classes", [])
 
-        self.cuboids = Meshes.load_from_files(fpaths_meshes=[self.config.fpaths_cuboids[cls] for cls in self.classes])
+        if self.config.get("fpaths_cuboids", None) is not None:
+            self.cuboids = Meshes.load_from_files(fpaths_meshes=[self.config.fpaths_cuboids[cls] for cls in self.classes])
+
         # [
         #    'car',
         #    #'carrot'
         #]
 
-        self.preprocess_meta(remove_previous=self.config.preprocess_meta_remove_previous, override=self.config.preprocess_meta_override, sequences=self.config.get("sequences"))
+        # CO3D.preprocess(config=self.config)
+
+        # self.preprocess_meta(remove_previous=self.config.preprocess_meta_remove_previous, override=self.config.preprocess_meta_override, sequences=self.config.get("sequences"))
         self.sequences_require_pcl = True
         self.frames_only_first_of_each_sequence = False
 
@@ -257,7 +338,7 @@ class CO3D(OD3D_Dataset):
         if self.sequences_require_pcl:
             self.sequences = []
             for sequence_name in self.sequences_names:
-                sequence_config = OmegaConf.load( self.path_meta.joinpath(sequence_name + '.yaml'))
+                sequence_config = OmegaConf.load(self.path_meta.joinpath(sequence_name + '.yaml'))
                 sequence = CO3D_Sequence(**sequence_config)
                 self.sequences.append(sequence)
 
@@ -284,13 +365,12 @@ class CO3D(OD3D_Dataset):
             #self.sequences_map_name_to_id = {}
         #self.frames_map_name_to_id = {}
 
-        if self.config.preprocess_pcls:
-            self.preprocess_pcls()
         # sequence_names
 
 
     @staticmethod
     def setup(config: DictConfig):
+
         # logger.info(OmegaConf.to_yaml(config))
         path_co3d_raw = Path(config.path_co3d_raw)
         if path_co3d_raw.exists() and config.setup_remove_previous:
@@ -320,111 +400,68 @@ class CO3D(OD3D_Dataset):
     def get_sequence_by_id(self, seq_id):
         return self.get_sequence_by_name(sequence_name=self.sequences_names[seq_id])
 
+    @staticmethod
+    def preprocess(config: DictConfig):
+        CO3D.preprocess_meta(config=config)
+        CO3D.preprocess_cuboids(config=config)
+    @staticmethod
+    def preprocess_meta(config: DictConfig):
+        path = Path(config.path_co3d_raw)
+        path_preprocess = Path(config.path_co3d_preprocess)
+        path_meta = path_preprocess.joinpath('meta')
+        sequences = config.get("sequences", None)
+        whitelist_frame_types = [CO3D_FRAME_TYPES.DEV_KNOWN, CO3D_FRAME_TYPES.DEV_UNSEEN,
+                                  CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
+                                  CO3D_FRAME_TYPES.TEST_KNOWN]
 
-    def preprocess_meta(self, remove_previous=False, override=False, sequences=None):
-        if not override and self.path_meta.exists():
+        if not config.preprocess_meta_override and path_meta.exists():
             return
 
-        if remove_previous:
-            if self.path_meta.exists():
-                shutil.rmtree(self.path_meta)
+        if config.preprocess_meta_remove_previous:
+            if path_meta.exists():
+                shutil.rmtree(path_meta)
 
-        for cls in self.classes:
+        for cls in config.classes:
             logger.info(f'preprocess meta for class {cls}')
             sequence_annotations = load_dataclass_jgzip(
-                f"{self.path}/{cls}/sequence_annotations.jgz", List[SequenceAnnotation]
+                f"{path}/{cls}/sequence_annotations.jgz", List[SequenceAnnotation]
             )
-
-
             logger.info('reading sequence annotations...')
             for sequence_annoation in tqdm(sequence_annotations):
                 if sequences is not None and sequence_annoation.sequence_name not in sequences:
                     continue
 
-                sequence = CO3D_Sequence.load_from_raw(path_co3d=self.path, sequence_annotation=sequence_annoation)
+                sequence = CO3D_Sequence.load_from_raw(path_co3d=path, path_meta=path_meta, path_preprocess=path_preprocess, sequence_annotation=sequence_annoation)
                 config = OmegaConf.structured(sequence)
-                fpath = self.path_meta.joinpath(sequence.name + '.yaml')
+                fpath = path_meta.joinpath(sequence.name + '.yaml')
                 if not fpath.parent.exists():
                     fpath.parent.mkdir(parents=True)
                 OmegaConf.save(config, fpath, resolve=True)
 
             cls_frame_annotations = load_dataclass_jgzip(
-                f"{self.path}/{cls}/frame_annotations.jgz", List[FrameAnnotation]
+                f"{path}/{cls}/frame_annotations.jgz", List[FrameAnnotation]
             )
             cls_frame_annotations = [fa for fa in cls_frame_annotations if fa.meta[
-                'frame_type'] in self.whitelist_frame_types]
+                'frame_type'] in whitelist_frame_types]
 
             logger.info('reading frame annotations...')
             for frame_annotation in tqdm(cls_frame_annotations):
                 if sequences is not None and frame_annotation.sequence_name not in sequences:
                     continue
-                frame = CO3D_Frame.load_from_raw(path_co3d=self.path, path_meta=self.path_meta, frame_annotation=frame_annotation)
+                frame = CO3D_Frame.load_from_raw(path_co3d=path, path_meta=path_meta, frame_annotation=frame_annotation)
                 conf = OmegaConf.structured(frame)
-                fpath = self.path_meta.joinpath(frame.sequence_name, frame.name + '.yaml')
+                fpath = path_meta.joinpath(frame.sequence_name, frame.name + '.yaml')
                 if not fpath.parent.exists():
                     fpath.parent.mkdir(parents=True)
                 OmegaConf.save(conf, fpath, resolve=True)
 
-    def preprocess_pcls(self):
-
-        path_pcls = self.path_preprocess.joinpath('pcls')
-        pts3d_max_count = 20000
-        pts3d_prob_thresh = 0.6
-
-        for seq_id in range(self.sequences_count):
-
-            seq_dataset = torch.utils.data.Subset(dataset=self, indices=self.sequences_item_ids[seq_id])
-            dataloader = torch.utils.data.DataLoader(dataset=seq_dataset, batch_size=10, shuffle=False,
-                                                     collate_fn=partial(self.collate_fn, modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK]), num_workers=4)
-
-
-            sequence = self.get_sequence_by_id(seq_id)
-            pts3d = sequence.pcl
-
-            pts3d = random_sampling(pts3d, pts3d_max_count=pts3d_max_count * 3)
-            pts3d = voxel_downsampling(pts3d, K=pts3d_max_count)
-            pts3d_prob = torch.ones(size=(pts3d.shape[0], 1), device=pts3d.device, dtype=pts3d.dtype)
-            for frames in iter(dataloader):
-                pxl2d = proj3d2d_broadcast(pts3d=pts3d, proj4x4=frames.cam_proj4x4_obj[:, None])
-                pts3d_prob += sample_pxl2d_pts(frames.mask, pxl2d=pxl2d, padding_mode='zeros').sum(dim=0)
-
-                #pxl2d = proj3d2d_broadcast(pts3d=pts3d_co3d, proj4x4=frame.cam_proj4x4_obj)
-                #gb_with_mask_with_pts3d = draw_pixels(img=blend_rgb(frame.rgb, frame.mask*255.), pxls=pxl2d)
-                #show_img(rgb_with_mask_with_pts3d)
-
-            pts3d_prob = pts3d_prob / len(seq_dataset)
-            # pts3d_co3ds = []
-            # for prob in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:  #0.5, 0.6, 0.7, 0.8, 0.9, 0.95
-            #    pts3d = torch.zeros_like(pts3d_co3d)
-            #    pts3d[pts3d_co3d_prob[..., 0] > prob] = pts3d[pts3d_prob[..., 0] > prob]
-            #    pts3d_co3ds.append(pts3d)
-            # show_pcl(torch.stack(pts3d_co3ds, dim=0))
-            # show_pcl(pts3d[pts3d_prob[..., 0] > 0.6])
-            pts3d_clean = pts3d[pts3d_prob[..., 0] > pts3d_prob_thresh]
-            #frame0: CO3D_Frame = seq_dataset[0]
-            #show_img(frame0.rgb)
-            #show_pcl(pts3d_clean, cam_tform4x4_obj=frame0.cam_tform4x4_obj, cam_intr4x4=frame0.cam_intr4x4, img_size=frame0.size)
-            fpath_pcl = path_pcls.joinpath(sequence.name, f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
-            fpath_pcl.parent.mkdir(parents=True, exist_ok=True)
-            save_ply(fpath_pcl, pts3d_clean)
-
-            pca_tform_world = get_pca_tform_world(pts3d_clean)
-            pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_world)
-
-            cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0], pca_pts3d_clean.max(dim=-2)[0]], dim=-2)[None,]
-            cuboid_pts3d_max_count = 1000
-
-            cuboids = Cuboids(cuboids_limits=cuboids_limits, max_pts_count=cuboid_pts3d_max_count)
-            cuboid_tform_pca = icp(cuboids.pts3d_surface[0], pca_pts3d_clean).inverse()
-            cuboid_tform_world = cuboid_tform_pca[None,].bmm(pca_tform_world[None,])[0]
-            fpath_pcl = path_pcls.joinpath(sequence.name, f'cuboid_max_{cuboid_pts3d_max_count}' + '.ply')
-
-            verts, faces = cuboids.meshelize(number_vertices=cuboid_pts3d_max_count)
-            #faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
-            #verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
-
-            save_ply(fpath_pcl, verts=verts, faces=faces)
-            # show_pcl([pts3d_clean, transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())])
+    @staticmethod
+    def preprocess_cuboids(config: DictConfig):
+        config.fpaths_cuboids = None
+        dataset = CO3D(config=config)
+        for sequence_name in dataset.sequences_names:
+            sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
+            _ = sequence.cuboid
 
     def __len__(self):
         return self.frames_count

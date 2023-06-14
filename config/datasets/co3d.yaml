@@ -8,7 +8,7 @@ modalities:
 path_co3d_raw: ${platform.path_datasets}/CO3D
 path_co3d_preprocess: ${platform.path_datasets}/CO3D_Preprocess
 
-
+path_meta: ${.path_co3d_preprocess}/meta
 
 rpath_dtd_raw: DTD
 rpath_dtd_cache: DTD_cache
@@ -36,9 +36,9 @@ sequences:
   #- '216_22836_48452'
 
 
-path_cuboids: ${.path_co3d_preprocess}/pcls
+path_cuboids: ${.path_co3d_preprocess}/cuboids
 fpaths_cuboids:
-    car: ${..path_cuboids}/${..sequences[0]}/cuboid_max_1000.ply
+    car: ${..path_cuboids}/car/${..sequences[0]}.ply # /cuboid_max_1000.ply
 
 classes:
   - car

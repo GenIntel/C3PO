@@ -311,7 +311,7 @@ class Cuboids(Meshes):
             out_vertices = np.array(out_vertices)
             out_faces = np.array(out_faces)
 
-            verts.append(torch.from_numpy(out_vertices))
-            faces.append(torch.from_numpy(out_faces))
+            verts.append(torch.from_numpy(out_vertices).to(dtype=torch.float))
+            faces.append(torch.from_numpy(out_faces).to(dtype=torch.long))
 
         return Cuboids(verts=verts, faces=faces)
