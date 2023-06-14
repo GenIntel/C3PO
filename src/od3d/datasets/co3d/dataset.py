@@ -305,6 +305,10 @@ class CO3D(OD3D_Dataset):
         transform=None
     ):
         super().__init__(config=config, transform=transform)
+
+        CO3D.setup(config=config)
+        CO3D.preprocess(config=config)
+
         self.path_meta = Path(config.path_meta)
 
         self.device = "cpu"
