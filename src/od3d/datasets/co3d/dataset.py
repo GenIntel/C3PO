@@ -149,7 +149,11 @@ class CO3D_Sequence():
     @property
     def pcl(self):
         if self._pcl is None:
-            verts, _ = load_ply(str(self.path_co3d.joinpath(self.rfpath_pcl)))
+            pts3d_max_count = 20000
+            pts3d_prob_thresh = 0.6
+            fpath_pcl = self.path_preprocess.joinpath('pcls', self.name,
+                                                      f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
+            verts, _ = load_ply(str(fpath_pcl))
             self._pcl = verts
         return self._pcl
 
@@ -162,7 +166,6 @@ class CO3D_Sequence():
             if not fpath_cuboid.exists():
                 fpath_cuboid.parent.mkdir(parents=True, exist_ok=True)
 
-                cuboid_pts3d_max_count = 1000
                 pts3d_max_count = 20000
                 cuboid_pts3d_max_count = 1000
                 pts3d_prob_thresh = 0.6
@@ -226,6 +229,7 @@ class CO3D_Sequence():
                 #verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
 
                 save_ply(fpath_cuboid, verts=world_verts, faces=cuboids.faces)
+
                 # show_pcl([pts3d_clean, transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())])
             self._cuboid = Cuboids.load_from_files(fpaths_meshes=[fpath_cuboid])
         return self._cuboid
