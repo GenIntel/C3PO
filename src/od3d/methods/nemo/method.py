@@ -62,7 +62,14 @@ class NeMo(OD3DMethod):
 
         #self.net = torch.nn.DataParallel(self.net).cuda()
         self.net.cuda()
+        self.meshes.cuda()
         self.net.eval()
+
+        self.optim = torch.optim.Adam(list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats], lr=self.config.train.optimizer.lr,
+                                 weight_decay=self.config.train.optimizer.weight_decay)  #
+        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optim, gamma=self.config.train.scheduler.gamma,
+                                                         milestones=self.config.train.scheduler.milestones)
+
 
         # load checkpoint
         if config.get("checkpoint", None) is not None:
@@ -71,13 +78,8 @@ class NeMo(OD3DMethod):
             self.load_checkpoint_old(config.checkpoint_old)
         #load_mesh(config.path_shapenemo)
 
-        self.meshes.cuda()
         # self.meshes.show()
 
-        self.optim = torch.optim.Adam(list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats], lr=self.config.train.optimizer.lr,
-                                 weight_decay=self.config.train.optimizer.weight_decay)  #
-        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optim, gamma=self.config.train.scheduler.gamma,
-                                                         milestones=self.config.train.scheduler.milestones)
 
 
         #self.verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
@@ -181,8 +183,10 @@ class NeMo(OD3DMethod):
                     from od3d.cv.geometry.transform import proj3d2d_origin
                     verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(torch.bmm(batch.cam_intr4x4, batch.cam_tform4x4_obj)[:1]), colors=[1., 0., 0.])
                     verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(batch.cam_proj4x4_obj[:1]), colors=[1., 0., 0.])
-                    results_train['verts_ncds_in_rgb'] = image_as_wandb_image(draw_pixels(verts_ncds_in_rgb, self.down_sample_rate * vts2d[0, mask_vts2d_vsbl[0]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[mask_vts2d_vsbl[0]]),
-                    caption=f'Frame Name {batch.name[0]}')
+                    img = draw_pixels(verts_ncds_in_rgb, self.down_sample_rate * vts2d[0, mask_vts2d_vsbl[0]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[mask_vts2d_vsbl[0]])
+                    results_train['verts_ncds_in_rgb'] = image_as_wandb_image(img, caption=f'Frame Name {batch.name[0]}')
+                    if self.config.train.visualize.live:
+                        show_img(img)
 
 
                 # B x F+N x C
@@ -201,9 +205,10 @@ class NeMo(OD3DMethod):
                     net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[net_mesh_nearest_feats_ids]
                     net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
                     net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
-                    results_train['net_feats_nearest_verts'] = image_as_wandb_image(blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0]),
-                                                                                                caption=f'Frame Name {batch.name[0]}')
-
+                    img = blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0])
+                    results_train['net_feats_nearest_verts'] = image_as_wandb_image(img, caption=f'Frame Name {batch.name[0]}')
+                    if self.config.train.visualize.live:
+                        show_img(img)
 
 
                 # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
@@ -350,17 +355,28 @@ class NeMo(OD3DMethod):
             #                                  imgs_sizes=batch.size //2, meshes_ids=[int(pred_class_ids[0])],
             #                                  replace_feats_with_verts3d=True)[0, 0])
 
+            if self.config.test.visualize.net_feats_nearest_verts:
+                clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.clutter_feats).max(dim=-1)
+                net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(batch.label[0])).max(dim=-1)
+                net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[net_mesh_nearest_feats_ids]
+                net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
+                net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
+                img = blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0])
+                results['net_feats_nearest_verts_' + batch.name[0]] = image_as_wandb_image(img)
+                if self.config.test.visualize.live:
+                    show_img(img)
+
             if pose_iterative_refine:
                 cam_pos = torch.nn.Parameter(cam_transf4x4_obj.inverse()[:, :3, 3].clone(), requires_grad=True)
                 cam_theta = torch.nn.Parameter(cam_theta.clone(), requires_grad=True)
                 cam_transf4x4_obj = transf4x4_from_pos_and_theta(pos=cam_pos, theta=cam_theta)
+                cam_shift_xyz = torch.nn.Parameter(torch.zeros_like(cam_pos), requires_grad=True)
 
                 if pose_iterative_xy_shift:
-                    cam_shift_xyz = torch.nn.Parameter(torch.zeros_like(cam_pos), requires_grad=True)
                     cam_transf4x4_obj[:, :2, 3] += cam_shift_xyz[:, :2]
 
                 optim_inference = torch.optim.Adam(
-                    params=[cam_pos, cam_theta],
+                    params=[cam_pos, cam_theta, cam_shift_xyz],
                     lr=self.config.test.optimizer.lr,
                     betas=(self.config.test.optimizer.beta0, self.config.test.optimizer.beta1),
                 )
@@ -388,10 +404,11 @@ class NeMo(OD3DMethod):
                     #                   self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids)) * mask_vts2d_vsbl
                     #mesh_cam_loss = -sim.mean(dim=-1)
 
-
-                    #show_img(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj, cams_intr4x4=batch.cam_intr4x4,
-                    #                                  imgs_sizes=batch.size, meshes_ids=pred_class_ids,
-                    #                                  modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype)))
+                    if self.config.test.visualize.live:
+                        # show_img(inner_feats2d_net_bank[0])
+                        show_img(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
+                                                          imgs_sizes=batch.size, meshes_ids=pred_class_ids[:1],
+                                                          modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype)))
 
                     loss = mesh_cam_loss.mean()
                     loss.backward()
@@ -399,21 +416,17 @@ class NeMo(OD3DMethod):
                     optim_inference.zero_grad()
                     cam_transf4x4_obj = transf4x4_from_pos_and_theta(pos=cam_pos, theta=cam_theta)
                     if pose_iterative_xy_shift:
-                        cam_shift_xyz = torch.nn.Parameter(torch.zeros_like(cam_pos), requires_grad=True)
                         cam_transf4x4_obj[:, :2, 3] += cam_shift_xyz[:, :2]
 
                 if self.config.test.visualize.verts_ncds_in_rgb:
-                    results['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
+                    img = blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
                                              imgs_sizes=batch.size, meshes_ids=pred_class_ids[:1],
-                                             modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype)))
+                                             modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
+                    results['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(img)
+                    if self.config.test.visualize.live:
+                        show_img(img)
 
-                if self.config.test.visualize.net_feats_nearest_verts:
-                    clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.clutter_feats).max(dim=-1)
-                    net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(batch.label[0])).max(dim=-1)
-                    net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[net_mesh_nearest_feats_ids]
-                    net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
-                    net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
-                    results['net_feats_nearest_verts_' + batch.name[0]] = image_as_wandb_image(blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0]))
+
 
                 results['time_pose_iterative'].append(time.time() - time_before_pose_iterative)
                 # logger.info(f"predicted pose iterative took {(time.time() - time_before_pose_iterative):.3f}s")

@@ -6,9 +6,9 @@ path_exps: /work/dlclarge1/sommerl-od3d/exps
 path_cuda: /work/dlclarge1/sommerl-od3d/cudas/cuda-11.7
 path_home: /ihome/sommerl
 url_od3d: git@github.com:Generative-Vision-Robust-Learning/od3d.git
-partition: lmb_gpu-rtx2080 # lmb_gpu-teslaP100 lmb_gpu-1080ti, lmb_gpu-rtx2080, testdlc_gpu-rtx2080, alldlc_gpu-rtx3080, alldlc_gpu-rtx2080, lmbdlc_gpu-rtx2080
+partition: lmbdlc_gpu-rtx2080 # lmb_gpu-teslaP100 lmb_gpu-1080ti, lmb_gpu-rtx2080, testdlc_gpu-rtx2080, alldlc_gpu-rtx3080, alldlc_gpu-rtx2080, lmbdlc_gpu-rtx2080
 # lmb_gpu-teslaP100 : error: No Kernel Image is available
-# lmb_gpu-rtx2080: problem: long waiting queue
+# lmbdlc_gpu-rtx2080: problem: long waiting queue
 username: sommerl
 gpu_count: 1
 cpu_count: 8

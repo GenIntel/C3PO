@@ -1,7 +1,7 @@
 from torch import nn
 from enum import Enum
 from omegaconf import DictConfig
-from od3d.methods.nemo.keypoint_representation_net import NetE2E
+import od3d.methods.nemo.keypoint_representation_net #  import NetE2E, ResNetExt
 import torch
 from od3d.cv.visual.resize import resize
 from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D, RGB_Random
@@ -28,6 +28,7 @@ class DINOv2(OD3D_Backbone):
 
         self.transform = torchvision.transforms.Compose([
                 CenterZoom3D(H=config.transform.height, W=config.transform.width, dist=config.transform.distance),
+                RGB_Random(),
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -35,7 +36,34 @@ class DINOv2(OD3D_Backbone):
         self.feat_dim = 384
     # 'x_norm_patchtokens', 'x_prenorm'
     def forward(self, x):
-        return resize(self.net.forward_features(resize(x, H_out=518, W_out=518))['x_norm_patchtokens'].reshape(-1, 37, 37, 384).permute(0, 3, 1, 2), H_out=64, W_out=64)
+        dinov2_out = self.net.forward_features(resize(x, H_out=518, W_out=518))
+        patch_tokens = dinov2_out['x_prenorm'][:, 1:]
+        # patch_tokens = dinov2_out['x_norm_patchtokens']
+        return resize(patch_tokens.reshape(-1, 37, 37, 384).permute(0, 3, 1, 2), H_out=64, W_out=64)
+
+
+
+class ResNet(OD3D_Backbone):
+    def __init__(
+        self,
+        config: DictConfig
+    ):
+
+        super().__init__(config=config)
+
+        self.transform = torchvision.transforms.Compose([
+                CenterZoom3D(H=config.transform.height, W=config.transform.width, dist=config.transform.distance),
+                RGB_Random(),
+                RGB_UInt8ToFloat(),
+                RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        self.net = torchvision.models.resnet50(pretrained=True)
+        self.feat_dim = 128
+
+    def forward(self, rgb):
+
+        return self.net(rgb)
+
 
 class ResNetExt(OD3D_Backbone):
     def __init__(
@@ -53,7 +81,9 @@ class ResNetExt(OD3D_Backbone):
         ])
         self.feat_dim = 128
 
-        self.net = NetE2E(
+        # self.net = od3d.methods.nemo.keypoint_representation_net.ResNetExt(pretrained=True)
+
+        self.net = od3d.methods.nemo.keypoint_representation_net.NetE2E(
             net_type=config.net_type,
             local_size=[config.local_size[0], config.local_size[1]],
             output_dimension=config.output_dimension,
@@ -64,4 +94,4 @@ class ResNetExt(OD3D_Backbone):
 
     def forward(self, rgb):
 
-        return self.net.forward_test(rgb)
+        return self.net.net.forward(rgb)

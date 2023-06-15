@@ -1,6 +1,6 @@
 # @package _global_
+ablation_name: ResNet
 method:
     nemo:
-        train:
-            optimizer:
-                lr: 0.001
+        backbone:
+            class_name: ResNet # ResNetExt DINOv2

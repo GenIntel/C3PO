@@ -14,7 +14,11 @@ def get_timestamp_as_string():
 def bench_single_method_local(config: DictConfig):
 
     # 1. setup logger
-    run_name = f'{get_timestamp_as_string()}_{config.test_dataset.class_name}_{config.method.class_name}_{config.platform.link}'
+    ablation_name = config.get("ablation_name", None)
+    if ablation_name is not None:
+        run_name = f'{get_timestamp_as_string()}_{config.test_dataset.class_name}_{config.method.class_name}_{ablation_name}_{config.platform.link}'
+    else:
+        run_name = f'{get_timestamp_as_string()}_{config.test_dataset.class_name}_{config.method.class_name}_{config.platform.link}'
     logging_dir = Path(config.logger.local_dir).joinpath(run_name)
     logging_dir.mkdir(parents=True)
     if config.logger.use_wandb:

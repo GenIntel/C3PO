@@ -202,7 +202,12 @@ class Pascal3D(OD3D_Dataset):
         transform=None
     ):
         super().__init__(config=config, transform=transform)
-        Pascal3D.setup(self.config)
+
+        if config.get("setup", False):
+            Pascal3D.setup(config=self.config)
+        if config.get("preprocess", False):
+            Pascal3D.preprocess(config=self.config)
+
         self.path = Path(self.config.path_pascal3d_raw)
 
         self.path_meshes = self.path.joinpath("CAD")
@@ -213,9 +218,6 @@ class Pascal3D(OD3D_Dataset):
 
         self.subsets = self.config.get("subsets", SUBSETS)
         self.categories = self.config.get("classes", CATEGORIES)
-
-
-        Pascal3D.preprocess(config=config)
 
         frames_names_meta = sorted([fpath.name.split('.')[0] for fpath in list(self.path_meta.joinpath("frames").iterdir())])
 
@@ -340,8 +342,6 @@ class Pascal3D(OD3D_Dataset):
 
         path_meta = path_preprocess.joinpath('meta')
         # remove_previous = False, override = False
-        if not config.preprocess_meta_override and path_meta.exists():
-            return
 
         if config.preprocess_meta_remove_previous:
             if path_meta.exists():
@@ -353,12 +353,16 @@ class Pascal3D(OD3D_Dataset):
             frames_names = list(filter(lambda f: f in config.frames, frames_names))
 
         for i in tqdm(range(len(frames_names))):
+            fpath = path_meta.joinpath("frames", frames_names[i] + '.yaml')
+            if not config.preprocess_meta_override and fpath.exists():
+                continue
+
             rfpath_annotation = Path("Annotations").joinpath(f"{frames_rfpaths[i]}.mat")
             rfpath_rgb = Path("Images").joinpath(f"{frames_rfpaths[i]}.JPEG")
             frame = Pascal3DFrame.load_from_raw(path_dataset=path, path_preprocess=path_preprocess, rfpath_rgb=rfpath_rgb, rfpath_annotation=rfpath_annotation, path_meshes=path_meshes)
+
             if frame.complete:
                 conf = OmegaConf.structured(frame)
-                fpath = path_meta.joinpath("frames", frame.name + '.yaml')
                 if not fpath.parent.exists():
                     fpath.parent.mkdir(parents=True)
                 OmegaConf.save(conf, fpath, resolve=True)

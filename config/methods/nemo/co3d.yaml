@@ -1,20 +1,28 @@
 # path_meshes: ${test_dataset.path_co3d_preprocess}/cuboids
 fpaths_meshes: ${test_dataset.fpaths_cuboids}
-
     #car: ${..path_meshes}/106_12650_23736/cuboid_max_1000.ply
+
+#path_cuboids: ${test_dataset.path_co3d_preprocess}/cuboids
+#fpaths_meshes:
+#    car: ${..path_cuboids}/car/106_12650_23736.ply
 
 # checkpoint: /scratch/sommerl/exps/06-06_14-36-03/nemo.ckpt
 # checkpoint: /misc/lmbraid19/sommerl/exps/06-07_11-18-02/nemo.ckpt
 # checkpoint: /scratch/sommerl/exps/06-07_13-32-55/nemo.ckpt
+checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
+
+
+# checkpoint: /misc/lmbraid19/sommerl/exps/06-15_09-11-03_CO3D_NeMo_local/nemo.ckpt
 
 train:
     epochs_to_next_test: -1
-    epochs: 200
+    epochs: 20
     batch_accumulate_to_next_step: 2
 
     visualize:
-        verts_ncds_in_rgb: True
-        net_feats_nearest_verts: True
+        live: False
+        verts_ncds_in_rgb: False
+        net_feats_nearest_verts: False
 
     val_fraction: 0.01
 
@@ -24,7 +32,11 @@ train:
         pin_memory: True
 
 test:
+    optimizer:
+        epochs: 30
+
     visualize:
+        live: False
         verts_ncds_in_rgb: True
         net_feats_nearest_verts: True
 
@@ -35,16 +47,16 @@ test:
 
     azim:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 7.
-        steps: 6
+        max: math.pi * 2 - (math.pi * 2) / 12.
+        steps: 11
     elev:
-        min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 7.
-        steps: 6
+        min: -math.pi / 2
+        max: math.pi / 2
+        steps: 5
     theta:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 7.
-        steps: 6
+        max: math.pi * 2 - (math.pi * 2) / 12.
+        steps: 11
     dist:
         min: '10.'
         max: '10.'

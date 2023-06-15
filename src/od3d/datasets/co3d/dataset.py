@@ -309,9 +309,9 @@ class CO3D(OD3D_Dataset):
         super().__init__(config=config, transform=transform)
 
         if config.get("setup", False):
-            CO3D.setup(config=config)
+            CO3D.setup(config=self.config)
         if config.get("preprocess", False):
-            CO3D.preprocess(config=config)
+            CO3D.preprocess(config=self.config)
 
         self.path_meta = Path(config.path_meta)
 
