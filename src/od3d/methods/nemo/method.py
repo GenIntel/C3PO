@@ -163,7 +163,7 @@ class NeMo(OD3DMethod):
                 wandb.log({'val_' + k: v for k, v in results_val.items()})
 
             if self.config.train.epochs_to_next_test > 0 and e % self.config.train.epochs_to_next_test == 0:
-                results_test = self.test(dataset_test, complete_dataset=True, pose_iterative_refine=True)
+                results_test = self.test(dataset_test, complete_dataset=False, pose_iterative_refine=True)
                 wandb.log({'test_' + k: v for k, v in results_test.items()})
 
             self.net.train()
@@ -298,6 +298,8 @@ class NeMo(OD3DMethod):
         cams_multiview_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
 
         C = len(cams_multiview_tform4x4_obj)
+
+        diffs_so3d_log = []
 
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
@@ -445,8 +447,11 @@ class NeMo(OD3DMethod):
             #    f"predicted pose, took {(time_pred_pose - time_pred_class):.3f}")
 
             diff_rot3x3 = torch.bmm(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_transf4x4_obj[:, :3, :3])
+
+
             try:
                 diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3)
+                diffs_so3d_log.append(diff_so3_log)
                 diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
             except ValueError:
                 logger.warning(f'Cannot calculate deviation in rotation angle due to rot3x3 trace being too small, setting deviation to 0.')
@@ -470,12 +475,17 @@ class NeMo(OD3DMethod):
             results['pose_acc_pi18'] = (results['rot_diff_rad'] < math.pi / 18).to(dtype=float).mean()
             results['pose_err_median'] = 180 / math.pi * results['rot_diff_rad'].median()
 
+            diffs_so3d_log = torch.cat(diffs_so3d_log, dim=0)
+            results['consist_rot_diff_rad'] = torch.norm(diffs_so3d_log - diffs_so3d_log.mean(dim=0, keepdim=True), dim=-1)
+            results['consist_pose_err_median'] = 180 / math.pi * results['consist_rot_diff_rad'].median()
+
             # cmatrix = confusion_matrix(results['label_gt'].detach().cpu().numpy(), results['label_pred'].detach().cpu().numpy())
             # logger.info(f'Confusion matrix:\n {cmatrix} ')
 
             del results['label_gt']
             del results['label_pred']
             del results['rot_diff_rad']
+            del results['consist_rot_diff_rad']
             for key, val in results.items():
                 logger.info(f'{key} : {val}')
 
