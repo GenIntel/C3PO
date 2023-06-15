@@ -58,7 +58,7 @@ def load_hierarchical_config(benchmark="defaults", platform="local", ablation=No
         if ablation is None:
             cfg = compose(config_name=benchmark, overrides=["platform=" + platform] + overrides)
         else:
-            cfg = compose(config_name=benchmark, overrides=["ablations=" + ablation, "platform=" + platform] + overrides)
+            cfg = compose(config_name=benchmark, overrides=["+ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg
 
 import subprocess

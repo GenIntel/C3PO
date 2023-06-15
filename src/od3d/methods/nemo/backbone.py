@@ -79,7 +79,7 @@ class ResNetExt(OD3D_Backbone):
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
-        self.feat_dim = 128
+        self.feat_dim = 256 # 128
 
         # self.net = od3d.methods.nemo.keypoint_representation_net.ResNetExt(pretrained=True)
 
