@@ -245,7 +245,7 @@ class NeMo(OD3DMethod):
         pass
     def calc_loss_feat2d_net_rendered(self, feats2d_net, feats2d_rendered):
         pass
-    def test(self, dataset: OD3D_Dataset, complete_dataset=False, pose_iterative_refine=True):
+    def test(self, dataset: OD3D_Dataset, complete_dataset=False, pose_iterative_refine=True, pose_iterative_xy_shift=True):
         self.net.eval()
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
@@ -355,6 +355,10 @@ class NeMo(OD3DMethod):
                 cam_theta = torch.nn.Parameter(cam_theta.clone(), requires_grad=True)
                 cam_transf4x4_obj = transf4x4_from_pos_and_theta(pos=cam_pos, theta=cam_theta)
 
+                if pose_iterative_xy_shift:
+                    cam_shift_xyz = torch.nn.Parameter(torch.zeros_like(cam_pos), requires_grad=True)
+                    cam_transf4x4_obj[:, :2, 3] += cam_shift_xyz[:, :2]
+
                 optim_inference = torch.optim.Adam(
                     params=[cam_pos, cam_theta],
                     lr=self.config.test.optimizer.lr,
@@ -394,6 +398,9 @@ class NeMo(OD3DMethod):
                     optim_inference.step()
                     optim_inference.zero_grad()
                     cam_transf4x4_obj = transf4x4_from_pos_and_theta(pos=cam_pos, theta=cam_theta)
+                    if pose_iterative_xy_shift:
+                        cam_shift_xyz = torch.nn.Parameter(torch.zeros_like(cam_pos), requires_grad=True)
+                        cam_transf4x4_obj[:, :2, 3] += cam_shift_xyz[:, :2]
 
                 if self.config.test.visualize.verts_ncds_in_rgb:
                     results['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
