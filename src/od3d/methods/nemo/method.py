@@ -145,7 +145,7 @@ class NeMo(OD3DMethod):
 
 
         dataset_train, dataset_val = torch.utils.data.random_split(dataset_sub, [1. - self.config.train.val_fraction, self.config.train.val_fraction], generator=generator)
-        dataset_val.config = dataset.config
+        # dataset_val.config = dataset.config
         dataset_val.collate_fn = dataset.collate_fn
 
         criterion = torch.nn.CrossEntropyLoss().cuda() # (reduction="none").cuda()
@@ -250,7 +250,7 @@ class NeMo(OD3DMethod):
         pass
     def calc_loss_feat2d_net_rendered(self, feats2d_net, feats2d_rendered):
         pass
-    def test(self, dataset: OD3D_Dataset, complete_dataset=False, pose_iterative_refine=True, pose_iterative_xy_shift=True):
+    def test(self, dataset: OD3D_Dataset, complete_dataset=False, pose_iterative_refine=True, pose_iterative_xy_shift=False):
         self.net.eval()
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
@@ -296,8 +296,17 @@ class NeMo(OD3DMethod):
         cams_count = in_shape.numel()
         classes_count = len(self.config.classes)
         cams_multiview_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+
+        C = len(cams_multiview_tform4x4_obj)
+
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
+            B = len(batch)
+
+            b_cams_multiview_tform4x4_obj = cams_multiview_tform4x4_obj[None,].repeat(B, 1, 1, 1)
+            b_cams_multiview_tform4x4_obj[:, :, 2, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
+            b_cams_multiview_intr4x4 = batch.cam_intr4x4[:, None].repeat(1, C, 1, 1)
+
             time_loaded = time.time()
             with torch.no_grad():
                 net_feats2d = self.net(batch.rgb)
@@ -329,7 +338,7 @@ class NeMo(OD3DMethod):
 
 
                 # OPTION A: Use 2d gradient of rendered features
-                mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cams_multiview_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4[:, None], imgs_sizes=batch.size, meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True)
+                mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj, cams_intr4x4=b_cams_multiview_intr4x4, imgs_sizes=batch.size, meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True)
                 inner_feats2d_net_mesh_multiple_cams = torch.einsum('bchw,bvchw->bvhw', net_feats2d, mesh_feats2d_rendered)[:, :, None]
                 inner_feats2d_net_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, clutter_feats)[:, None,].mean(dim=1, keepdim=True)
                 inner_feats2d_net_bank_multiple_cams = torch.max(inner_feats2d_net_mesh_multiple_cams, inner_feats2d_net_clutter)
@@ -345,7 +354,7 @@ class NeMo(OD3DMethod):
 
                 mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
-                cam_transf4x4_obj = cams_multiview_tform4x4_obj[mesh_cam_loss_min_id]
+                cam_transf4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(dim1=-2, dim2=-1).permute(2, 0, 1)
                 cam_theta = theta[mesh_cam_loss_min_id]
 
             #show_img(self.meshes.render_feats(cams_tform4x4_obj=init_cams_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4 / 2,

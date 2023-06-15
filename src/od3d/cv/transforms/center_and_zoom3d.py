@@ -48,9 +48,8 @@ class CenterZoom3D():
 
         frame._cam_intr4x4 = torch.bmm(cam_crop_tform_cam[None,], frame._cam_intr4x4[None,])[0]
 
-        #frame._cam_intr4x4[:2, :2] /= scale
-        # frame._cam_intr4x4[1, 1] /= scale
-        # frame._cam_tform4x4_obj[2, 3] = frame.cam_tform4x4_obj[2, 3] / scale
+        #frame._cam_intr4x4[:2, :] /= scale
+        #frame._cam_tform4x4_obj[2, 3] = frame.cam_tform4x4_obj[2, 3] / scale
 
         frame._cam_proj4x4_obj[:, :] = torch.bmm(frame.cam_intr4x4[None,], frame.cam_tform4x4_obj[None,])[0]
 

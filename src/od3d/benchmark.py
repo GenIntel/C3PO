@@ -7,23 +7,15 @@ from od3d.methods.method import OD3DMethod
 from pathlib import Path
 import datetime
 
-def get_timestamp_as_string():
-    now = datetime.datetime.now()
-    timestamp = now.strftime("%m-%d_%H-%M-%S")
-    return timestamp
 def bench_single_method_local(config: DictConfig):
 
     # 1. setup logger
-    ablation_name = config.get("ablation_name", None)
-    if ablation_name is not None:
-        run_name = f'{get_timestamp_as_string()}_{config.test_dataset.class_name}_{config.method.class_name}_{ablation_name}_{config.platform.link}'
-    else:
-        run_name = f'{get_timestamp_as_string()}_{config.test_dataset.class_name}_{config.method.class_name}_{config.platform.link}'
-    logging_dir = Path(config.logger.local_dir).joinpath(run_name)
+
+    logging_dir = Path(config.logger.local_dir).joinpath(config.run_name)
     logging_dir.mkdir(parents=True)
     if config.logger.use_wandb:
         wandb.login()
-        wandb.init(project=config.logger.wandb_project_name, config=OmegaConf.to_container(config, resolve=True), dir=Path(config.logger.local_dir), name=run_name)
+        wandb.init(project=config.logger.wandb_project_name, config=OmegaConf.to_container(config, resolve=True), dir=Path(config.logger.local_dir), name=config.run_name)
 
     # 2. setup datasets
 
@@ -62,8 +54,7 @@ def bench_single_method_torque(cfg: DictConfig):
     # 3. execute script with command: run od3d bench single -f `path-to-config`
     # TODO
 
-    timestamp = get_timestamp_as_string()
-    job_name = f'{timestamp}_{cfg.test_dataset.name}_{cfg.method.name}'
+    job_name = cfg.run_name
 
     from pathlib import Path
     local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
@@ -160,9 +151,7 @@ def bench_single_method_slurm(cfg: DictConfig):
     # 2. setup od3d on slurm
     # 3. execute script with command: run od3d bench single -f `path-to-config`
 
-    timestamp = get_timestamp_as_string()
-    job_name = f'{timestamp}_{cfg.test_dataset.name}_{cfg.method.name}'
-
+    job_name = cfg.run_name
     from pathlib import Path
     local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
     if not local_tmp_config_fpath.resolve().parent.exists():
@@ -172,7 +161,6 @@ def bench_single_method_slurm(cfg: DictConfig):
     local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'run_{job_name}.sh') # .resolve()
     if not local_tmp_script_fpath.parent.exists():
         local_tmp_script_fpath.parent.mkdir(parents=True)
-
 
     remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'config_{job_name}.yaml')
     remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'run_{job_name}.sh')

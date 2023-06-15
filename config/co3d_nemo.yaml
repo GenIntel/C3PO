@@ -3,7 +3,7 @@ defaults:
   - methods@method.nemo: nemo_cls
   - methods/nemo@method.nemo: co3d
   - datasets@train_dataset: co3d_train
-  - datasets@test_dataset: co3d_train # co3d_test
+  - datasets@test_dataset: co3d_test
   - platform@platform_local: local
   - platform: local
 
@@ -11,7 +11,7 @@ metrics:
   - metricA
   - metricB
 
-train: False
+train: True
 test: True
 
 #training:

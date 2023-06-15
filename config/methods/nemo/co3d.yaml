@@ -9,14 +9,16 @@ fpaths_meshes: ${test_dataset.fpaths_cuboids}
 # checkpoint: /scratch/sommerl/exps/06-06_14-36-03/nemo.ckpt
 # checkpoint: /misc/lmbraid19/sommerl/exps/06-07_11-18-02/nemo.ckpt
 # checkpoint: /scratch/sommerl/exps/06-07_13-32-55/nemo.ckpt
-checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
+# checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
 
 
 # checkpoint: /misc/lmbraid19/sommerl/exps/06-15_09-11-03_CO3D_NeMo_local/nemo.ckpt
 
 train:
-    epochs_to_next_test: -1
-    epochs: 20
+    epochs_to_next_ckpt: 5
+    epochs_to_next_val: 5
+    epochs_to_next_test: 5
+    epochs: 100
     batch_accumulate_to_next_step: 2
 
     visualize:
@@ -42,28 +44,28 @@ test:
 
     dataloader:
         num_workers: 4
-        batch_size: 4
+        batch_size: 1
         pin_memory: True
 
     azim:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 12.
-        steps: 11
+        max: math.pi * 2 - (math.pi * 2) / 8.
+        steps: 8
     elev:
         min: -math.pi / 2
         max: math.pi / 2
         steps: 5
     theta:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 12.
-        steps: 11
+        max: math.pi * 2 - (math.pi * 2) / 8.
+        steps: 8
     dist:
-        min: '10.'
-        max: '10.'
+        min: '14.'
+        max: '14.'
         steps: 1
 
 backbone:
     transform:
         width: 512
         height: 512
-        distance: 16.
+        distance: 14.

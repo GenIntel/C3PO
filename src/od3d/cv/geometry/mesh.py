@@ -313,13 +313,20 @@ class Meshes(torch.nn.Module):
             meshes_ids = torch.LongTensor(list(range(len(self)))).to(device=device)
 
         meshes_count = meshes_ids.shape[0]
-        cams_count = cams_tform4x4_obj.shape[0]
+        if cams_tform4x4_obj.dim() == 4:
+            cams_count = cams_tform4x4_obj.shape[1]
+        elif cams_tform4x4_obj.dim() == 3:
+            cams_count = cams_tform4x4_obj.shape[0]
+        else:
+            raise ValueError(f'Set `cams_tform4x4_obj.dim()` must be 3 or 4')
 
         if broadcast_batch_and_cams:
             meshes_ids = meshes_ids
-            cams_tform4x4_obj = cams_tform4x4_obj[None, :].expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
+            if cams_tform4x4_obj.dim() == 3:
+                cams_tform4x4_obj = cams_tform4x4_obj[None, :]
             if cams_intr4x4.dim() == 3:
                 cams_intr4x4 = cams_intr4x4[None, :]
+            cams_tform4x4_obj = cams_tform4x4_obj.expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
             cams_intr4x4 = cams_intr4x4.expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
             meshes_ids = meshes_ids[:, None].expand(meshes_count, cams_count).reshape(-1)
             render_count = meshes_count * cams_count
@@ -380,12 +387,14 @@ class Meshes(torch.nn.Module):
             mask = fragments.zbuf.permute(0, 3, 1, 2) > 0.
             if broadcast_batch_and_cams:
                 mask = mask.reshape(meshes_count, cams_count, *mask.shape[-3:])
+
             return mask
 
         if modality == MESH_RENDER_MODALITIES.DEPTH:
             depth = fragments.zbuf.permute(0, 3, 1, 2)
             if broadcast_batch_and_cams:
                 depth = depth.reshape(meshes_count, cams_count, *depth.shape[-3:])
+
             return depth
 
         if modality == MESH_RENDER_MODALITIES.MASK_VERTS_VSBL:
@@ -400,6 +409,7 @@ class Meshes(torch.nn.Module):
                 faces_ids_vsbl = faces_ids_vsbl[faces_ids_vsbl >= 0]
                 verts_ids_vsbl = faces_ids[faces_ids_vsbl].unique()
                 verts_vsbl_mask[b, verts_ids_vsbl] = 1
+
             return verts_vsbl_mask
 
         if modality == MESH_RENDER_MODALITIES.FEATS:

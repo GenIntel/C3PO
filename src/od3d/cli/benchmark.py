@@ -7,7 +7,13 @@ logger = logging.getLogger(__name__)
 from od3d.benchmark import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
 app = typer.Typer()
 import subprocess
+from omegaconf import open_dict
 
+from datetime import datetime
+def get_timestamp_as_string():
+    now = datetime.now()
+    timestamp = now.strftime("%m-%d_%H-%M-%S")
+    return timestamp
 
 @app.command()
 def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
@@ -45,7 +51,17 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                 methods_cfgs.append(method_cfg)
 
     print(f"{len(methods_cfgs)} configs with single method.")
+
+
+
     for method_cfg in methods_cfgs:
+        with open_dict(method_cfg):
+            ablation_name = method_cfg.get("ablation_name", None)
+            if ablation_name is not None:
+                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.test_dataset.class_name}_{method_cfg.method.class_name}_{ablation_name}_{method_cfg.platform.link}'
+            else:
+                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.test_dataset.class_name}_{method_cfg.method.class_name}_{method_cfg.platform.link}'
+
         if method_cfg.platform.link == 'local':
             bench_single_method_local(method_cfg)
         elif method_cfg.platform.link == 'local-separate-venv':
@@ -56,6 +72,8 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
             bench_single_method_torque(method_cfg)
         elif method_cfg.platform.link == 'slurm':
             bench_single_method_slurm(method_cfg)
+
+
 
 @app.command()
 def single_local(config_fpath: str = typer.Option(None, '-c', '--config')):
@@ -85,7 +103,7 @@ def info_slurm():
 def status_slurm():
     logging.basicConfig(level=logging.INFO)
 
-    slurm_result = subprocess.run(f'ssh slurm "squeue"', capture_output=True, shell=True)
+    slurm_result = subprocess.run(f'ssh slurm "squeue --me"', capture_output=True, shell=True)
     slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
     for slurm_job in slurm_jobs:
         logger.info(slurm_job)
@@ -93,7 +111,7 @@ def status_slurm():
 def status_torque():
     logging.basicConfig(level=logging.INFO)
 
-    torque_result = subprocess.run(f'ssh torque "qstat -a"', capture_output=True, shell=True)
+    torque_result = subprocess.run(f'ssh torque "qstat -a -u $(whoami)"', capture_output=True, shell=True)
     torque_jobs = torque_result.stdout.decode("utf-8").split("\n")
     for torque_job in torque_jobs:
         logger.info(torque_job)
