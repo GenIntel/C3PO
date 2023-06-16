@@ -141,9 +141,7 @@ class NeMo(OD3DMethod):
         pass
 
     def train(self, dataset: OD3D_Dataset, dataset_test: OD3D_Dataset):
-
         dataset.transform = self.transform_train
-        dataset_test.transform = self.transform_test
 
         self.net.train()
         self.meshes.feats.requires_grad = True
@@ -156,9 +154,6 @@ class NeMo(OD3DMethod):
 
 
         dataset_train, dataset_val = torch.utils.data.random_split(dataset_sub, [1. - self.config.train.val_fraction, self.config.train.val_fraction], generator=generator)
-        # dataset_val.config = dataset.config
-        dataset_val.collate_fn = dataset.collate_fn
-        dataset_val.transform = self.transform_test
 
         criterion = torch.nn.CrossEntropyLoss().cuda() # (reduction="none").cuda()
 
@@ -171,11 +166,11 @@ class NeMo(OD3DMethod):
 
         for e in range(self.config.train.epochs):
             if e % self.config.train.epochs_to_next_val == 0:
-                results_val = self.test(dataset_val, complete_dataset=True, pose_iterative_refine=True)
+                results_val = self.test(dataset, dataset_sub=dataset_val, pose_iterative_refine=True)
                 wandb.log({'val_' + k: v for k, v in results_val.items()})
 
             if self.config.train.epochs_to_next_test > 0 and e % self.config.train.epochs_to_next_test == 0:
-                results_test = self.test(dataset_test, complete_dataset=False, pose_iterative_refine=True)
+                results_test = self.test(dataset_test, pose_iterative_refine=True)
                 wandb.log({'test_' + k: v for k, v in results_test.items()})
 
             self.net.train()
@@ -261,18 +256,15 @@ class NeMo(OD3DMethod):
         pass
     def calc_loss_feat2d_net_rendered(self, feats2d_net, feats2d_rendered):
         pass
-    def test(self, dataset: OD3D_Dataset, complete_dataset=False, pose_iterative_refine=True, pose_iterative_xy_shift=True):
+    def test(self, dataset: OD3D_Dataset, pose_iterative_refine=True, pose_iterative_xy_shift=True, dataset_sub=None):
         self.net.eval()
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
         dataset.transform = self.transform_test
 
-        if complete_dataset:
-            dataset_sub = dataset
-        else:
-            generator = torch.Generator().manual_seed(42)
+        if dataset_sub is None:
+            generator = torch.Generator().manual_seed(42) # dataset.config.subset_fraction
             dataset_sub, _ = torch.utils.data.random_split(dataset, [dataset.config.subset_fraction, 1. - dataset.config.subset_fraction], generator=generator)
-
         dataloader = torch.utils.data.DataLoader(dataset=dataset_sub, batch_size=self.config.test.dataloader.batch_size, shuffle=False,
                                                  collate_fn=dataset.collate_fn, num_workers=self.config.test.dataloader.num_workers, pin_memory=self.config.test.dataloader.pin_memory)
 
@@ -350,7 +342,7 @@ class NeMo(OD3DMethod):
                 results['time_class'].append(time_pred_class - time_pred_net_feats2d)
 
 
-                # OPTION A: Use 2d gradient of rendered features
+                #  OPTION A: Use 2d gradient of rendered features
                 mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj, cams_intr4x4=b_cams_multiview_intr4x4, imgs_sizes=batch.size, meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True)
                 inner_feats2d_net_mesh_multiple_cams = torch.einsum('bchw,bvchw->bvhw', net_feats2d, mesh_feats2d_rendered)[:, :, None]
                 inner_feats2d_net_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, clutter_feats)[:, None,].mean(dim=1, keepdim=True)
@@ -359,7 +351,7 @@ class NeMo(OD3DMethod):
 
 
                 # OPTION B: Use 2d gradient of net features
-                #vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4[:, None], cams_tform4x4_obj=cams_multiview_tform4x4_obj, imgs_sizes=batch.size, mesh_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True)
+                #vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj, cams_intr4x4=b_cams_multiview_intr4x4, imgs_sizes=batch.size, mesh_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True)
                 #net_feats = sample_pxl2d_pts(net_feats2d, pxl2d=vts2d.reshape(len(batch),-1 , 2)).reshape(*vts2d.shape[:3], -1)
                 #sim = torch.einsum('bvfc,bfc->bvf', net_feats, self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids)) * mask_vts2d_vsbl
                 #mesh_multiple_cams_loss = -sim.mean(dim=-1)
@@ -485,10 +477,12 @@ class NeMo(OD3DMethod):
             results['pose_acc_pi6'] = (results['rot_diff_rad'] < math.pi /6).to(dtype=float).mean()
             results['pose_acc_pi18'] = (results['rot_diff_rad'] < math.pi / 18).to(dtype=float).mean()
             results['pose_err_median'] = 180 / math.pi * results['rot_diff_rad'].median()
+            results['pose_err_mean'] = 180 / math.pi * results['rot_diff_rad'].mean()
 
             diffs_so3d_log = torch.cat(diffs_so3d_log, dim=0)
-            results['consist_rot_diff_rad'] = torch.norm(diffs_so3d_log - diffs_so3d_log.mean(dim=0, keepdim=True), dim=-1)
+            results['consist_rot_diff_rad'] = torch.norm(diffs_so3d_log - diffs_so3d_log.mean(dim=0, keepdim=True), dim=-1) % torch.pi
             results['consist_pose_err_median'] = 180 / math.pi * results['consist_rot_diff_rad'].median()
+            results['consist_pose_err_mean'] = 180 / math.pi * results['consist_rot_diff_rad'].mean()
 
             # cmatrix = confusion_matrix(results['label_gt'].detach().cpu().numpy(), results['label_pred'].detach().cpu().numpy())
             # logger.info(f'Confusion matrix:\n {cmatrix} ')

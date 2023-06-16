@@ -42,6 +42,8 @@ import torch.utils.data
 from functools import partial
 from od3d.cv.geometry.downsample import voxel_downsampling, random_sampling
 from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D
+import od3d.io
+import cv2
 
 class CO3D_FRAME_TYPES(str, Enum):
     DEV_KNOWN = 'dev_known'
@@ -119,6 +121,7 @@ class CO3D_Sequence():
     name: str
     category: str
     _pcl = None
+    _front_name = None
     _cuboid = None
     path_co3d: Path
     path_preprocess: Path
@@ -127,6 +130,41 @@ class CO3D_Sequence():
     pcl_quality_score: float
     viewpoint_quality_score: float
     path_meta: Path
+
+
+    def preprocess_front_name(self, override=False):
+        fpath_front_name = self.path_preprocess.joinpath('front_names', self.category, self.name, 'front_name.yaml')
+
+        if override or not fpath_front_name.exists():
+
+            config = OmegaConf.create()
+            config.sequences = [self.name]
+            config.path = []
+            config.path_meta = self.path_meta
+            config.classes = [self.category]
+            dataset = CO3D(config=config)
+
+            if fpath_front_name.exists():
+                self._front_name = od3d.io.read_str_from_file(fpath_front_name)
+                front_item_id = dataset.get_item_id_by_name(self.name, self._front_name)
+            else:
+                front_item_id = 0
+
+            k = ord('a')  # 2424832
+            while (k == ord('a') or k == ord('d')):  # k == 2424832 or k == 2555904:
+                show_img(dataset.get_item(front_item_id).rgb, duration=1)
+                k = cv2.waitKey(0)
+                if k == ord('a'):  # 2424832: # :
+                    # left key:
+                    front_item_id -= 1
+                elif k == ord('d'):  # 2555904:
+                    # right key:
+                    front_item_id += 1
+                front_item_id %= len(dataset)
+            self._front_name = dataset.get_item(front_item_id).name
+            if not fpath_front_name.parent.exists():
+                fpath_front_name.parent.mkdir(parents=True)
+            od3d.io.write_str_to_file(fpath_front_name, text=self._front_name)
 
     def preprocess_cuboid(self, override=False):
         fpath_cuboid = self.path_preprocess.joinpath('cuboids', self.category, self.name + '.ply')
@@ -161,6 +199,18 @@ class CO3D_Sequence():
         return self._pcl
 
     @property
+    def front_name(self):
+        fpath_front_name = self.path_preprocess.joinpath('front_names', self.category, self.name, 'front_name.yaml')
+        if self._front_name is None:
+            if not fpath_front_name.exists():
+                self.preprocess_front_name()
+            self._front_name = od3d.io.read_str_from_file(fpath_front_name)
+        return self._front_name
+
+    def cam_tform_obj_canonic(self):
+        pass
+
+    @property
     def cuboid(self):
         if self._cuboid is None:
 
@@ -172,6 +222,7 @@ class CO3D_Sequence():
                 pts3d_max_count = 20000
                 cuboid_pts3d_max_count = 1000
                 pts3d_prob_thresh = 0.6
+                pts3d_cuboid_reduce_factor = 0.8
                 fpath_pcl = self.path_preprocess.joinpath('pcls', self.name, f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
                 fpath_pcl.parent.mkdir(parents=True, exist_ok=True)
 
@@ -217,7 +268,7 @@ class CO3D_Sequence():
                 pca_tform_world = get_pca_tform_world(pts3d_clean)
                 pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_world)
 
-                cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0], pca_pts3d_clean.max(dim=-2)[0]], dim=-2)[None,]
+                cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0] * pts3d_cuboid_reduce_factor, pca_pts3d_clean.max(dim=-2)[0] * pts3d_cuboid_reduce_factor], dim=-2)[None,]
 
                 cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
 
@@ -381,6 +432,7 @@ class CO3D(OD3D_Dataset):
         # sequence_names
 
 
+
     @staticmethod
     def setup(config: DictConfig):
 
@@ -400,6 +452,14 @@ class CO3D(OD3D_Dataset):
             logger.info(f"Downloading CO3D dataset at {path_co3d_raw}")
             run_cmd(cmd=f'python {path_co3d_repo.joinpath("co3d/download_dataset.py")} --download_folder {path_co3d_raw}', live=True, logger=logger)
             # --n_download_workers 1 --n_extract_workers 1
+
+    def get_item_id_by_name(self, sequence_name, frame_name):
+        for i in range(len(self)):
+            seq_id = self.map_item_id_to_seq_id[i]
+            frame_id = self.map_item_id_to_frame_id[i]
+            if self.sequences_names[seq_id] == sequence_name and self.frames_names[seq_id][frame_id] == frame_name:
+                return i
+        return -1
     def get_sequence_by_name(self, sequence_name):
         sequence_config = OmegaConf.load(self.path_meta.joinpath(sequence_name + '.yaml'))
         return CO3D_Sequence(**sequence_config)
@@ -407,6 +467,7 @@ class CO3D(OD3D_Dataset):
     def get_frame_by_name(self, sequence_name, frame_name):
         frame_config = OmegaConf.load(self.path_meta.joinpath(sequence_name, frame_name + '.yaml'))
         return CO3D_Frame(**frame_config)
+
     def get_frame_by_id(self, frame_id, seq_id):
         return self.get_frame_by_name(sequence_name=self.sequences_names[seq_id], frame_name=self.frames_names[seq_id][frame_id])
 
@@ -418,6 +479,8 @@ class CO3D(OD3D_Dataset):
         logger.info("preprocess")
         CO3D.preprocess_meta(config=config)
         CO3D.preprocess_cuboids(config=config)
+        CO3D.preprocess_front_names(config=config)
+
     @staticmethod
     def preprocess_meta(config: DictConfig):
         path = Path(config.path_co3d_raw)
@@ -482,6 +545,19 @@ class CO3D(OD3D_Dataset):
 
             sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
             sequence.preprocess_cuboid(override=config.preprocess_cuboids_override)
+
+    @staticmethod
+    def preprocess_front_names(config: DictConfig):
+        logger.info("preprocess front_names")
+        config = copy(config)
+        config.fpaths_cuboids = None
+        config.setup = False
+        config.preprocess = False
+        dataset = CO3D(config=config)
+        for sequence_name in dataset.sequences_names:
+            logger.info(f"preprocess cuboids, sequence {sequence_name}")
+            sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
+            sequence.preprocess_front_name(override=config.preprocess_front_names_override)
 
     def __len__(self):
         return self.frames_count

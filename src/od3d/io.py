@@ -86,4 +86,11 @@ def run_cmd(cmd, logger, live=False):
 
 
 
+def read_str_from_file(fpath: Path):
+    with open(fpath, 'r') as file:
+        data = file.read().rstrip()
+    return data
 
+def write_str_to_file(fpath: Path, text: str):
+    with open(fpath, "w") as file:
+        file.write(text)

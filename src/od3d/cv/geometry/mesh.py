@@ -250,16 +250,30 @@ class Meshes(torch.nn.Module):
                 verts2d (torch.Tensor): BxNx2
 
         """
+        #meshes_count = mesh_ids.shape[0]
+        # cams_count = cams_tform4x4_obj.shape[0]
+
         meshes_count = mesh_ids.shape[0]
-        cams_count = cams_tform4x4_obj.shape[0]
+        if cams_tform4x4_obj.dim() == 4:
+            cams_count = cams_tform4x4_obj.shape[1]
+        elif cams_tform4x4_obj.dim() == 3:
+            cams_count = cams_tform4x4_obj.shape[0]
+        else:
+            raise ValueError(f'Set `cams_tform4x4_obj.dim()` must be 3 or 4')
 
         if broadcast_batch_and_cams:
             mesh_ids = mesh_ids
-            cams_tform4x4_obj = cams_tform4x4_obj[None, :].expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
+            if cams_tform4x4_obj.dim() == 3:
+                cams_tform4x4_obj = cams_tform4x4_obj[None, :]
             if cams_intr4x4.dim() == 3:
                 cams_intr4x4 = cams_intr4x4[None, :]
+            cams_tform4x4_obj = cams_tform4x4_obj.expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
             cams_intr4x4 = cams_intr4x4.expand(meshes_count, cams_count, 4, 4).reshape(-1, 4, 4)
             mesh_ids = mesh_ids[:, None].expand(meshes_count, cams_count).reshape(-1)
+            #render_count = meshes_count * cams_count
+        else:
+            if meshes_count != cams_count:
+                raise ValueError(f'Set `broadcast_batch_and_cams=True` to allow different number of cameras and meshes')
 
         B = cams_tform4x4_obj.shape[0]
         #if imgs_sizes.dim() == 2:

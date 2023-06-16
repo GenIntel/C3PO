@@ -21,8 +21,9 @@ setup_override: False
 
 preprocess: True
 preprocess_meta_override: False
-preprocess_cuboids_override: False
 preprocess_meta_remove_previous: False
+preprocess_cuboids_override: False
+preprocess_front_names_override: False
 
 sequences:
   - '106_12650_23736'

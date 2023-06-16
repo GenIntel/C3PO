@@ -13,6 +13,7 @@ fpaths_meshes: ${test_dataset.fpaths_cuboids}
 
 
 # checkpoint: /misc/lmbraid19/sommerl/exps/06-15_09-11-03_CO3D_NeMo_local/nemo.ckpt
+# checkpoint: /misc/lmbraid19/sommerl/exps/06-16_14-12-30_CO3D_NeMo_local/nemo.ckpt
 
 train:
     transform:
@@ -34,9 +35,9 @@ train:
     batch_accumulate_to_next_step: 2
 
     visualize:
-        live: True
+        live: False
         verts_ncds_in_rgb: True
-        net_feats_nearest_verts: False
+        net_feats_nearest_verts: True
 
     val_fraction: 0.01
 
@@ -55,8 +56,8 @@ test:
 
     visualize:
         live: False
-        verts_ncds_in_rgb: True
-        net_feats_nearest_verts: True
+        verts_ncds_in_rgb: False
+        net_feats_nearest_verts: False
 
     dataloader:
         num_workers: 4
@@ -65,16 +66,16 @@ test:
 
     azim:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 8.
-        steps: 8
+        max: math.pi * 2 - (math.pi * 2) / 10.
+        steps: 10
     elev:
         min: -math.pi / 2
         max: math.pi / 2
-        steps: 5
+        steps: 10
     theta:
         min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 8.
-        steps: 8
+        max: math.pi * 2 - (math.pi * 2) / 10.
+        steps: 10
     dist:
         min: '20.'
         max: '20.'
