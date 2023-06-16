@@ -4,8 +4,6 @@ method:
     nemo:
         backbone:
             class_name: DINOv2 # ResNetExt DINOv2
-
-
-    train:
-        optimizer:
-            lr: 0.00001 # 0.0001
+        train:
+            optimizer:
+                lr: 0.00001 # 0.0001

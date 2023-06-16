@@ -40,7 +40,7 @@ test:
 
 
 backbone:
-    class_name: ResNetExt # ResNetExt DINOv2 ResNet
+    class_name: ResNetExt #  ResNetExt # ResNetExt DINOv2 ResNet
     net_type: resnetext
     local_size:
         - 1

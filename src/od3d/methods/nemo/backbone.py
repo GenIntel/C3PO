@@ -35,7 +35,7 @@ class DINOv2(OD3D_Backbone):
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
         self.dino_feat_dim = 384
-        self.feat_dim = 128
+        self.feat_dim = 128 # 128
 
         self.doubleconv = nn.Sequential(
             nn.Conv2d(self.dino_feat_dim, self.feat_dim, kernel_size=3, padding=1),
@@ -50,13 +50,11 @@ class DINOv2(OD3D_Backbone):
     def forward(self, x):
         dinov2_out = self.net.forward_features(resize(x, H_out=518, W_out=518))
         patch_tokens = dinov2_out['x_prenorm'][:, 1:]
-        # patch_tokens = dinov2_out['x_norm_patchtokens']
+        #patch_tokens = dinov2_out['x_norm_patchtokens']
 
         feat = resize(patch_tokens.reshape(-1, 37, 37, 384).permute(0, 3, 1, 2), H_out=64, W_out=64, mode='bilinear')
 
         return torch.nn.functional.normalize(self.doubleconv(feat), p=2, dim=1)
-        # return feat
-
 
 class ResNet(OD3D_Backbone):
     def __init__(
