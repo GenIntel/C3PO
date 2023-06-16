@@ -121,7 +121,9 @@ class CO3D_Sequence():
     name: str
     category: str
     _pcl = None
+    _pcl_clean = None
     _front_name = None
+    _cam_tform4x4_obj_canonic = None
     _cuboid = None
     path_co3d: Path
     path_preprocess: Path
@@ -207,8 +209,91 @@ class CO3D_Sequence():
             self._front_name = od3d.io.read_str_from_file(fpath_front_name)
         return self._front_name
 
-    def cam_tform_obj_canonic(self):
+    @property
+    def fpath_cam_tform4x4_obj_canonic(self):
+        return self.path_preprocess.joinpath('cam_tform4x4_obj_canonic', self.category, self.name, 'tform4x4.pt')
+
+    def preprocess_cam_tform4x4_obj_canonic(self, override=False):
+        fpath_cam_tform4x4_obj_canonic = self.fpath_cam_tform4x4_obj_canonic
+        if override or not fpath_cam_tform4x4_obj_canonic.exists():
+            front_frame_fpath_meta = self.path_meta.joinpath(self.name, self.front_name + '.yaml')
+            frame_front_config = OmegaConf.load(front_frame_fpath_meta)
+            frame_front = CO3D_Frame(**frame_front_config)
+            pcl_clean = self.pcl_clean
+            # frame_front.cam_tform4x4_obj # flip x and z axis for other direction
+            # pcl_clean = self.pcl_clean()
+            cam_tform4x4_obj_canic = torch.Tensor([0., 0., 0.])
+            torch.save(cam_tform4x4_obj_canic, f=str(fpath_cam_tform4x4_obj_canonic))
         pass
+    @property
+    def cam_tform4x4_obj_canonic(self):
+        if self._cam_tform4x4_obj_canonic is None:
+            if not self.fpath_cam_tform4x4_obj_canonic.exists():
+                self.preprocess_cam_tform4x4_obj_canonic()
+            self._cam_tform4x4_obj_canonic = torch.load(f=str(self.fpath_cam_tform4x4_obj_canonic))
+        return self._cam_tform4x4_obj_canonic
+
+
+    def preprocess_pcl_clean(self, override=False):
+        fpath_pcl_clean = self.fpath_pcl_clean
+        if override or not fpath_pcl_clean.exists():
+            fpath_pcl_clean.parent.mkdir(parents=True, exist_ok=True)
+
+            pts3d_max_count = 20000
+            pts3d_prob_thresh = 0.6
+
+            config = OmegaConf.create()
+            config.sequences = [self.name]
+            config.path = []
+            config.path_meta = self.path_meta
+            config.classes = [self.category]
+
+            dataset = CO3D(config=config)
+            dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
+                                                     collate_fn=partial(CO3D.collate_fn,
+                                                                        modalities=[OD3D_FRAME_MODALITIES.RGB,
+                                                                                    OD3D_FRAME_MODALITIES.MASK]),
+                                                     num_workers=4)
+
+            pts3d = self.pcl
+
+            pts3d = random_sampling(pts3d, pts3d_max_count=pts3d_max_count * 3)
+            pts3d = voxel_downsampling(pts3d, K=pts3d_max_count)
+            pts3d_prob = torch.ones(size=(pts3d.shape[0], 1), device=pts3d.device, dtype=pts3d.dtype)
+            for frames in iter(dataloader):
+                pxl2d = proj3d2d_broadcast(pts3d=pts3d, proj4x4=frames.cam_proj4x4_obj[:, None])
+                pts3d_prob += sample_pxl2d_pts(frames.mask, pxl2d=pxl2d, padding_mode='zeros').sum(dim=0)
+
+                # pxl2d = proj3d2d_broadcast(pts3d=pts3d_co3d, proj4x4=frame.cam_proj4x4_obj)
+                # gb_with_mask_with_pts3d = draw_pixels(img=blend_rgb(frame.rgb, frame.mask*255.), pxls=pxl2d)
+                # show_img(rgb_with_mask_with_pts3d)
+
+            pts3d_prob = pts3d_prob / len(dataset)
+            # pts3d_co3ds = []
+            # for prob in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:  #0.5, 0.6, 0.7, 0.8, 0.9, 0.95
+            #    pts3d = torch.zeros_like(pts3d_co3d)
+            #    pts3d[pts3d_co3d_prob[..., 0] > prob] = pts3d[pts3d_prob[..., 0] > prob]
+            #    pts3d_co3ds.append(pts3d)
+            # show_pcl(torch.stack(pts3d_co3ds, dim=0))
+            # show_pcl(pts3d[pts3d_prob[..., 0] > 0.6])
+            pts3d_clean = pts3d[pts3d_prob[..., 0] > pts3d_prob_thresh]
+            # frame0: CO3D_Frame = seq_dataset[0]
+            # show_img(frame0.rgb)
+            # show_pcl(pts3d_clean, cam_tform4x4_obj=frame0.cam_tform4x4_obj, cam_intr4x4=frame0.cam_intr4x4, img_size=frame0.size)
+
+            save_ply(fpath_pcl_clean, pts3d_clean)
+
+    @property
+    def fpath_pcl_clean(self):
+        return self.path_preprocess.joinpath('pcls', self.category, self.name, 'pcl_clean.ply') #  f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
+    @property
+    def pcl_clean(self):
+        if self._pcl_clean is None:
+            fpath_pcl_clean = self.fpath_pcl_clean
+            if not fpath_pcl_clean.exists():
+                self.preprocess_pcl_clean()
+            self._pcl_clean, _ = load_ply(fpath_pcl_clean)
+        return self._pcl_clean
 
     @property
     def cuboid(self):
@@ -219,51 +304,10 @@ class CO3D_Sequence():
             if not fpath_cuboid.exists():
                 fpath_cuboid.parent.mkdir(parents=True, exist_ok=True)
 
-                pts3d_max_count = 20000
                 cuboid_pts3d_max_count = 1000
-                pts3d_prob_thresh = 0.6
                 pts3d_cuboid_reduce_factor = 0.8
-                fpath_pcl = self.path_preprocess.joinpath('pcls', self.name, f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
-                fpath_pcl.parent.mkdir(parents=True, exist_ok=True)
 
-
-                config = OmegaConf.create()
-                config.sequences = [self.name]
-                config.path = []
-                config.path_meta = self.path_meta
-                config.classes = [self.category]
-
-                dataset = CO3D(config=config)
-                dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
-                                                         collate_fn=partial(CO3D.collate_fn, modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK]), num_workers=4)
-
-                pts3d = self.pcl
-
-                pts3d = random_sampling(pts3d, pts3d_max_count=pts3d_max_count * 3)
-                pts3d = voxel_downsampling(pts3d, K=pts3d_max_count)
-                pts3d_prob = torch.ones(size=(pts3d.shape[0], 1), device=pts3d.device, dtype=pts3d.dtype)
-                for frames in iter(dataloader):
-                    pxl2d = proj3d2d_broadcast(pts3d=pts3d, proj4x4=frames.cam_proj4x4_obj[:, None])
-                    pts3d_prob += sample_pxl2d_pts(frames.mask, pxl2d=pxl2d, padding_mode='zeros').sum(dim=0)
-
-                    #pxl2d = proj3d2d_broadcast(pts3d=pts3d_co3d, proj4x4=frame.cam_proj4x4_obj)
-                    #gb_with_mask_with_pts3d = draw_pixels(img=blend_rgb(frame.rgb, frame.mask*255.), pxls=pxl2d)
-                    #show_img(rgb_with_mask_with_pts3d)
-
-                pts3d_prob = pts3d_prob / len(dataset)
-                # pts3d_co3ds = []
-                # for prob in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:  #0.5, 0.6, 0.7, 0.8, 0.9, 0.95
-                #    pts3d = torch.zeros_like(pts3d_co3d)
-                #    pts3d[pts3d_co3d_prob[..., 0] > prob] = pts3d[pts3d_prob[..., 0] > prob]
-                #    pts3d_co3ds.append(pts3d)
-                # show_pcl(torch.stack(pts3d_co3ds, dim=0))
-                # show_pcl(pts3d[pts3d_prob[..., 0] > 0.6])
-                pts3d_clean = pts3d[pts3d_prob[..., 0] > pts3d_prob_thresh]
-                #frame0: CO3D_Frame = seq_dataset[0]
-                #show_img(frame0.rgb)
-                #show_pcl(pts3d_clean, cam_tform4x4_obj=frame0.cam_tform4x4_obj, cam_intr4x4=frame0.cam_intr4x4, img_size=frame0.size)
-
-                save_ply(fpath_pcl, pts3d_clean)
+                pts3d_clean = self.pcl_clean
 
                 pca_tform_world = get_pca_tform_world(pts3d_clean)
                 pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_world)
@@ -479,7 +523,8 @@ class CO3D(OD3D_Dataset):
         logger.info("preprocess")
         CO3D.preprocess_meta(config=config)
         CO3D.preprocess_cuboids(config=config)
-        CO3D.preprocess_front_names(config=config)
+        # CO3D.preprocess_cam_tform4x4_obj_canonic(config=config)
+        # CO3D.preprocess_front_names(config=config)
 
     @staticmethod
     def preprocess_meta(config: DictConfig):
@@ -555,10 +600,22 @@ class CO3D(OD3D_Dataset):
         config.preprocess = False
         dataset = CO3D(config=config)
         for sequence_name in dataset.sequences_names:
-            logger.info(f"preprocess cuboids, sequence {sequence_name}")
+            logger.info(f"preprocess front_names, sequence {sequence_name}")
             sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
             sequence.preprocess_front_name(override=config.preprocess_front_names_override)
 
+    @staticmethod
+    def preprocess_cam_tform4x4_obj_canonic(config: DictConfig):
+        logger.info("preprocess cam_tform4x4_obj_canonic")
+        config = copy(config)
+        config.fpaths_cuboids = None
+        config.setup = False
+        config.preprocess = False
+        dataset = CO3D(config=config)
+        for sequence_name in dataset.sequences_names:
+            logger.info(f"preprocess cam_tform4x4_obj_canonic, sequence {sequence_name}")
+            sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
+            sequence.preprocess_cam_tform4x4_obj_canonic(override=config.preprocess_cam_tform4x4_obj_canonic_override)
     def __len__(self):
         return self.frames_count
 
