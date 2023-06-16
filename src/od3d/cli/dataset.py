@@ -59,10 +59,10 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
     import torchvision
-    from od3d.cv.transforms import CenterZoom3D
+    from od3d.cv.transforms import CenterZoom3D, RandomCenterZoom3D
     modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
     dataset.transform = torchvision.transforms.Compose([
-        CenterZoom3D(H=512, W=512, dist=50., apply_mask=True, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_txtr=False, config=config.dataset),
+        RandomCenterZoom3D(H=512, W=512, dist=50., center3d_min=[-1., -1., -1.], center3d_max=[1., 1., 1.], apply_mask=True, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_txtr=False, config=config.dataset),
         dataset.transform,
 
     ]

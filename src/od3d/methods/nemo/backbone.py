@@ -4,7 +4,7 @@ from omegaconf import DictConfig
 import od3d.methods.nemo.keypoint_representation_net #  import NetE2E, ResNetExt
 import torch
 from od3d.cv.visual.resize import resize
-from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D, RGB_Random
+from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize # , CenterZoom3D, RGB_Random
 import torchvision
 
 class OD3D_Backbone(nn.Module):
@@ -29,8 +29,6 @@ class DINOv2(OD3D_Backbone):
             param.requires_grad = False
 
         self.transform = torchvision.transforms.Compose([
-                CenterZoom3D(H=config.transform.height, W=config.transform.width, dist=config.transform.distance),
-                RGB_Random(),
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -65,8 +63,6 @@ class ResNet(OD3D_Backbone):
         super().__init__(config=config)
 
         self.transform = torchvision.transforms.Compose([
-                CenterZoom3D(H=config.transform.height, W=config.transform.width, dist=config.transform.distance),
-                RGB_Random(),
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -156,8 +152,6 @@ class ResNetExt(OD3D_Backbone):
         super().__init__(config=config)
 
         self.transform = torchvision.transforms.Compose([
-                CenterZoom3D(H=config.transform.height, W=config.transform.width, dist=config.transform.distance),
-                RGB_Random(),
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -176,5 +170,5 @@ class ResNetExt(OD3D_Backbone):
         )
 
     def forward(self, rgb):
-        return self.net.forward_test(rgb)
+        return self.net.forward_test(resize(rgb, H_out=512, W_out=512))
         #return torch.nn.functional.normalize(self.net.net(rgb), p=2, dim=1)

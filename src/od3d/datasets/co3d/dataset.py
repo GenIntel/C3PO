@@ -128,6 +128,11 @@ class CO3D_Sequence():
     viewpoint_quality_score: float
     path_meta: Path
 
+    def preprocess_cuboid(self, override=False):
+        fpath_cuboid = self.path_preprocess.joinpath('cuboids', self.category, self.name + '.ply')
+        if override and fpath_cuboid.exists():
+            fpath_cuboid.unlink()
+        _ = self.cuboid
     @staticmethod
     def load_from_raw(path_co3d: Path, path_meta: Path, path_preprocess: Path, sequence_annotation: SequenceAnnotation):
         name = sequence_annotation.sequence_name
@@ -476,7 +481,7 @@ class CO3D(OD3D_Dataset):
             logger.info(f"preprocess cuboids, sequence {sequence_name}")
 
             sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
-            _ = sequence.cuboid
+            sequence.preprocess_cuboid(override=config.preprocess_cuboids_override)
 
     def __len__(self):
         return self.frames_count

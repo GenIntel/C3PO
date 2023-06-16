@@ -43,6 +43,17 @@ class NeMo(OD3DMethod):
 
         # init Network
         self.net = OD3D_Backbone.subclasses[config.backbone.class_name](config.backbone)
+        from od3d.cv.transforms import RandomCenterZoom3D, RGB_Random, CenterZoom3D
+
+        self.transform_train = torchvision.transforms.Compose([
+            RandomCenterZoom3D(**config.train.transform),
+            RGB_Random(),
+            self.net.transform,
+        ])
+        self.transform_test = torchvision.transforms.Compose([
+            CenterZoom3D(**config.test.transform),
+            self.net.transform
+        ])
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
@@ -131,8 +142,8 @@ class NeMo(OD3DMethod):
 
     def train(self, dataset: OD3D_Dataset, dataset_test: OD3D_Dataset):
 
-        dataset.transform = self.net.transform
-        dataset_test.transform = self.net.transform
+        dataset.transform = self.transform_train
+        dataset_test.transform = self.transform_test
 
         self.net.train()
         self.meshes.feats.requires_grad = True
@@ -147,6 +158,7 @@ class NeMo(OD3DMethod):
         dataset_train, dataset_val = torch.utils.data.random_split(dataset_sub, [1. - self.config.train.val_fraction, self.config.train.val_fraction], generator=generator)
         # dataset_val.config = dataset.config
         dataset_val.collate_fn = dataset.collate_fn
+        dataset_val.transform = self.transform_test
 
         criterion = torch.nn.CrossEntropyLoss().cuda() # (reduction="none").cuda()
 
@@ -253,7 +265,7 @@ class NeMo(OD3DMethod):
         self.net.eval()
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
-        dataset.transform = self.net.transform
+        dataset.transform = self.transform_test
 
         if complete_dataset:
             dataset_sub = dataset

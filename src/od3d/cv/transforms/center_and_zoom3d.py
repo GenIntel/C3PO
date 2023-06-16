@@ -2,15 +2,17 @@
 import logging
 logger = logging.getLogger(__name__)
 import torch
-from od3d.cv.geometry.transform import proj3d2d_origin, rot3x3_from_two_vectors
+from od3d.cv.geometry.transform import proj3d2d_origin, rot3x3_from_two_vectors, proj3d2d
 from od3d.cv.visual.crop import crop
 from omegaconf import DictConfig
 from od3d.datasets.dtd import DTD
 
 
+
 class CenterZoom3D():
 
-    def __init__(self, H, W, dist, apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None):
+    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None):
+        self.center3d = torch.Tensor(center3d)
         self.H = H
         self.W = W
         self.dist = dist
@@ -26,7 +28,7 @@ class CenterZoom3D():
         _, _, _, _ = frame.size, frame.cam_intr4x4, frame.cam_tform4x4_obj, frame.cam_proj4x4_obj
         scale = frame.cam_tform4x4_obj[2, 3] / self.dist
 
-        center = proj3d2d_origin(proj4x4=frame.cam_proj4x4_obj)
+        center = proj3d2d(self.center3d, proj4x4=frame.cam_proj4x4_obj)
 
         if self.apply_mask:
             frame._mask, _ = crop(img=frame.mask, center=center, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
@@ -73,3 +75,16 @@ class CenterZoom3D():
 
         frame.mask, frame.depth, frame.kpts2d, frame.kpts3d_vsbl = frame.calc_mesh_proj(fpath_mesh=frame.fpath_mesh, pts3d=frame.kpts3d)
         """
+
+
+class RandomCenterZoom3D():
+    def __init__(self, H, W, dist,  center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None, center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.]):
+        self.centerzoom3d = CenterZoom3D(H=H, W=W, dist=dist, center3d=center3d, apply_txtr=apply_txtr,
+                                    apply_kpts2d_annot=apply_kpts2d_annot, apply_bbox_annot=apply_bbox_annot,
+                                    apply_mask=apply_mask, config=config)
+        self.center3d_min = torch.Tensor(center3d_min)
+        self.center3d_max = torch.Tensor(center3d_max)
+
+    def __call__(self, frame):
+        self.centerzoom3d.center3d = self.center3d_min + torch.rand(3) * (self.center3d_max - self.center3d_min)
+        return self.centerzoom3d(frame)
