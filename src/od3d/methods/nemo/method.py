@@ -336,6 +336,8 @@ class NeMo(OD3DMethod):
                     meshes_scores.append(mesh_score)
                 meshes_scores = torch.stack(meshes_scores, dim=-1)
                 pred_class_scores, pred_class_ids = meshes_scores.max(dim=1)
+
+                logger.info(f'pred class ids {pred_class_ids}')
                 time_pred_class = time.time()
                 # logger.info(f"predicted class: {self.config.classes[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
 
@@ -477,12 +479,17 @@ class NeMo(OD3DMethod):
             results['pose_acc_pi6'] = (results['rot_diff_rad'] < math.pi /6).to(dtype=float).mean()
             results['pose_acc_pi18'] = (results['rot_diff_rad'] < math.pi / 18).to(dtype=float).mean()
             results['pose_err_median'] = 180 / math.pi * results['rot_diff_rad'].median()
-            results['pose_err_mean'] = 180 / math.pi * results['rot_diff_rad'].mean()
+            #results['pose_err_mean'] = 180 / math.pi * results['rot_diff_rad'].mean()
 
             diffs_so3d_log = torch.cat(diffs_so3d_log, dim=0)
-            results['consist_rot_diff_rad'] = torch.norm(diffs_so3d_log - diffs_so3d_log.mean(dim=0, keepdim=True), dim=-1) % torch.pi
+
+            from od3d.cv.geometry.transform import rot3x3_broadcast, so3_exp_map
+            diffs_rot3x3_mean = so3_exp_map(diffs_so3d_log.mean(dim=0, keepdim=False))
+            diffs_rot3x3 = rot3x3_broadcast(diffs_rot3x3_mean.T, pytorch3d.transforms.so3_exp_map(diffs_so3d_log))
+            diffs_rot3 = pytorch3d.transforms.so3_log_map(diffs_rot3x3)
+            results['consist_rot_diff_rad'] = torch.norm(diffs_rot3, dim=-1)
             results['consist_pose_err_median'] = 180 / math.pi * results['consist_rot_diff_rad'].median()
-            results['consist_pose_err_mean'] = 180 / math.pi * results['consist_rot_diff_rad'].mean()
+            # results['consist_pose_err_mean'] = 180 / math.pi * results['consist_rot_diff_rad'].mean()
 
             # cmatrix = confusion_matrix(results['label_gt'].detach().cpu().numpy(), results['label_pred'].detach().cpu().numpy())
             # logger.info(f'Confusion matrix:\n {cmatrix} ')
