@@ -221,6 +221,10 @@ class CO3D_Sequence():
             frame_front = CO3D_Frame(**frame_front_config)
             pcl_clean = self.pcl_clean
             # frame_front.cam_tform4x4_obj # flip x and z axis for other direction
+
+
+            # obj_canonic_tform4x4_obj = cam_tform_obj_canonic.inverse(), cam_tform_obj
+
             # pcl_clean = self.pcl_clean()
             cam_tform4x4_obj_canic = torch.Tensor([0., 0., 0.])
             torch.save(cam_tform4x4_obj_canic, f=str(fpath_cam_tform4x4_obj_canonic))
@@ -304,24 +308,65 @@ class CO3D_Sequence():
             if not fpath_cuboid.exists():
                 fpath_cuboid.parent.mkdir(parents=True, exist_ok=True)
 
+                from od3d.cv.geometry.transform import se3_exp_map, tform4x4
+
                 cuboid_pts3d_max_count = 1000
-                pts3d_cuboid_reduce_factor = 0.8
 
                 pts3d_clean = self.pcl_clean
 
                 pca_tform_world = get_pca_tform_world(pts3d_clean)
                 pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_world)
 
-                cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0] * pts3d_cuboid_reduce_factor, pca_pts3d_clean.max(dim=-2)[0] * pts3d_cuboid_reduce_factor], dim=-2)[None,]
+                cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0], pca_pts3d_clean.max(dim=-2)[0]], dim=-2)[None,]
 
                 cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
 
                 # verts, faces = cuboids.meshelize(number_vertices=cuboid_pts3d_max_count)
 
-                cuboid_tform_pca = icp(cuboids.verts, pca_pts3d_clean).inverse()
-                cuboid_tform_world = cuboid_tform_pca[None,].bmm(pca_tform_world[None,])[0]
+                icp_tform_pca = icp(cuboids.verts, pca_pts3d_clean).inverse()
+
+
+
+
+                icp_tform_world = tform4x4(icp_tform_pca, pca_tform_world)
+
+                icp_pts3d_clean = transf3d_broadcast(pts3d_clean, icp_tform_world)
+
+
+
+                cuboid_tform6_tmp = torch.zeros(6).to(device=icp_pts3d_clean.device)
+                tmp_tform4x4_icp = torch.eye(4).to(device=icp_pts3d_clean.device)
+
+                for i in range(100):
+                    tmp_tform4x4_icp = tform4x4(se3_exp_map(cuboid_tform6_tmp.detach()), tmp_tform4x4_icp)
+
+                    cuboid_tform6_tmp = torch.nn.Parameter(torch.zeros(6).to(device=icp_pts3d_clean.device),
+                                                           requires_grad=True)
+                    optimizer = torch.optim.SGD(params=[cuboid_tform6_tmp], lr=0.0001)
+
+                    cuboid_tform4x4_icp = tform4x4(se3_exp_map(cuboid_tform6_tmp), tmp_tform4x4_icp)
+
+                    cuboid_pts3d = transf3d_broadcast(pts3d=icp_pts3d_clean, transf4x4=cuboid_tform4x4_icp)
+
+                    _, icp_pts3d_ids_min = cuboid_pts3d.min(dim=0)
+                    _, icp_pts3d_ids_max = cuboid_pts3d.max(dim=0)
+                    cuboid_pts3d_limits = cuboid_pts3d[torch.cat([icp_pts3d_ids_min, icp_pts3d_ids_max], dim=0)]
+                    icp_cuboids_vol = (cuboid_pts3d_limits[3, 0] - cuboid_pts3d_limits[0, 0]) * (cuboid_pts3d_limits[4, 1] - cuboid_pts3d_limits[1, 1]) * (cuboid_pts3d_limits[5, 2] - cuboid_pts3d_limits[2, 2])
+                    loss = torch.norm(icp_cuboids_vol, p=2)
+                    loss.backward()
+                    logger.info(f'Volume {loss}')
+                    optimizer.step()
+
+
+                cuboids_limits = torch.stack([cuboid_pts3d.min(dim=-2)[0], cuboid_pts3d.max(dim=-2)[0]], dim=-2)[None,]
+                cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
+
+                cuboid_tform_world = tform4x4(cuboid_tform4x4_icp, icp_tform_world) #  icp_tform_pca[None,].bmm(pca_tform_world[None,])[0]
+
+
                 world_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=cuboid_tform_world.inverse())
 
+                show_pcl([pts3d_clean, world_verts])
 
                 #faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
                 #verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())

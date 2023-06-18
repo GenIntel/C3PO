@@ -3,7 +3,22 @@ from pytorch3d.renderer.cameras import look_at_view_transform, look_at_rotation
 import math
 from pytorch3d.transforms import axis_angle_to_matrix
 from pytorch3d.transforms import so3_exp_map
+import pytorch3d.transforms
 
+def se3_exp_map(se3_log: torch.Tensor):
+    """
+        Args:
+            se3_log (torch.Tensor): ...x6 (transl :3, rot 3:6)
+        Returns:
+            se3_4x4 (torch.Tensor): ...x4x4
+    """
+    se3_log_shape = se3_log.shape
+
+    se3_4x4 = pytorch3d.transforms.se3_exp_map(se3_log.reshape(-1, 6)).permute(0, 2, 1)
+
+    se3_4x4 = se3_4x4.reshape(se3_log_shape[:-1] + torch.Size([4, 4]))
+
+    return se3_4x4
 
 def rot3x3_from_two_vectors(a: torch.Tensor, b: torch.Tensor):
     """Rotation matrix for rotating vector a onto vector b
@@ -27,6 +42,14 @@ def rot3x3_from_two_vectors(a: torch.Tensor, b: torch.Tensor):
     if a.dim() == 1:
         rot3x3 = rot3x3[0]
     return rot3x3
+
+def tform4x4_broadcast(a_tform4x4_b, b_tform4x4_c):
+    shape_first_dims = torch.broadcast_shapes(a_tform4x4_b.shape[:-2], b_tform4x4_c.shape[:-2])
+    a_tform4x4_c = tform4x4(a_tform4x4_b.expand(*shape_first_dims, 4, 4), b_tform4x4_c.expand(*shape_first_dims, 4, 4))
+    return a_tform4x4_c
+
+def tform4x4(tform1_4x4, tform2_4x4):
+    return torch.bmm(tform1_4x4.reshape(-1, 4, 4), tform2_4x4.reshape(-1, 4, 4)).reshape(tform1_4x4.shape)
 
 def transf4x4_from_pos_and_theta(pos, theta):
     in_shape = theta.shape
