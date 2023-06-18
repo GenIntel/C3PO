@@ -366,14 +366,14 @@ class CO3D_Sequence():
 
                 world_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=cuboid_tform_world.inverse())
 
-                show_pcl([pts3d_clean, world_verts])
+                #show_pcl([pts3d_clean, world_verts])
 
                 #faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
                 #verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
 
                 save_ply(fpath_cuboid, verts=world_verts, faces=cuboids.faces)
 
-                # show_pcl([pts3d_clean, transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())])
+
             self._cuboid = Cuboids.load_from_files(fpaths_meshes=[fpath_cuboid])
         return self._cuboid
 
