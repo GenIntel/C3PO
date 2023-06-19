@@ -1,5 +1,6 @@
 import logging
 
+from od3d.cv.geometry.transform import tform4x4
 from torch.utils.data import Dataset
 from omegaconf import OmegaConf, DictConfig
 from enum import Enum
@@ -24,6 +25,7 @@ class OD3D_FRAME_MODALITIES(str, Enum):
     MESH = 'mesh'
     KPTS = 'kpts'
     BBOX = 'bbox'
+    CUBOID_FRONT_TFORM4X4_OBJ = 'cuboid_front_tform4x4_obj'
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -41,14 +43,12 @@ class OD3D_Frame:
     # rfpath_pcl: Path
     l_cam_tform4x4_obj: List[List[float]] #  torch.Tensor
     l_cam_intr4x4: List[List[float]] # torch.Tensor
-    l_cam_proj4x4_obj: List[List[float]] # torch.Tensor
     l_size: List[float] # torch.Tensor
     H: int
     W: int
     label= None
     _cam_tform4x4_obj = None
     _cam_intr4x4 = None
-    _cam_proj4x4_obj = None
     _size = None
     _rgb = None
     _mask = None
@@ -75,9 +75,7 @@ class OD3D_Frame:
 
     @property
     def cam_proj4x4_obj(self):
-        if self._cam_proj4x4_obj is None:
-            self._cam_proj4x4_obj = torch.Tensor(self.l_cam_proj4x4_obj)
-        return torch.Tensor(self._cam_proj4x4_obj)
+        return tform4x4(self.cam_intr4x4, self.cam_tform4x4_obj)
     @property
     def mask(self):
         if self._mask is None:
@@ -116,6 +114,14 @@ class OD3D_Frames():
         self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0) #.to(device=device)
         self.category = [frame.category for frame in frames]
         self.label = torch.LongTensor([frame.label for frame in frames]) # .to(device=device)
+
+        # if OD3D_FRAME_MODALITIES.CUBOID_FRONT_TFORM4X4_OBJ in modalities:
+        #
+        #    cuboid_front_tform4x4_obj = torch.stack([frame.sequence.cuboid_front_tform4x4_obj for frame in frames],
+        #                                                  dim=0)
+        #
+        #    self.cam_tform4x4_obj = tform4x4(self.cam_tform4x4_obj, cuboid_front_tform4x4_obj.inverse())
+        #    self.cam_proj4x4_obj = tform4x4(self.cam_intr4x4, self.cam_tform4x4_obj)
 
         if OD3D_FRAME_MODALITIES.RGB in modalities:
             self.rgb = torch.stack([frame.rgb for frame in frames], dim=0) #.to(device=device)
@@ -222,9 +228,8 @@ class OD3D_Dataset(Dataset):
     def get_item(self, item):
         raise NotImplementedError
 
-    @staticmethod
-    def collate_fn(frames: List[OD3D_Frame], modalities: List[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cpu', dtype=torch.float32):
-        frames = OD3D_Frames(frames, modalities, dtype=dtype, device=device)
+    def collate_fn(self, frames: List[OD3D_Frame], device='cpu', dtype=torch.float32):
+        frames = OD3D_Frames(frames, modalities=self.config.modalities, dtype=dtype, device=device)
         return frames
 
     @staticmethod

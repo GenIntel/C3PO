@@ -5,7 +5,7 @@ import typer
 import od3d.io
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES
 from omegaconf import OmegaConf
-from functools import partial
+from pathlib import Path
 
 app = typer.Typer()
 
@@ -53,6 +53,16 @@ def preprocess(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     OD3D_Dataset.subclasses[config.dataset.class_name].preprocess(config.dataset)
 
 @app.command()
+def rsync(directory: str = typer.Option('CO3D_Preprocess', '-d', '--directory'),
+          platform: str = typer.Option('local', '-p', '--platform'),):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform)
+
+    path_datasets_local = Path(config.platform_local.path_datasets).joinpath(directory)
+    path_datasets_remote = Path(config.platform.path_datasets).joinpath(directory)
+    od3d.io.run_cmd(cmd=f'rsync -avrzP {path_datasets_local} {config.platform.link}:{path_datasets_remote}', live=True, logger=logger)
+
+@app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
@@ -60,15 +70,14 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
     import torchvision
     from od3d.cv.transforms import CenterZoom3D, RandomCenterZoom3D
-    modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
+    # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
     dataset.transform = torchvision.transforms.Compose([
         RandomCenterZoom3D(H=512, W=512, dist=50., center3d_min=[-1., -1., -1.], center3d_max=[1., 1., 1.], apply_mask=True, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_txtr=False, config=config.dataset),
         dataset.transform,
-
     ]
     )
 
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=partial(dataset.collate_fn, modalities=modalities))
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=dataset.collate_fn)
     logging.info(f"Dataset contains {len(dataset)} frames.")
     for batch in iter(dataloader):
         batch.visualize(cuboids=dataset.cuboids)

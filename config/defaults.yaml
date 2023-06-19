@@ -1,5 +1,6 @@
 defaults:
     - platform: local
+    - platform@platform_local: local
 
 use_wandb: true
 wandb_project_name: NeMo

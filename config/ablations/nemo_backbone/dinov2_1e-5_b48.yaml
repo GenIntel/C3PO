@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: DINOv2_1e-5_b24
+ablation_name: DINOv2_1e-5_b48
 method:
     nemo:
         backbone:
@@ -7,4 +7,4 @@ method:
         train:
             optimizer:
                 lr: 0.00001 # 0.0001
-            batch_accumulate_to_next_step: 2
+            batch_accumulate_to_next_step: 4

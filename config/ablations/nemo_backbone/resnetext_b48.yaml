@@ -1,0 +1,8 @@
+# @package _global_
+ablation_name: ResNetExt_b48
+method:
+    nemo:
+        backbone:
+            class_name: ResNetExt # ResNetExt DINOv2
+        train:
+            batch_accumulate_to_next_step: 4

@@ -16,7 +16,7 @@ from od3d.cv.visual.draw import draw_pixels
 
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
-from od3d.cv.geometry.transform import transf4x4_from_spherical
+from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4_broadcast, tform4x4, rot3x3
 from od3d.cv.visual.show import show_imgs, show_img
 import torchvision
 from od3d.cv.visual.blend import blend_rgb
@@ -30,6 +30,8 @@ from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize
 from od3d.methods.nemo.backbone import OD3D_Backbone
+from functools import partial
+
 
 class NeMo(OD3DMethod):
     def __init__(
@@ -156,7 +158,6 @@ class NeMo(OD3DMethod):
         dataset_train, dataset_val = torch.utils.data.random_split(dataset_sub, [1. - self.config.train.val_fraction, self.config.train.val_fraction], generator=generator)
 
         criterion = torch.nn.CrossEntropyLoss().cuda() # (reduction="none").cuda()
-
         dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=self.config.train.dataloader.batch_size, shuffle=True,
                                                        collate_fn=dataset.collate_fn, num_workers=self.config.train.dataloader.num_workers, pin_memory=self.config.train.dataloader.pin_memory)
 
@@ -298,9 +299,9 @@ class NeMo(OD3DMethod):
         dist = dist[None, None, None, :].expand(in_shape).reshape(-1)
         cams_count = in_shape.numel()
         classes_count = len(self.config.classes)
-        cams_multiview_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+        cams_multiview_tform4x4_cuboid = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
 
-        C = len(cams_multiview_tform4x4_obj)
+        C = len(cams_multiview_tform4x4_cuboid)
 
         diffs_so3d_log = []
 
@@ -308,8 +309,11 @@ class NeMo(OD3DMethod):
             batch.to(device=self.device)
             B = len(batch)
 
-            b_cams_multiview_tform4x4_obj = cams_multiview_tform4x4_obj[None,].repeat(B, 1, 1, 1)
+            b_cams_multiview_tform4x4_obj = cams_multiview_tform4x4_cuboid[None,].repeat(B, 1, 1, 1)
+
+            # assumption 1: distance to object is known
             b_cams_multiview_tform4x4_obj[:, :, 2, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
+
             b_cams_multiview_intr4x4 = batch.cam_intr4x4[:, None].repeat(1, C, 1, 1)
 
             time_loaded = time.time()
@@ -358,6 +362,8 @@ class NeMo(OD3DMethod):
                 #sim = torch.einsum('bvfc,bfc->bvf', net_feats, self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids)) * mask_vts2d_vsbl
                 #mesh_multiple_cams_loss = -sim.mean(dim=-1)
 
+                if self.config.test.visualize.samples and self.config.test.visualize.live:
+                    show_imgs(self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj, cams_intr4x4=b_cams_multiview_intr4x4, imgs_sizes=batch.size, meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate, broadcast_batch_and_cams=True, modality='rgb'))
 
                 mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
@@ -451,7 +457,11 @@ class NeMo(OD3DMethod):
             #logger.info(
             #    f"predicted pose, took {(time_pred_pose - time_pred_class):.3f}")
 
-            diff_rot3x3 = torch.bmm(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_transf4x4_obj[:, :3, :3])
+            #cam_tform4x4_cuboid = tform4x4(cam_transf4x4_obj, batch.cuboid_front_tform4x4_obj.inverse())
+            #gt_cam_tform4x4_cuboid = tform4x4(batch.cam_tform4x4_obj, batch.cuboid_front_tform4x4_obj.inverse())
+            #diff_rot3x3 = rot3x3(gt_cam_tform4x4_cuboid[:, :3, :3].permute(0, 2, 1), cam_tform4x4_cuboid[:, :3, :3])
+
+            diff_rot3x3 = rot3x3(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_transf4x4_obj[:, :3, :3])
 
 
             try:

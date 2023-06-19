@@ -29,7 +29,7 @@ from od3d.cv.visual.draw import draw_pixels
 from od3d.cv.visual.blend import blend_rgb
 
 from od3d.cv.geometry.points_alignment import get_pca_tform_world
-from od3d.cv.geometry.transform import transf3d_broadcast
+from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.geometry.points_alignment import icp
 
@@ -123,7 +123,7 @@ class CO3D_Sequence():
     _pcl = None
     _pcl_clean = None
     _front_name = None
-    _cam_tform4x4_obj_canonic = None
+    _cuboid_front_tform4x4_obj = None
     _cuboid = None
     path_co3d: Path
     path_preprocess: Path
@@ -210,33 +210,22 @@ class CO3D_Sequence():
         return self._front_name
 
     @property
-    def fpath_cam_tform4x4_obj_canonic(self):
-        return self.path_preprocess.joinpath('cam_tform4x4_obj_canonic', self.category, self.name, 'tform4x4.pt')
+    def fpath_cuboid_front_tform4x4_obj(self):
+        return self.path_preprocess.joinpath('cuboid_front_tform4x4_obj', self.category, self.name, 'tform4x4.pt')
 
-    def preprocess_cam_tform4x4_obj_canonic(self, override=False):
-        fpath_cam_tform4x4_obj_canonic = self.fpath_cam_tform4x4_obj_canonic
-        if override or not fpath_cam_tform4x4_obj_canonic.exists():
-            front_frame_fpath_meta = self.path_meta.joinpath(self.name, self.front_name + '.yaml')
-            frame_front_config = OmegaConf.load(front_frame_fpath_meta)
-            frame_front = CO3D_Frame(**frame_front_config)
-            pcl_clean = self.pcl_clean
-            # frame_front.cam_tform4x4_obj # flip x and z axis for other direction
-
-
-            # obj_canonic_tform4x4_obj = cam_tform_obj_canonic.inverse(), cam_tform_obj
-
-            # pcl_clean = self.pcl_clean()
-            cam_tform4x4_obj_canic = torch.Tensor([0., 0., 0.])
-            torch.save(cam_tform4x4_obj_canic, f=str(fpath_cam_tform4x4_obj_canonic))
-        pass
     @property
-    def cam_tform4x4_obj_canonic(self):
-        if self._cam_tform4x4_obj_canonic is None:
-            if not self.fpath_cam_tform4x4_obj_canonic.exists():
-                self.preprocess_cam_tform4x4_obj_canonic()
-            self._cam_tform4x4_obj_canonic = torch.load(f=str(self.fpath_cam_tform4x4_obj_canonic))
-        return self._cam_tform4x4_obj_canonic
+    def cam_front_tform4x4_obj(self):
+        frame_config = OmegaConf.load(self.path_meta.joinpath(self.name, self.front_name + '.yaml'))
+        frame = CO3D_Frame(**frame_config)
+        return frame.cam_tform4x4_obj
 
+    @property
+    def cuboid_front_tform4x4_obj(self):
+        if self._cuboid_front_tform4x4_obj is None:
+            if not self.fpath_cuboid_front_tform4x4_obj.exists():
+                self.preprocess_cuboid()
+            self._cuboid_front_tform4x4_obj = torch.load(f=str(self.fpath_cuboid_front_tform4x4_obj))
+        return self._cuboid_front_tform4x4_obj
 
     def preprocess_pcl_clean(self, override=False):
         fpath_pcl_clean = self.fpath_pcl_clean
@@ -251,12 +240,11 @@ class CO3D_Sequence():
             config.path = []
             config.path_meta = self.path_meta
             config.classes = [self.category]
+            config.modalities = [OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK]
 
             dataset = CO3D(config=config)
             dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
-                                                     collate_fn=partial(CO3D.collate_fn,
-                                                                        modalities=[OD3D_FRAME_MODALITIES.RGB,
-                                                                                    OD3D_FRAME_MODALITIES.MASK]),
+                                                     collate_fn=dataset.collate_fn,
                                                      num_workers=4)
 
             pts3d = self.pcl
@@ -309,70 +297,83 @@ class CO3D_Sequence():
                 fpath_cuboid.parent.mkdir(parents=True, exist_ok=True)
 
                 from od3d.cv.geometry.transform import se3_exp_map, tform4x4
+                from od3d.cv.geometry.transform import rot3x3
 
                 cuboid_pts3d_max_count = 1000
 
                 pts3d_clean = self.pcl_clean
 
-                pca_tform_world = get_pca_tform_world(pts3d_clean)
-                pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_world)
+                pca_tform_obj = get_pca_tform_world(pts3d_clean)
+                pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_obj)
 
                 cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0], pca_pts3d_clean.max(dim=-2)[0]], dim=-2)[None,]
 
                 cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
 
-                # verts, faces = cuboids.meshelize(number_vertices=cuboid_pts3d_max_count)
-
                 icp_tform_pca = icp(cuboids.verts, pca_pts3d_clean).inverse()
 
+                icp_tform_obj = tform4x4(icp_tform_pca, pca_tform_obj)
 
-
-
-                icp_tform_world = tform4x4(icp_tform_pca, pca_tform_world)
-
-                icp_pts3d_clean = transf3d_broadcast(pts3d_clean, icp_tform_world)
-
-
-
-                cuboid_tform6_tmp = torch.zeros(6).to(device=icp_pts3d_clean.device)
-                tmp_tform4x4_icp = torch.eye(4).to(device=icp_pts3d_clean.device)
+                cuboid_tform6_tmp = torch.zeros(6).to(device=pts3d_clean.device)
+                tmp_tform4x4_obj = icp_tform_obj #  torch.eye(4).to(device=pts3d_clean.device)
 
                 for i in range(100):
-                    tmp_tform4x4_icp = tform4x4(se3_exp_map(cuboid_tform6_tmp.detach()), tmp_tform4x4_icp)
+                    tmp_tform4x4_obj = tform4x4(se3_exp_map(cuboid_tform6_tmp.detach()), tmp_tform4x4_obj)
 
-                    cuboid_tform6_tmp = torch.nn.Parameter(torch.zeros(6).to(device=icp_pts3d_clean.device),
+                    cuboid_tform6_tmp = torch.nn.Parameter(torch.zeros(6).to(device=pts3d_clean.device),
                                                            requires_grad=True)
                     optimizer = torch.optim.SGD(params=[cuboid_tform6_tmp], lr=0.0001)
 
-                    cuboid_tform4x4_icp = tform4x4(se3_exp_map(cuboid_tform6_tmp), tmp_tform4x4_icp)
+                    cuboid_tform4x4_obj = tform4x4(se3_exp_map(cuboid_tform6_tmp), tmp_tform4x4_obj)
 
-                    cuboid_pts3d = transf3d_broadcast(pts3d=icp_pts3d_clean, transf4x4=cuboid_tform4x4_icp)
+                    cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj)
 
                     _, icp_pts3d_ids_min = cuboid_pts3d.min(dim=0)
                     _, icp_pts3d_ids_max = cuboid_pts3d.max(dim=0)
                     cuboid_pts3d_limits = cuboid_pts3d[torch.cat([icp_pts3d_ids_min, icp_pts3d_ids_max], dim=0)]
-                    icp_cuboids_vol = (cuboid_pts3d_limits[3, 0] - cuboid_pts3d_limits[0, 0]) * (cuboid_pts3d_limits[4, 1] - cuboid_pts3d_limits[1, 1]) * (cuboid_pts3d_limits[5, 2] - cuboid_pts3d_limits[2, 2])
+                    # icp_cuboids_vol = (cuboid_pts3d_limits[3, 0] - cuboid_pts3d_limits[0, 0]) * (cuboid_pts3d_limits[4, 1] - cuboid_pts3d_limits[1, 1]) * (cuboid_pts3d_limits[5, 2] - cuboid_pts3d_limits[2, 2])
+                    # using maximum ensures centering.
+                    icp_cuboids_vol = (max(abs(cuboid_pts3d_limits[3, 0]), abs(cuboid_pts3d_limits[0, 0])) * 2) * \
+                                      (max(abs(cuboid_pts3d_limits[4, 1]), abs(cuboid_pts3d_limits[1, 1])) * 2) * \
+                                      (max(abs(cuboid_pts3d_limits[5, 2]), abs(cuboid_pts3d_limits[2, 2])) * 2)
+
                     loss = torch.norm(icp_cuboids_vol, p=2)
                     loss.backward()
                     logger.info(f'Volume {loss}')
                     optimizer.step()
 
+                cuboid_tform4x4_obj = cuboid_tform4x4_obj.detach()
 
+                cam_front_rot3x3_cuboid = rot3x3(self.cam_front_tform4x4_obj[:3, :3], cuboid_tform4x4_obj[:3, :3].T)
+                cam_front_rot3x3_max_ids = cam_front_rot3x3_cuboid.abs().max(dim=-1)[1]
+                assert (0 in cam_front_rot3x3_max_ids.unique() and 1 in cam_front_rot3x3_max_ids.unique() and 2 in cam_front_rot3x3_max_ids.unique())
+                cuboid_front_tform4x4_cuboid = torch.eye(n=4).to(device=cam_front_rot3x3_cuboid.device)
+                cuboid_front_tform4x4_cuboid[:3, :3] = cuboid_front_tform4x4_cuboid[cam_front_rot3x3_max_ids, :3] * cam_front_rot3x3_cuboid.sign()
+
+                # x y z camera should be mapped to x z -y in object coordinate system
+                cuboid_front_tform4x4_cuboid[:3] = cuboid_front_tform4x4_cuboid[[0, 2, 1]]
+                cuboid_front_tform4x4_cuboid[2] = -cuboid_front_tform4x4_cuboid[2]
+
+                cuboid_front_tform_obj = tform4x4(cuboid_front_tform4x4_cuboid, cuboid_tform4x4_obj)
+
+                if not self.fpath_cuboid_front_tform4x4_obj.parent.exists():
+                    self.fpath_cuboid_front_tform4x4_obj.parent.mkdir(parents=True, exist_ok=True)
+                torch.save(cuboid_front_tform_obj, f=str(self.fpath_cuboid_front_tform4x4_obj))
+
+                obj_tform_cuboid_front = cuboid_front_tform_obj.inverse()
+
+                cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_front_tform_obj)
                 cuboids_limits = torch.stack([cuboid_pts3d.min(dim=-2)[0], cuboid_pts3d.max(dim=-2)[0]], dim=-2)[None,]
+
                 cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
+                obj_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=obj_tform_cuboid_front)
 
-                cuboid_tform_world = tform4x4(cuboid_tform4x4_icp, icp_tform_world) #  icp_tform_pca[None,].bmm(pca_tform_world[None,])[0]
+                #from od3d.cv.geometry.primitives import CoordinateFrame
+                #from od3d.cv.geometry.transform import transf4x4_from_spherical, transf4x4_from_pos_and_theta
+                #cframe = CoordinateFrame(origin=obj_tform_cuboid_front[:3, 3], axes=obj_tform_cuboid_front[:3, :3])
+                # show_pcl([pts3d_clean, obj_verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
 
-
-                world_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=cuboid_tform_world.inverse())
-
-                #show_pcl([pts3d_clean, world_verts])
-
-                #faces = Meshes.get_faces_from_verts(verts=cuboids.pts3d_surface[0], ball_radius=1.)
-                #verts = transf3d_broadcast(pts3d=cuboids.pts3d_surface[0], transf4x4=cuboid_tform_world.inverse())
-
-                save_ply(fpath_cuboid, verts=world_verts, faces=cuboids.faces)
-
+                save_ply(fpath_cuboid, verts=cuboids.verts, faces=cuboids.faces)
 
             self._cuboid = Cuboids.load_from_files(fpaths_meshes=[fpath_cuboid])
         return self._cuboid
@@ -386,6 +387,7 @@ class CO3D_Frame(OD3D_Frame):
     depth_scale: float
     frame_type: str
     _sequence = None
+    return_cam_tform4x4_cuboid_front = False
     @property
     def sequence(self):
         if self._sequence is None:
@@ -397,6 +399,15 @@ class CO3D_Frame(OD3D_Frame):
         if self._depth is None:
             self._depth = read_co3d_depth_image(self.path_dataset.joinpath(self.rfpath_depth)) * self.depth_scale
         return self._depth
+
+    @property
+    def cam_tform4x4_obj(self):
+        if self._cam_tform4x4_obj is None:
+            if self.return_cam_tform4x4_cuboid_front:
+                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.l_cam_tform4x4_obj), self.sequence.cuboid_front_tform4x4_obj.inverse())
+            else:
+                self._cam_tform4x4_obj = torch.Tensor(self.l_cam_tform4x4_obj)
+        return self._cam_tform4x4_obj
 
     @staticmethod
     def load_from_raw(path_co3d: Path, path_meta: Path, frame_annotation: FrameAnnotation):
@@ -433,17 +444,15 @@ class CO3D_Frame(OD3D_Frame):
                            [0., focal_length[1], principal_point[1], 0.],
                            [0., 0., 1., 0.],
                            [0., 0., 0., 1.]])
-        cam_proj4x4_obj = torch.bmm(cam_intr4x4[None,], cam_tform4x4_obj[None,])[0]
 
         l_size = size.tolist()
         l_cam_intr4x4 = cam_intr4x4.tolist()
         l_cam_tform4x4_obj = cam_tform4x4_obj.tolist()
-        l_cam_proj4x4_obj = cam_proj4x4_obj.tolist()
         return CO3D_Frame(path_dataset=path_dataset, path_meta=path_meta, category=category, frame_number=frame_number, frame_type=frame_type,
                    name=name, rfpath_mask=rfpath_mask, rfpath_depth=rfpath_depth, rfpath_depth_mask=rfpath_depth_mask,
                    rfpath_rgb=rfpath_rgb, H=H, W=W, l_size=l_size, l_cam_intr4x4=l_cam_intr4x4,
                    sequence_name=sequence_name,
-                   l_cam_tform4x4_obj=l_cam_tform4x4_obj, l_cam_proj4x4_obj=l_cam_proj4x4_obj, depth_scale=depth_scale)
+                   l_cam_tform4x4_obj=l_cam_tform4x4_obj, depth_scale=depth_scale)
 
 class CO3D(OD3D_Dataset):
     def __init__(
@@ -520,8 +529,6 @@ class CO3D(OD3D_Dataset):
 
         # sequence_names
 
-
-
     @staticmethod
     def setup(config: DictConfig):
 
@@ -555,7 +562,9 @@ class CO3D(OD3D_Dataset):
 
     def get_frame_by_name(self, sequence_name, frame_name):
         frame_config = OmegaConf.load(self.path_meta.joinpath(sequence_name, frame_name + '.yaml'))
-        return CO3D_Frame(**frame_config)
+        frame = CO3D_Frame(**frame_config)
+        frame.return_cam_tform4x4_cuboid_front = self.config.get("return_cam_tform4x4_cuboid_front", False)
+        return frame
 
     def get_frame_by_id(self, frame_id, seq_id):
         return self.get_frame_by_name(sequence_name=self.sequences_names[seq_id], frame_name=self.frames_names[seq_id][frame_id])
@@ -566,6 +575,8 @@ class CO3D(OD3D_Dataset):
     @staticmethod
     def preprocess(config: DictConfig):
         logger.info("preprocess")
+        config = config.copy()
+        config.return_cam_tform4x4_cuboid_front = False
         CO3D.preprocess_meta(config=config)
         CO3D.preprocess_cuboids(config=config)
         # CO3D.preprocess_cam_tform4x4_obj_canonic(config=config)
@@ -672,3 +683,5 @@ class CO3D(OD3D_Dataset):
         return frame
     def visualize(self, item: int):
         pass
+
+

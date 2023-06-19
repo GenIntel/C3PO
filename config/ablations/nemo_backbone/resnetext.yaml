@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: ResNetExt
+ablation_name: ResNetExt_b24
 method:
     nemo:
         backbone:

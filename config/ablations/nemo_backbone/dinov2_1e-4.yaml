@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: DINOv2_1e-4
+ablation_name: DINOv2_1e-4_b24
 method:
     nemo:
         backbone:

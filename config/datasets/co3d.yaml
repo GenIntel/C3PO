@@ -4,6 +4,11 @@ class_name: CO3D
 modalities:
     - 'rgb'
     - 'mask'
+    - 'cuboid_front_tform4x4_obj' # setting this is highly important, so that the cam_tform4x4_obj equals cam_tform4x4_cuboid_front
+
+
+
+return_cam_tform4x4_cuboid_front: True
 
 path_co3d_raw: ${platform.path_datasets}/CO3D
 path_co3d_preprocess: ${platform.path_datasets}/CO3D_Preprocess
@@ -24,7 +29,6 @@ preprocess_meta_override: False
 preprocess_meta_remove_previous: False
 preprocess_cuboids_override: False
 preprocess_front_names_override: False
-preprocess_cam_tform4x4_obj_canonic_override: False
 
 sequences:
   - '106_12650_23736'

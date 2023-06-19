@@ -118,8 +118,6 @@ class Pascal3DFrame(OD3D_Frame):
         cam_intr4x4 = np.vstack((cam_intr4x4, [0, 0, 0, 1]))
         cam_intr4x4 = torch.from_numpy(cam_intr4x4).to(dtype=cam_tform4x4_obj.dtype)
 
-        cam_proj4x4_obj = torch.bmm(cam_intr4x4[None,], cam_tform4x4_obj[None,])[0]
-
         rfpath_mesh = Path(category).joinpath(f"{(mesh_index + 1):02d}.off")
 
         fpath_mesh_kpoints3d = path_meshes.joinpath(f"{category}.mat")
@@ -130,7 +128,7 @@ class Pascal3DFrame(OD3D_Frame):
         return Pascal3DFrame(name=name, complete=complete, incomplete_reason=incomplete_reason, path_dataset=path_dataset,
                       rfpath_rgb=rfpath_rgb, rfpath_mesh=rfpath_mesh, path_meshes=path_meshes, path_preprocess=path_preprocess,
                       l_bbox=bbox.tolist(), kpts_names=kpts_names, l_kpts2d_annot=kpts2d_annot.tolist(), l_kpts2d_annot_vsbl=kpts2d_annot_vsbl.tolist(), W=W, H=H, l_size=size.tolist(),
-                      l_cam_tform4x4_obj=cam_tform4x4_obj.tolist(), l_cam_intr4x4=cam_intr4x4.tolist(), l_cam_proj4x4_obj=cam_proj4x4_obj.tolist(), l_kpts3d=kpts3d.tolist(), category=category,
+                      l_cam_tform4x4_obj=cam_tform4x4_obj.tolist(), l_cam_intr4x4=cam_intr4x4.tolist(), l_kpts3d=kpts3d.tolist(), category=category,
                              rfpath_mask=Path('mask').joinpath(f'{name}.png'), rfpath_depth=Path("None"), rfpath_depth_mask=Path("None")
                       )
 
