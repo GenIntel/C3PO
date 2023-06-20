@@ -440,13 +440,13 @@ class NeMo(OD3DMethod):
                     if pose_iterative_xy_shift:
                         cam_transf4x4_obj[:, :2, 3] += cam_shift_xyz[:, :2]
 
-                if self.config.test.visualize.verts_ncds_in_rgb:
-                    img = blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
-                                             imgs_sizes=batch.size, meshes_ids=pred_class_ids[:1],
-                                             modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
-                    results['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(img)
-                    if self.config.test.visualize.live:
-                        show_img(img)
+            if self.config.test.visualize.verts_ncds_in_rgb:
+                img = blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
+                                         imgs_sizes=batch.size, meshes_ids=pred_class_ids[:1],
+                                         modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
+                results['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(img)
+                if self.config.test.visualize.live:
+                    show_img(img)
 
 
 
