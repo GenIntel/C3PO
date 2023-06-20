@@ -59,7 +59,7 @@ def rsync(directory: str = typer.Option('CO3D_Preprocess', '-d', '--directory'),
     config = od3d.io.load_hierarchical_config(platform=platform)
 
     path_datasets_local = Path(config.platform_local.path_datasets).joinpath(directory)
-    path_datasets_remote = Path(config.platform.path_datasets).joinpath(directory)
+    path_datasets_remote = Path(config.platform.path_datasets).joinpath(directory).parent
     od3d.io.run_cmd(cmd=f'rsync -avrzP {path_datasets_local} {config.platform.link}:{path_datasets_remote}', live=True, logger=logger)
 
 @app.command()
