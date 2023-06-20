@@ -440,6 +440,9 @@ class NeMo(OD3DMethod):
                     if pose_iterative_xy_shift:
                         cam_transf4x4_obj[:, :2, 3] += cam_shift_xyz[:, :2]
 
+                results['time_pose_iterative'].append(time.time() - time_before_pose_iterative)
+                # logger.info(f"predicted pose iterative took {(time.time() - time_before_pose_iterative):.3f}s")
+
             if self.config.test.visualize.verts_ncds_in_rgb:
                 img = blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
                                          imgs_sizes=batch.size, meshes_ids=pred_class_ids[:1],
@@ -450,8 +453,6 @@ class NeMo(OD3DMethod):
 
 
 
-                results['time_pose_iterative'].append(time.time() - time_before_pose_iterative)
-                # logger.info(f"predicted pose iterative took {(time.time() - time_before_pose_iterative):.3f}s")
 
             results['time_pose'].append(time.time() - time_pred_class)
             #logger.info(
