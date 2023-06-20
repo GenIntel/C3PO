@@ -265,7 +265,7 @@ class NeMo(OD3DMethod):
         pass
     def calc_loss_feat2d_net_rendered(self, feats2d_net, feats2d_rendered):
         pass
-    def test(self, dataset: OD3D_Dataset, pose_iterative_refine=False, pose_iterative_xy_shift=False, dataset_sub=None):
+    def test(self, dataset: OD3D_Dataset, pose_iterative_refine=True, pose_iterative_xy_shift=False, dataset_sub=None):
         self.net.eval()
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
