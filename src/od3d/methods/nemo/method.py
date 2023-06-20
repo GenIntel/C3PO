@@ -72,6 +72,7 @@ class NeMo(OD3DMethod):
         self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.net.feat_dim), device=self.device), requires_grad=True)
         self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.feat_dim), device=self.device), requires_grad=True))
 
+        self.normalize_feats()
 
         #self.net = torch.nn.DataParallel(self.net).cuda()
         self.net.cuda()
@@ -109,6 +110,11 @@ class NeMo(OD3DMethod):
             self.classification_size[1] // self.down_sample_rate,
         )
 
+    def normalize_feats(self):
+        self.clutter_feats.data = self.clutter_feats.detach() / self.clutter_feats.detach().norm(dim=-1, keepdim=True)
+        self.meshes.feats.data = self.meshes.feats.detach() / self.meshes.feats.detach().norm(dim=-1, keepdim=True)
+        #logger.info(self.clutter_feats[:1])
+        #logger.info(self.meshes.feats[:1])
 
     def load_checkpoint_old(self, path_checkpoint):
         checkpoint = torch.load(path_checkpoint, map_location="cuda:0")
@@ -242,6 +248,7 @@ class NeMo(OD3DMethod):
                 accumulate_steps += 1
                 if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
                     self.optim.step()
+                    self.normalize_feats()
                     self.optim.zero_grad()
 
 
@@ -251,6 +258,7 @@ class NeMo(OD3DMethod):
 
             if not accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
                 self.optim.step()
+                self.normalize_feats()
                 self.optim.zero_grad()
 
     def calc_loss_feat2d_net_bank(self, feats2d_net, feats2d_bank):
