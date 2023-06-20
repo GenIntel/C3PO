@@ -167,11 +167,11 @@ class NeMo(OD3DMethod):
 
         for e in range(self.config.train.epochs):
             if e % self.config.train.epochs_to_next_val == 0:
-                results_val = self.test(dataset, dataset_sub=dataset_val, pose_iterative_refine=True)
+                results_val = self.test(dataset, dataset_sub=dataset_val)
                 wandb.log({'val_' + k: v for k, v in results_val.items()})
 
             if self.config.train.epochs_to_next_test > 0 and e % self.config.train.epochs_to_next_test == 0:
-                results_test = self.test(dataset_test, pose_iterative_refine=True)
+                results_test = self.test(dataset_test)
                 wandb.log({'test_' + k: v for k, v in results_test.items()})
 
             self.net.train()
@@ -257,7 +257,7 @@ class NeMo(OD3DMethod):
         pass
     def calc_loss_feat2d_net_rendered(self, feats2d_net, feats2d_rendered):
         pass
-    def test(self, dataset: OD3D_Dataset, pose_iterative_refine=True, pose_iterative_xy_shift=True, dataset_sub=None):
+    def test(self, dataset: OD3D_Dataset, pose_iterative_refine=False, pose_iterative_xy_shift=False, dataset_sub=None):
         self.net.eval()
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
