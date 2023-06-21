@@ -169,24 +169,23 @@ class Meshes(torch.nn.Module):
         vts_ct_max = self.verts_counts_max
         device = self.verts.device
         self.feats = torch.nn.Parameter(torch.cat([feats[i*vts_ct_max: i*vts_ct_max + self.verts_counts[i]].to(device=device) for i in range(len(self))], dim=0), requires_grad=True)
-
         self.feats_from_faces = torch.nn.Parameter(torch.cat([self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)] for mesh_id in range(len(self))], dim=0))
 
     def set_feats_cat(self, feats):
         self.feats = torch.nn.Parameter(feats, requires_grad=True)
         self.feats_from_faces = torch.nn.Parameter(torch.cat([self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)] for mesh_id in range(len(self))], dim=0))
 
-    def get_verts_stacked_with_mesh_ids(self, mesh_ids):
+    def get_verts_stacked_with_mesh_ids(self, mesh_ids=None):
         if mesh_ids == None:
             mesh_ids = list(range(len(self)))
         return torch.stack([self.get_verts_padded_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
 
-    def get_feats_stacked_with_mesh_ids(self, mesh_ids):
+    def get_feats_stacked_with_mesh_ids(self, mesh_ids=None):
         if mesh_ids == None:
             mesh_ids = list(range(len(self)))
-        return torch.stack([self.get_feats_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
+        return torch.stack([self.get_feats_padded_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
 
-    def get_faces_stacked_with_mesh_ids(self, mesh_ids):
+    def get_faces_stacked_with_mesh_ids(self, mesh_ids=None):
         if mesh_ids == None:
             mesh_ids = list(range(len(self)))
         return torch.stack([self.get_faces_padded_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)

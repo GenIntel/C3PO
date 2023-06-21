@@ -81,6 +81,16 @@ def bench_single_method_torque(cfg: DictConfig):
         gpu_cfg_str = f':gpus={gpu_count}' if gpu_count > 0 else ""
         cuda_cfg_str = f':nvidiaMinCC75' if gpu_count > 0 else ""
 
+        if cfg.platform.install_od3d:
+            install_od3d_cmds_str = '''
+pip install pip --upgrade
+pip install torch
+FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install -e {cfg.platform.path_od3d}
+            '''
+        else:
+            install_od3d_cmds_str = ''
+
         script_as_string = f'''#!/bin/bash
 #PBS -N {job_name}
 #PBS -S /bin/bash
@@ -128,10 +138,7 @@ else
     source {cfg.platform.path_od3d}/${{VENV_NAME}}/bin/activate
 fi
 
-pip install pip --upgrade
-pip install torch
-FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-pip install -e {cfg.platform.path_od3d}
+{install_od3d_cmds_str}
 
 od3d debug hello-world
 
@@ -171,6 +178,16 @@ def bench_single_method_slurm(cfg: DictConfig):
         cpu_count = cfg.platform.cpu_count
         ram = cfg.platform.ram
         walltime = cfg.platform.walltime
+
+        if cfg.platform.install_od3d:
+            install_od3d_cmds_str = '''
+pip install pip --upgrade
+pip install torch
+FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install -e {cfg.platform.path_od3d}
+            '''
+        else:
+            install_od3d_cmds_str = ''
 
         partition = cfg.get("platform").get("partition", None)
         partition_cfg_str = f'#SBATCH --partition {partition}' if partition is not None else ''
@@ -224,10 +241,7 @@ else
     source {cfg.platform.path_od3d}/${{VENV_NAME}}/bin/activate
 fi
 
-pip3 install pip --upgrade
-pip3 install torch
-FORCE_CUDA=1 pip3 install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-pip3 install -e {cfg.platform.path_od3d}
+{install_od3d_cmds_str}
 
 od3d debug hello-world
 

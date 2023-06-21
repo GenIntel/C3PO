@@ -33,7 +33,7 @@ class DINOv2(OD3D_Backbone):
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
         self.dino_feat_dim = 384
-        self.feat_dim = 128 # 128
+        self.feat_dim = config.channels # 128
 
         self.doubleconv = nn.Sequential(
             nn.Conv2d(self.dino_feat_dim, self.feat_dim, kernel_size=3, padding=1),
@@ -66,7 +66,7 @@ class ResNet(OD3D_Backbone):
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
-        self.feat_dim = 128 # 128
+        self.feat_dim = config.channels # 128
 
         net = torchvision.models.resnet50(pretrained=True)
         self.extractor1 = nn.Sequential()
@@ -156,7 +156,7 @@ class ResNetExt(OD3D_Backbone):
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-        self.feat_dim = 128 # 128
+        self.feat_dim = config.channels # 128
 
         # self.net = od3d.methods.nemo.keypoint_representation_net.ResNetExt(pretrained=True)
 

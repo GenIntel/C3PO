@@ -33,8 +33,9 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         # create one config per ablation
         ablation_dir = ablations_root_dir.joinpath(ablation)
         for ablation_file_fpath in ablation_dir.iterdir():
-            ablation_fpath_rel = str(ablation_file_fpath.relative_to(ablations_root_dir).with_suffix(''))
-            cfgs.append(od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform, ablation=ablation_fpath_rel))
+            ablation_fpath_rel = ablation_file_fpath.relative_to(ablations_root_dir).with_suffix('')
+            if not ablation_fpath_rel.name.startswith("_"):
+                cfgs.append(od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform, ablation=str(ablation_fpath_rel)))
 
     # create one config per method
     methods_cfgs = []
