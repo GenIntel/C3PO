@@ -1,0 +1,6 @@
+# @package _global_
+ablation_name: lr1e-4_thrsh06_l1_regw10
+method:
+    nemo:
+        train:
+            loss_reg_weight: 10.

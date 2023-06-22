@@ -21,8 +21,9 @@ backbone:
     class_name: ResNetExt #  ResNetExt # ResNetExt DINOv2 ResNet
 
 train:
+    loss_reg_weight: 0.
     sequences_tform4x4_labeled_count: 1
-    sequences_tform4x4_estimated_frames_count: 5
+    sequences_tform4x4_estimated_frames_count: 8
     sequences_tform4x4_estimated_sim_threshold: 0.6
     T: 0.07
     optimizer:
@@ -57,7 +58,7 @@ train:
     val_fraction: 0.01
 
     dataloader:
-        num_workers: 0
+        num_workers: 4
         batch_size: 12
         pin_memory: True
 
@@ -130,7 +131,7 @@ test:
         dist: 15.
 
     dataloader:
-        num_workers: 0
-        batch_size: 1
+        num_workers: 4
+        batch_size: 4
         pin_memory: True
 
