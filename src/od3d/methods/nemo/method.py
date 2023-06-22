@@ -297,8 +297,8 @@ class NeMo(OD3DMethod):
                 # weighting with similarity score
                 # net_feats = net_feats * (batch.cam_tform4x4_obj_sim[:, None, None] ** 4)
 
-                sim_weight = batch.cam_tform4x4_obj_sim[:, None].expand(*net_feats.shape[:2])
-                sim_weight = torch.cat([sim_weight[:, :N][mask_vts2d_vsbl], sim_weight[:, N:].reshape(-1)], dim=0)
+                # sim_weight = batch.cam_tform4x4_obj_sim[:, None].expand(*net_feats.shape[:2])
+                # sim_weight = torch.cat([sim_weight[:, :N][mask_vts2d_vsbl], sim_weight[:, N:].reshape(-1)], dim=0)
 
                 batch_vts_ids = torch.cat([batch_vts_ids[:, :N][mask_vts2d_vsbl], batch_vts_ids[:, N:].reshape(-1)], dim=0)
                 net_feats = torch.cat([net_feats[:, :N][mask_vts2d_vsbl], net_feats[:, N:].reshape(-1, C)], dim=0)
@@ -311,8 +311,17 @@ class NeMo(OD3DMethod):
                 sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
 
                 sim = sim / self.config.train.T
-                subsample_ids = torch.multinomial(sim_weight, num_samples = sim_weight.shape[0], replacement=True)
-                loss = criterion(sim[subsample_ids], batch_vts_ids[subsample_ids])
+                # subsample_ids = torch.multinomial(sim_weight, num_samples = sim_weight.shape[0], replacement=True)
+                # loss = criterion(sim[subsample_ids], batch_vts_ids[subsample_ids])
+                lossCLS = criterion(sim, batch_vts_ids)
+
+                norm_verts = torch.sqrt(torch.einsum('vc,vc->v', self.meshes.verts, self.meshes.verts))
+
+                sim_verts_coords = torch.einsum('nvc,nvc->nv', self.meshes.verts[None, ], self.meshes.verts[:, None]) / (norm_verts[None, :] * norm_verts[:, None])
+                sim_verts_feats = torch.einsum('nvc,nvc->nv', self.meshes.feats[None, ], self.meshes.feats[:, None])
+                lossREG = (sim_verts_coords - sim_verts_feats).norm(dim=-1).mean()
+
+                loss = lossCLS + lossREG * self.config.train.loss_reg_weight
                 loss.backward()
                 logger.info(f'loss {loss.item()}')
                 results_train['loss'] = loss
