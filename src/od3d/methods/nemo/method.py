@@ -326,11 +326,13 @@ class NeMo(OD3DMethod):
 
                 norm_verts = torch.sqrt(torch.einsum('vc,vc->v', self.meshes.verts, self.meshes.verts))
 
-                sim_verts_coords = torch.einsum('nvc,nvc->nv', self.meshes.verts[None, ], self.meshes.verts[:, None]) / (norm_verts[None, :] * norm_verts[:, None])
-                sim_verts_feats = torch.einsum('nvc,nvc->nv', self.meshes.feats[None, ], self.meshes.feats[:, None])
-                lossREG = (sim_verts_coords - sim_verts_feats).norm(dim=-1).mean()
+                loss = lossCLS
+                if self.config.train.loss_reg_weight > 0.:
+                    sim_verts_coords = torch.einsum('nvc,nvc->nv', self.meshes.verts[None, ], self.meshes.verts[:, None]) / (norm_verts[None, :] * norm_verts[:, None])
+                    sim_verts_feats = torch.einsum('nvc,nvc->nv', self.meshes.feats[None, ], self.meshes.feats[:, None])
+                    lossREG = (sim_verts_coords - sim_verts_feats).norm(dim=-1).mean() * self.config.train.loss_reg_weight
+                    loss += lossREG
 
-                loss = lossCLS + lossREG * self.config.train.loss_reg_weight
                 loss.backward()
                 logger.info(f'loss {loss.item()}')
                 results_train['loss'] = loss
@@ -376,6 +378,7 @@ class NeMo(OD3DMethod):
             return sim
     def inference_batch(self, batch, config: DictConfig):
         results = {}
+        B = len(batch)
 
         if config.sample.method == 'uniform':
 
@@ -406,9 +409,6 @@ class NeMo(OD3DMethod):
             # b_cams_multiview_tform4x4_obj[:, :, :3, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]
 
             b_cams_multiview_intr4x4 = batch.cam_intr4x4[:, None].repeat(1, C, 1, 1)
-
-
-        B = len(batch)
 
 
         time_loaded = time.time()
