@@ -1,5 +1,6 @@
 link: slurm
 ws_name: od3d # /work/dlclarge1/sommerl-od3d
+install_od3d: True
 path_od3d: /work/dlclarge1/sommerl-od3d/od3d
 path_datasets: /work/dlclarge1/sommerl-od3d/datasets
 path_exps: /work/dlclarge1/sommerl-od3d/exps

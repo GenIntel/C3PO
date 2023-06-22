@@ -19,6 +19,7 @@ train:
   apply_txtr: False
   epochs_to_next_ckpt: 5
   epochs_to_next_val: 5
+  epochs_to_next_forget_est_tforms4x4: 10
   epochs_to_next_test: 20
   epochs: 200
   batch_accumulate_to_next_step: 2
@@ -37,15 +38,65 @@ train:
 
 test:
     transform:
-      W: 512
-      H: 512
-      dist: 14.
+        W: 512
+        H: 512
+        dist: 14.
+
+    dataloader:
+        num_workers: 0
+        batch_size: 1
+        pin_memory: True
+
+inference:
+    sample:
+      method: epnp3d2d # epnp3d2d uniform
+      epnp3d2d:
+        count_cams: 100
+        count_pts: 4
+    visualize:
+        live: False
+        samples: False
+        verts_ncds_in_rgb: False
+        net_feats_nearest_verts: False
+        sim: False
+
+    pose_iterative_refine: True
 
     optimizer:
         beta0: 0.4
         beta1: 0.6
         lr: 5e-2 # 5e-2
         epochs: 30
+
+    azim:
+        min: '0.'
+        max: math.pi * 2 - (math.pi * 2) / 10.
+        steps: 10
+
+    elev:
+        min: -math.pi / 2
+        max: math.pi / 2
+        steps: 6
+
+    theta:
+        min: '0.'
+        max: math.pi * 2 - (math.pi * 2) / 10.
+        steps: 10
+
+    #elev:
+    #    min: -math.pi / 8
+    #    max: math.pi / 4
+    #    steps: 6
+
+    #theta:
+    #    min: -math.pi / 6
+    #    max: math.pi / 6
+    #    steps: 3
+
+    dist:
+        min: '20.'
+        max: '20.'
+        steps: 1
 
 
 backbone:
@@ -62,7 +113,8 @@ backbone:
 
     width: 64
     height: 64
-    channels: 128
+    channels: 128 # 128
+
 
 memory_bank:
     class_name: nemo.models.feature_banks_cls.NearestMemoryManager

@@ -1,5 +1,6 @@
 link: torque
 path_od3d: /home/sommerl/od3d
+install_od3d: True
 #path_datasets: /misc/lmbraid19/sommerl/datasets
 #path_exps: /misc/lmbraid19/sommerl/exps
 path_datasets: /misc/lmbraid19/sommerl/datasets

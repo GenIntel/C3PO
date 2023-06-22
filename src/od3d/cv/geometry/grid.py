@@ -9,10 +9,22 @@ def substract_pxl2d(x: torch.Tensor):
         x_sub_pxl2d: ...xHxWx2
 
     """
-    H, W = x.shape[-3:-1]
 
+    pxl2d = get_pxl2d_like(x)
+    return x - pxl2d
+
+def get_pxl2d_like(x: torch.Tensor):
+    """
+
+    Args:
+        x: ...xHxWxC
+    Returns:
+        x_sub_pxl2d: ...xHxWx2
+
+    """
+    H, W = x.shape[-3:-1]
     pxl2d = get_pxl2d(H, W, device=x.device, dtype=x.dtype)
-    return x - pxl2d[(None,) * (x.dim() - 3)].expand(*x.shape)
+    return pxl2d[(None,) * (x.dim() - 3)].expand(*(x.shape[:-1] + torch.Size([2,])))
 
 def get_pxl2d(H, W, dtype, device, B=None):
     grid_y, grid_x = torch.meshgrid(

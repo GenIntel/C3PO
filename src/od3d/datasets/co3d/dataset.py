@@ -529,6 +529,11 @@ class CO3D(OD3D_Dataset):
 
         # sequence_names
 
+    def get_subset_by_sequences(self, sequences: List[str]):
+        config = self.config.copy()
+        config.sequences = sequences
+        dataset = CO3D(config=config, transform=self.transform)
+        return dataset
     @staticmethod
     def setup(config: DictConfig):
 

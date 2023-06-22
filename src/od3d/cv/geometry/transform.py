@@ -68,6 +68,12 @@ def rot3x3_from_two_vectors(a: torch.Tensor, b: torch.Tensor):
 
 
 
+def inv_tform4x4(a_tform4x4_b):
+    b_rot3x3_a = a_tform4x4_b[..., :3, :3].transpose(-1, -2)
+    a_rot3x3_b_origin = a_tform4x4_b[..., :3, 3]
+    b_transl3_0 = -rot3d(pts3d=a_rot3x3_b_origin, rot3x3=b_rot3x3_a)
+    return transf4x4_from_rot3x3_and_transl3(transl3=b_transl3_0, rot3x3=b_rot3x3_a)
+
 def tform4x4(tform1_4x4, tform2_4x4):
     return torch.bmm(tform1_4x4.reshape(-1, 4, 4), tform2_4x4.reshape(-1, 4, 4)).reshape(tform1_4x4.shape)
 

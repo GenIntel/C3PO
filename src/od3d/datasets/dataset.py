@@ -26,6 +26,7 @@ class OD3D_FRAME_MODALITIES(str, Enum):
     KPTS = 'kpts'
     BBOX = 'bbox'
     CUBOID_FRONT_TFORM4X4_OBJ = 'cuboid_front_tform4x4_obj'
+    SEQUENCE_NAME = 'sequence_name'
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -98,23 +99,49 @@ class OD3D_Frame:
             self._depth_mask = read_image(self.path_dataset.joinpath(self.rfpath_depth_mask))
         return self._depth_mask
 
+@dataclass
 class OD3D_Frames():
-    def __init__(self, frames: List[OD3D_Frame], modalities: List[OD3D_FRAME_MODALITIES], dtype, device):
-        self.modalities = OD3D_FRAME_MODALITIES
+    modalities: List[OD3D_FRAME_MODALITIES]
+    length: int
+    name: List[str]
+    path_co3d: Path
+    size: torch.Tensor
+    cam_intr4x4: torch.Tensor
+    cam_tform4x4_obj: torch.Tensor
+    category: List[str]
+    label: torch.LongTensor
+    dtype: None
+    device: None
+    sequence_name: None
+    rgb: None
+    depth: None
+    mask: None
+    depth_mask: None
+    kpts2d_annot: None
+    kpts2d_annot_vsbl: None
+    kpts_names: None
+    kpts3d: None
+    bbox: None
 
+    @staticmethod
+    def get_frames_from_list(frames: List[OD3D_Frame], modalities: List[OD3D_FRAME_MODALITIES], dtype, device):
         frame0 = frames[0]
-        self.length = len(frames)
-        self.name = [frame.name for frame in frames]
-        self.dtype = dtype
-        self.device = device
-        self.path_co3d = frame0.path_dataset
-        self.size = frame0.size # .to(device=device)
-        self.cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0) # .to(device=device)
-        self.cam_proj4x4_obj = torch.stack([frame.cam_proj4x4_obj for frame in frames], dim=0) #.to(device=device)
-        self.cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0) #.to(device=device)
-        self.category = [frame.category for frame in frames]
-        self.label = torch.LongTensor([frame.label for frame in frames]) # .to(device=device)
 
+        length = len(frames)
+        name = [frame.name for frame in frames]
+        dtype = dtype
+        device = device
+        path_co3d = frame0.path_dataset
+        size = frame0.size # .to(device=device)
+        cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0) # .to(device=device)
+        cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0) #.to(device=device)
+        category = [frame.category for frame in frames]
+        label = torch.LongTensor([frame.label for frame in frames]) # .to(device=device)
+
+        if OD3D_FRAME_MODALITIES.SEQUENCE_NAME in modalities:
+            sequence_name = [frame.sequence.name for frame in frames]
+        else:
+            sequence_name = None
         # if OD3D_FRAME_MODALITIES.CUBOID_FRONT_TFORM4X4_OBJ in modalities:
         #
         #    cuboid_front_tform4x4_obj = torch.stack([frame.sequence.cuboid_front_tform4x4_obj for frame in frames],
@@ -124,27 +151,67 @@ class OD3D_Frames():
         #    self.cam_proj4x4_obj = tform4x4(self.cam_intr4x4, self.cam_tform4x4_obj)
 
         if OD3D_FRAME_MODALITIES.RGB in modalities:
-            self.rgb = torch.stack([frame.rgb for frame in frames], dim=0) #.to(device=device)
+            rgb = torch.stack([frame.rgb for frame in frames], dim=0) #.to(device=device)
+        else:
+            rgb = None
 
         if OD3D_FRAME_MODALITIES.MASK in modalities:
-            self.mask = torch.stack([frame.mask for frame in frames], dim=0) #.to(device=device)
+            mask = torch.stack([frame.mask for frame in frames], dim=0) #.to(device=device)
+        else:
+            mask = None
 
         if OD3D_FRAME_MODALITIES.DEPTH in modalities:
-            self.depth = torch.stack([frame.depth for frame in frames], dim=0)# .to(device=device)
+            depth = torch.stack([frame.depth for frame in frames], dim=0)# .to(device=device)
+        else:
+            depth = None
 
         if OD3D_FRAME_MODALITIES.DEPTH_MASK in modalities:
-            self.depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0)# .to(device=device)
+            depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0)# .to(device=device)
+        else:
+            depth_mask = None
 
         if OD3D_FRAME_MODALITIES.KPTS in modalities:
-            self.kpts2d_annot = [frame.kpts2d_annot for frame in frames]
-            self.kpts2d_annot_vsbl = [frame.kpts2d_annot_vsbl for frame in frames]
-            self.kpts_names = [frame.kpts_names for frame in frames]
-            self.kpts3d = [frame.kpts3d for frame in frames]
+            kpts2d_annot = [frame.kpts2d_annot for frame in frames]
+            kpts2d_annot_vsbl = [frame.kpts2d_annot_vsbl for frame in frames]
+            kpts_names = [frame.kpts_names for frame in frames]
+            kpts3d = [frame.kpts3d for frame in frames]
+        else:
+            kpts2d_annot = None
+            kpts2d_annot_vsbl = None
+            kpts_names = None
+            kpts3d = None
 
         if OD3D_FRAME_MODALITIES.BBOX in modalities:
-            self.bbox = torch.stack([frame.bbox for frame in frames])
-        self.modalities = modalities
+            bbox = torch.stack([frame.bbox for frame in frames])
+        else:
+            bbox = None
 
+        return OD3D_Frames(modalities=modalities, length=length,name=name,  dtype=dtype, device=device,
+                           path_co3d=path_co3d, size=size, cam_intr4x4=cam_intr4x4, cam_tform4x4_obj=cam_tform4x4_obj,
+                           category=category, label=label, sequence_name=sequence_name,
+                           rgb=rgb, depth = depth,
+                           mask=mask, depth_mask=depth_mask, kpts2d_annot=kpts2d_annot,
+                           kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox)
+
+
+    def get_items(self, items):
+        return OD3D_Frames(modalities=self.modalities, length=len(items), name=[self.name[item] for item in items], dtype=self.dtype, device=self.device,
+                           path_co3d=self.path_co3d, size=self.size, cam_intr4x4=self.cam_intr4x4[items], cam_tform4x4_obj=self.cam_tform4x4_obj[items],
+                           category=[self.category[item] for item in items], label=self.label[items],
+                           sequence_name=[self.sequence_name[item] for item in items] if self.sequence_name is not None else None,
+                           rgb=self.rgb[items] if self.rgb is not None else None,
+                           depth=self.depth[items] if self.depth is not None else None,
+                           mask=self.mask[items] if self.mask is not None else None,
+                           depth_mask=self.depth_mask[items] if self.depth_mask is not None else None,
+                           kpts2d_annot=self.kpts2d_annot[items] if self.kpts2d_annot is not None else None,
+                           kpts2d_annot_vsbl=self.kpts2d_annot_vsbl[items] if self.kpts2d_annot_vsbl is not None else None,
+                           kpts_names=self.kpts_names[items] if self.kpts_names is not None else None,
+                           kpts3d=self.kpts3d[items] if self.kpts3d is not None else None,
+                           bbox =self.bbox[items] if self.bbox is not None else None)
+
+    @property
+    def cam_proj4x4_obj(self):
+        return tform4x4(self.cam_intr4x4, self.cam_tform4x4_obj)
     def __len__(self):
         return self.length
     def visualize(self, cuboids: Meshes = None):
@@ -229,7 +296,7 @@ class OD3D_Dataset(Dataset):
         raise NotImplementedError
 
     def collate_fn(self, frames: List[OD3D_Frame], device='cpu', dtype=torch.float32):
-        frames = OD3D_Frames(frames, modalities=self.config.modalities, dtype=dtype, device=device)
+        frames = OD3D_Frames.get_frames_from_list(frames, modalities=self.config.modalities, dtype=dtype, device=device)
         return frames
 
     @staticmethod

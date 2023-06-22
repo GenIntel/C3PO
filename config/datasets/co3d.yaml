@@ -5,7 +5,7 @@ modalities:
     - 'rgb'
     - 'mask'
     - 'cuboid_front_tform4x4_obj' # setting this is highly important, so that the cam_tform4x4_obj equals cam_tform4x4_cuboid_front
-
+    - 'sequence_name'
 
 
 return_cam_tform4x4_cuboid_front: True

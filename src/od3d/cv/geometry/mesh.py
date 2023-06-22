@@ -129,7 +129,8 @@ class Meshes(torch.nn.Module):
         return feats_from_faces
 
     def get_feats_from_faces_with_mesh_id(self, mesh_id):
-        return self.feats_from_faces[self.faces_counts_acc_from_0[mesh_id]: self.faces_counts_acc_from_0[mesh_id+1]]
+        # return self.feats_from_faces[self.faces_counts_acc_from_0[mesh_id]: self.faces_counts_acc_from_0[mesh_id+1]]
+        return self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)]
     def get_rgb_with_mesh_id(self, mesh_id):
         return self.rgb[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
     def get_verts_with_mesh_id(self, mesh_id):
