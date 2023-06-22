@@ -4,6 +4,30 @@ import cv2
 import pytorch3d as t3d
 import pytorch3d.ops
 
+def batchwise_fit_se3_to_corresp_3d_2d_and_masks(masks_in, pts1, pxl2, proj_mat, method="cpu-epnp", weights=None, prev_se3_mats=None):
+    """ calculates se3 fit
+    Paramters
+    ---------
+    masks_in torch.Tensor: BxKxHxW / BxKxN, bool
+    pts1 torch.Tensor: Bx3xHxW / Bx3xN, float
+    pxl2 torch.Tensor: Bx2xHxW / Bx2xN, float
+    weights_in torch.Tensor: BxKxHxW / BxKxN, float
+
+    Returns
+    -------
+    tform4x4: BxKx4x4, float
+    """
+    tform4x4 = []
+    B = pts1.shape[0]
+    for b in range(B):
+        if weights is not None:
+            tform4x4.append(
+                fit_se3_to_corresp_3d_2d_and_masks(masks_in[b], pts1[b], pxl2[b], proj_mat[b], method=method,
+                                                   weights=weights[b], prev_se3_mats=None))
+        else:
+            tform4x4.append(fit_se3_to_corresp_3d_2d_and_masks(masks_in[b], pts1[b], pxl2[b], proj_mat[b], method=method, weights=None, prev_se3_mats=None))
+    return torch.stack(tform4x4, dim=0)
+
 def fit_se3_to_corresp_3d_2d_and_masks(masks_in, pts1, pxl2, proj_mat, method="cpu-epnp", weights=None, prev_se3_mats=None):
     """ calculates se3 fit
     Paramters

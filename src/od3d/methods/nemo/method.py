@@ -13,6 +13,7 @@ import numpy as np
 import wandb
 import math
 from od3d.cv.visual.draw import draw_pixels
+from od3d.cv.geometry.transform import se3_exp_map
 
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
@@ -33,7 +34,7 @@ from od3d.methods.nemo.backbone import OD3D_Backbone
 from functools import partial
 
 from od3d.cv.geometry.grid import get_pxl2d_like
-from od3d.cv.geometry.fit3d2d import fit_se3_to_corresp_3d_2d_and_masks
+from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks #  fit_se3_to_corresp_3d_2d_and_masks
 
 class NeMo(OD3DMethod):
     def __init__(
@@ -189,22 +190,30 @@ class NeMo(OD3DMethod):
                         self.seq_obj_tform4x4_est_obj[dataset.config.sequences[s]] = torch.eye(4, device=self.device)
                         self.seq_obj_tform4x4_est_obj_sim[dataset.config.sequences[s]] = 1.
                     else:
-                        dataloader_train_seq = torch.utils.data.DataLoader(dataset=dataset.get_subset_by_sequences([seq]), batch_size=1, shuffle=True,
+                        seq_dataset = dataset.get_subset_by_sequences([seq])
+                        dataloader_train_seq = torch.utils.data.DataLoader(dataset=seq_dataset, batch_size=self.config.test.dataloader.batch_size, shuffle=True,
                                                                            collate_fn=dataset.collate_fn,
-                                                                           num_workers=self.config.train.dataloader.num_workers,
-                                                                           pin_memory=self.config.train.dataloader.pin_memory)
+                                                                           num_workers=self.config.test.dataloader.num_workers,
+                                                                           pin_memory=self.config.test.dataloader.pin_memory)
                         logger.info(f'estimating obj_tform4x4_obj_est for {seq}')
                         seq_obj_tform4x4_est_obj = []
                         seq_obj_tform4x4_est_obj_sim = []
+                        count_frames = 0
                         for i, batch in enumerate(iter(dataloader_train_seq)):
-                            if i == self.config.train.sequences_tform4x4_estimated_frames_count:
+                            count_frames += len(batch)
+                            if count_frames >= self.config.train.sequences_tform4x4_estimated_frames_count:
                                 break
                             batch.to(device=self.device)
                             cam_tform4x4_obj_est, est_sim, _ = self.inference_batch(batch, config=self.config.inference)
-                            seq_obj_tform4x4_est_obj.append(tform4x4(inv_tform4x4(batch.cam_tform4x4_obj[0]), cam_tform4x4_obj_est))
-                            seq_obj_tform4x4_est_obj_sim.append(est_sim[0])
-                        seq_sims = torch.stack(seq_obj_tform4x4_est_obj_sim, dim=0)
-                        seq_max_sim_id = seq_sims.max(dim=0)[1]
+                            seq_obj_tform4x4_est_obj.append(tform4x4(inv_tform4x4(batch.cam_tform4x4_obj), cam_tform4x4_obj_est))
+                            seq_obj_tform4x4_est_obj_sim.append(est_sim)
+                        seq_obj_tform4x4_est_obj_sim = torch.cat(seq_obj_tform4x4_est_obj_sim, dim=0)
+                        seq_obj_tform4x4_est_obj = torch.cat(seq_obj_tform4x4_est_obj, dim=0)
+
+                        seq_obj_tform4x4_est_obj_sim = seq_obj_tform4x4_est_obj_sim[:self.config.train.sequences_tform4x4_estimated_frames_count]
+                        seq_obj_tform4x4_est_obj = seq_obj_tform4x4_est_obj[:self.config.train.sequences_tform4x4_estimated_frames_count]
+
+                        seq_max_sim_id = seq_obj_tform4x4_est_obj_sim.max(dim=0)[1]
                         if seq_obj_tform4x4_est_obj_sim[seq_max_sim_id] > self.config.train.sequences_tform4x4_estimated_sim_threshold:
                             self.seq_obj_tform4x4_est_obj[dataset.config.sequences[s]] = seq_obj_tform4x4_est_obj[seq_max_sim_id]
                             self.seq_obj_tform4x4_est_obj_sim[dataset.config.sequences[s]] = seq_obj_tform4x4_est_obj_sim[seq_max_sim_id]
@@ -436,7 +445,7 @@ class NeMo(OD3DMethod):
             results['time_class'] = time_pred_class - time_pred_net_feats2d
 
             if config.sample.method == 'epnp3d2d':
-                sim_nearest_texture_vals, sim_nearest_texture_ids = torch.einsum('bchw,bvc->bvhw', net_feats2d, self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids)).max(dim=1)
+                sim_nearest_texture_vals, sim_nearest_texture_ids = torch.einsum('bchw,bvc->bvhw', net_feats2d, self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids).detach()).max(dim=1)
                 sim_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats.detach()).max(dim=1, keepdim=False)[0]
                 sim_nearest_texture_verts = torch.stack([self.meshes.get_verts_stacked_with_mesh_ids(pred_class_ids[b: b+1])[0, sim_nearest_texture_ids[b]] for b in range(B)], dim=0)
                 sim_nearest_texture_verts2d = get_pxl2d_like(sim_nearest_texture_verts) # H=sim_clutter.shape[1], W=sim_clutter.shape[2], dtype=sim_nearest_texture_verts.dtype, device=sim_nearest_texture_verts.device)[None,].expand()
@@ -445,12 +454,12 @@ class NeMo(OD3DMethod):
                 K = config.sample.epnp3d2d.count_cams
                 N = config.sample.epnp3d2d.count_pts
                 masks_in_ids = torch.multinomial((sim_clutter < sim_nearest_texture_vals).flatten(1) * sim_nearest_texture_vals.flatten(1), num_samples=K * N).reshape(-1, K, N)
-                masks_in = torch.zeros(size=(K, sim_clutter.shape[1] * sim_clutter.shape[2]), device=sim_clutter.device, dtype=torch.bool)
-                for k in range(K):
-                    masks_in[k, masks_in_ids[0, k]] = True
-                masks_in = masks_in.reshape(K, sim_clutter.shape[1], sim_clutter.shape[2])
-                b_cams_multiview_tform4x4_obj = fit_se3_to_corresp_3d_2d_and_masks(masks_in=masks_in, pts1=sim_nearest_texture_verts.permute(0, 3, 1, 2)[0],  pxl2=sim_nearest_texture_verts2d.permute(0, 3, 1, 2)[0], proj_mat=batch.cam_intr4x4[0, :2, :3] / self.down_sample_rate, method="cpu-epnp")
-                b_cams_multiview_tform4x4_obj = b_cams_multiview_tform4x4_obj[None, ]
+                masks_in = torch.zeros(size=(B, K, sim_clutter.shape[1] * sim_clutter.shape[2]), device=sim_clutter.device, dtype=torch.bool)
+                for b in range(B):
+                    for k in range(K):
+                        masks_in[b, k, masks_in_ids[b, k]] = True
+                masks_in = masks_in.reshape(B, K, sim_clutter.shape[1], sim_clutter.shape[2])
+                b_cams_multiview_tform4x4_obj = batchwise_fit_se3_to_corresp_3d_2d_and_masks(masks_in=masks_in, pts1=sim_nearest_texture_verts.permute(0, 3, 1, 2),  pxl2=sim_nearest_texture_verts2d.permute(0, 3, 1, 2), proj_mat=batch.cam_intr4x4[:, :2, :3] / self.down_sample_rate, method="cpu-epnp")
                 b_cams_multiview_intr4x4 = batch.cam_intr4x4[:, None].repeat(1, K, 1, 1)
             
             #  OPTION A: Use 2d gradient of rendered features
@@ -518,7 +527,6 @@ class NeMo(OD3DMethod):
                 show_img(img)
 
         if config.pose_iterative_refine:
-            from od3d.cv.geometry.transform import se3_exp_map
             obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=(B, 6)).to(device=cam_transf4x4_obj.device),
                                                 requires_grad=True)
             cam_transf4x4_obj = tform4x4(cam_transf4x4_obj, se3_exp_map(obj_tform6_tmp))
@@ -596,6 +604,7 @@ class NeMo(OD3DMethod):
             results['time_pose_iterative'] = (time.time() - time_before_pose_iterative)
             # logger.info(f"predicted pose iterative took {(time.time() - time_before_pose_iterative):.3f}s")
 
+        cam_transf4x4_obj = cam_transf4x4_obj.clone().detach()
         if config.visualize.verts_ncds_in_rgb:
             img = blend_rgb(batch.rgb[0], (
             self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],

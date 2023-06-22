@@ -20,6 +20,7 @@ from enum import Enum
 from od3d.cv.io import load_ply, save_ply
 from od3d.io import run_cmd
 from copy import copy
+from od3d.cv.geometry.transform import inv_tform4x4
 
 from od3d.cv.visual.show import show_pcl
 
@@ -404,7 +405,7 @@ class CO3D_Frame(OD3D_Frame):
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
             if self.return_cam_tform4x4_cuboid_front:
-                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.l_cam_tform4x4_obj), self.sequence.cuboid_front_tform4x4_obj.inverse())
+                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.l_cam_tform4x4_obj), inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
             else:
                 self._cam_tform4x4_obj = torch.Tensor(self.l_cam_tform4x4_obj)
         return self._cam_tform4x4_obj
