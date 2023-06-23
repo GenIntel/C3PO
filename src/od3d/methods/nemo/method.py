@@ -249,6 +249,9 @@ class NeMo(OD3DMethod):
 
                 sequences_filtered = list(self.seq_obj_tform4x4_est_obj_sim.keys())
 
+                results_train["count_sequences"] = len(sequences_filtered)
+
+
                 dataset_sub, _ = torch.utils.data.random_split(dataset.get_subset_by_sequences(sequences_filtered), [dataset.config.subset_fraction,
                                                                          1. - dataset.config.subset_fraction],
                                                                generator=generator)
@@ -268,7 +271,6 @@ class NeMo(OD3DMethod):
 
             if e % self.config.train.epochs_to_next_val == 0:
                 results_val = self.test(dataset, dataset_sub=dataset_val_seq_filtered)
-                results_val["num_sequences"] = len(self.seq_obj_tform4x4_est_obj.keys())
                 wandb.log({'val_' + k: v for k, v in results_val.items()})
 
 
