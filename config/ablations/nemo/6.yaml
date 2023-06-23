@@ -1,6 +1,0 @@
-# @package _global_
-ablation_name: lr1e-4_thrsh06_l2
-method:
-    nemo:
-        train:
-            sequences_tform4x4_labeled_count: 2

@@ -1,7 +1,8 @@
 # @package _global_
-ablation_name: lr1e-4_thrsh06_l1
+ablation_name: lr1e-4_thrsh065_l1_e400_s10
 method:
     nemo:
         train:
-            optimizer:
-                lr: 1e-4 # 0.0001
+            sequences_tform4x4_estimated_sim_threshold: 0.65
+            sequences_tform4x4_labeled_count: 1
+            epochs: 400 # 200

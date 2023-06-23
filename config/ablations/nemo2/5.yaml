@@ -1,0 +1,6 @@
+# @package _global_
+ablation_name: lr1e-4_thrsh099_l3
+method:
+    nemo:
+        train:
+            sequences_tform4x4_estimated_sim_threshold: 0.99

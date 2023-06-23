@@ -1,6 +1,6 @@
 # @package _global_
-ablation_name: lr1e-4_thrsh06_l1_regw01
+ablation_name: lr1e-4_thrsh065_l3
 method:
     nemo:
         train:
-            loss_reg_weight: 0.1
+            sequences_tform4x4_estimated_sim_threshold: 0.65

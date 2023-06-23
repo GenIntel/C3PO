@@ -4,8 +4,9 @@ class_name: CO3D
 modalities:
     - 'rgb'
     - 'mask'
-    - 'cuboid_front_tform4x4_obj' # setting this is highly important, so that the cam_tform4x4_obj equals cam_tform4x4_cuboid_front
     - 'sequence_name'
+    - 'sequence'
+    # - 'cuboid_front_tform4x4_obj' # setting this is highly important, so that the cam_tform4x4_obj equals cam_tform4x4_cuboid_front
 
 
 return_cam_tform4x4_cuboid_front: True
@@ -20,29 +21,34 @@ rpath_dtd_cache: DTD_cache
 path_dtd_raw: ${platform.path_datasets}/${.rpath_dtd_raw}
 path_dtd_cache: ${platform.path_datasets}/${.rpath_dtd_cache}
 
-setup: True
+setup: False
 setup_remove_previous: False
 setup_override: False
 
 preprocess: True
+preprocess_meta: True
 preprocess_meta_override: False
 preprocess_meta_remove_previous: False
+preprocess_cuboids: False
 preprocess_cuboids_override: False
 preprocess_front_names_override: False
 
-sequences:
-  - '106_12650_23736'
-  - '116_13655_29006'
-  - '185_19982_37678'
-  - '194_20898_41093'
-  - '194_20900_41097'
-  - '194_20939_43630'
-  #- '206_21799_45886'
-  #- '206_21805_45881'
-  #- '206_21810_45890'
-  #- '216_22790_47232'
-  #- '216_22808_47498'
-  #- '216_22836_48452'
+sequences_require_pcl: False
+sequences_count_max_per_class: 40
+
+#sequences:
+#  - '106_12650_23736'
+#  - '116_13655_29006'
+#  - '185_19982_37678'
+#  - '194_20898_41093'
+#  - '194_20900_41097'
+#  - '194_20939_43630'
+#  #- '206_21799_45886'
+#  #- '206_21805_45881'
+#  #- '206_21810_45890'
+#  #- '216_22790_47232'
+#  #- '216_22808_47498'
+#  #- '216_22836_48452'
 
 
 path_cuboids: ${.path_co3d_preprocess}/cuboids
