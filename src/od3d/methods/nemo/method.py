@@ -237,6 +237,8 @@ class NeMo(OD3DMethod):
                                                          imgs_sizes=batch.size, meshes_ids=batch.label[:1],
                                                          modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(
                                     dtype=batch.rgb.dtype))
+
+
                                 results_train[f'seq_{seq}_verts_ncds_in_rgb'] = image_as_wandb_image(verts_ncds_in_rgb,
                                                                                           caption=f'Frame Name {batch.name[0]}')
                                 if self.config.train.visualize.live:
@@ -276,6 +278,7 @@ class NeMo(OD3DMethod):
 
 
             for i, batch in enumerate(iter(dataloader_train)):
+
                 batch.to(device=self.device)
 
                 batch.cam_tform4x4_obj_sim = torch.zeros(size=(len(batch),), device=self.device)
@@ -362,6 +365,7 @@ class NeMo(OD3DMethod):
                 logger.info(f'loss {loss.item()}')
                 results_train['loss'] = loss
                 wandb.log({'train_' + k: v for k, v in results_train.items()})
+                results_train = {}
 
                 accumulate_steps += 1
                 if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:

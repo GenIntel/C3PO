@@ -99,6 +99,17 @@ def info_slurm():
     'srun -p lmb_gpu-rtx2080 -w dagobert --pty bash'
     pass
 
+def get_slurm_jobs_ids(job_id_treshold=None):
+    slurm_result = subprocess.run(f'ssh slurm "squeue --me"', capture_output=True, shell=True)
+    slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
+    slurm_jobs_ids = []
+    for slurm_job in slurm_jobs[1:]:
+        slurm_job_split = slurm_job.split()
+        if len(slurm_job_split) > 0:
+            slurm_jobs_ids.append(int(slurm_job_split[0]))
+    if job_id_treshold is not None:
+        slurm_jobs_ids = list(filter(lambda job_id: job_id < job_id_treshold, slurm_jobs_ids))
+    return slurm_jobs_ids
 
 @app.command()
 def status_slurm():
@@ -128,6 +139,13 @@ def stop_torque(job: str = typer.Option(None, '-j', '--job')):
 def stop_slurm(job: str = typer.Option(None, '-j', '--job')):
     logging.basicConfig(level=logging.INFO)
 
-    slurm_result = subprocess.run(f'ssh slurm "scancel {job}"', capture_output=True, shell=True)
-    for line in slurm_result.stdout.decode("utf-8").split("\n"):
-        logger.info(line)
+    if job.startswith('l'):
+        slurm_jobs_ids = get_slurm_jobs_ids(int(job[1:]))
+        logger.info(f'stop slurm job ids {slurm_jobs_ids}')
+    else:
+        slurm_jobs_ids = [int(job)]
+
+    for job_id in slurm_jobs_ids:
+        slurm_result = subprocess.run(f'ssh slurm "scancel {str(job_id)}"', capture_output=True, shell=True)
+        for line in slurm_result.stdout.decode("utf-8").split("\n"):
+            logger.info(line)
