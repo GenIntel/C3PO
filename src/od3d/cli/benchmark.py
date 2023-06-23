@@ -114,8 +114,8 @@ def get_slurm_jobs_ids(job_id_treshold=None):
 @app.command()
 def status_slurm():
     logging.basicConfig(level=logging.INFO)
-
-    slurm_result = subprocess.run(f'ssh slurm "squeue --me"', capture_output=True, shell=True)
+    format = '"%.18i %.9P %.40j %.8u %.8T %.10M %.9l %.6D %R"'
+    slurm_result = subprocess.run(f"ssh slurm 'squeue --me --format={format}'", capture_output=True, shell=True)
     slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
     for slurm_job in slurm_jobs:
         logger.info(slurm_job)
