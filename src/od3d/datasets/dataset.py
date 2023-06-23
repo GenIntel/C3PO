@@ -254,7 +254,7 @@ class OD3D_Frames():
         if OD3D_FRAME_MODALITIES.BBOX in self.modalities:
             img = draw_bbox(img=img, bbox=self.bbox[0])
 
-        if self.sequence is not None:
+        if self.sequence is not None and self.sequence[0].cuboid_labeled:
             # if self.sequence_name
             img = blend_rgb(img, (self.sequence[0].cuboid.render_feats(
                                     cams_tform4x4_obj=self.cam_tform4x4_obj[:1],

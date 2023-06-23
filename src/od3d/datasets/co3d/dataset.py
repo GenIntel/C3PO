@@ -285,6 +285,9 @@ class CO3D_Sequence():
         return self._pcl
 
     @property
+    def cuboid_labeled(self):
+        return self.fpath_cuboid.exists()
+    @property
     def cuboid_front_tform4x4_obj_labeled(self):
         return self.fpath_cuboid_front_tform4x4_obj.exists()
     @property
