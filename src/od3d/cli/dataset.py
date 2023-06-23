@@ -28,6 +28,7 @@ def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
     sequences_names_as_str = '\n'.join(dataset.sequences_names)
     logger.info(f"Dataset sequences names: \n {sequences_names_as_str}")
+    logger.info(f'There are {len(dataset.sequences_names)} sequences in the dataset.')
 
 
 @app.command()
@@ -80,6 +81,6 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=dataset.collate_fn)
     logging.info(f"Dataset contains {len(dataset)} frames.")
     for batch in iter(dataloader):
-        batch.visualize(cuboids=dataset.cuboids)
+        batch.visualize()
         # batch[0].sequence_name
         # dataset.visualize(i)

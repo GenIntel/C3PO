@@ -27,6 +27,7 @@ class OD3D_FRAME_MODALITIES(str, Enum):
     BBOX = 'bbox'
     CUBOID_FRONT_TFORM4X4_OBJ = 'cuboid_front_tform4x4_obj'
     SEQUENCE_NAME = 'sequence_name'
+    SEQUENCE = 'sequence'
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -113,6 +114,7 @@ class OD3D_Frames():
     dtype: None
     device: None
     sequence_name: None
+    sequence: None
     rgb: None
     depth: None
     mask: None
@@ -142,6 +144,11 @@ class OD3D_Frames():
             sequence_name = [frame.sequence.name for frame in frames]
         else:
             sequence_name = None
+
+        if OD3D_FRAME_MODALITIES.SEQUENCE in modalities:
+            sequence = [frame.sequence for frame in frames]
+        else:
+            sequence = None
         # if OD3D_FRAME_MODALITIES.CUBOID_FRONT_TFORM4X4_OBJ in modalities:
         #
         #    cuboid_front_tform4x4_obj = torch.stack([frame.sequence.cuboid_front_tform4x4_obj for frame in frames],
@@ -191,7 +198,7 @@ class OD3D_Frames():
                            category=category, label=label, sequence_name=sequence_name,
                            rgb=rgb, depth = depth,
                            mask=mask, depth_mask=depth_mask, kpts2d_annot=kpts2d_annot,
-                           kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox)
+                           kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox, sequence=sequence)
 
 
     def get_items(self, items):
@@ -207,7 +214,8 @@ class OD3D_Frames():
                            kpts2d_annot_vsbl=self.kpts2d_annot_vsbl[items] if self.kpts2d_annot_vsbl is not None else None,
                            kpts_names=self.kpts_names[items] if self.kpts_names is not None else None,
                            kpts3d=self.kpts3d[items] if self.kpts3d is not None else None,
-                           bbox =self.bbox[items] if self.bbox is not None else None)
+                           bbox =self.bbox[items] if self.bbox is not None else None,
+                           sequence=[self.sequence[item] for item in items] if self.sequence is not None else None)
 
     @property
     def cam_proj4x4_obj(self):
@@ -246,11 +254,12 @@ class OD3D_Frames():
         if OD3D_FRAME_MODALITIES.BBOX in self.modalities:
             img = draw_bbox(img=img, bbox=self.bbox[0])
 
-        if cuboids is not None:
-            img = blend_rgb(img, (cuboids.render_feats(
+        if self.sequence is not None:
+            # if self.sequence_name
+            img = blend_rgb(img, (self.sequence[0].cuboid.render_feats(
                                     cams_tform4x4_obj=self.cam_tform4x4_obj[:1],
                                     cams_intr4x4=self.cam_intr4x4[:1],
-                                    imgs_sizes=self.size, meshes_ids=self.label[:1],
+                                    imgs_sizes=self.size, meshes_ids=torch.LongTensor([0]),
                                     modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=self.rgb.dtype))
 
         #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
