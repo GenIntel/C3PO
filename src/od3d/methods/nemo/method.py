@@ -157,7 +157,7 @@ class NeMo(OD3DMethod):
 
     def train(self, dataset: OD3D_Dataset, dataset_test: OD3D_Dataset):
         dataset.transform = self.transform_train
-
+        results_train = {}
         self.net.train()
         self.meshes.feats.requires_grad = True
 
@@ -210,13 +210,34 @@ class NeMo(OD3DMethod):
                         seq_obj_tform4x4_est_obj_sim = torch.cat(seq_obj_tform4x4_est_obj_sim, dim=0)
                         seq_obj_tform4x4_est_obj = torch.cat(seq_obj_tform4x4_est_obj, dim=0)
 
-                        seq_obj_tform4x4_est_obj_sim = seq_obj_tform4x4_est_obj_sim[:self.config.train.sequences_tform4x4_estimated_frames_count]
                         seq_obj_tform4x4_est_obj = seq_obj_tform4x4_est_obj[:self.config.train.sequences_tform4x4_estimated_frames_count]
+
+                        seq_obj_tform4x4_est_obj_sim = []
+                        for i, batch in enumerate(iter(dataloader_train_seq)):
+                            batch.to(device=self.device)
+                            #B = len(batch)
+                            #C = self.config.train.sequences_tform4x4_estimated_frames_count
+                            sim = self.get_sim_cam_tform4x4_obj(batch, cam_intr4x4=batch.cam_intr4x4[:, None], cam_tform4x4_obj=tform4x4_broadcast(batch.cam_tform4x4_obj[:, None], seq_obj_tform4x4_est_obj[None, ]), broadcast_batch_and_cams=True)
+                            seq_obj_tform4x4_est_obj_sim.append(sim)
+                        seq_obj_tform4x4_est_obj_sim = torch.cat(seq_obj_tform4x4_est_obj_sim, dim=0).mean(dim=0)
 
                         seq_max_sim_id = seq_obj_tform4x4_est_obj_sim.max(dim=0)[1]
                         if seq_obj_tform4x4_est_obj_sim[seq_max_sim_id] > self.config.train.sequences_tform4x4_estimated_sim_threshold:
-                            self.seq_obj_tform4x4_est_obj[dataset.config.sequences[s]] = seq_obj_tform4x4_est_obj[seq_max_sim_id]
-                            self.seq_obj_tform4x4_est_obj_sim[dataset.config.sequences[s]] = seq_obj_tform4x4_est_obj_sim[seq_max_sim_id]
+                            self.seq_obj_tform4x4_est_obj[seq] = seq_obj_tform4x4_est_obj[seq_max_sim_id]
+                            if self.config.train.visualize.seq_added_tform:
+                                batch.to(self.device)
+                                batch.cam_tform4x4_obj[:1] = tform4x4(batch.cam_tform4x4_obj[:1], self.seq_obj_tform4x4_est_obj[seq])
+                                verts_ncds_in_rgb = blend_rgb(batch.rgb[0], (
+                                self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[:1],
+                                                         cams_intr4x4=batch.cam_intr4x4[:1],
+                                                         imgs_sizes=batch.size, meshes_ids=batch.label[:1],
+                                                         modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(
+                                    dtype=batch.rgb.dtype))
+                                results_train[f'seq_{seq}_verts_ncds_in_rgb'] = image_as_wandb_image(verts_ncds_in_rgb,
+                                                                                          caption=f'Frame Name {batch.name[0]}')
+                                if self.config.train.visualize.live:
+                                    show_img(verts_ncds_in_rgb)
+                            self.seq_obj_tform4x4_est_obj_sim[seq] = seq_obj_tform4x4_est_obj_sim[seq_max_sim_id]
 
                 logger.info(f'estimating obj_tform4x4_obj_est_sims of {self.seq_obj_tform4x4_est_obj_sim}')
 
@@ -249,7 +270,7 @@ class NeMo(OD3DMethod):
             self.net.train()
             self.meshes.feats.requires_grad = True
 
-            results_train = {}
+
             for i, batch in enumerate(iter(dataloader_train)):
                 batch.to(device=self.device)
 
@@ -358,6 +379,18 @@ class NeMo(OD3DMethod):
         pass
     def calc_loss_feat2d_net_rendered(self, feats2d_net, feats2d_rendered):
         pass
+
+    def get_sim_cam_tform4x4_obj(self, batch, cam_intr4x4, cam_tform4x4_obj, broadcast_batch_and_cams=False):
+        with torch.no_grad():
+            net_feats2d = self.net(batch.rgb)
+            mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_tform4x4_obj,
+                                                             cams_intr4x4=cam_intr4x4,
+                                                             imgs_sizes=batch.size, meshes_ids=batch.label,
+                                                             down_sample_rate=self.down_sample_rate,
+                                                             broadcast_batch_and_cams=broadcast_batch_and_cams)
+
+            sim = self.get_sim(feats2d_net=net_feats2d, feats2d_rendered=mesh_feats2d_rendered)
+        return sim
 
     def get_sim(self, feats2d_net, feats2d_rendered, return_sim_pxl=False):
         if feats2d_rendered.dim() == 5:
