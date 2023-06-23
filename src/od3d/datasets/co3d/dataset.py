@@ -148,6 +148,8 @@ class CO3D_Sequence():
             config.path = []
             config.path_meta = self.path_meta
             config.classes = [self.category]
+            config.preprocess = False
+            config.setup = False
             dataset = CO3D(config=config)
 
             if fpath_front_name.exists():
@@ -331,7 +333,8 @@ class CO3D_Sequence():
             config.path_meta = self.path_meta
             config.classes = [self.category]
             config.modalities = [OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK]
-
+            config.preprocess=False
+            config.setup=False
             dataset = CO3D(config=config)
             dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
                                                      collate_fn=dataset.collate_fn,
@@ -651,7 +654,6 @@ class CO3D(OD3D_Dataset):
                     continue
 
                 sequence = CO3D_Sequence.load_from_raw(path_co3d=path, path_meta=path_meta, path_preprocess=path_preprocess, sequence_annotation=sequence_annoation)
-
 
                 config = OmegaConf.structured(sequence)
                 if not fpath.parent.exists():
