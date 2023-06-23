@@ -27,11 +27,11 @@ def get_pxl2d_like(x: torch.Tensor):
     return pxl2d[(None,) * (x.dim() - 3)].expand(*(x.shape[:-1] + torch.Size([2,])))
 
 def get_pxl2d(H, W, dtype, device, B=None):
-    grid_y, grid_x = torch.meshgrid(
+    grid_x, grid_y = torch.meshgrid(
         [
             torch.arange(0., H, dtype=dtype, device=device),
             torch.arange(0., W, dtype=dtype, device=device),
-        ]
+        ], indexing='xy'
     )
     grid_xy = torch.stack((grid_x, grid_y), dim=-1)
 
