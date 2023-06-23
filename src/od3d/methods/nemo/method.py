@@ -213,7 +213,11 @@ class NeMo(OD3DMethod):
                         seq_obj_tform4x4_est_obj = seq_obj_tform4x4_est_obj[:self.config.train.sequences_tform4x4_estimated_frames_count]
 
                         seq_obj_tform4x4_est_obj_sim = []
+                        count_frames = 0
                         for i, batch in enumerate(iter(dataloader_train_seq)):
+                            count_frames += len(batch)
+                            if count_frames >= self.config.train.sequences_tform4x4_estimated_frames_count:
+                                break
                             batch.to(device=self.device)
                             #B = len(batch)
                             #C = self.config.train.sequences_tform4x4_estimated_frames_count

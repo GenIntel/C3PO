@@ -532,6 +532,8 @@ class CO3D(OD3D_Dataset):
 
     def get_subset_by_sequences(self, sequences: List[str]):
         config = self.config.copy()
+        config.setup = False
+        config.preprocess = False
         config.sequences = sequences
         dataset = CO3D(config=config, transform=self.transform)
         return dataset
