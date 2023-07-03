@@ -82,7 +82,7 @@ def bench_single_method_torque(cfg: DictConfig):
         cuda_cfg_str = f':nvidiaMinCC75' if gpu_count > 0 else ""
 
         if cfg.platform.install_od3d:
-            install_od3d_cmds_str = '''
+            install_od3d_cmds_str = f'''
 pip install pip --upgrade
 pip install torch
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
@@ -180,7 +180,7 @@ def bench_single_method_slurm(cfg: DictConfig):
         walltime = cfg.platform.walltime
 
         if cfg.platform.install_od3d:
-            install_od3d_cmds_str = '''
+            install_od3d_cmds_str = f'''
 pip install pip --upgrade
 pip install torch
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
