@@ -18,7 +18,7 @@ class CenterZoom3D():
         self.dist = dist
         self.apply_txtr = apply_txtr
         self.apply_kpts2d_annot = apply_kpts2d_annot
-        self.apply_bbox_annot= apply_bbox_annot
+        self.apply_bbox_annot=apply_bbox_annot
         self.apply_mask = apply_mask
         if self.apply_txtr:
             self.dtd = DTD(config=config)
@@ -26,8 +26,13 @@ class CenterZoom3D():
     def __call__(self, frame):
         # logger.info(f"Frame name {self.name}")
         _, _, _, _ = frame.size, frame.cam_intr4x4, frame.cam_tform4x4_obj, frame.cam_proj4x4_obj
-        scale = frame.cam_tform4x4_obj[2, 3] / self.dist
-
+        if self.dist is not None:
+            scale = frame.cam_tform4x4_obj[2, 3] / self.dist
+            if scale < 0.01:
+                logger.warning(f'Scale is < 0.01. Setting scale to 1.')
+                scale = 1.
+        else:
+            scale = 1.
         center = proj3d2d(self.center3d, proj4x4=frame.cam_proj4x4_obj)
 
         if self.apply_mask:

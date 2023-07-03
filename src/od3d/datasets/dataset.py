@@ -313,3 +313,11 @@ class OD3D_Dataset(Dataset):
         raise NotImplementedError
     def visualize(self, item: int):
         raise NotImplementedError
+
+    @staticmethod
+    def get_path_meta(config):
+        return OD3D_Dataset.get_path_preprocess(config=config).joinpath('meta')
+
+    @staticmethod
+    def get_path_preprocess(config):
+        return Path(config.path_co3d_preprocess)

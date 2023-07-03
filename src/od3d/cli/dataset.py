@@ -73,7 +73,7 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     from od3d.cv.transforms import CenterZoom3D, RandomCenterZoom3D
     # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
     dataset.transform = torchvision.transforms.Compose([
-        RandomCenterZoom3D(H=512, W=512, dist=50., center3d_min=[-1., -1., -1.], center3d_max=[1., 1., 1.], apply_mask=True, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_txtr=False, config=config.dataset),
+        RandomCenterZoom3D(H=512, W=512, dist=20., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_mask=True, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_txtr=False, config=config.dataset),
         dataset.transform,
     ]
     )
@@ -81,6 +81,53 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=dataset.collate_fn)
     logging.info(f"Dataset contains {len(dataset)} frames.")
     for batch in iter(dataloader):
+        logger.info(f'{batch.sequence_name[0]}')
         batch.visualize()
+
         # batch[0].sequence_name
         # dataset.visualize(i)
+
+
+import http.server
+import socketserver
+import torchvision
+@app.command()
+def serve(dataset: str = typer.Option('co3d', '-d', '--dataset'),
+              platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=dataset.collate_fn)
+    logging.info(f"Dataset contains {len(dataset)} frames.")
+    iterator = iter(dataloader)
+
+
+    # Define the request handler class
+    class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            batch = next(iterator)
+            if batch is not None:
+                # Set the appropriate content type for image files
+                self.send_response(200)
+                self.send_header('Content-type', 'image/jpeg' if self.path.endswith(".jpg") else 'image/png')
+                self.end_headers()
+
+                # Open the image file and send its contents as the response body
+                self.wfile.write(bytes(torchvision.io.encode_png(input=(batch.rgb[0].detach().cpu() * 255).to(torch.uint8)).byte()))
+            else:
+                # If the requested file is not an image, fall back to the default behavior
+                super().do_GET()
+
+            #self.send_response(200)  # Set the response status code
+            #self.send_header('Content-type', 'text/html')  # Set the content type header
+            #self.end_headers()
+            #self.wfile.write(b"Hello, World!")  # Send the response body
+
+    # Set up the server
+    port = 8081  # Choose any available port number
+    handler = MyRequestHandler
+    httpd = socketserver.TCPServer(("", port), handler)
+
+    # Start the server
+    print(f"Server running on port {port}")
+    httpd.serve_forever()

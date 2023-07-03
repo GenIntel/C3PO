@@ -547,8 +547,16 @@ class CO3D(OD3D_Dataset):
         self.sequences_item_ids = []
         self.map_item_id_to_seq_id = []
         self.map_item_id_to_frame_id = []
+
+        if self.config.blacklist_negative_depth:
+            blacklist_negative_depth = OmegaConf.load(self.get_fpath_blacklist_negative_depth(config=self.config))
         for sequence_name in tqdm(self.sequences_names):
-            self.frames_names.append(sorted([fpath.name.split('.')[0] for fpath in list(self.path_meta.joinpath(sequence_name).iterdir())], key=lambda n: int(n)))
+            seq_frames_names = sorted([fpath.name.split('.')[0] for fpath in list(self.path_meta.joinpath(sequence_name).iterdir())], key=lambda n: int(n))
+            if self.config.blacklist_negative_depth:
+                seq_frames_names = list(filter(lambda frame_name: frame_name not in blacklist_negative_depth, seq_frames_names))
+            if self.config.frames_count_max_per_sequence > 0:
+                seq_frames_names = seq_frames_names[:self.config.frames_count_max_per_sequence]
+            self.frames_names.append(seq_frames_names)
             self.sequences_lengths.append(len(self.frames_names[-1]))
             self.sequences_item_ids.append(list(range(self.frames_count, self.frames_count + self.sequences_lengths[-1])))
             self.frames_count += self.sequences_lengths[-1]
@@ -617,8 +625,14 @@ class CO3D(OD3D_Dataset):
             CO3D.preprocess_meta(config=config)
         if config.preprocess_cuboids:
             CO3D.preprocess_cuboids(config=config)
+        if config.preprocess_blacklist_negative_depth:
+            CO3D.preprocess_blacklist_negative_depth(config=config)
         # CO3D.preprocess_cam_tform4x4_obj_canonic(config=config)
         # CO3D.preprocess_front_names(config=config)
+
+    @staticmethod
+    def get_fpath_blacklist_negative_depth(config):
+        return OD3D_Dataset.get_path_preprocess(config=config).joinpath('blacklist_negative_depth.yaml')
 
     @staticmethod
     def preprocess_meta(config: DictConfig):
@@ -627,8 +641,8 @@ class CO3D(OD3D_Dataset):
         path_meta = path_preprocess.joinpath('meta')
         sequences = config.get("sequences", None)
         whitelist_frame_types = [CO3D_FRAME_TYPES.DEV_KNOWN, CO3D_FRAME_TYPES.DEV_UNSEEN,
-                                  CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
-                                  CO3D_FRAME_TYPES.TEST_KNOWN]
+                                 CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
+                                 CO3D_FRAME_TYPES.TEST_KNOWN]
 
         #if not config.preprocess_meta_override and path_meta.exists():
         #    return
@@ -720,6 +734,34 @@ class CO3D(OD3D_Dataset):
             logger.info(f"preprocess cam_tform4x4_obj_canonic, sequence {sequence_name}")
             sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
             sequence.preprocess_cam_tform4x4_obj_canonic(override=config.preprocess_cam_tform4x4_obj_canonic_override)
+
+
+    @staticmethod
+    def preprocess_blacklist_negative_depth(config: DictConfig):
+        logger.info("preprocess blacklist negative depth")
+        config = copy(config)
+        config.fpaths_cuboids = None
+        config.setup = False
+        config.preprocess = False
+        dataset = CO3D(config=config)
+        blacklist_negative_depth_fpath = CO3D.get_fpath_blacklist_negative_depth(config=config)
+        if not blacklist_negative_depth_fpath.exists():
+            blacklist_negative_depth = OmegaConf.create()
+        else:
+            blacklist_negative_depth = OmegaConf.load(blacklist_negative_depth_fpath)
+
+        for sequence_name in dataset.sequences_names:
+            logger.info(f"preprocess blacklist negative depth, sequence {sequence_name}")
+            dataset_seq = dataset.get_subset_by_sequences([sequence_name])
+            dataloader = torch.utils.data.DataLoader(dataset=dataset_seq, batch_size=1, shuffle=False,
+                                                     collate_fn=dataset.collate_fn)
+            for batch in iter(dataloader):
+                if batch.cam_tform4x4_obj[0, 2, 3] < 0.01:
+                    if sequence_name not in blacklist_negative_depth.keys():
+                        blacklist_negative_depth[sequence_name] = []
+                    blacklist_negative_depth[sequence_name].append(batch.name[0])
+        OmegaConf.save(blacklist_negative_depth, blacklist_negative_depth_fpath, resolve=True)
+
     def __len__(self):
         return self.frames_count
 
