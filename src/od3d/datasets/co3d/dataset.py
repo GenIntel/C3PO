@@ -655,10 +655,10 @@ class CO3D(OD3D_Dataset):
 
                 sequence = CO3D_Sequence.load_from_raw(path_co3d=path, path_meta=path_meta, path_preprocess=path_preprocess, sequence_annotation=sequence_annoation)
 
-                config = OmegaConf.structured(sequence)
+                seq_config = OmegaConf.structured(sequence)
                 if not fpath.parent.exists():
                     fpath.parent.mkdir(parents=True)
-                OmegaConf.save(config, fpath, resolve=True)
+                OmegaConf.save(seq_config, fpath, resolve=True)
 
             cls_frame_annotations = load_dataclass_jgzip(
                 f"{path}/{cls}/frame_annotations.jgz", List[FrameAnnotation]
@@ -676,10 +676,10 @@ class CO3D(OD3D_Dataset):
                     continue
 
                 frame = CO3D_Frame.load_from_raw(path_co3d=path, path_meta=path_meta, frame_annotation=frame_annotation)
-                conf = OmegaConf.structured(frame)
+                frame_conf = OmegaConf.structured(frame)
                 if not fpath.parent.exists():
                     fpath.parent.mkdir(parents=True)
-                OmegaConf.save(conf, fpath, resolve=True)
+                OmegaConf.save(frame_conf, fpath, resolve=True)
 
     @staticmethod
     def preprocess_cuboids(config: DictConfig):
