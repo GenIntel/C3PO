@@ -366,10 +366,10 @@ class Pascal3D(OD3D_Dataset):
                 OmegaConf.save(conf, fpath, resolve=True)
                 _ = frame.mask
 
-    @staticmethod
-    def collate_fn(frames: List[Pascal3DFrame], modalities: List[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cpu', dtype=torch.float32):
-        frames = Pascal3DFrames(frames, modalities, dtype=dtype, device=device)
-        return frames
+    #@staticmethod
+    #def collate_fn(frames: List[Pascal3DFrame], modalities: List[OD3D_FRAME_MODALITIES]=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK], device='cpu', dtype=torch.float32):
+    #    frames = Pascal3DFrames(frames, modalities, dtype=dtype, device=device)
+    #    return frames
 
     def __len__(self):
         return len(self.frames_names)

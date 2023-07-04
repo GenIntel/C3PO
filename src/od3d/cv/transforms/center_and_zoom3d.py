@@ -7,12 +7,10 @@ from od3d.cv.visual.crop import crop
 from omegaconf import DictConfig
 from od3d.datasets.dtd import DTD
 
-
-
 class CenterZoom3D():
 
     def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None):
-        self.center3d = torch.Tensor(center3d)
+        self.center3d = torch.Tensor(center3d) if center3d is not None else None
         self.H = H
         self.W = W
         self.dist = dist
@@ -33,7 +31,10 @@ class CenterZoom3D():
                 scale = 1.
         else:
             scale = 1.
-        center = proj3d2d(self.center3d, proj4x4=frame.cam_proj4x4_obj)
+        if self.center3d is not None:
+            center = proj3d2d(self.center3d, proj4x4=frame.cam_proj4x4_obj)
+        else:
+            center = frame.size.flip(dims=[0]) / 2
 
         if self.apply_mask:
             frame._mask, _ = crop(img=frame.mask, center=center, H_out=self.H, W_out=self.W, scale=scale, ctx=None)

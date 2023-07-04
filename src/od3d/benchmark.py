@@ -20,7 +20,10 @@ def bench_single_method_local(config: DictConfig):
     # 2. setup datasets
 
 
-    dataset_test = OD3D_Dataset.subclasses[config.test_dataset.class_name](config.test_dataset)
+    # dataset_test = OD3D_Dataset.subclasses[config.test_dataset.class_name](config.test_dataset)
+    datasets_test = []
+    for dataset_test_key in config.test_datasets.keys():
+        datasets_test.append( OD3D_Dataset.subclasses[config.test_datasets[dataset_test_key].class_name](config.test_datasets[dataset_test_key]))
     dataset_train = OD3D_Dataset.subclasses[config.train_dataset.class_name](config.train_dataset)
 
     # 3. setup method
@@ -28,13 +31,14 @@ def bench_single_method_local(config: DictConfig):
 
     # 4. train method
     if config.train:
-        method.train(dataset_train, dataset_test)
+        method.train(dataset_train, datasets_test)
 
     # 5. bench method (logs results inside class)
     if config.test:
-        results = method.test(dataset_test)
+        for dataset_test in datasets_test:
+            results_test = method.test(datasets_test)
+            wandb.log({f'test_{dataset_test.config.name}_{k}': v for k, v in results_test.items()})
 
-    wandb.log({'test_' + k: v for k, v in results.items()})
 def bench_single_method_local_separate_venv(cfg: DictConfig):
     # 1. save config
     # 2. setup od3d in separate virtual environment

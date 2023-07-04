@@ -1,5 +1,5 @@
 import time
-
+from typing import List
 from od3d.methods.method import OD3DMethod
 from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
@@ -155,7 +155,7 @@ class NeMo(OD3DMethod):
     def setup(self):
         pass
 
-    def train(self, dataset: OD3D_Dataset, dataset_test: OD3D_Dataset):
+    def train(self, dataset: OD3D_Dataset, datasets_test: List[OD3D_Dataset]):
         dataset.transform = self.transform_train
         results_train = {}
         self.net.train()
@@ -174,12 +174,12 @@ class NeMo(OD3DMethod):
         #                                               collate_fn=dataset.collate_fn, num_workers=self.config.train.dataloader.num_workers, pin_memory=self.config.train.dataloader.pin_memory)
 
 
-
         for e in range(self.config.train.epochs):
 
             if self.config.train.epochs_to_next_test > 0 and e % self.config.train.epochs_to_next_test == 0:
-                results_test = self.test(dataset_test)
-                wandb.log({'test_' + k: v for k, v in results_test.items()})
+                for dataset_test in datasets_test:
+                    results_test = self.test(dataset_test)
+                    wandb.log({f'test_{dataset_test.config.name}_{k}': v for k, v in results_test.items()})
 
             if self.config.train.epochs_to_next_forget_est_tforms4x4 > 0 and e % self.config.train.epochs_to_next_forget_est_tforms4x4 == 0:
                 self.seq_obj_tform4x4_est_obj = {}
