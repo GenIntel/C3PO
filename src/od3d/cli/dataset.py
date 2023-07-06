@@ -28,8 +28,11 @@ def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
-    sequences_names_as_str = '\n'.join(dataset.sequences_names)
+    sequences_names_as_str = '\n'.join(dataset.sequences_names) # sequence.pcl_quality_score
     logger.info(f"Dataset sequences names: \n {sequences_names_as_str}")
+    for i in range(len(dataset.sequences_names)):
+        seq = dataset.get_sequence_by_name(dataset.sequences_names[i])
+        logger.info(f"Sequence {seq.name} {seq.pcl_quality_score}")
     logger.info(f'There are {len(dataset.sequences_names)} sequences in the dataset.')
 
 

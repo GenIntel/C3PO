@@ -7,25 +7,13 @@ from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
 from pathlib import Path
 import math
-import torchvision.io
 import od3d.io
-from od3d.cv.visual.draw import draw_pixels, draw_bbox
-from od3d.cv.geometry.transform import proj3d2d, reproj2d3d, proj3d2d_broadcast, transf3d_broadcast
-from od3d.cv.geometry.transform import transf3d
-from od3d.cv.visual.render import render_mask, render_depth, render_mesh
 from od3d.cv.geometry.mesh import Mesh
-from od3d.cv.visual.blend import blend_rgb
-from od3d.cv.visual.show import show_img
-from od3d.cv.visual.crop import crop
-from od3d.cv.visual.sample import sample_pxl2d_pts
-from od3d.datasets.shapenemo import ShapeNemo
 import pickle
 from od3d.cv.geometry.transform import transf4x4_from_spherical
 import shutil
 from tqdm import tqdm
 from od3d.datasets.dataset import OD3D_FRAME_MODALITIES
-from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize, CenterZoom3D
-
 from od3d.cv.geometry.mesh import Meshes
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.io import save_ply
@@ -205,7 +193,7 @@ class Pascal3D(OD3D_Dataset):
         if config.get("preprocess", False):
             Pascal3D.preprocess(config=self.config)
 
-        self.path = Path(self.config.path_pascal3d_raw)
+        self.path = Path(self.config.path_raw)
 
         self.path_meshes = self.path.joinpath("CAD")
 
@@ -223,7 +211,7 @@ class Pascal3D(OD3D_Dataset):
 
         self.cache = self.config.cache
         if self.cache == "Disk":
-            self.path_cache = Path(self.config.path_pascal3d_raw).parent.joinpath("PASCAL3D_CACHE")
+            self.path_cache = Path(self.config.path_raw).parent.joinpath("PASCAL3D_CACHE")
             self.fpath_frame_names = self.path_cache.joinpath(self.name + '.txt')
 
             if self.fpath_frame_names.exists():
@@ -268,7 +256,7 @@ class Pascal3D(OD3D_Dataset):
         return frames_names, frames_rfpaths
     @staticmethod
     def setup(config):
-        path_pascal3d_raw = Path(config.path_pascal3d_raw)
+        path_pascal3d_raw = Path(config.path_raw)
 
         if path_pascal3d_raw.exists() and config.setup_remove_previous:
             logger.info(f"Removing previous Pascal3D+")
@@ -295,9 +283,9 @@ class Pascal3D(OD3D_Dataset):
         perc_axis_coverage = 0.99
         verts_count = 1000
 
-        path = Path(config.path_pascal3d_raw)
+        path = Path(config.path_raw)
         path_meshes = path.joinpath("CAD")
-        path_preprocess = Path(config.path_pascal3d_preprocess)
+        path_preprocess = Path(config.path_preprocess)
 
         path_cuboids = path_preprocess.joinpath("cuboids")
 
@@ -329,9 +317,9 @@ class Pascal3D(OD3D_Dataset):
 
     @staticmethod
     def preprocess_meta(config:DictConfig):
-        path = Path(config.path_pascal3d_raw)
+        path = Path(config.path_raw)
         path_meshes = path.joinpath("CAD")
-        path_preprocess = Path(config.path_pascal3d_preprocess)
+        path_preprocess = Path(config.path_preprocess)
         categories = config.get("classes", CATEGORIES)
         subsets = config.get("subsets", SUBSETS)
 
