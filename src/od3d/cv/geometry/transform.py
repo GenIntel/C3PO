@@ -12,6 +12,15 @@ def so3_exp_map(so3_log:torch.Tensor):
 
     return so3_3x3
 
+def so3_log_map(so3_3x3: torch.Tensor):
+    so3_exp_shape = so3_3x3.shape
+
+    so3_log = pytorch3d.transforms.so3_log_map(so3_3x3.reshape(-1, 3, 3))
+
+    so3_log = so3_log.reshape(so3_exp_shape[:-2] + torch.Size([3]))
+
+    return so3_log
+
 def se3_log_map(se3_exp: torch.Tensor):
     """
     Args:

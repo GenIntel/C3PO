@@ -4,8 +4,12 @@ defaults:
   - methods/nemo@method.nemo: co3d
   - datasets@train_dataset: co3d_train
   - datasets@test_dataset: co3d_test
+  - datasets@test_datasets.co3d: co3d_test
+  - datasets@test_datasets.pascal3d: pascal3d_test
   - platform@platform_local: local
   - platform: local
+
+
 
 metrics:
   - metricA

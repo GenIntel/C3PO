@@ -1,3 +1,6 @@
+defaults:
+  - keypoints@keypoints
+
 name: co3d
 class_name: CO3D
 
@@ -8,13 +11,30 @@ modalities:
     - 'sequence'
     # - 'cuboid_front_tform4x4_obj' # setting this is highly important, so that the cam_tform4x4_obj equals cam_tform4x4_cuboid_front
 
+frame:
+  #modalities:
+  #  - 'rgb'
+  #  - 'mask'
+  #  - 'sequence_name'
+  #  - 'sequence'
+  cuboid_source: 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl'
+  cam_tform_obj_source: 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame'
 
+sequence:
+  #modalities:
+  #  - 'rgb'
+  #  - 'mask'
+  #  - 'sequence_name'
+  #  - 'sequence'
+  cuboid_source: 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl'
+  cam_tform_obj_source: 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame'
+
+blacklist_negative_depth: False
 return_cam_tform4x4_cuboid_front: True
+frames_count_max_per_sequence: -1
 
-path_co3d_raw: ${platform.path_datasets}/CO3D
-path_co3d_preprocess: ${platform.path_datasets}/CO3D_Preprocess
-
-path_meta: ${.path_co3d_preprocess}/meta
+path_raw: ${platform.path_datasets}/CO3D
+path_preprocess: ${platform.path_datasets}/CO3D_Preprocess
 
 rpath_dtd_raw: DTD
 rpath_dtd_cache: DTD_cache
@@ -27,28 +47,47 @@ setup_override: False
 
 preprocess: True
 preprocess_meta: True
-preprocess_meta_override: False
+preprocess_meta_override: True
 preprocess_meta_remove_previous: False
 preprocess_cuboids: False
-preprocess_cuboids_override: False
+preprocess_cuboids_override: True
 preprocess_front_names_override: False
+preprocess_blacklist_negative_depth: False
 
 sequences_require_pcl: False
 sequences_count_max_per_class: 40
 
-#sequences:
-#  - '106_12650_23736'
-#  - '116_13655_29006'
-#  - '185_19982_37678'
-#  - '194_20898_41093'
-#  - '194_20900_41097'
-#  - '194_20939_43630'
-#  #- '206_21799_45886'
-#  #- '206_21805_45881'
-#  #- '206_21810_45890'
-#  #- '216_22790_47232'
-#  #- '216_22808_47498'
-#  #- '216_22836_48452'
+sequences:
+  - '106_12650_23736' # good cuboid
+  - '216_22790_47232' # good cuboid
+  - '206_21799_45886' # good cuboid
+  - '194_20898_41093'  # bad cuboid
+  - '116_13655_29006' # ugly cuboid
+  - '194_20900_41097' # bad cuboid
+  - '194_20939_43630'  # good cuboid
+  - '206_21805_45881'  # ugly cuboid
+  - '206_21810_45890' # ugly cuboid
+  - '216_22808_47498' # bad cuboid
+  - '185_19982_37678' # good cuboid, test
+  - '216_22836_48452' # good cuboid, test
+  - '79_8255_17609'
+  - '79_8257_17428' # seems like it makes some problems
+  - '106_12651_23171'
+  - '106_12655_23644'
+  - '106_12657_23628'
+  - '106_12658_23657'
+  - '106_12662_23043'
+  - '106_12674_24709'
+  - '106_12675_24807'
+  - '106_12690_26550'
+  - '106_12693_26655'
+  - '106_12704_22241'
+#  - '116_13661_27311' # unusable center
+#  - '125_14549_30301' # unusable center
+  - '134_15448_30930'
+  - '147_16368_32139'
+  - '147_16369_32224'
+  - '157_17278_33448'
 
 
 path_cuboids: ${.path_co3d_preprocess}/cuboids

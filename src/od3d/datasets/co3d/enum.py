@@ -1,0 +1,82 @@
+from enum import Enum
+
+class CAM_TFORM_OBJ_SOURCES(str, Enum):
+    FIRST_FRAME = 'first_frame'
+    FRONT_FRAME = 'front_frame'
+    FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
+    KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
+
+class CUBOID_SOURCES(str, Enum):
+    FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
+    KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
+
+class CO3D_FRAME_TYPES(str, Enum):
+    DEV_KNOWN = 'dev_known'
+    DEV_UNSEEN = 'dev_unseen'
+    TEST_KNOWN = 'test_known'
+    TEST_UNSEEN = 'test_unseen'
+    TRAIN_KNOWN = 'train_known'
+    TRAIN_UNSEEN = 'train_unseen'
+
+class CO3D_FRAME_SPLITS(str, Enum):
+    MULTISEQUENCE_CAR_DEV_KNOWN = 'multisequence_car_dev_known'
+    MULTISEQUENCE_CAR_DEV_UNSEEN = 'multisequence_car_dev_unseen'
+    MULTISEQUENCE_CAR_TEST_KNOWN = 'multisequence_car_test_known'
+    MULTISEQUENCE_CAR_TEST_UNSEEN = 'multisequence_car_test_unseen'
+    MULTISEQUENCE_CAR_TRAIN_KNOWN = 'multisequence_car_train_known'
+    MULTISEQUENCE_CAR_TRAIN_UNSEEN = 'multisequence_car_train_unseen'
+    SINGLESEQUENCE_CAR_TEST_0_KNOWN = 'singlesequence_car_test_0_known'
+    SINGLESEQUENCE_CAR_TEST_0_UNSEEN = 'singlesequence_car_test_0_unseen'
+
+class CO3D_CLASSES(str, Enum):
+    APPLE = "apple"
+    BACKPACK = "backpack"
+    BALL = "ball"
+    BANANA = "banana"
+    BASEBALLBAT = "baseballbat"
+    BASEBALLGLOVE = "baseballglove"
+    BENCH = "bench"
+    BICYCLE = "bicycle"
+    BOOK = "book"
+    BOTTLE = "bottle"
+    BOWL = "bowl"
+    BROCCOLI = "broccoli"
+    CAKE = "cake"
+    CAR = "car"
+    CARROT = "carrot"
+    CELLPHONE = "cellphone"
+    CHAIR = "chair"
+    COUCH = "couch"
+    CUP = "cup"
+    DONUT = "donut"
+    FRISBEE = "frisbee"
+    HAIRDRYER = "hairdryer"
+    HANDBAG = "handbag"
+    HOTDOG = "hotdog"
+    HYDRANT = "hydrant"
+    KEYBOARD = "keyboard"
+    KITE = "kite"
+    LAPTOP = "laptop"
+    MICROWAVE = "microwave"
+    MOTORCYCLE = "motorcycle"
+    MOUSE = "mouse"
+    ORANGE = "orange"
+    PARKINGMETER = "parkingmeter"
+    PIZZA = "pizza"
+    PLANT = "plant"
+    REMOTE = "remote"
+    SANDWICH = "sandwich"
+    SKATEBOARD = "skateboard"
+    STOPSIGN = "stopsign"
+    SUITCASE = "suitcase"
+    TEDDYBEAR = "teddybear"
+    TOASTER = "toaster"
+    TOILET = "toilet"
+    TOYBUS = "toybus"
+    TOYPLANE = "toyplane"
+    TOYTRAIN = "toytrain"
+    TOYTRUCK = "toytruck"
+    TV = "tv"
+    UMBRELLA = "umbrella"
+    VASE = "vase"
+    WINEGLASS = "wineglass"

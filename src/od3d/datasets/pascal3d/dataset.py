@@ -56,7 +56,6 @@ from omegaconf import OmegaConf
 @dataclass
 class Pascal3DFrame(OD3D_Frame):
     complete: bool
-    path_preprocess: Path
     kpts_names: List[str]
     l_bbox: List[float]
     l_kpts2d_annot: List[List[float]]
@@ -209,10 +208,8 @@ class Pascal3D(OD3D_Dataset):
         self.path = Path(self.config.path_pascal3d_raw)
 
         self.path_meshes = self.path.joinpath("CAD")
-        self.path_preprocess = Path(self.config.path_pascal3d_preprocess)
 
         self.path_cuboids = self.config.path_cuboids
-        self.path_meta = self.path_preprocess.joinpath('meta')
 
         self.subsets = self.config.get("subsets", SUBSETS)
         self.categories = self.config.get("classes", CATEGORIES)

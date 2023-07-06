@@ -36,6 +36,7 @@ class OD3D_SEQ_MODALITIES(str, Enum):
 @dataclass
 class OD3D_Frame:
     path_dataset: Path
+    path_preprocess: Path
     category: str
     name: str
     rfpath_rgb: Path
@@ -48,7 +49,8 @@ class OD3D_Frame:
     l_size: List[float] # torch.Tensor
     H: int
     W: int
-    label= None
+    modalities = None
+    label=None
     _cam_tform4x4_obj = None
     _cam_intr4x4 = None
     _size = None
@@ -56,6 +58,12 @@ class OD3D_Frame:
     _mask = None
     _depth = None
     _depth_mask = None
+    _kpts2d_orient = None
+
+
+    @property
+    def name_unique(self):
+        return self.name
 
     @property
     def size(self):
@@ -78,16 +86,36 @@ class OD3D_Frame:
     @property
     def cam_proj4x4_obj(self):
         return tform4x4(self.cam_intr4x4, self.cam_tform4x4_obj)
+
+    @property
+    def fpath_kpts2d_orient(self):
+        return self.path_preprocess.joinpath("labels", "kpts2d_orient", f"{self.name_unique}.pt")
+
+    @property
+    def kpts2d_orient_labeled(self):
+        return self.fpath_kpts2d_orient.exists()
+    @property
+    def kpts2d_orient(self):
+        kpts2d_orient = torch.load(self.fpath_kpts2d_orient)
+        return kpts2d_orient
+
+    @property
+    def path_mask(self):
+        return self.path_dataset.joinpath(self.rfpath_mask)
+
     @property
     def mask(self):
         if self._mask is None:
-            self._mask = read_image(self.path_dataset.joinpath(self.rfpath_mask)) / 255.
+            self._mask = read_image(self.path_mask) / 255.
         return self._mask
 
     @property
+    def path_rgb(self):
+        return self.path_dataset.joinpath(self.rfpath_rgb)
+    @property
     def rgb(self):
         if self._rgb is None:
-            self._rgb = torchvision.io.read_image(str(self.path_dataset.joinpath(self.rfpath_rgb)), mode=torchvision.io.ImageReadMode.RGB)
+            self._rgb = torchvision.io.read_image(str(self.path_rgb), mode=torchvision.io.ImageReadMode.RGB)
         return self._rgb
 
     @property
@@ -245,7 +273,7 @@ class OD3D_Frames():
 
             kpts3d_inf_mask = torch.isinf(self.kpts3d[0]).any(dim=-1)
             if kpts3d_inf_mask.sum() > 0:
-                logger.warn(f'There are {kpts3d_inf_mask.sum()} kpts with infinity for label {self.category[0]}')
+                logger.warning(f'There are {kpts3d_inf_mask.sum()} kpts with infinity for label {self.category[0]}')
             kpts3d = self.kpts3d[0][~kpts3d_inf_mask]
             kpts3d = torch.cat([kpts3d, torch.zeros(size=(1, 3,), device=self.device)])
             kpts3d2d = proj3d2d_broadcast(proj4x4=self.cam_proj4x4_obj[0], pts3d=kpts3d)
@@ -314,10 +342,24 @@ class OD3D_Dataset(Dataset):
     def visualize(self, item: int):
         raise NotImplementedError
 
+    @property
+    def path(self):
+        return Path(self.config.path)
+
+    @property
+    def path_preprocess(self):
+        return Path(self.config.path_preprocess)
+    @property
+    def path_meta(self):
+        return self.path_preprocess.joinpath('meta')
     @staticmethod
     def get_path_meta(config):
         return OD3D_Dataset.get_path_preprocess(config=config).joinpath('meta')
 
     @staticmethod
     def get_path_preprocess(config):
-        return Path(config.path_co3d_preprocess)
+        return Path(config.path_preprocess)
+
+    @staticmethod
+    def get_path(config):
+        return Path(config.path)

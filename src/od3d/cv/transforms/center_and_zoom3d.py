@@ -84,7 +84,7 @@ class CenterZoom3D():
 
 
 class RandomCenterZoom3D():
-    def __init__(self, H, W, dist,  center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None, center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.]):
+    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None, center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.]):
         self.centerzoom3d = CenterZoom3D(H=H, W=W, dist=dist, center3d=center3d, apply_txtr=apply_txtr,
                                     apply_kpts2d_annot=apply_kpts2d_annot, apply_bbox_annot=apply_bbox_annot,
                                     apply_mask=apply_mask, config=config)
