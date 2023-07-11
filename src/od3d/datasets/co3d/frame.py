@@ -29,8 +29,20 @@ class CO3D_Frame(OD3D_Frame):
     _sequence = None
     return_cam_tform4x4_cuboid_front = False
     # the following variables can be configured dynamically
-    cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES = CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL
-    cuboid_source: CUBOID_SOURCES = CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL
+    _config = None
+
+    @staticmethod
+    def create_with_config(config, **kwargs):
+        co3d_seq = CO3D_Frame(**kwargs)
+        co3d_seq._config = config
+        return co3d_seq
+    @property
+    def config(self):
+        if self._config is None:
+            self._config = OmegaConf.create()
+            self._config.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+            self._config.cuboid_source = CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+        return self._config
 
     @property
     def name_unique(self):
@@ -40,7 +52,7 @@ class CO3D_Frame(OD3D_Frame):
         if self._sequence is None:
             from od3d.datasets.co3d.sequence import CO3D_Sequence
             sequence_config = OmegaConf.load(self.path_meta.joinpath(self.sequence_name + '.yaml'))
-            self._sequence = CO3D_Sequence(**{**sequence_config})
+            self._sequence = CO3D_Sequence.create_with_config(**sequence_config, config=self.config)
         return self._sequence
 
     @property
@@ -52,12 +64,12 @@ class CO3D_Frame(OD3D_Frame):
     @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
-            if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FIRST_FRAME:
+            if self.config.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FIRST_FRAME:
                 self._cam_tform4x4_obj = torch.Tensor(self.l_cam_tform4x4_obj)
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL:
+            elif self.config.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL:
                 self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.l_cam_tform4x4_obj),
                                                   inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL:
+            elif self.config.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL:
                 self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.l_cam_tform4x4_obj),
                                                   inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
 

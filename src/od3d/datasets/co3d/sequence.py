@@ -51,6 +51,7 @@ class CO3D_Sequence():
     _front_name = None
     _cuboid_front_tform4x4_obj = None
     _cuboid = None
+    _config = None
     path_co3d: Path
     path_preprocess: Path
     rfpath_pcl: Path
@@ -59,9 +60,19 @@ class CO3D_Sequence():
     viewpoint_quality_score: float
     path_meta: Path
     # the following variables can be configured dynamically
-    cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES = CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL
-    cuboid_source: CUBOID_SOURCES = CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL
 
+    @staticmethod
+    def create_with_config(config, **kwargs):
+        co3d_seq = CO3D_Sequence(**kwargs)
+        co3d_seq._config = config
+        return co3d_seq
+    @property
+    def config(self):
+        if self._config is None:
+            self._config = OmegaConf.create()
+            self._config.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+            self._config.cuboid_source = CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+        return self._config
 
     def preprocess_front_name(self, override=False):
         fpath_front_name = self.fpath_front_name
@@ -101,7 +112,7 @@ class CO3D_Sequence():
             od3d.io.write_str_to_file(fpath_front_name, text=self._front_name)
 
     def align_cuboid_tform_obj(self, cuboid_tform_obj):
-        if self.cuboid_source == CUBOID_SOURCES.FRONT_FRAME_AND_PCL:
+        if self.config.cuboid_source == CUBOID_SOURCES.FRONT_FRAME_AND_PCL:
 
             cam_front_rot3x3_cuboid = rot3x3(self.cam_front_tform4x4_obj[:3, :3], cuboid_tform_obj[:3, :3].T)
             cam_front_rot3x3_max_ids = cam_front_rot3x3_cuboid.abs().max(dim=-1)[1]
@@ -117,21 +128,43 @@ class CO3D_Sequence():
 
             cuboid_tform_obj = tform4x4(cuboid_front_tform4x4_cuboid, cuboid_tform_obj)
 
-        elif self.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
+        elif self.config.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
             from od3d.cv.geometry.fit.axis3d_from_pxl2d import axis3d_from_pxl2d
             from od3d.cv.visual.show import show_img
-            cam_rot3x3_obj = axis3d_from_pxl2d(kpts2d_orient=self.first_frame.kpts2d_orient, cam_intr4x4=self.first_frame.cam_intr4x4) #  orients
-            cuboid_tform_obj[:3, :3] = rot3x3(cam_rot3x3_obj.T, self.cam_first_tform4x4_obj[:3, :3])
+            cam_rot3x3_cuboid_front = axis3d_from_pxl2d(kpts2d_orient=self.first_frame.kpts2d_orient, cam_intr4x4=self.first_frame.cam_intr4x4) #  orients
+            # cam_rot3x3_cuboid = rot3x3(self.cam_first_tform4x4_obj[:3, :3], cuboid_tform_obj[:3, :3].T)
+            #
+            # cuboid_front_rot3x3_cuboid = rot3x3(cam_rot3x3_cuboid_front.T, cam_rot3x3_cuboid)
+            # cuboid_front_rot3x3_cuboid_alignment =
+            # cam_front_rot3x3_cuboid = rot3x3(self.cam_front_tform4x4_obj[:3, :3], cuboid_tform_obj[:3, :3].T)
+            # cam_front_rot3x3_max_ids = cam_front_rot3x3_cuboid.abs().max(dim=-1)[1]
+            # assert (
+            #         0 in cam_front_rot3x3_max_ids.unique() and 1 in cam_front_rot3x3_max_ids.unique() and 2 in cam_front_rot3x3_max_ids.unique())
+            # cuboid_front_tform4x4_cuboid = torch.eye(n=4).to(device=cam_front_rot3x3_cuboid.device)
+            # cuboid_front_tform4x4_cuboid[:3, :3] = cuboid_front_tform4x4_cuboid[cam_front_rot3x3_max_ids,
+            #                                        :3] * cam_front_rot3x3_cuboid.sign()
+            #
+            #
+            #
+            #cuboid_front_rot3x3_cuboid = rot3x3(rot3x3(cam_rot3x3_cuboid_front.T, self.cam_first_tform4x4_obj[:3, :3]), cuboid_tform_obj[:3, :3].T)
+            #cuboid_front_tform4x4_cuboid = torch.eye(4)
+            #cuboid_front_tform4x4_cuboid[:3, :3] = cuboid_front_rot3x3_cuboid
+            #cuboid_tform_obj = tform4x4(cuboid_front_tform4x4_cuboid, cuboid_tform_obj)
+            #
+            #
+            # cuboid_tform_obj[:3, :3] = rot3x3(cuboid_front_rot3x3_cuboid, cuboid_tform_obj[:3, :3])
+
+            cuboid_tform_obj[:3, :3] = rot3x3(cam_rot3x3_cuboid_front.T, self.cam_first_tform4x4_obj[:3, :3])
+            #cuboid_tform_obj[:3, 3] = rot3d(cam_rot3x3_cuboid_front.T, self.cam_first_tform4x4_obj[:3, :3])
         return cuboid_tform_obj
 
     def preprocess_cuboid(self, override=False):
-
-
         fpath_cuboid = self.fpath_cuboid
         if override or not fpath_cuboid.exists():
             fpath_cuboid.parent.mkdir(parents=True, exist_ok=True)
 
             cuboid_pts3d_max_count = 1000
+            percentile_noise = 0.01
 
             pts3d_clean = self.pcl_clean
 
@@ -158,22 +191,33 @@ class CO3D_Sequence():
             tmp_tform6_cuboid = torch.zeros(6).to(device=pts3d_clean.device)
             cuboid_tform4x4_obj = icp_tform_obj  # torch.eye(4).to(device=pts3d_clean.device)
 
+
+            """
+            cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj)
+            #cuboids_limits = torch.stack([cuboid_pts3d.min(dim=-2)[0], cuboid_pts3d.max(dim=-2)[0]], dim=-2)[None,]
+            cuboids_limits = torch.stack(
+                [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)], dim=-2)[None,]
+            cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
+            icp_tform_cuboid = icp(cuboids.verts, cuboid_pts3d).inverse()
+            cuboid_tform4x4_obj = tform4x4(icp_tform_cuboid, cuboid_tform4x4_obj)
+            """
+
             for i in range(100):
-                if self.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
-                    tmp_tform6_cuboid.data[3:] = 0.
-                cuboid_tform4x4_obj = tform4x4(cuboid_tform4x4_obj.detach(), se3_exp_map(tmp_tform6_cuboid.detach()))
+                if self.config.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
+                   tmp_tform6_cuboid.data[3:] = 0.
+                cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid.detach()), cuboid_tform4x4_obj.detach())
 
                 tmp_tform6_cuboid = torch.nn.Parameter(torch.zeros(6).to(device=pts3d_clean.device),
                                                        requires_grad=True)
-                optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.0001)
+                optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.001)
 
-                cuboid_tform4x4_obj = tform4x4(cuboid_tform4x4_obj, se3_exp_map(tmp_tform6_cuboid))
+                cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid), cuboid_tform4x4_obj)
 
                 cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj)
-
                 _, icp_pts3d_ids_min = cuboid_pts3d.min(dim=0)
                 _, icp_pts3d_ids_max = cuboid_pts3d.max(dim=0)
                 cuboid_pts3d_limits = cuboid_pts3d[torch.cat([icp_pts3d_ids_min, icp_pts3d_ids_max], dim=0)]
+                #cuboid_pts3d_limits = torch.cat([cuboid_pts3d.quantile(dim=0, q=percentile_noise), cuboid_pts3d.quantile(dim=0, q=1. - percentile_noise)], dim=0)
                 # icp_cuboids_vol = (cuboid_pts3d_limits[3, 0] - cuboid_pts3d_limits[0, 0]) * (cuboid_pts3d_limits[4, 1] - cuboid_pts3d_limits[1, 1]) * (cuboid_pts3d_limits[5, 2] - cuboid_pts3d_limits[2, 2])
                 # using maximum ensures centering.
                 icp_cuboids_vol = (max(abs(cuboid_pts3d_limits[3, 0]), abs(cuboid_pts3d_limits[0, 0])) * 2) * \
@@ -181,9 +225,17 @@ class CO3D_Sequence():
                                   (max(abs(cuboid_pts3d_limits[5, 2]), abs(cuboid_pts3d_limits[2, 2])) * 2)
 
                 loss = torch.norm(icp_cuboids_vol, p=2)
+                # loss = cuboid_pts3d_limits.norm(dim=-1).prod() + (cuboid_pts3d_limits[0:3] - cuboid_pts3d_limits[3:6]).norm()
                 loss.backward()
                 logger.info(f'Volume {loss}')
                 optimizer.step()
+
+            cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj)
+            cuboids_limits = torch.stack(
+                [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)], dim=-2)[None,]
+            cuboid_center_tform4x4_cuboid = torch.eye(4, device=cuboid_tform4x4_obj.device)
+            cuboid_center_tform4x4_cuboid[:3, 3] = - (cuboids_limits[0, 1] + cuboids_limits[0, 0]) / 2.
+            cuboid_tform4x4_obj = tform4x4(cuboid_center_tform4x4_cuboid, cuboid_tform4x4_obj)
 
             cuboid_front_tform_obj = cuboid_tform4x4_obj.detach()
 
@@ -194,13 +246,14 @@ class CO3D_Sequence():
             # obj_tform_cuboid_front = cuboid_front_tform_obj.inverse()
 
             cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_front_tform_obj)
-            cuboids_limits = torch.stack([cuboid_pts3d.min(dim=-2)[0], cuboid_pts3d.max(dim=-2)[0]], dim=-2)[None,]
+            #cuboids_limits = torch.stack([cuboid_pts3d.min(dim=-2)[0], cuboid_pts3d.max(dim=-2)[0]], dim=-2)[None,]
+            cuboids_limits = torch.stack(
+                [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)], dim=-2)[None,]
 
             cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
 
-            # from od3d.cv.visual.show import show_pcl
-            # obj_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=cuboid_front_tform_obj.inverse())
-            # show_pcl([pts3d_clean, obj_verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
+            #from od3d.cv.visual.show import show_pcl
+            #show_pcl([cuboid_pts3d, cuboids.verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
 
             # from od3d.cv.geometry.primitives import CoordinateFrame
             # from od3d.cv.geometry.transform import transf4x4_from_spherical, transf4x4_from_pos_and_theta
@@ -245,7 +298,7 @@ class CO3D_Sequence():
 
     @property
     def fpath_cuboid_front_tform4x4_obj(self):
-        return self.path_preprocess.joinpath('cuboid_front_tform4x4_obj', self.cuboid_source, self.category, self.name, 'tform4x4.pt')
+        return self.path_preprocess.joinpath('cuboid_front_tform4x4_obj', self.config.cuboid_source, self.category, self.name, 'tform4x4.pt')
 
     # def get_cuboid_front_tform4x4_obj(self, cuboid_source: CUBOID_SOURCES):#
         #
@@ -287,14 +340,14 @@ class CO3D_Sequence():
     @property
     def front_frame(self):
         frame_config = OmegaConf.load(self.path_meta.joinpath(self.name, self.front_name + '.yaml'))
-        frame = CO3D_Frame(**frame_config)
+        frame = CO3D_Frame.create_with_config(**frame_config, config=self.config)
         return frame
 
     @property
     def first_frame(self):
-        first_frame_fname = sorted(self.path_meta.joinpath(self.name).iterdir())[0]
+        first_frame_fname = sorted(self.path_meta.joinpath(self.name).iterdir(), key=lambda p: int(p.name.split('.')[0]))[0]
         frame_config = OmegaConf.load(self.path_meta.joinpath(self.name, first_frame_fname)) # + '.yaml'))
-        frame = CO3D_Frame(**frame_config)
+        frame = CO3D_Frame.create_with_config(**frame_config, config=self.config)
         return frame
 
     @property
@@ -317,6 +370,12 @@ class CO3D_Sequence():
             config = OmegaConf.create()
             config.sequences = [self.name]
             config.path = []
+            config.path_preprocess = self.path_preprocess
+            config.frame = self.config
+            config.frame.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.FIRST_FRAME.value
+            config.sequence = self.config
+            config.sequence.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.FIRST_FRAME.value
+
             config.path_meta = self.path_meta
             config.classes = [self.category]
             config.modalities = [OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK]
@@ -325,7 +384,7 @@ class CO3D_Sequence():
             dataset = CO3D(config=config)
             dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
                                                      collate_fn=dataset.collate_fn,
-                                                     num_workers=4)
+                                                     num_workers=0)
 
             pts3d = self.pcl
 
@@ -360,7 +419,7 @@ class CO3D_Sequence():
         return self.path_preprocess.joinpath('front_names', self.category, self.name, 'front_name.yaml')
     @property
     def fpath_cuboid(self):
-        return self.path_preprocess.joinpath('cuboids', self.cuboid_source, self.category, self.name + '.ply')
+        return self.path_preprocess.joinpath('cuboids', self.config.cuboid_source, self.category, self.name + '.ply')
     @property
     def fpath_pcl_clean(self):
         return self.path_preprocess.joinpath('pcls', self.category, self.name, 'pcl_clean.ply') #  f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')

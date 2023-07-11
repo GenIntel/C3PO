@@ -344,7 +344,7 @@ class OD3D_Dataset(Dataset):
 
     @property
     def path(self):
-        return Path(self.config.path)
+        return Path(self.config.path_raw)
 
     @property
     def path_preprocess(self):

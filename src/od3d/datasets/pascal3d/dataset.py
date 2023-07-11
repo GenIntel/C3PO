@@ -193,7 +193,6 @@ class Pascal3D(OD3D_Dataset):
         if config.get("preprocess", False):
             Pascal3D.preprocess(config=self.config)
 
-        self.path = Path(self.config.path_raw)
 
         self.path_meshes = self.path.joinpath("CAD")
 

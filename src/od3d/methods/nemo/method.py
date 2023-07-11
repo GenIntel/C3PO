@@ -186,7 +186,7 @@ class NeMo(OD3DMethod):
                 self.seq_obj_tform4x4_est_obj_sim = {}
                 from od3d.cv.geometry.transform import inv_tform4x4
                 for s, seq in enumerate(dataset.config.sequences):
-                    if s < self.config.train.sequences_tform4x4_labeled_count:
+                    if self.config.train.sequences_tform4x4_labeled_count < 0 or s < self.config.train.sequences_tform4x4_labeled_count:
                         self.seq_obj_tform4x4_est_obj[dataset.config.sequences[s]] = torch.eye(4, device=self.device)
                         self.seq_obj_tform4x4_est_obj_sim[dataset.config.sequences[s]] = 1.
                     else:

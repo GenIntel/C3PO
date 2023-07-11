@@ -6,7 +6,7 @@ num_noise: 5
 max_group: 512
 down_sample_rate: 8
 
-classes: ${test_dataset.classes}
+classes: ${train_dataset.classes}
 
 transforms:
     - class_name: nemo.datasets.pascal3d.Normalize

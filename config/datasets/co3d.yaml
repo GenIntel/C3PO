@@ -46,16 +46,18 @@ setup_remove_previous: False
 setup_override: False
 
 preprocess: True
-preprocess_meta: True
-preprocess_meta_override: True
+preprocess_meta: False
+preprocess_meta_override: False
 preprocess_meta_remove_previous: False
 preprocess_cuboids: False
-preprocess_cuboids_override: True
+preprocess_cuboids_override: False
 preprocess_front_names_override: False
 preprocess_blacklist_negative_depth: False
+preprocess_cuboid_avg: False
+preprocess_cuboid_avg_override: False
 
 sequences_require_pcl: False
-sequences_count_max_per_class: 40
+sequences_count_max_per_class:
 
 sequences:
   - '106_12650_23736' # good cuboid
@@ -90,9 +92,9 @@ sequences:
   - '157_17278_33448'
 
 
-path_cuboids: ${.path_co3d_preprocess}/cuboids
+path_cuboids: ${.path_preprocess}/cuboids/avg/${.name}
 fpaths_cuboids:
-    car: ${..path_cuboids}/car/106_12650_23736.ply # /cuboid_max_1000.ply
+    car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
 
 classes:
   - car

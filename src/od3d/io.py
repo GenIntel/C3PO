@@ -62,8 +62,9 @@ def load_hierarchical_config(benchmark="defaults", platform="local", ablation=No
     return cfg
 
 import subprocess
-def run_cmd(cmd, logger, live=False):
-    logger.info(f'Run command {cmd}')
+def run_cmd(cmd, logger, live=False, background=False):
+    if logger is not None:
+        logger.info(f'Run command {cmd}')
     if live:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, shell=True)
 
@@ -80,9 +81,15 @@ def run_cmd(cmd, logger, live=False):
         logger.info(f'Return Code {return_code}')
 
     else:
-        res = subprocess.run(cmd, capture_output=True, shell=True)
-        logger.info(res.stdout.decode("utf-8"))
-        logger.info(res.stderr.decode("utf-8"))
+        if not background:
+            res = subprocess.run(cmd, capture_output=True, shell=True)
+            if logger is not None:
+                logger.info(res.stdout.decode("utf-8"))
+                logger.info(res.stderr.decode("utf-8"))
+            return res.stdout.decode("utf-8")
+        else:
+            subprocess.run(cmd, capture_output=False, shell=True)
+
 
 
 

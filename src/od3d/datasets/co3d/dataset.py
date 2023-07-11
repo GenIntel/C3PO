@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 import shutil
 from tqdm import tqdm
 import torch.utils.data
+import numpy as np
+from od3d.cv.io import load_ply, save_ply
 
 from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CLASSES
 
@@ -44,6 +46,12 @@ class CO3D(OD3D_Dataset):
         self.classes = self.config.get("classes", [])
         self.sequences = None
 
+        self.config.sequence = self.config.get("sequence", {})
+        self.config.frame = self.config.get("frame", {})
+
+        self.config.blacklist_negative_depth = self.config.get("blacklist_negative_depth", False)
+        self.config.frames_count_max_per_sequence = self.config.get("frames_count_max_per_sequence", -1)
+
         #if self.config.get("fpaths_cuboids", None) is not None:
         #    self.cuboids = Meshes.load_from_files(fpaths_meshes=[self.config.fpaths_cuboids[cls] for cls in self.classes])
 
@@ -65,7 +73,7 @@ class CO3D(OD3D_Dataset):
         self.sequences = []
         for sequence_name in self.sequences_names:
             sequence_config = OmegaConf.load(self.path_meta.joinpath(sequence_name + '.yaml'))
-            sequence = CO3D_Sequence(**{**sequence_config, **self.config.sequence})
+            sequence = CO3D_Sequence.create_with_config(**sequence_config, config=self.config.sequence)
             self.sequences.append(sequence)
 
         self.sequences_names = [seq.name for seq in self.sequences if seq.category in self.classes]
@@ -73,7 +81,12 @@ class CO3D(OD3D_Dataset):
 
         if self.config.get("sequences_require_pcl", False):
             # quality score lies in range [-2.35x, 1.04x]
-            self.sequences = list(filter(lambda sequence: sequence.rfpath_pcl != Path('None') and sequence.pcl_quality_score > self.config.get("sequences_require_pcl_score", 0.8), self.sequences))
+            self.sequences = list(filter(lambda sequence: sequence.rfpath_pcl != Path('None'), self.sequences))
+            self.sequences = list(filter(lambda sequence: sequence.pcl_quality_score > self.config.get("sequences_require_pcl_score", 0.8), self.sequences))
+
+            if self.config.get("sequences_sort_pcl_score", False):
+                self.sequences = sorted(self.sequences, key=lambda sequence: -sequence.pcl_quality_score)
+
             self.sequences_names = [seq.name for seq in self.sequences]
 
         if self.config.get("sequences_count_max_per_class", None) is not None:
@@ -102,9 +115,11 @@ class CO3D(OD3D_Dataset):
         for sequence_name in tqdm(self.sequences_names):
             seq_frames_names = sorted([fpath.name.split('.')[0] for fpath in list(self.path_meta.joinpath(sequence_name).iterdir())], key=lambda n: int(n))
             if self.config.blacklist_negative_depth:
+                logger.info("filtering frames with blocklist negative depth...")
                 seq_frames_names = list(filter(lambda frame_name: frame_name not in blacklist_negative_depth, seq_frames_names))
-            if self.config.frames_count_max_per_sequence > 0:
-                seq_frames_names = seq_frames_names[:self.config.frames_count_max_per_sequence]
+            if self.config.get("frames_count_max_per_sequence", -1) > 0:
+                #seq_frames_names = seq_frames_names[:self.config.frames_count_max_per_sequence]
+                seq_frames_names = [seq_frames_names[fid] for fid in np.linspace(0, len(seq_frames_names)-1, self.config.frames_count_max_per_sequence).astype(np.int).tolist()]
             self.frames_names.append(seq_frames_names)
             self.sequences_lengths.append(len(self.frames_names[-1]))
             self.sequences_item_ids.append(list(range(self.frames_count, self.frames_count + self.sequences_lengths[-1])))
@@ -152,11 +167,11 @@ class CO3D(OD3D_Dataset):
     def get_sequence_by_name(self, sequence_name):
 
         sequence_config = OmegaConf.load(self.path_meta.joinpath(sequence_name + '.yaml'))
-        return CO3D_Sequence(**{**sequence_config, **self.config.sequence})
+        return CO3D_Sequence.create_with_config(**sequence_config, config=self.config.sequence)
 
     def get_frame_by_name(self, sequence_name, frame_name):
         frame_config = OmegaConf.load(self.path_meta.joinpath(sequence_name, frame_name + '.yaml'))
-        frame = CO3D_Frame(**{**frame_config, **self.config.frame})
+        frame = CO3D_Frame.create_with_config(**frame_config, config=self.config.frame)
         # frame.return_cam_tform4x4_cuboid_front = self.config.get("return_cam_tform4x4_cuboid_front", False)
         return frame
 
@@ -177,6 +192,8 @@ class CO3D(OD3D_Dataset):
             CO3D.preprocess_cuboids(config=config)
         if config.preprocess_blacklist_negative_depth:
             CO3D.preprocess_blacklist_negative_depth(config=config)
+        if config.preprocess_cuboid_avg:
+            CO3D.preprocess_cuboid_avg(config=config)
         # CO3D.preprocess_cam_tform4x4_obj_canonic(config=config)
         # CO3D.preprocess_front_names(config=config)
 
@@ -270,6 +287,49 @@ class CO3D(OD3D_Dataset):
             sequence = dataset.get_sequence_by_name(sequence_name=sequence_name)
             sequence.preprocess_cuboid(override=config.preprocess_cuboids_override)
 
+    @staticmethod
+    def preprocess_cuboid_avg(config: DictConfig):
+        logger.info("preprocess cuboids")
+
+
+        for cls in config.classes:
+            fpath = Path(config.path_preprocess).joinpath('cuboids', 'avg', config.name, f'{cls}.ply')
+
+            if not fpath.exists() or config.preprocess_cuboid_avg_override:
+                logger.info(f"preprocessing average cuboid and saving it to {fpath}")
+                config = copy(config)
+                config.fpaths_cuboids = None
+                config.setup = False
+                config.preprocess = False
+                dataset = CO3D(config=config)
+                percentile_noise = 0.03
+                cuboid_pts3d_max_count = 1000
+                device = 'cuda:0'
+                from od3d.cv.visual.show import show_pcl
+                from od3d.cv.geometry.downsample import voxel_downsampling
+                from od3d.cv.geometry.transform import transf3d_broadcast
+                from od3d.cv.geometry.primitives import Cuboids
+                pcls = []
+                for sequence_name in dataset.sequences_names:
+                    sequence = dataset.get_sequence_by_name(sequence_name)
+                    pcls.append(transf3d_broadcast(voxel_downsampling(sequence.pcl_clean, K=cuboid_pts3d_max_count).to(device=device),
+                                                   transf4x4=sequence.cuboid_front_tform4x4_obj.to(device=device)))
+                    # batch[0].sequence_name
+                    # dataset.visualize(i)
+                pcl_max_pts_id = torch.Tensor([pcl.shape[0] for pcl in pcls]).max(dim=0)[1]
+                pcls.append(pcls[0])
+                pcls[0] = pcls[pcl_max_pts_id]
+
+                cuboid_pts3d = torch.cat(pcls, dim = 0)
+
+                cuboids_limits = torch.stack(
+                    [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)],
+                    dim=-2)[None,]
+                cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
+
+                fpath.parent.mkdir(parents=True, exist_ok=True)
+                save_ply(fpath, verts=cuboids.verts, faces=cuboids.faces)
+                # show_pcl([cuboids.verts.to(device=device)] + pcls)
     @staticmethod
     def preprocess_front_names(config: DictConfig):
         logger.info("preprocess front_names")
