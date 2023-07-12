@@ -161,6 +161,7 @@ class NeMo(OD3DMethod):
         self.net.train()
         self.meshes.feats.requires_grad = True
 
+
         accumulate_steps = 0
 
         generator = torch.Generator().manual_seed(42)
@@ -251,10 +252,11 @@ class NeMo(OD3DMethod):
 
                 results_train["count_sequences"] = len(sequences_filtered)
 
-
                 dataset_sub, _ = torch.utils.data.random_split(dataset.get_subset_by_sequences(sequences_filtered), [dataset.config.subset_fraction,
                                                                          1. - dataset.config.subset_fraction],
                                                                generator=generator)
+
+                visual_names_unique = [dataset_sub[i].name_unique for i in range(self.config.train.visualize.num_samples)]
 
                 logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
@@ -296,16 +298,18 @@ class NeMo(OD3DMethod):
                 N = vts2d.shape[1]
 
                 if self.config.train.visualize.verts_ncds_in_rgb:
-                    verts_ncds_in_rgb = blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
-                                                                                          imgs_sizes=batch.size, meshes_ids=batch.label[:1],
-                                                                                          modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
-                    from od3d.cv.geometry.transform import proj3d2d_origin
-                    verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(torch.bmm(batch.cam_intr4x4, batch.cam_tform4x4_obj)[:1]), colors=[1., 0., 0.])
-                    verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(batch.cam_proj4x4_obj[:1]), colors=[1., 0., 0.])
-                    img = draw_pixels(verts_ncds_in_rgb, self.down_sample_rate * vts2d[0, mask_vts2d_vsbl[0]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[mask_vts2d_vsbl[0]])
-                    results_train['verts_ncds_in_rgb'] = image_as_wandb_image(img, caption=f'Frame Name {batch.name[0]}')
-                    if self.config.train.visualize.live:
-                        show_img(img)
+                    for b in range(len(batch)):
+                        if batch.name_unique[b] in visual_names_unique:
+                            verts_ncds_in_rgb = blend_rgb(batch.rgb[b], (self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[b:b+1], cams_intr4x4=batch.cam_intr4x4[b:b+1],
+                                                                                                  imgs_sizes=batch.size, meshes_ids=batch.label[b:b+1],
+                                                                                                  modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
+                            from od3d.cv.geometry.transform import proj3d2d_origin
+                            verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(torch.bmm(batch.cam_intr4x4, batch.cam_tform4x4_obj)[b:b+1]), colors=[1., 0., 0.])
+                            verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(batch.cam_proj4x4_obj[b:b+1]), colors=[1., 0., 0.])
+                            img = draw_pixels(verts_ncds_in_rgb, self.down_sample_rate * vts2d[b, mask_vts2d_vsbl[b]], colors=self.meshes.get_verts_ncds_with_mesh_id(batch.label[b])[mask_vts2d_vsbl[b]])
+                            results_train['verts_ncds_in_rgb'] = image_as_wandb_image(img, caption=f'Frame Name {batch.name_unique[b]}')
+                            if self.config.train.visualize.live:
+                                show_img(img)
 
 
                 # B x F+N x C
@@ -319,15 +323,17 @@ class NeMo(OD3DMethod):
                 # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
                 # returns: BxF+NxC
                 if self.config.train.visualize.net_feats_nearest_verts:
-                    clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.clutter_feats).max(dim=-1)
-                    net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2), self.meshes.get_feats_with_mesh_id(batch.label[0])).max(dim=-1)
-                    net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[net_mesh_nearest_feats_ids]
-                    net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
-                    net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
-                    img = blend_rgb(resize(batch.rgb[0], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0])
-                    results_train['net_feats_nearest_verts'] = image_as_wandb_image(img, caption=f'Frame Name {batch.name[0]}')
-                    if self.config.train.visualize.live:
-                        show_img(img)
+                    for b in range(len(batch)):
+                        if batch.name_unique[b] in visual_names_unique:
+                            clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[b:b+1].flatten(-2), self.clutter_feats).max(dim=-1)
+                            net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv', net_feats2d[b:b+1].flatten(-2), self.meshes.get_feats_with_mesh_id(batch.label[b])).max(dim=-1)
+                            net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[b])[net_mesh_nearest_feats_ids]
+                            net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
+                            net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
+                            img = blend_rgb(resize(batch.rgb[b], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[b])
+                            results_train['net_feats_nearest_verts'] = image_as_wandb_image(img, caption=f'Frame Name {batch.name[b]}')
+                            if self.config.train.visualize.live:
+                                show_img(img)
 
 
                 # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
@@ -419,7 +425,7 @@ class NeMo(OD3DMethod):
             return sim, sim_pxl
         else:
             return sim
-    def inference_batch(self, batch, config: DictConfig):
+    def inference_batch(self, batch, config: DictConfig, visual_names_unique=None):
         results = {}
         B = len(batch)
 
@@ -496,7 +502,9 @@ class NeMo(OD3DMethod):
 
                 K = config.sample.epnp3d2d.count_cams
                 N = config.sample.epnp3d2d.count_pts
-                masks_in_ids = torch.multinomial((sim_clutter < sim_nearest_texture_vals).flatten(1) * sim_nearest_texture_vals.flatten(1), num_samples=K * N).reshape(-1, K, N)
+                prob_well_corresp = (sim_clutter < sim_nearest_texture_vals).flatten(1) * sim_nearest_texture_vals.flatten(1)
+                prob_well_corresp[prob_well_corresp.sum(dim=-1) == 0] = 1.
+                masks_in_ids = torch.multinomial(prob_well_corresp, num_samples=K * N).reshape(-1, K, N)
                 masks_in = torch.zeros(size=(B, K, sim_clutter.shape[1] * sim_clutter.shape[2]), device=sim_clutter.device, dtype=torch.bool)
                 for b in range(B):
                     for k in range(K):
@@ -532,6 +540,7 @@ class NeMo(OD3DMethod):
             # mesh_multiple_cams_loss = -sim.mean(dim=-1)
 
             if config.visualize.samples and config.visualize.live:
+
                 show_imgs(self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj,
                                                    cams_intr4x4=b_cams_multiview_intr4x4, imgs_sizes=batch.size,
                                                    meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate,
@@ -552,22 +561,24 @@ class NeMo(OD3DMethod):
         #                                  replace_feats_with_verts3d=True)[0, 0])
 
         if config.visualize.net_feats_nearest_verts:
-            clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[:1].flatten(-2),
-                                                        self.clutter_feats).max(dim=-1)
-            net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv',
-                                                                                  net_feats2d[:1].flatten(-2),
-                                                                                  self.meshes.get_feats_with_mesh_id(
-                                                                                      batch.label[0])).max(dim=-1)
-            net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[0])[
-                net_mesh_nearest_feats_ids]
-            net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
-            net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:],
-                                                                                          3).permute(0, 3, 1, 2)
-            img = blend_rgb(resize(batch.rgb[0], scale_factor=1. / self.down_sample_rate),
-                            net_mesh_nearest_feats_verts_ncds[0])
-            results['net_feats_nearest_verts_' + batch.name[0]] = image_as_wandb_image(img)
-            if config.visualize.live:
-                show_img(img)
+            for b in range(len(batch)):
+                if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
+                    clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[b:b+1].flatten(-2),
+                                                                self.clutter_feats).max(dim=-1)
+                    net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv',
+                                                                                          net_feats2d[b:b+1].flatten(-2),
+                                                                                          self.meshes.get_feats_with_mesh_id(
+                                                                                              batch.label[b])).max(dim=-1)
+                    net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[b])[
+                        net_mesh_nearest_feats_ids]
+                    net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
+                    net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:],
+                                                                                                  3).permute(0, 3, 1, 2)
+                    img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate),
+                                    net_mesh_nearest_feats_verts_ncds[0])
+                    results['net_feats_nearest_verts_' + batch.name_unique[b]] = image_as_wandb_image(img)
+                    if config.visualize.live:
+                        show_img(img)
 
         if config.pose_iterative_refine:
             obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=(B, 6)).to(device=cam_transf4x4_obj.device),
@@ -619,20 +630,24 @@ class NeMo(OD3DMethod):
                 # mesh_cam_loss = substract_pxl2d(net_mesh_nearest_feats_verts2d / self.down_sample_rate)[(net_mesh_nearest_feats_sim > clutter_sim)].norm(dim=-1).mean()
 
                 if config.visualize.sim:
-                    img = blend_rgb(resize(batch.rgb[0], scale_factor=1. / self.down_sample_rate), sim_pxl[:1])
-                    results['sim' + batch.name[0]] = image_as_wandb_image(img,
-                                                                          caption=f'mean sim={sim[0]}')
-                    if config.visualize.live:
-                        show_img(img)
+                    for b in range(len(batch)):
+                        if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
+                            img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate), sim_pxl[b:b+1])
+                            results['sim' + batch.name_unique[b]] = image_as_wandb_image(img,
+                                                                                  caption=f'mean sim={sim[b]}')
+                            if config.visualize.live:
+                                show_img(img)
 
                 if config.visualize.live:
-                    # show_img(inner_feats2d_net_bank[0])
-                    show_img(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1],
-                                                                               cams_intr4x4=batch.cam_intr4x4[:1],
-                                                                               imgs_sizes=batch.size,
-                                                                               meshes_ids=pred_class_ids[:1],
-                                                                               modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
-                        0]).to(dtype=batch.rgb.dtype)))
+                    for b in range(len(batch)):
+                        if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
+                            # show_img(inner_feats2d_net_bank[0])
+                            show_img(blend_rgb(batch.rgb[b], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[b:b+1],
+                                                                                       cams_intr4x4=batch.cam_intr4x4[b:b+1],
+                                                                                       imgs_sizes=batch.size,
+                                                                                       meshes_ids=pred_class_ids[b:b+1],
+                                                                                       modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
+                                0]).to(dtype=batch.rgb.dtype)))
 
                 loss = mesh_cam_loss.mean()
                 loss.backward()
@@ -649,13 +664,15 @@ class NeMo(OD3DMethod):
 
         cam_transf4x4_obj = cam_transf4x4_obj.clone().detach()
         if config.visualize.verts_ncds_in_rgb:
-            img = blend_rgb(batch.rgb[0], (
-            self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[:1], cams_intr4x4=batch.cam_intr4x4[:1],
-                                     imgs_sizes=batch.size, meshes_ids=pred_class_ids[:1],
-                                     modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
-            results['verts_ncds_in_rgb_' + batch.name[0]] = image_as_wandb_image(img)
-            if config.visualize.live:
-                show_img(img)
+            for b in range(len(batch)):
+                if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
+                    img = blend_rgb(batch.rgb[b], (
+                    self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[b:b+1], cams_intr4x4=batch.cam_intr4x4[b:b+1],
+                                             imgs_sizes=batch.size, meshes_ids=pred_class_ids[b:b+1],
+                                             modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=batch.rgb.dtype))
+                    results['verts_ncds_in_rgb_' + batch.name_unique[b]] = image_as_wandb_image(img)
+                    if config.visualize.live:
+                        show_img(img)
 
 
 
@@ -698,6 +715,7 @@ class NeMo(OD3DMethod):
         dataloader = torch.utils.data.DataLoader(dataset=dataset_sub, batch_size=self.config.test.dataloader.batch_size, shuffle=False,
                                                  collate_fn=dataset.collate_fn, num_workers=self.config.test.dataloader.num_workers, pin_memory=self.config.test.dataloader.pin_memory)
 
+        visual_names_unique = [dataset_sub[i].name_unique for i in range(config_inference.visualize.num_samples)]
         logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
         results = {
@@ -714,7 +732,7 @@ class NeMo(OD3DMethod):
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
 
-            _, _ , results_batch = self.inference_batch(batch=batch, config=config_inference)
+            _, _ , results_batch = self.inference_batch(batch=batch, config=config_inference, visual_names_unique=visual_names_unique)
 
             for key, val in results_batch.items():
                 if key in results.keys() and isinstance(results[key], list):

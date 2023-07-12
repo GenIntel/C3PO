@@ -133,6 +133,7 @@ class OD3D_Frames():
     modalities: List[OD3D_FRAME_MODALITIES]
     length: int
     name: List[str]
+    name_unique: List[str]
     path_co3d: Path
     size: torch.Tensor
     cam_intr4x4: torch.Tensor
@@ -159,6 +160,7 @@ class OD3D_Frames():
 
         length = len(frames)
         name = [frame.name for frame in frames]
+        name_unique = [frame.name_unique for frame in frames]
         dtype = dtype
         device = device
         path_co3d = frame0.path_dataset
@@ -221,7 +223,7 @@ class OD3D_Frames():
         else:
             bbox = None
 
-        return OD3D_Frames(modalities=modalities, length=length,name=name,  dtype=dtype, device=device,
+        return OD3D_Frames(modalities=modalities, length=length,name=name, name_unique=name_unique, dtype=dtype, device=device,
                            path_co3d=path_co3d, size=size, cam_intr4x4=cam_intr4x4, cam_tform4x4_obj=cam_tform4x4_obj,
                            category=category, label=label, sequence_name=sequence_name,
                            rgb=rgb, depth = depth,
@@ -230,7 +232,7 @@ class OD3D_Frames():
 
 
     def get_items(self, items):
-        return OD3D_Frames(modalities=self.modalities, length=len(items), name=[self.name[item] for item in items], dtype=self.dtype, device=self.device,
+        return OD3D_Frames(modalities=self.modalities, length=len(items), name=[self.name[item] for item in items], name_unique=[self.name_unique[item] for item in items], dtype=self.dtype, device=self.device,
                            path_co3d=self.path_co3d, size=self.size, cam_intr4x4=self.cam_intr4x4[items], cam_tform4x4_obj=self.cam_tform4x4_obj[items],
                            category=[self.category[item] for item in items], label=self.label[items],
                            sequence_name=[self.sequence_name[item] for item in items] if self.sequence_name is not None else None,
@@ -250,6 +252,7 @@ class OD3D_Frames():
         return tform4x4(self.cam_intr4x4, self.cam_tform4x4_obj)
     def __len__(self):
         return self.length
+
     def visualize(self, cuboids: Meshes = None):
         from od3d.cv.visual.show import show_img
         from od3d.cv.visual.blend import blend_rgb
@@ -362,4 +365,4 @@ class OD3D_Dataset(Dataset):
 
     @staticmethod
     def get_path(config):
-        return Path(config.path)
+        return Path(config.path_raw)

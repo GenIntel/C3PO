@@ -14,11 +14,15 @@ def slurm():
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform='slurm')
 
-    logger.info(f'ssh slurm && source {config.platform.path_od3d}/venv310/bin/activate')
+    logger.info(f'ssh slurm')
+    logger.info(f'cd {config.platform.path_od3d} && source venv310/bin/activate')
 
+# sinfo
 @app.command()
 def torque():
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform='torque')
 
-    logger.info(f'ssh torque && source {config.platform.path_od3d}/venv310/bin/activate')
+    logger.info(f'ssh torque')
+    logger.info(f'cd {config.platform.path_od3d} && source venv310/bin/activate')
+

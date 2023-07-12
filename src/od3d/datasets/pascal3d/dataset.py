@@ -316,13 +316,14 @@ class Pascal3D(OD3D_Dataset):
 
     @staticmethod
     def preprocess_meta(config:DictConfig):
-        path = Path(config.path_raw)
-        path_meshes = path.joinpath("CAD")
-        path_preprocess = Path(config.path_preprocess)
         categories = config.get("classes", CATEGORIES)
         subsets = config.get("subsets", SUBSETS)
 
-        path_meta = path_preprocess.joinpath('meta')
+        path = Pascal3D.get_path(config=config)
+        path_preprocess = Pascal3D.get_path_preprocess(config=config)
+        path_meta = Pascal3D.get_path_meta(config=config)
+        path_meshes = path.joinpath("CAD")
+
         # remove_previous = False, override = False
 
         if config.preprocess_meta_remove_previous:

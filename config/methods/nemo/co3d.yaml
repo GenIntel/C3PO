@@ -43,14 +43,15 @@ train:
             - +0.5
             - +0.5
             - +0.5
-    epochs_to_next_ckpt: 6
-    epochs_to_next_val: 6
-    epochs_to_next_test: 6
+    epochs_to_next_ckpt: 1 # 6
+    epochs_to_next_val: 1 # 6
+    epochs_to_next_test: 1 # 6
     epochs_to_next_forget_est_tforms4x4: 2
     epochs: 100
     batch_accumulate_to_next_step: 2
 
     visualize:
+        num_samples: 10
         live: False
         verts_ncds_in_rgb: False
         net_feats_nearest_verts: False
@@ -102,6 +103,7 @@ inference:
 
     pose_iterative_refine: True
     visualize:
+        num_samples: 10
         live: False
         samples: False
         verts_ncds_in_rgb: True

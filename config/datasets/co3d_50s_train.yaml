@@ -7,6 +7,10 @@ frames_count_max_per_sequence: -1
 
 subset_fraction: 1.
 
+visualize:
+  count: 10
+  unique_names:
+
 sequences:
 #  - '185_19982_37678'
 #  - '206_21799_45886'

@@ -5,7 +5,7 @@ name: co3d_10s_test
 
 frames_count_max_per_sequence: -1
 
-subset_fraction: 1.
+subset_fraction: 0.01
 
 sequences:
   - '185_19982_37678'

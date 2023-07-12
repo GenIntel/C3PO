@@ -76,16 +76,20 @@ def preprocess_meta(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     config.dataset.preprocess_meta_override = override
     OD3D_Dataset.subclasses[config.dataset.class_name].preprocess_meta(config.dataset)
 
-
 @app.command()
-def rsync(directory: str = typer.Option('CO3D_Preprocess', '-d', '--directory'),
-          platform: str = typer.Option('local', '-p', '--platform'),):
+def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
+          platform_source: str = typer.Option('local', '-s', '--source'),
+          platform_target: str = typer.Option('slurm', '-t', '--target'),):
     logging.basicConfig(level=logging.INFO)
-    config = od3d.io.load_hierarchical_config(platform=platform)
+    config_source = od3d.io.load_hierarchical_config(platform=platform_source, overrides=["+datasets@dataset=" + dataset])
+    config_target = od3d.io.load_hierarchical_config(platform=platform_target, overrides=["+datasets@dataset=" + dataset])
 
-    path_datasets_local = Path(config.platform_local.path_datasets).joinpath(directory)
-    path_datasets_remote = Path(config.platform.path_datasets).joinpath(directory).parent
-    od3d.io.run_cmd(cmd=f'rsync -avrzP {path_datasets_local} {config.platform.link}:{path_datasets_remote}', live=True, logger=logger)
+    paths_source = Path(config_source.dataset.path_preprocess)
+    paths_target = Path(config_target.dataset.path_preprocess) # .parent
+    subdirs = list([path.name for path in paths_source.iterdir() if path.name not in ['labelstudio', 'meta']])
+    logger.info(subdirs)
+    for subdir in subdirs:
+        od3d.io.run_cmd(cmd=f'rsync -avrzP {paths_source.joinpath(subdir)} {config_target.platform.link}:{paths_target.joinpath(subdir).parent}', live=True, logger=logger)
 
 @app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
