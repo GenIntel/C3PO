@@ -38,6 +38,20 @@ fpaths_cuboids:
     train: ${..path_cuboids}/train.ply
     tvmonitor: ${..path_cuboids}/tvmonitor.ply
 
+scale_normalized_to_real:
+    aeroplane: 1.
+    bicycle: 1.
+    boat: 1.
+    bottle: 1.
+    bus: 1.
+    car: 4.65
+    chair: 1.
+    diningtable: 1.
+    motorbike: 1.
+    sofa: 1.
+    train: 1.
+    tvmonitor: 1.
+
 path_shapenemo: ${platform.path_datasets}/ShapeNeMo/Pascal3D
 
 url_pascal3d_seg: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGlQMyl2_03gXDTQw3Qm

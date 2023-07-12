@@ -59,7 +59,7 @@ class Pascal3DFrame(OD3D_Frame):
     _mesh= None
 
     @staticmethod
-    def load_from_raw(path_dataset: Path, path_preprocess: Path, rfpath_annotation: Path, rfpath_rgb: Path, path_meshes: Path, dt_shape_nemo=None, classes: list = None):
+    def load_from_raw(path_dataset: Path, path_preprocess: Path, rfpath_annotation: Path, rfpath_rgb: Path, path_meshes: Path, scale_normalized_to_real, dt_shape_nemo=None, classes: list = None):
         annotation = scipy.io.loadmat(path_dataset.joinpath(rfpath_annotation))
         name = annotation['record']['filename'][0][0][0].split('.')[0]
         complete = True
@@ -84,7 +84,7 @@ class Pascal3DFrame(OD3D_Frame):
         viewpoint = object['viewpoint']
         azimuth = viewpoint['azimuth'][0][0][0][0] * math.pi / 180
         elevation = viewpoint['elevation'][0][0][0][0] * math.pi / 180
-        distance = viewpoint['distance'][0][0][0][0]
+        distance = viewpoint['distance'][0][0][0][0] * scale_normalized_to_real[category]
         focal = viewpoint['focal'][0][0][0][0]
 
         if focal == 0:
@@ -110,7 +110,7 @@ class Pascal3DFrame(OD3D_Frame):
         fpath_mesh_kpoints3d = path_meshes.joinpath(f"{category}.mat")
         annotation_mesh3d = scipy.io.loadmat(fpath_mesh_kpoints3d)
         kpts3d = np.stack([annotation_mesh3d[category][n][0][mesh_index][0] if len(annotation_mesh3d[category][n][0][mesh_index]) > 0 else np.array([np.inf, np.inf, np.inf]) for n in kpts_names])
-        kpts3d = torch.from_numpy(kpts3d)
+        kpts3d = torch.from_numpy(kpts3d) * scale_normalized_to_real[category]
 
         return Pascal3DFrame(name=name, complete=complete, incomplete_reason=incomplete_reason, path_dataset=path_dataset,
                       rfpath_rgb=rfpath_rgb, rfpath_mesh=rfpath_mesh, path_meshes=path_meshes, path_preprocess=path_preprocess,
@@ -307,6 +307,8 @@ class Pascal3D(OD3D_Dataset):
                 min_ids = verts_group.min(dim=0)[1]
                 cuboid_limits = verts_sorted[torch.stack([min_ids, min_ids + verts_count_axis_coverage], dim=0)].diagonal(dim1=-2, dim2=-1)
 
+                category = path_meshes_category.name
+                cuboid_limits = cuboid_limits * config.scale_normalized_to_real[category]
                 meshes = Cuboids.create_dense_from_limits(limits=cuboid_limits[None,], verts_count=verts_count)
 
                 fpath = path_cuboids.joinpath(f'{path_meshes_category.name}.ply')
@@ -342,7 +344,7 @@ class Pascal3D(OD3D_Dataset):
 
             rfpath_annotation = Path("Annotations").joinpath(f"{frames_rfpaths[i]}.mat")
             rfpath_rgb = Path("Images").joinpath(f"{frames_rfpaths[i]}.JPEG")
-            frame = Pascal3DFrame.load_from_raw(path_dataset=path, path_preprocess=path_preprocess, rfpath_rgb=rfpath_rgb, rfpath_annotation=rfpath_annotation, path_meshes=path_meshes)
+            frame = Pascal3DFrame.load_from_raw(path_dataset=path, path_preprocess=path_preprocess, rfpath_rgb=rfpath_rgb, rfpath_annotation=rfpath_annotation, path_meshes=path_meshes, scale_normalized_to_real=config.scale_normalized_to_real)
 
             if frame.complete:
                 conf = OmegaConf.structured(frame)
