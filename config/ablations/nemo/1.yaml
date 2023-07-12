@@ -1,10 +1,10 @@
 # @package _global_
-ablation_name: lr1e-4_bs48
+ablation_name: lr1e-4_bs12
 method:
     nemo:
         train:
           optimizer:
               lr: 1e-4 # 0.0001
-          batch_accumulate_to_next_step: 4
+          batch_accumulate_to_next_step: 1
           dataloader:
               batch_size: 12

@@ -1,0 +1,34 @@
+# @package _global_
+ablation_name: old_checkpoint_ransac_sampling
+method:
+    nemo:
+        checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
+        fpaths_meshes: ${test_datasets.pascal3d.fpaths_cuboids}
+        inference:
+            sample:
+                method: epnp3d2d # epnp3d2d uniform
+
+            azim:
+                min: '0.'
+                max: math.pi * 2 - (math.pi * 2) / 12.
+                steps: 12
+
+            elev:
+                min: -math.pi / 6
+                max: math.pi / 3
+                steps: 4
+
+            theta:
+                min: -math.pi / 6
+                max: math.pi / 6
+                steps: 3
+
+            dist:
+                min: '15.'
+                max: '15.'
+                steps: 1
+
+
+
+train: False
+test: True

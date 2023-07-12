@@ -86,10 +86,14 @@ def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
 
     paths_source = Path(config_source.dataset.path_preprocess)
     paths_target = Path(config_target.dataset.path_preprocess) # .parent
+
+    source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
+    target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
+
     subdirs = list([path.name for path in paths_source.iterdir() if path.name not in ['labelstudio', 'meta']])
     logger.info(subdirs)
     for subdir in subdirs:
-        od3d.io.run_cmd(cmd=f'rsync -avrzP {paths_source.joinpath(subdir)} {config_target.platform.link}:{paths_target.joinpath(subdir).parent}', live=True, logger=logger)
+        od3d.io.run_cmd(cmd=f'rsync -avrzP {source_link}{paths_source.joinpath(subdir)} {target_link}{paths_target.joinpath(subdir).parent}', live=True, logger=logger)
 
 @app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),

@@ -35,6 +35,8 @@ from functools import partial
 
 from od3d.cv.geometry.grid import get_pxl2d_like
 from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks #  fit_se3_to_corresp_3d_2d_and_masks
+from od3d.cv.geometry.transform import inv_tform4x4
+
 
 class NeMo(OD3DMethod):
     def __init__(
@@ -124,16 +126,24 @@ class NeMo(OD3DMethod):
         #logger.info(self.meshes.feats[:1])
 
     def load_checkpoint_old(self, path_checkpoint):
+        fpaths_meshes_old = list(self.config.fpaths_meshes.values())
+        meshes_old = Meshes.load_from_files(fpaths_meshes=fpaths_meshes_old)
+        verts_count_max = meshes_old.verts_counts_max
+        mem_verts_feats_count = len(fpaths_meshes_old) * verts_count_max
         checkpoint = torch.load(path_checkpoint, map_location="cuda:0")
         self.net.net = torch.nn.DataParallel(self.net.net).cuda()
         self.net.net.load_state_dict(checkpoint["state"], strict=False)
         self.net.net = self.net.net.module
-        self.clutter_feats = checkpoint["memory"][self.mem_verts_feats_count:].clone().detach().cpu()
+        self.clutter_feats = checkpoint["memory"][mem_verts_feats_count:].clone().detach().cpu()
         self.clutter_feats = self.clutter_feats.mean(dim=0, keepdim=True)
         self.clutter_feats = torch.nn.Parameter(self.clutter_feats.to(device=self.device), requires_grad=True)
 
-        verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
-        self.meshes.set_feats_cat_with_pad(verts_feats)
+        verts_feats = []
+        map_mesh_id_to_old_id = [fpaths_meshes_old.index(fpath_mesh) for fpath_mesh in self.fpaths_meshes]
+        for i in range(len(self.fpaths_meshes)):
+            mesh_old_id = map_mesh_id_to_old_id[i]
+            verts_feats.append(checkpoint["memory"][mesh_old_id*verts_count_max: (mesh_old_id+1)*verts_count_max].clone().detach().cpu())
+        self.meshes.set_feats_cat_with_pad(torch.cat(verts_feats, dim=0))
 
 
     def save_checkpoint(self, path_checkpoint):
@@ -185,7 +195,6 @@ class NeMo(OD3DMethod):
             if self.config.train.epochs_to_next_forget_est_tforms4x4 > 0 and e % self.config.train.epochs_to_next_forget_est_tforms4x4 == 0:
                 self.seq_obj_tform4x4_est_obj = {}
                 self.seq_obj_tform4x4_est_obj_sim = {}
-                from od3d.cv.geometry.transform import inv_tform4x4
                 for s, seq in enumerate(dataset.config.sequences):
                     if self.config.train.sequences_tform4x4_labeled_count < 0 or s < self.config.train.sequences_tform4x4_labeled_count:
                         self.seq_obj_tform4x4_est_obj[dataset.config.sequences[s]] = torch.eye(4, device=self.device)
@@ -453,10 +462,11 @@ class NeMo(OD3DMethod):
 
             b_cams_multiview_tform4x4_obj = cams_multiview_tform4x4_cuboid[None,].repeat(B, 1, 1, 1)
 
-            # assumption 1: distance / translation to object is known
+            # assumption 1: distance translation to object is known
             b_cams_multiview_tform4x4_obj[:, :, 2, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
-            # b_cams_multiview_tform4x4_obj[:, :, :3, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]
 
+            # assumption 2: translation to object is known
+            # b_cams_multiview_tform4x4_obj[:, :, :3, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]
             b_cams_multiview_intr4x4 = batch.cam_intr4x4[:, None].repeat(1, C, 1, 1)
 
 
@@ -498,7 +508,6 @@ class NeMo(OD3DMethod):
                 sim_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats.detach()).max(dim=1, keepdim=False)[0]
                 sim_nearest_texture_verts = torch.stack([self.meshes.get_verts_stacked_with_mesh_ids(pred_class_ids[b: b+1])[0, sim_nearest_texture_ids[b]] for b in range(B)], dim=0)
                 sim_nearest_texture_verts2d = get_pxl2d_like(sim_nearest_texture_verts) # H=sim_clutter.shape[1], W=sim_clutter.shape[2], dtype=sim_nearest_texture_verts.dtype, device=sim_nearest_texture_verts.device)[None,].expand()
-
 
                 K = config.sample.epnp3d2d.count_cams
                 N = config.sample.epnp3d2d.count_pts

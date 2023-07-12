@@ -112,6 +112,25 @@ def get_slurm_jobs_ids(job_id_treshold=None):
     return slurm_jobs_ids
 
 @app.command()
+def rsync(platform_source: str = typer.Option('slurm', '-s', '--source'),
+          platform_target: str = typer.Option('local', '-t', '--target'),
+          run: str = typer.Option(None, '-r', '--run')):
+    logging.basicConfig(level=logging.INFO)
+    if run is None:
+        logger.warning('Please specify a run.')
+        return
+
+    config_source = od3d.io.load_hierarchical_config(platform=platform_source)
+    config_target = od3d.io.load_hierarchical_config(platform=platform_target)
+    source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
+    target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
+
+    path_source = Path(config_source.platform.path_exps).joinpath(run)
+    path_target = Path(config_target.platform.path_exps).joinpath(run)
+    od3d.io.run_cmd(cmd=f'rsync -avrzP {source_link}{path_source} {target_link}{path_target.parent}', live=True, logger=logger)
+
+
+@app.command()
 def status_slurm():
     logging.basicConfig(level=logging.INFO)
     format = '"%.18i %.9P %.40j %.8u %.8T %.10M %.9l %.6D %R"'

@@ -24,7 +24,7 @@ path_meshes: ${platform.path_datasets}/${.rpath_meshes}
 
 
 path_cuboids: '${.path_preprocess}/cuboids'
-fpaths_meshes:
+fpaths_cuboids:
     aeroplane: ${..path_cuboids}/aeroplane.ply
     bicycle: ${..path_cuboids}/bicycle.ply
     boat: ${..path_cuboids}/boat.ply

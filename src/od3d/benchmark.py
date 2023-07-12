@@ -36,8 +36,9 @@ def bench_single_method_local(config: DictConfig):
     # 5. bench method (logs results inside class)
     if config.test:
         for dataset_test in datasets_test:
-            results_test = method.test(datasets_test)
+            results_test = method.test(dataset_test)
             wandb.log({f'test_{dataset_test.config.name}_{k}': v for k, v in results_test.items()})
+
 
 def bench_single_method_local_separate_venv(cfg: DictConfig):
     # 1. save config

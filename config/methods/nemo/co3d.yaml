@@ -1,5 +1,7 @@
 # path_meshes: ${test_dataset.path_co3d_preprocess}/cuboids
-fpaths_meshes: ${train_dataset.fpaths_cuboids}
+#fpaths_meshes: ${train_dataset.fpaths_cuboids}
+fpaths_meshes: ${test_datasets.co3d.fpaths_cuboids}
+
     #car: ${..path_meshes}/106_12650_23736/cuboid_max_1000.ply
 
 #path_cuboids: ${test_dataset.path_co3d_preprocess}/cuboids
@@ -31,6 +33,13 @@ train:
         lr: 1e-4 # 0.0001
         weight_decay: 0.0001
 
+    batch_accumulate_to_next_step: 2
+
+    dataloader:
+        num_workers: 4
+        batch_size: 12
+        pin_memory: True
+
     transform:
         W: 512
         H: 512
@@ -48,7 +57,7 @@ train:
     epochs_to_next_test: 1 # 6
     epochs_to_next_forget_est_tforms4x4: 2
     epochs: 100
-    batch_accumulate_to_next_step: 2
+
 
     visualize:
         num_samples: 10
@@ -59,10 +68,6 @@ train:
 
     val_fraction: 0.01
 
-    dataloader:
-        num_workers: 4
-        batch_size: 12
-        pin_memory: True
 
 inference:
     optimizer:
