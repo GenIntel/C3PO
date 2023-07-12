@@ -292,7 +292,7 @@ class NeMo(OD3DMethod):
                 batch.cam_tform4x4_obj_sim = batch.cam_tform4x4_obj_sim.detach()
                 batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
-                logger.info(f'batch.label {batch.label}')
+                # logger.info(f'batch.label {batch.label}')
                 # B x x N x 2
                 vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4, cams_tform4x4_obj=batch.cam_tform4x4_obj, imgs_sizes=batch.size, mesh_ids=batch.label, down_sample_rate=self.down_sample_rate)
                 N = vts2d.shape[1]
@@ -487,7 +487,7 @@ class NeMo(OD3DMethod):
             meshes_scores = torch.stack(meshes_scores, dim=-1)
             pred_class_scores, pred_class_ids = meshes_scores.max(dim=1)
 
-            logger.info(f'pred class ids {pred_class_ids}')
+            #logger.info(f'pred class ids {pred_class_ids}')
             time_pred_class = time.time()
             # logger.info(f"predicted class: {self.config.classes[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
 
