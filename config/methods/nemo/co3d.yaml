@@ -108,11 +108,12 @@ inference:
 
     pose_iterative_refine: True
     visualize:
-        num_samples: 10
+        num_samples: 1
         live: False
-        samples: False
-        verts_ncds_in_rgb: True
-        net_feats_nearest_verts: True
+        samples: True
+        samples_scores: True
+        verts_ncds_in_rgb: False
+        net_feats_nearest_verts: False
         sim: False
 
     #inference:

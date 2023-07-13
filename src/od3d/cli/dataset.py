@@ -20,7 +20,7 @@ def setup(config_fpath: str = typer.Option(None, '-c', '--config')):
     logging.basicConfig(level=logging.DEBUG)
     print(config_fpath)
     config = OmegaConf.load(config_fpath)
-    od3ddataset = OD3D_Dataset.subclasses[config.class_name](config)
+    od3ddataset = OD3D_Dataset.subclasses[config.class_name].create_from_config(config=config)
     od3ddataset.setup()
 @app.command()
 def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
@@ -28,11 +28,11 @@ def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
-    dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     sequences_names = dataset.sequences_names
     if dataset_ban is not None:
         config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset_ban])
-        dataset_ban = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+        dataset_ban = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
         sequences_names = list(filter(lambda sname: sname not in dataset_ban.sequences_names, sequences_names))
     sequences_names_as_str = '\n  - '.join(sequences_names) # sequence.pcl_quality_score
     logger.info(f"Dataset sequences names: \n {sequences_names_as_str}")
@@ -56,14 +56,14 @@ def setup(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
 @app.command()
 def preprocess(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
           platform: str = typer.Option('local', '-p', '--platform'),
-          override: bool = typer.Option(False, '-o', '--override'),
-          remove_previous: bool = typer.Option(False, '-r', '--remove-previous')):
+          override: bool = typer.Option(False, '-o', '--override')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
-    config.dataset.preprocess_meta_remove_previous = remove_previous
-    config.dataset.preprocess_meta_override = override
-    OD3D_Dataset.subclasses[config.dataset.class_name].preprocess(config.dataset)
-
+    config.dataset.setup = False
+    config.dataset.preprocess_meta = False
+    config.dataset.preprocess = True
+    config.dataset.preprocess_override = override
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
 
 @app.command()
 def preprocess_meta(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
@@ -71,10 +71,12 @@ def preprocess_meta(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
           override: bool = typer.Option(False, '-o', '--override'),
           remove_previous: bool = typer.Option(False, '-r', '--remove-previous')):
     logging.basicConfig(level=logging.INFO)
+
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     config.dataset.preprocess_meta_remove_previous = remove_previous
     config.dataset.preprocess_meta_override = override
     OD3D_Dataset.subclasses[config.dataset.class_name].preprocess_meta(config.dataset)
+
 
 @app.command()
 def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
@@ -90,7 +92,7 @@ def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
     source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
     target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
 
-    subdirs = list([path.name for path in paths_source.iterdir() if path.name not in ['labelstudio', 'meta']])
+    subdirs = list([path.name for path in paths_source.iterdir() if path.name not in ['labelstudio']]) # 'meta'
     logger.info(subdirs)
     for subdir in subdirs:
         od3d.io.run_cmd(cmd=f'rsync -avrzP {source_link}{paths_source.joinpath(subdir)} {target_link}{paths_target.joinpath(subdir).parent}', live=True, logger=logger)
@@ -100,7 +102,7 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
-    dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     import torchvision
     from od3d.cv.transforms import CenterZoom3D, RandomCenterZoom3D
     # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
@@ -130,6 +132,9 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     logging.info(f"Dataset contains {len(dataset)} frames.")
     for batch in iter(dataloader):
         logger.info(f'{batch.sequence_name[0]}')
+
+        if torch.cuda.is_available():
+            batch.to(device='cuda:0')
         batch.visualize()
 
 import http.server
@@ -146,7 +151,7 @@ def label_add_local(dataset: str = typer.Option('co3d_only_first', '-d', '--data
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     config.dataset.preprocess = False
     config.dataset.preprocess_cuboids = False
-    dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     #logging.info(f"Dataset contains {len(dataset)} frames.")
 
     path_labelstudio = dataset.path_preprocess.joinpath('labelstudio', )
@@ -203,7 +208,7 @@ def label_export(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     config.dataset.preprocess = False
     config.dataset.preprocess_cuboids = False
-    dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     project_name = f'{dataset.config.name}_{category}'
     #logging.info(f"Dataset contains {len(dataset)} frames.")
 
@@ -313,7 +318,7 @@ def label_start(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     config.dataset.classes = [category]
-    dataset = OD3D_Dataset.subclasses[config.dataset.class_name](config.dataset)
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     logging.info(f"Dataset contains {len(dataset)} frames.")
     project_name = f'{dataset.config.name}_{category}'
 

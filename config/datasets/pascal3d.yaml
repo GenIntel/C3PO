@@ -7,7 +7,6 @@ modalities:
     - 'kpts'
     - 'bbox'
 
-
 url_pascal3d_raw: ftp://cs.stanford.edu/cs/cvgl/PASCAL3D+_release1.1.zip
 rpath_pascal3d_raw: PASCAL3D+_release1.1
 
@@ -44,7 +43,7 @@ scale_normalized_to_real:
     boat: 1.
     bottle: 1.
     bus: 1.
-    car: 4.65
+    car: 6. # 4.65, 6.
     chair: 1.
     diningtable: 1.
     motorbike: 1.
@@ -61,10 +60,15 @@ path_pascal3d_seg: ${platform.path_datasets}/${.rpath_pascal3d_seg}
 setup: True
 setup_remove_previous: False
 setup_override: False
-preprocess: True
+
+preprocess_meta: True
 preprocess_meta_override: False
 preprocess_meta_remove_previous: False
-preprocess_cuboids_override: False
+
+preprocess: True
+preprocess_override: False
+preprocess_cuboids: True
+preprocess_masks: True
 
 index_shift: 0
 pad_texture: false
@@ -119,7 +123,7 @@ image_sizes:
 #    train: [256, 608]
 #    tvmonitor: [480, 448]
 
-classes:
+categories:
 #    - aeroplane
 #    - bicycle
 #    - boat

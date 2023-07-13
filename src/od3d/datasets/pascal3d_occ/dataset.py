@@ -4,7 +4,7 @@ from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
 from pathlib import Path
 from od3d.datasets.pascal3d import Pascal3D
-from od3d.datasets.pascal3d.dataset import CATEGORIES, SUBSETS
+# from od3d.datasets.pascal3d.dataset import CATEGORIES, SUBSETS
 # import wget
 import shutil
 import od3d.io
@@ -39,7 +39,7 @@ class Pascal3D_Occ(Pascal3D):
             od3d.io.run_cmd(cmd=f'cd {path_pascal3d_occ_raw} && {fpath}', logger=logger, live=True)
 
     @staticmethod
-    def get_frame_names_from_subsets_and_cateogories(path_pascal3d_raw, subsets, categories):
+    def get_frames_names_from_subsets_and_cateogories_from_raw(path_pascal3d_raw, subsets, categories):
         pass
     @staticmethod
     def preprocess(config: DictConfig):
@@ -62,9 +62,9 @@ class Pascal3D_Occ(Pascal3D):
             if path_meta.exists():
                 shutil.rmtree(path_meta)
 
-        frames_names, frames_rfpaths = Pascal3D_occ.get_frame_names_from_subsets_and_cateogories(path_pascal3d_raw=path,
-                                                                                                 subsets=subsets,
-                                                                                                 categories=categories)
+        frames_names, frames_rfpaths = Pascal3D_occ.get_frames_names_from_subsets_and_cateogories_from_raw(path_pascal3d_raw=path,
+                                                                                                           subsets=subsets,
+                                                                                                           categories=categories)
 
         if config.get('frames', None) is not None:
             frames_names = list(filter(lambda f: f in config.frames, frames_names))

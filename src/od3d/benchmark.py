@@ -23,8 +23,8 @@ def bench_single_method_local(config: DictConfig):
     # dataset_test = OD3D_Dataset.subclasses[config.test_dataset.class_name](config.test_dataset)
     datasets_test = []
     for dataset_test_key in config.test_datasets.keys():
-        datasets_test.append( OD3D_Dataset.subclasses[config.test_datasets[dataset_test_key].class_name](config.test_datasets[dataset_test_key]))
-    dataset_train = OD3D_Dataset.subclasses[config.train_dataset.class_name](config.train_dataset)
+        datasets_test.append( OD3D_Dataset.subclasses[config.test_datasets[dataset_test_key].class_name].create_from_config(config=config.test_datasets[dataset_test_key]))
+    dataset_train = OD3D_Dataset.subclasses[config.train_dataset.class_name].create_from_config(config=config.train_dataset)
 
     # 3. setup method
     method = OD3DMethod.subclasses[config.method.class_name](config.method, logging_dir=logging_dir)
@@ -37,7 +37,7 @@ def bench_single_method_local(config: DictConfig):
     if config.test:
         for dataset_test in datasets_test:
             results_test = method.test(dataset_test)
-            wandb.log({f'test_{dataset_test.config.name}_{k}': v for k, v in results_test.items()})
+            wandb.log({f'test_{dataset_test.name}_{k}': v for k, v in results_test.items()})
 
 
 def bench_single_method_local_separate_venv(cfg: DictConfig):

@@ -29,5 +29,5 @@ method:
 
 
 
-train: False
+train: True
 test: True

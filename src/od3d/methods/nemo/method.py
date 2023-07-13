@@ -190,15 +190,15 @@ class NeMo(OD3DMethod):
             if self.config.train.epochs_to_next_test > 0 and e % self.config.train.epochs_to_next_test == 0:
                 for dataset_test in datasets_test:
                     results_test = self.test(dataset_test)
-                    wandb.log({f'test_{dataset_test.config.name}_{k}': v for k, v in results_test.items()})
+                    wandb.log({f'test_{dataset_test.name}_{k}': v for k, v in results_test.items()})
 
             if self.config.train.epochs_to_next_forget_est_tforms4x4 > 0 and e % self.config.train.epochs_to_next_forget_est_tforms4x4 == 0:
                 self.seq_obj_tform4x4_est_obj = {}
                 self.seq_obj_tform4x4_est_obj_sim = {}
-                for s, seq in enumerate(dataset.config.sequences):
+                for s, seq in enumerate(dataset.sequences_names):
                     if self.config.train.sequences_tform4x4_labeled_count < 0 or s < self.config.train.sequences_tform4x4_labeled_count:
-                        self.seq_obj_tform4x4_est_obj[dataset.config.sequences[s]] = torch.eye(4, device=self.device)
-                        self.seq_obj_tform4x4_est_obj_sim[dataset.config.sequences[s]] = 1.
+                        self.seq_obj_tform4x4_est_obj[dataset.sequences_names[s]] = torch.eye(4, device=self.device)
+                        self.seq_obj_tform4x4_est_obj_sim[dataset.sequences_names[s]] = 1.
                     else:
                         seq_dataset = dataset.get_subset_by_sequences([seq])
                         dataloader_train_seq = torch.utils.data.DataLoader(dataset=seq_dataset, batch_size=self.config.test.dataloader.batch_size, shuffle=True,
@@ -261,9 +261,7 @@ class NeMo(OD3DMethod):
 
                 results_train["count_sequences"] = len(sequences_filtered)
 
-                dataset_sub, _ = torch.utils.data.random_split(dataset.get_subset_by_sequences(sequences_filtered), [dataset.config.subset_fraction,
-                                                                         1. - dataset.config.subset_fraction],
-                                                               generator=generator)
+                dataset_sub = dataset.get_subset_by_sequences(sequences_filtered)
 
                 visual_names_unique = [dataset_sub[i].name_unique for i in range(self.config.train.visualize.num_samples)]
 
@@ -548,12 +546,23 @@ class NeMo(OD3DMethod):
             # sim = torch.einsum('bvfc,bfc->bvf', net_feats, self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids)) * mask_vts2d_vsbl
             # mesh_multiple_cams_loss = -sim.mean(dim=-1)
 
-            if config.visualize.samples and config.visualize.live:
+            if config.visualize.samples:
+                for b in range(len(batch)):
+                    if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
+                        imgs = self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj[b],
+                                                           cams_intr4x4=b_cams_multiview_intr4x4[b], imgs_sizes=batch.size,
+                                                           meshes_ids=pred_class_ids[b:b+1], down_sample_rate=self.down_sample_rate,
+                                                           broadcast_batch_and_cams=True, modality='rgb')[0]
+                        if config.sample.method == 'uniform':
+                            imgs = imgs.reshape(config.azim.steps, config.elev.steps, config.theta.steps, *imgs.shape[-3:])
+                        from od3d.cv.visual.show import imgs_to_img
+                        from od3d.cv.visual.blend import blend_rgb
+                        imgs = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate), imgs[:, :, 0])
+                        img = imgs_to_img(imgs)
 
-                show_imgs(self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj,
-                                                   cams_intr4x4=b_cams_multiview_intr4x4, imgs_sizes=batch.size,
-                                                   meshes_ids=pred_class_ids, down_sample_rate=self.down_sample_rate,
-                                                   broadcast_batch_and_cams=True, modality='rgb'))
+                        results['samples_' + batch.name_unique[b]] = image_as_wandb_image(img)
+                        if config.visualize.live:
+                            show_img(img)
 
             mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
@@ -719,8 +728,8 @@ class NeMo(OD3DMethod):
         dataset.transform = self.transform_test
 
         if dataset_sub is None:
-            generator = torch.Generator().manual_seed(42) # dataset.config.subset_fraction
-            dataset_sub, _ = torch.utils.data.random_split(dataset, [dataset.config.subset_fraction, 1. - dataset.config.subset_fraction], generator=generator)
+            dataset_sub = dataset
+
         dataloader = torch.utils.data.DataLoader(dataset=dataset_sub, batch_size=self.config.test.dataloader.batch_size, shuffle=False,
                                                  collate_fn=dataset.collate_fn, num_workers=self.config.test.dataloader.num_workers, pin_memory=self.config.test.dataloader.pin_memory)
 

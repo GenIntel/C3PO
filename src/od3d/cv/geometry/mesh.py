@@ -318,6 +318,7 @@ class Meshes(torch.nn.Module):
     def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
         dtype = cams_tform4x4_obj.dtype
         device = cams_tform4x4_obj.device
+        self.to(device)
 
         if down_sample_rate != 1.:
             cams_intr4x4 = cams_intr4x4 / down_sample_rate

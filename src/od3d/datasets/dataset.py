@@ -1,4 +1,5 @@
 import logging
+logger = logging.getLogger(__name__)
 
 from od3d.cv.geometry.transform import tform4x4
 from torch.utils.data import Dataset
@@ -13,8 +14,7 @@ from od3d.cv.io import read_image, read_co3d_depth_image
 import torchvision
 from dataclasses import dataclass, field
 from typing import List
-import logging
-logger = logging.getLogger(__name__)
+
 
 
 class OD3D_FRAME_MODALITIES(str, Enum):
@@ -34,9 +34,7 @@ class OD3D_SEQ_MODALITIES(str, Enum):
 
 
 @dataclass
-class OD3D_Frame:
-    path_dataset: Path
-    path_preprocess: Path
+class OD3D_FrameMeta:
     category: str
     name: str
     rfpath_rgb: Path
@@ -49,38 +47,68 @@ class OD3D_Frame:
     l_size: List[float] # torch.Tensor
     H: int
     W: int
-    modalities = None
-    label=None
-    _cam_tform4x4_obj = None
-    _cam_intr4x4 = None
-    _size = None
-    _rgb = None
-    _mask = None
-    _depth = None
-    _depth_mask = None
-    _kpts2d_orient = None
+
+    @staticmethod
+    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
+        fpath_meta = path_meta.joinpath(rfpath)
+        if not fpath_meta.exists():
+            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
+        return OD3D_FrameMeta(**OmegaConf.load(fpath_meta))
+
+    @staticmethod
+    def get_rfpath_frames():
+        return Path("frames")
+
+    def get_fpath(self, path_meta):
+        raise NotImplementedError
+
+    def save(self, path_meta):
+        frame_meta_fpath = self.get_fpath(path_meta=path_meta)
+        frame_meta_config = OmegaConf.structured(self)
+        if not frame_meta_fpath.parent.exists():
+            frame_meta_fpath.parent.mkdir(parents=True)
+        OmegaConf.save(frame_meta_config, frame_meta_fpath, resolve=True)
+
+class OD3D_Frame():
+
+    def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, meta: OD3D_FrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
+        self.meta: OD3D_FrameMeta = meta
+        self.path_raw: Path = path_raw
+        self.path_preprocess: Path = path_preprocess
+        self.path_meta: Path = path_meta
+        self._cam_tform4x4_obj = None
+        self._cam_intr4x4 = None
+        self._size = None
+        self._rgb = None
+        self._mask = None
+        self._depth = None
+        self._depth_mask = None
+        self._kpts2d_orient = None
+        self.categories = categories
+        self.category_id = categories.index(self.category)
+        self.modalities = modalities
 
 
     @property
     def name_unique(self):
-        return self.name
+        return self.meta.name
 
     @property
     def size(self):
         if self._size is None:
-            self._size = torch.Tensor(self.l_size)
+            self._size = torch.Tensor(self.meta.l_size)
         return self._size
 
     @property
     def cam_intr4x4(self):
         if self._cam_intr4x4 is None:
-            self._cam_intr4x4 = torch.Tensor(self.l_cam_intr4x4)
+            self._cam_intr4x4 = torch.Tensor(self.meta.l_cam_intr4x4)
         return self._cam_intr4x4
 
     @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
-            self._cam_tform4x4_obj = torch.Tensor(self.l_cam_tform4x4_obj)
+            self._cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
         return self._cam_tform4x4_obj
 
     @property
@@ -101,7 +129,7 @@ class OD3D_Frame:
 
     @property
     def path_mask(self):
-        return self.path_dataset.joinpath(self.rfpath_mask)
+        return self.path_raw.joinpath(self.meta.rfpath_mask)
 
     @property
     def mask(self):
@@ -111,7 +139,7 @@ class OD3D_Frame:
 
     @property
     def path_rgb(self):
-        return self.path_dataset.joinpath(self.rfpath_rgb)
+        return self.path_raw.joinpath(self.meta.rfpath_rgb)
     @property
     def rgb(self):
         if self._rgb is None:
@@ -125,8 +153,16 @@ class OD3D_Frame:
     @property
     def depth_mask(self):
         if self._depth_mask is None:
-            self._depth_mask = read_image(self.path_dataset.joinpath(self.rfpath_depth_mask))
+            self._depth_mask = read_image(self.path_raw.joinpath(self.meta.rfpath_depth_mask))
         return self._depth_mask
+
+    @property
+    def category(self):
+        return self.meta.category
+
+    @property
+    def name(self):
+        return self.meta.name
 
 @dataclass
 class OD3D_Frames():
@@ -163,12 +199,12 @@ class OD3D_Frames():
         name_unique = [frame.name_unique for frame in frames]
         dtype = dtype
         device = device
-        path_co3d = frame0.path_dataset
+        path_co3d = frame0.path_raw
         size = frame0.size # .to(device=device)
         cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0) # .to(device=device)
         cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0) #.to(device=device)
         category = [frame.category for frame in frames]
-        label = torch.LongTensor([frame.label for frame in frames]) # .to(device=device)
+        label = torch.LongTensor([frame.category_id for frame in frames]) # .to(device=device)
 
         if OD3D_FRAME_MODALITIES.SEQUENCE_NAME in modalities:
             sequence_name = [frame.sequence.name for frame in frames]
@@ -198,12 +234,12 @@ class OD3D_Frames():
             mask = None
 
         if OD3D_FRAME_MODALITIES.DEPTH in modalities:
-            depth = torch.stack([frame.depth for frame in frames], dim=0)# .to(device=device)
+            depth = torch.stack([frame.depth for frame in frames], dim=0) # .to(device=device)
         else:
             depth = None
 
         if OD3D_FRAME_MODALITIES.DEPTH_MASK in modalities:
-            depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0)# .to(device=device)
+            depth_mask = torch.stack([frame.depth_mask for frame in frames], dim=0) # .to(device=device)
         else:
             depth_mask = None
 
@@ -226,7 +262,7 @@ class OD3D_Frames():
         return OD3D_Frames(modalities=modalities, length=length,name=name, name_unique=name_unique, dtype=dtype, device=device,
                            path_co3d=path_co3d, size=size, cam_intr4x4=cam_intr4x4, cam_tform4x4_obj=cam_tform4x4_obj,
                            category=category, label=label, sequence_name=sequence_name,
-                           rgb=rgb, depth = depth,
+                           rgb=rgb, depth=depth,
                            mask=mask, depth_mask=depth_mask, kpts2d_annot=kpts2d_annot,
                            kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox, sequence=sequence)
 
@@ -291,7 +327,8 @@ class OD3D_Frames():
                                     cams_tform4x4_obj=self.cam_tform4x4_obj[:1],
                                     cams_intr4x4=self.cam_intr4x4[:1],
                                     imgs_sizes=self.size, meshes_ids=torch.LongTensor([0]),
-                                    modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=self.rgb.dtype))
+                                    modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=self.rgb.dtype, device=img.device))
+
 
         #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,
         #                                      proj3d2d_broadcast(pts3d=torch.cat((pts3d, self.kpts3d[0, self.kpts3d_vsbl[0]])),
@@ -309,35 +346,49 @@ class OD3D_Frames():
                     # self.__dict__[k] = a.to(device)
             self.device = device
 
+
+
 class OD3D_Dataset(Dataset):
     subclasses = {}
+
+    @staticmethod
+    def create_from_config(config: DictConfig, transform=None):
+        raise NotImplementedError
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.subclasses[cls.__name__] = cls
-    def __init__(self, config: DictConfig, transform=None):
-        self.config = config
+    def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path, transform=None, index_shift=0, subset_fraction=1.):
+        self.name = name
+        self.path_raw: Path = Path(path_raw)
+        self.path_preprocess: Path = Path(path_preprocess)
+        self.subset_fraction: float = subset_fraction
+
         if transform is None:
             import torchvision
-            from od3d.cv.transforms.center_and_zoom3d import CenterZoom3D
             from od3d.cv.transforms.rgb import RGB_UInt8ToFloat, RGB_Normalize, RGB_Random
-            from od3d.cv.transforms.center_and_zoom3d import CenterZoom3D
             transform = torchvision.transforms.Compose([
                 # RGB_Random(),
                 RGB_UInt8ToFloat(),
             ])
+
         self.transform = transform
-        self.index_shift = self.config.get('index_shift', 0)
+        self.index_shift = index_shift
+        self.modalities = modalities
 
     def __len__(self):
         raise NotImplementedError
     def __getitem__(self, item):
-        return self.get_item((item + self.index_shift) % len(self))
+        return self.transform(self.get_item((item + self.index_shift) % len(self)))
     def get_item(self, item):
         raise NotImplementedError
 
     def collate_fn(self, frames: List[OD3D_Frame], device='cpu', dtype=torch.float32):
-        frames = OD3D_Frames.get_frames_from_list(frames, modalities=self.config.modalities, dtype=dtype, device=device)
+        frames = OD3D_Frames.get_frames_from_list(frames, modalities=self.modalities, dtype=dtype, device=device)
         return frames
+
+    def get_dataloader(self, batch_size=1, shuffle=False):
+        dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False, collate_fn=self.collate_fn)
+        return dataloader
 
     @staticmethod
     def setup(config: DictConfig):
@@ -346,15 +397,9 @@ class OD3D_Dataset(Dataset):
         raise NotImplementedError
 
     @property
-    def path(self):
-        return Path(self.config.path_raw)
-
-    @property
-    def path_preprocess(self):
-        return Path(self.config.path_preprocess)
-    @property
     def path_meta(self):
         return self.path_preprocess.joinpath('meta')
+
     @staticmethod
     def get_path_meta(config):
         return OD3D_Dataset.get_path_preprocess(config=config).joinpath('meta')
@@ -364,5 +409,5 @@ class OD3D_Dataset(Dataset):
         return Path(config.path_preprocess)
 
     @staticmethod
-    def get_path(config):
+    def get_path_raw(config):
         return Path(config.path_raw)

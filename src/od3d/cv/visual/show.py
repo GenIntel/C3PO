@@ -130,9 +130,7 @@ def show_pcl(verts, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tens
     input('bla')
 
 
-
-
-def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=None):
+def imgs_to_img(rgbs):
     # rgb: K x 3 x H x W / GH x GW x 3 x H x W
 
     # , masks_mulitply=None, masks_overlay=None
@@ -170,6 +168,10 @@ def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=Non
 
     rgb = rgb.reshape(C, GH * H, GW * W)
 
+    return rgb
+
+def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=None):
+    rgb = imgs_to_img(rgbs)
     show_img(rgb, duration, vwriter, fpath, height, width)
 
 def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None, normalize=False):

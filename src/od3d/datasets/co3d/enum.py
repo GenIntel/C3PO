@@ -1,16 +1,17 @@
-from enum import Enum
+from od3d.data import ExtEnum
 
-class CAM_TFORM_OBJ_SOURCES(str, Enum):
+class CAM_TFORM_OBJ_SOURCES(str, ExtEnum):
+    CO3D = 'co3d'
     FIRST_FRAME = 'first_frame'
     FRONT_FRAME = 'front_frame'
     FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
     KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
 
-class CUBOID_SOURCES(str, Enum):
+class CUBOID_SOURCES(str, ExtEnum):
     FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
     KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
 
-class CO3D_FRAME_TYPES(str, Enum):
+class CO3D_FRAME_TYPES(str, ExtEnum):
     DEV_KNOWN = 'dev_known'
     DEV_UNSEEN = 'dev_unseen'
     TEST_KNOWN = 'test_known'
@@ -18,7 +19,7 @@ class CO3D_FRAME_TYPES(str, Enum):
     TRAIN_KNOWN = 'train_known'
     TRAIN_UNSEEN = 'train_unseen'
 
-class CO3D_FRAME_SPLITS(str, Enum):
+class CO3D_FRAME_SPLITS(str, ExtEnum):
     MULTISEQUENCE_CAR_DEV_KNOWN = 'multisequence_car_dev_known'
     MULTISEQUENCE_CAR_DEV_UNSEEN = 'multisequence_car_dev_unseen'
     MULTISEQUENCE_CAR_TEST_KNOWN = 'multisequence_car_test_known'
@@ -28,7 +29,7 @@ class CO3D_FRAME_SPLITS(str, Enum):
     SINGLESEQUENCE_CAR_TEST_0_KNOWN = 'singlesequence_car_test_0_known'
     SINGLESEQUENCE_CAR_TEST_0_UNSEEN = 'singlesequence_car_test_0_unseen'
 
-class CO3D_CLASSES(str, Enum):
+class CO3D_CATEGORIES(str, ExtEnum):
     APPLE = "apple"
     BACKPACK = "backpack"
     BALL = "ball"

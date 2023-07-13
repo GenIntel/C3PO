@@ -1,6 +1,7 @@
-from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES
-from od3d.datasets.co3d.frame import CO3D_Frame
+from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES
+from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 
+from tqdm import tqdm
 import logging
 logger = logging.getLogger(__name__)
 import torch.utils.data
@@ -31,7 +32,7 @@ from od3d.cv.geometry.transform import proj3d2d_broadcast
 from od3d.cv.visual.sample import sample_pxl2d_pts
 
 from od3d.cv.geometry.points_alignment import get_pca_tform_world
-from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4
+from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4, inv_tform4x4
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.geometry.points_alignment import icp
 
@@ -41,38 +42,132 @@ from od3d.cv.geometry.downsample import voxel_downsampling, random_sampling
 import od3d.io
 import cv2
 
-
 @dataclass
-class CO3D_Sequence():
+class CO3D_SequenceMeta():
     name: str
     category: str
-    _pcl = None
-    _pcl_clean = None
-    _front_name = None
-    _cuboid_front_tform4x4_obj = None
-    _cuboid = None
-    _config = None
-    path_co3d: Path
-    path_preprocess: Path
-    rfpath_pcl: Path
     pcl_pts_count: int
     pcl_quality_score: float
+    rfpath_pcl: Path
     viewpoint_quality_score: float
-    path_meta: Path
-    # the following variables can be configured dynamically
 
     @staticmethod
-    def create_with_config(config, **kwargs):
-        co3d_seq = CO3D_Sequence(**kwargs)
-        co3d_seq._config = config
-        return co3d_seq
+    def load_from_raw(sequence_annotation: SequenceAnnotation):
+        name = sequence_annotation.sequence_name
+        category = sequence_annotation.category
+        if sequence_annotation.point_cloud is not None:
+            rfpath_pcl = sequence_annotation.point_cloud.path
+            pcl_pts_count = sequence_annotation.point_cloud.n_points
+            pcl_quality_score = sequence_annotation.point_cloud.quality_score
+        else:
+            rfpath_pcl = Path('None')
+            pcl_pts_count = 0
+            pcl_quality_score = float('nan')
+
+        viewpoint_quality_score = sequence_annotation.viewpoint_quality_score
+
+        return CO3D_SequenceMeta(name=name, category=category, rfpath_pcl=rfpath_pcl,
+                                 pcl_pts_count=pcl_pts_count, pcl_quality_score=pcl_quality_score,
+                                 viewpoint_quality_score=viewpoint_quality_score)
+
+    @staticmethod
+    def load_from_meta_with_category_and_name(path_meta: Path, category: str, name: str):
+        fpath_meta = CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta, category=category, name=name)
+        if not fpath_meta.exists():
+            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
+        return CO3D_SequenceMeta(**OmegaConf.load(fpath_meta))
+
+    @staticmethod
+    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
+        fpath_meta = path_meta.joinpath(rfpath)
+        if not fpath_meta.exists():
+            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
+        return CO3D_SequenceMeta(**OmegaConf.load(fpath_meta))
+    @staticmethod
+    def get_fpath_sequence_meta_with_rfpath(path_meta: Path, rfpath_meta: Path):
+        return path_meta.joinpath(rfpath_meta)
+
+    @staticmethod
+    def get_fpath_sequence_meta_with_category_and_name(path_meta: Path, category: str, name: str):
+        return path_meta.joinpath(CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=category, name=name))
+
+    @staticmethod
+    def get_rfpath_sequence_meta_with_category_and_name(category: str, name: str):
+        return CO3D_SequenceMeta.get_rfpath_sequences().joinpath(category, name + '.yaml')
+
+    @staticmethod
+    def get_rfpath_sequences():
+        return Path("sequences")
+
+    @staticmethod
+    def get_path_sequences_meta(path_meta: Path):
+        return path_meta.joinpath(CO3D_SequenceMeta.get_rfpath_sequences())
+    @staticmethod
+    def get_path_sequences_meta_with_category(path_meta: Path, category: str):
+        return CO3D_SequenceMeta.get_path_sequences_meta(path_meta=path_meta).joinpath(category)
+
+    def get_fpath(self, path_meta):
+        return CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta,
+                                                                                category=self.category,
+                                                                                name=self.name)
     @property
-    def config(self):
-        if self._config is None:
-            self._config = OmegaConf.create()
-            self._config.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value
-            self._config.cuboid_source = CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value
-        return self._config
+    def rfpath(self):
+        return CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=self.category, name=self.name)
+
+    def save(self, path_meta):
+        sequence_meta_fpath = self.get_fpath(path_meta=path_meta)
+        sequence_meta_config = OmegaConf.structured(self)
+        if not sequence_meta_fpath.parent.exists():
+            sequence_meta_fpath.parent.mkdir(parents=True)
+        OmegaConf.save(sequence_meta_config, sequence_meta_fpath, resolve=True)
+
+
+class CO3D_Sequence():
+
+    def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, meta: CO3D_SequenceMeta,
+                 modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
+                 cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
+                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+                 ):
+        self.path_raw: Path = path_raw
+        self.path_preprocess: Path = path_preprocess
+        self.path_meta: Path = path_meta
+        self.meta = meta
+        self.cam_tform_obj_source = cam_tform_obj_source
+        self.cuboid_source = cuboid_source
+        self.modalities = modalities
+        self.categories = categories
+        self.category_id = categories.index(self.category)
+        self._pcl = None
+        self._pcl_clean = None
+        self._front_name = None
+        self._cuboid_front_tform4x4_obj = None
+        self._cuboid = None
+
+    # the following variables can be configured dynamically
+
+    #@staticmethod
+    #def create_with_config(config, **kwargs):
+    #    co3d_seq = CO3D_Sequence(**kwargs)
+    #    co3d_seq._config = config
+    #    return co3d_seq
+    #@property
+    #def config(self):
+    #    if self._config is None:
+    #        self._config = OmegaConf.create()
+    #        self._config.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+    #        self._config.cuboid_source = CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+    #    return self._config
+
+
+
+    @property
+    def name(self):
+        return self.meta.name
+
+    @property
+    def category(self):
+        return self.meta.category
 
     def preprocess_front_name(self, override=False):
         fpath_front_name = self.fpath_front_name
@@ -112,7 +207,7 @@ class CO3D_Sequence():
             od3d.io.write_str_to_file(fpath_front_name, text=self._front_name)
 
     def align_cuboid_tform_obj(self, cuboid_tform_obj):
-        if self.config.cuboid_source == CUBOID_SOURCES.FRONT_FRAME_AND_PCL:
+        if self.cuboid_source == CUBOID_SOURCES.FRONT_FRAME_AND_PCL:
 
             cam_front_rot3x3_cuboid = rot3x3(self.cam_front_tform4x4_obj[:3, :3], cuboid_tform_obj[:3, :3].T)
             cam_front_rot3x3_max_ids = cam_front_rot3x3_cuboid.abs().max(dim=-1)[1]
@@ -128,7 +223,7 @@ class CO3D_Sequence():
 
             cuboid_tform_obj = tform4x4(cuboid_front_tform4x4_cuboid, cuboid_tform_obj)
 
-        elif self.config.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
+        elif self.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
             from od3d.cv.geometry.fit.axis3d_from_pxl2d import axis3d_from_pxl2d
             from od3d.cv.visual.show import show_img
             cam_rot3x3_cuboid_front = axis3d_from_pxl2d(kpts2d_orient=self.first_frame.kpts2d_orient, cam_intr4x4=self.first_frame.cam_intr4x4) #  orients
@@ -175,7 +270,7 @@ class CO3D_Sequence():
                 None,]
 
             cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
-            icp_tform_pca = icp(cuboids.verts, pca_pts3d_clean).inverse()
+            icp_tform_pca = inv_tform4x4(icp(cuboids.verts, pca_pts3d_clean))
             icp_tform_obj = tform4x4(icp_tform_pca, pca_tform_obj)
 
             # from od3d.cv.visual.show import show_pcl
@@ -203,7 +298,7 @@ class CO3D_Sequence():
             """
 
             for i in range(100):
-                if self.config.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
+                if self.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
                    tmp_tform6_cuboid.data[3:] = 0.
                 cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid.detach()), cuboid_tform4x4_obj.detach())
 
@@ -261,29 +356,12 @@ class CO3D_Sequence():
 
             save_ply(fpath_cuboid, verts=cuboids.verts, faces=cuboids.faces)
 
-    @staticmethod
-    def load_from_raw(path_co3d: Path, path_meta: Path, path_preprocess: Path, sequence_annotation: SequenceAnnotation):
-        name = sequence_annotation.sequence_name
-        category = sequence_annotation.category
-        if sequence_annotation.point_cloud is not None:
-            rfpath_pcl = sequence_annotation.point_cloud.path
-            pcl_pts_count = sequence_annotation.point_cloud.n_points
-            pcl_quality_score = sequence_annotation.point_cloud.quality_score
-        else:
-            rfpath_pcl = Path('None')
-            pcl_pts_count = 0
-            pcl_quality_score = float('nan')
 
-        viewpoint_quality_score = sequence_annotation.viewpoint_quality_score
-
-        return CO3D_Sequence(path_co3d=path_co3d, path_meta=path_meta, path_preprocess=path_preprocess, name=name, category=category, rfpath_pcl=rfpath_pcl,
-                             pcl_pts_count=pcl_pts_count, pcl_quality_score=pcl_quality_score,
-                             viewpoint_quality_score=viewpoint_quality_score)
 
     @property
     def pcl(self):
         if self._pcl is None:
-            fpath_pcl = self.path_co3d.joinpath(self.rfpath_pcl)
+            fpath_pcl = self.path_raw.joinpath(self.meta.rfpath_pcl)
             verts, _ = load_ply(str(fpath_pcl))
             self._pcl = verts
         return self._pcl
@@ -298,7 +376,7 @@ class CO3D_Sequence():
 
     @property
     def fpath_cuboid_front_tform4x4_obj(self):
-        return self.path_preprocess.joinpath('cuboid_front_tform4x4_obj', self.config.cuboid_source, self.category, self.name, 'tform4x4.pt')
+        return self.path_preprocess.joinpath('cuboid_front_tform4x4_obj', self.cuboid_source, self.category, self.name, 'tform4x4.pt')
 
     # def get_cuboid_front_tform4x4_obj(self, cuboid_source: CUBOID_SOURCES):#
         #
@@ -325,30 +403,33 @@ class CO3D_Sequence():
             self._front_name = od3d.io.read_str_from_file(fpath_front_name)
         return self._front_name
 
-    #@property
-    #def fpath_cuboid_front_tform4x4_obj(self):
-    #    return self.path_preprocess.joinpath('cuboid_front_tform4x4_obj', self.category, self.name, 'tform4x4.pt')
-
     @property
     def cam_front_tform4x4_obj(self):
-        return torch.Tensor(self.front_frame.l_cam_tform4x4_obj)
+        return torch.Tensor(self.front_frame.meta.l_cam_tform4x4_obj)
 
     @property
     def cam_first_tform4x4_obj(self):
-        return torch.Tensor(self.first_frame.l_cam_tform4x4_obj)
+        return torch.Tensor(self.first_frame.meta.l_cam_tform4x4_obj)
+
+    def get_frame_by_name(self, frame_name: str):
+        frame_meta = CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_meta,
+                                                               rfpath=CO3D_FrameMeta.
+                                                               get_rfpath_frame_meta_with_category_sequence_name(
+                                                                   category=self.category, sequence=self.name,
+                                                                   name=frame_name))
+        frame = CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+                           meta=frame_meta, modalities=self.modalities, categories=self.categories,
+                           cam_tform_obj_source=self.cam_tform_obj_source, cuboid_source=self.cuboid_source)
+        return frame
 
     @property
     def front_frame(self):
-        frame_config = OmegaConf.load(self.path_meta.joinpath(self.name, self.front_name + '.yaml'))
-        frame = CO3D_Frame.create_with_config(**frame_config, config=self.config)
-        return frame
+        return self.get_frame_by_name(frame_name=self.front_name)
 
     @property
     def first_frame(self):
-        first_frame_fname = sorted(self.path_meta.joinpath(self.name).iterdir(), key=lambda p: int(p.name.split('.')[0]))[0]
-        frame_config = OmegaConf.load(self.path_meta.joinpath(self.name, first_frame_fname)) # + '.yaml'))
-        frame = CO3D_Frame.create_with_config(**frame_config, config=self.config)
-        return frame
+        first_frame_fpath = sorted(CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=self.path_meta, category=self.category, sequence=self.name).iterdir(), key=lambda p: int(p.stem))[0]
+        return self.get_frame_by_name(frame_name=first_frame_fpath.stem)
 
     @property
     def cuboid_front_tform4x4_obj(self):
@@ -367,21 +448,9 @@ class CO3D_Sequence():
             pts3d_max_count = 20000
             pts3d_prob_thresh = 0.6
 
-            config = OmegaConf.create()
-            config.sequences = [self.name]
-            config.path = []
-            config.path_preprocess = self.path_preprocess
-            config.frame = self.config
-            config.frame.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.FIRST_FRAME.value
-            config.sequence = self.config
-            config.sequence.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.FIRST_FRAME.value
-
-            config.path_meta = self.path_meta
-            config.classes = [self.category]
-            config.modalities = [OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK]
-            config.preprocess=False
-            config.setup=False
-            dataset = CO3D(config=config)
+            dataset = CO3D(name='co3d', modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK],
+                           path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+                           categories=[CO3D_CATEGORIES(self.category).value], sequences_names=[self.name], cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D.value)
             dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
                                                      collate_fn=dataset.collate_fn,
                                                      num_workers=0)
@@ -391,7 +460,13 @@ class CO3D_Sequence():
             pts3d = random_sampling(pts3d, pts3d_max_count=pts3d_max_count * 3)
             pts3d = voxel_downsampling(pts3d, K=pts3d_max_count)
             pts3d_prob = torch.ones(size=(pts3d.shape[0], 1), device=pts3d.device, dtype=pts3d.dtype)
-            for frames in iter(dataloader):
+
+            if torch.cuda.is_available():
+                pts3d = pts3d.to(device='cuda:0')
+                pts3d_prob = pts3d_prob.to(device='cuda:0')
+            for frames in tqdm(iter(dataloader)):
+                if torch.cuda.is_available():
+                    frames.to(device='cuda:0')
                 pxl2d = proj3d2d_broadcast(pts3d=pts3d, proj4x4=frames.cam_proj4x4_obj[:, None])
                 pts3d_prob += sample_pxl2d_pts(frames.mask, pxl2d=pxl2d, padding_mode='zeros').sum(dim=0)
 
@@ -419,7 +494,7 @@ class CO3D_Sequence():
         return self.path_preprocess.joinpath('front_names', self.category, self.name, 'front_name.yaml')
     @property
     def fpath_cuboid(self):
-        return self.path_preprocess.joinpath('cuboids', self.config.cuboid_source, self.category, self.name + '.ply')
+        return self.path_preprocess.joinpath('cuboids', self.cuboid_source, self.category, self.name + '.ply')
     @property
     def fpath_pcl_clean(self):
         return self.path_preprocess.joinpath('pcls', self.category, self.name, 'pcl_clean.ply') #  f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
