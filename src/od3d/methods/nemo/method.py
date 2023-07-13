@@ -349,7 +349,7 @@ class NeMo(OD3DMethod):
                             net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.label[b])[net_mesh_nearest_feats_ids]
                             net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
                             net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1, *net_feats2d.shape[-2:], 3).permute(0, 3, 1, 2)
-                            img = blend_rgb(resize(batch.rgb[b], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[b])
+                            img = blend_rgb(resize(batch.rgb[b], scale_factor=1./self.down_sample_rate), net_mesh_nearest_feats_verts_ncds[0])
                             results_train['net_feats_nearest_verts'] = image_as_wandb_image(img, caption=f'Frame Name {batch.name[b]}')
                             if self.config.train.visualize.live:
                                 show_img(img)
