@@ -332,7 +332,9 @@ class NeMo(OD3DMethod):
                 net_feats2d = self.net(batch.rgb)
                 H, W = net_feats2d.shape[-2:]
                 xy = torch.stack(torch.meshgrid(torch.arange(W,device=self.device), torch.arange(H, device=self.device), indexing='xy'), dim=0) # HxW
-                noise2d = xy.flatten(1)[:, torch.multinomial((1. - 1. * resize(batch.mask, scale_factor=1. / self.down_sample_rate)).flatten(1), self.config.num_noise)].permute(1, 2, 0)
+                prob_noise = (1. - 1. * resize(batch.mask, scale_factor=1. / self.down_sample_rate)).flatten(1)
+                prob_noise[prob_noise.sum(dim=-1) == 0.] = 1.
+                noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise)].permute(1, 2, 0)
                 net_feats = sample_pxl2d_pts(net_feats2d, pxl2d=torch.cat([vts2d, noise2d], dim=1))
 
                 C = net_feats.shape[2]
