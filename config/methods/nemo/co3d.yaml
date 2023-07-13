@@ -60,10 +60,10 @@ train:
 
 
     visualize:
-        num_samples: 10
+        num_samples: 5
         live: False
-        verts_ncds_in_rgb: False
-        net_feats_nearest_verts: False
+        verts_ncds_in_rgb: True
+        net_feats_nearest_verts: True
         seq_added_tform: True
 
     val_fraction: 0.01
@@ -108,12 +108,12 @@ inference:
 
     pose_iterative_refine: True
     visualize:
-        num_samples: 1
+        num_samples: 5
         live: False
         samples: True
         samples_scores: True
-        verts_ncds_in_rgb: False
-        net_feats_nearest_verts: False
+        verts_ncds_in_rgb: True
+        net_feats_nearest_verts: True
         sim: False
 
     #inference:

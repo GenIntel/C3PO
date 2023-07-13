@@ -14,7 +14,7 @@ import wandb
 import math
 from od3d.cv.visual.draw import draw_pixels
 from od3d.cv.geometry.transform import se3_exp_map
-
+from od3d.cv.visual.show import imgs_to_img
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
 from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4_broadcast, tform4x4, rot3x3
@@ -562,16 +562,34 @@ class NeMo(OD3DMethod):
                                                            cams_intr4x4=b_cams_multiview_intr4x4[b], imgs_sizes=batch.size,
                                                            meshes_ids=pred_class_ids[b:b+1], down_sample_rate=self.down_sample_rate,
                                                            broadcast_batch_and_cams=True, modality='rgb')[0]
+
+
                         if config.sample.method == 'uniform':
                             imgs = imgs.reshape(config.azim.steps, config.elev.steps, config.theta.steps, *imgs.shape[-3:])[:, :, 0]
-                        from od3d.cv.visual.show import imgs_to_img
-                        from od3d.cv.visual.blend import blend_rgb
+
                         imgs = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate), imgs)
                         img = imgs_to_img(imgs)
 
                         results['samples_' + batch.name_unique[b]] = image_as_wandb_image(img)
                         if config.visualize.live:
                             show_img(img)
+
+
+            if config.visualize.samples_scores:
+                for b in range(len(batch)):
+                    if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
+                        imgs = sim[b][:, None, None, None].expand(*sim[b].shape, 3,
+                                                                         *mesh_feats2d_rendered.shape[-2:])
+
+                        if config.sample.method == 'uniform':
+                            imgs = imgs.reshape(config.azim.steps, config.elev.steps, config.theta.steps, *imgs.shape[-3:])[:, :, 0]
+
+                        img = imgs_to_img(imgs)
+
+                        results['samples_scores' + batch.name_unique[b]] = image_as_wandb_image(img)
+                        if config.visualize.live:
+                            show_img(img)
+
 
             mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
