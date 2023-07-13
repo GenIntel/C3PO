@@ -65,7 +65,7 @@ preprocess_meta: True
 preprocess_meta_override: False
 preprocess_meta_remove_previous: False
 
-preprocess: True
+preprocess: False
 preprocess_override: False
 preprocess_cuboids: True
 preprocess_masks: True

@@ -12,6 +12,8 @@ transforms:
     - class_name: nemo.datasets.pascal3d.Normalize
 
 train:
+  incremental:
+    enabled: False
   transform:
     W: 512
     H: 512

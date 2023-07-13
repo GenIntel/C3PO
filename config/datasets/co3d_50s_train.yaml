@@ -7,10 +7,6 @@ name: co3d_50s_train
 
 subset_fraction: 1.
 
-visualize:
-  count: 10
-  unique_names:
-
 sequences:
 #  - '185_19982_37678'
 #  - '206_21799_45886'
