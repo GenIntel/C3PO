@@ -5,9 +5,9 @@ name: co3d_10s_test
 
 #frames_count_max_per_sequence: 10
 
-subset_fraction: 0.01
+subset_fraction: 0.05
 
-sequences:
+sequences_names:
   - '185_19982_37678'
   - '206_21799_45886'
   - '194_20939_43630'

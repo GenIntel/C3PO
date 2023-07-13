@@ -7,7 +7,7 @@ name: co3d_50s_train
 
 subset_fraction: 1.
 
-sequences:
+sequences_names:
 #  - '185_19982_37678'
 #  - '206_21799_45886'
 #  - '194_20939_43630'

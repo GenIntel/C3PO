@@ -130,13 +130,16 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
 
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, collate_fn=dataset.collate_fn)
     logging.info(f"Dataset contains {len(dataset)} frames.")
+    imgs = []
     for batch in iter(dataloader):
         logger.info(f'{batch.sequence_name[0]}')
-
         if torch.cuda.is_available():
             batch.to(device='cuda:0')
-        batch.visualize()
+        img = batch.visualize()
+        imgs.append(img)
 
+    from od3d.cv.visual.video import save_gif, save_video
+    save_video(imgs=imgs, fpath=Path(config.platform.path_exps).joinpath('videos', dataset.name + '.mp4'))
 import http.server
 import socketserver
 import torchvision

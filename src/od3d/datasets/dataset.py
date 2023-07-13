@@ -337,6 +337,7 @@ class OD3D_Frames():
         #                                     colors=(0, 0, 255), radius_in=2, radius_out=4)
 
         show_img(img)
+        return img
 
     def to(self, device: torch.device):
         if self.device != device:

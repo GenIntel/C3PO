@@ -7,7 +7,7 @@ path_exps: /work/dlclarge1/sommerl-od3d/exps
 path_cuda: /work/dlclarge1/sommerl-od3d/cudas/cuda-11.7
 path_home: /ihome/sommerl
 url_od3d: git@github.com:Generative-Vision-Robust-Learning/od3d.git
-partition: lmb_gpu-rtx2080 # lmb_gpu-teslaP100 lmb_gpu-1080ti, lmb_gpu-rtx2080, testdlc_gpu-rtx2080, alldlc_gpu-rtx3080, alldlc_gpu-rtx2080, lmbdlc_gpu-rtx2080
+partition: alldlc_gpu-rtx3080 # lmb_gpu-teslaP100 lmb_gpu-1080ti, lmb_gpu-rtx2080, testdlc_gpu-rtx2080, alldlc_gpu-rtx3080, alldlc_gpu-rtx2080, lmbdlc_gpu-rtx2080
 # 1. lmbdlc_gpu-rtx2080 :
 # 2. alldlc_gpu-rtx3080
 # 3. alldlc_gpu-rtx2080
