@@ -264,13 +264,14 @@ class NeMo(OD3DMethod):
 
                     dataset_sub = dataset.get_subset_by_sequences(sequences_filtered)
 
-                    visual_names_unique = [dataset_sub[i].name_unique for i in range(self.config.train.visualize.num_samples)]
+
 
                     logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
             else:
                 dataset_sub = dataset
 
+            visual_names_unique = [dataset_sub[i].name_unique for i in range(self.config.train.visualize.num_samples)]
             dataset_train_seq_filtered, dataset_val_seq_filtered = torch.utils.data.random_split(dataset_sub,
                                                                                                  [
                                                                                                      1. - self.config.train.val_fraction,
