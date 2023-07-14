@@ -320,10 +320,10 @@ def label_start(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'
                 restart: bool = typer.Option(False, '-r', '--restart')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
-    config.dataset.classes = [category]
+    config.dataset.categories = [category]
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     logging.info(f"Dataset contains {len(dataset)} frames.")
-    project_name = f'{dataset.config.name}_{category}'
+    project_name = f'{dataset.name}_{category}'
 
     path_labelstudio = dataset.path_preprocess.joinpath('labelstudio')
     path_labelstudio_in = path_labelstudio.joinpath('in', project_name)
@@ -335,7 +335,7 @@ def label_start(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'
             shutil.rmtree(path_labelstudio_out)
 
     path_labelstudio_labelconfig = dataset.path_preprocess.joinpath('labelstudio', f'label_{category}_config.xml')
-    keypoints = dataset.config.keypoints[category]
+    # keypoints = dataset.config.keypoints[category]
 
     labelconfig_str="""
 <View>
