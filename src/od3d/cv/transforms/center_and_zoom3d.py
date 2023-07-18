@@ -38,10 +38,6 @@ class CenterZoom3D():
 
         if self.center3d is not None:
             center = proj3d2d(self.center3d, proj4x4=frame.cam_proj4x4_obj)
-
-            center_princ = frame.cam_intr4x4[:2, 2]
-            if (center_princ - center).norm() > 2:
-                logger.warning(f"principal point is deviating from projected center 3d")
         else:
             center = frame.size.flip(dims=[0]) / 2
 
