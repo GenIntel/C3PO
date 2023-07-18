@@ -1,8 +1,0 @@
-# @package _global_
-ablation_name: ransac_sampling
-method:
-    nemo:
-        checkpoint: ${platform.path_exps}/07-12_09-15-12_CO3D_NeMo_lr1e-4_bs24_slurm/nemo.ckpt
-
-train: False
-test: True

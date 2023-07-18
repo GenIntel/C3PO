@@ -1,0 +1,35 @@
+# @package _global_
+ablation_name: debug
+method:
+    nemo:
+        inference:
+            visualize:
+                num_samples: 5
+                live: True
+                samples_sorted: True
+                samples: True
+                samples_scores: True
+                verts_ncds_in_rgb: True
+                net_feats_nearest_verts: True
+
+        test:
+            dataloader:
+                num_workers: 0
+                batch_size: 1
+                pin_memory: True
+
+        train:
+            dataloader:
+                num_workers: 0
+                batch_size: 1
+                pin_memory: True
+
+            visualize:
+                num_samples: 5
+                live: False
+                verts_ncds_in_rgb: True
+                net_feats_nearest_verts: True
+                seq_added_tform: True
+
+train: False
+test: True

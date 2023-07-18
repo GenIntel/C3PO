@@ -23,7 +23,6 @@ backbone:
     class_name: ResNetExt #  ResNetExt # ResNetExt DINOv2 ResNet
 
 train:
-    loss_reg_weight: 0.
     sequences_tform4x4_labeled_count: -1 #
     sequences_tform4x4_estimated_frames_count: 8
     sequences_tform4x4_estimated_sim_threshold: 0.6
@@ -62,8 +61,8 @@ train:
     visualize:
         num_samples: 5
         live: False
-        verts_ncds_in_rgb: False
-        net_feats_nearest_verts: False
+        verts_ncds_in_rgb: True
+        net_feats_nearest_verts: True
         seq_added_tform: True
 
     val_fraction: 0.01
@@ -73,31 +72,12 @@ inference:
 
     visualize:
         num_samples: 5
-        live: True
+        live: False
         samples_sorted: True
         samples: True
         samples_scores: True
-        verts_ncds_in_rgb: False
-        net_feats_nearest_verts: False
-        sim: False
-
-
-    #inference:
-    #    visualize:
-    #        live: False
-    #        samples: False
-    #        verts_ncds_in_rgb: False
-    #        net_feats_nearest_verts: False
-    #        sim: False
-    #
-    #    pose_iterative_refine: True
-    #
-    #    optimizer:
-    #        beta0: 0.4
-    #        beta1: 0.6
-    #        lr: 5e-2 # 5e-2
-    #        epochs: 30
-
+        verts_ncds_in_rgb: True
+        net_feats_nearest_verts: True
 
 test:
     transform:
