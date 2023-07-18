@@ -62,59 +62,25 @@ train:
     visualize:
         num_samples: 5
         live: False
-        verts_ncds_in_rgb: True
-        net_feats_nearest_verts: True
+        verts_ncds_in_rgb: False
+        net_feats_nearest_verts: False
         seq_added_tform: True
 
     val_fraction: 0.01
 
 
 inference:
-    optimizer:
-        beta0: 0.4
-        beta1: 0.6
-        lr: 1e-2 # 5e-2
-        epochs: 30
 
-    azim:
-        min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 10.
-        steps: 10
-
-    elev:
-        min: -math.pi / 2
-        max: math.pi / 2
-        steps: 6
-
-    theta:
-        min: '0.'
-        max: math.pi * 2 - (math.pi * 2) / 10.
-        steps: 10
-
-    #elev:
-    #    min: -math.pi / 8
-    #    max: math.pi / 4
-    #    steps: 6
-
-    #theta:
-    #    min: -math.pi / 6
-    #    max: math.pi / 6
-    #    steps: 3
-
-    dist:
-        min: '15.'
-        max: '15.'
-        steps: 1
-
-    pose_iterative_refine: True
     visualize:
         num_samples: 5
-        live: False
+        live: True
+        samples_sorted: True
         samples: True
         samples_scores: True
-        verts_ncds_in_rgb: True
-        net_feats_nearest_verts: True
+        verts_ncds_in_rgb: False
+        net_feats_nearest_verts: False
         sim: False
+
 
     #inference:
     #    visualize:
@@ -135,10 +101,10 @@ inference:
 
 test:
     transform:
-        W: 512
-        H: 512
+        W: 512 # 800 # 512
+        H: 512 # 640 # 512
         dist: #  None #15.
-        center3d: #  None
+        center3d: #  [0., 0., 0.] #  None
 
     dataloader:
         num_workers: 4

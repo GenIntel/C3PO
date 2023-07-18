@@ -67,8 +67,8 @@ inference:
     optimizer:
         beta0: 0.4
         beta1: 0.6
-        lr: 5e-2 # 5e-2
-        epochs: 30
+        lr: 2e-2 # 5e-3 5e-2
+        epochs: 30 # 30
 
     azim:
         min: '0.'

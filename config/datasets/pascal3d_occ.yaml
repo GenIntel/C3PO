@@ -4,10 +4,18 @@ defaults:
 name: pascal3d_occ
 class_name: Pascal3D_Occ
 
+
+#path_raw: ${platform.path_datasets}/${.rpath_pascal3d_raw}
+#path_preprocess: ${platform.path_datasets}/PASCAL3D_Preprocess
+
 rpath_pascal3d_occ_raw: PASCAL3D_Occ
 rpath_pascal3d_occ_preproc: PASCAL3D_OccPreProc
 
-path_pascal3d_occ_raw: ${platform.path_datasets}/${.rpath_pascal3d_occ_raw}
-path_pascal3d_occ_preproc: ${platform.path_datasets}/${.rpath_pascal3d_occ_preproc}
+path_raw: ${platform.path_datasets}/${.rpath_pascal3d_occ_raw}
+path_preprocess: ${platform.path_datasets}/${.rpath_pascal3d_occ_preproc}
+
+
+#path_pascal3d_occ_raw: ${platform.path_datasets}/${.rpath_pascal3d_occ_raw}
+#path_pascal3d_occ_preproc: ${platform.path_datasets}/${.rpath_pascal3d_occ_preproc}
 
 url_pascal3d_occ_script: https://raw.githubusercontent.com/Angtian/OccludedPASCAL3D/master/download_FG.sh

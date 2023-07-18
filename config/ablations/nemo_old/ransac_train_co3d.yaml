@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+  - override /datasets@train_dataset: co3d_50s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+
+ablation_name: ransac_train_co3d
+
+method:
+    nemo:
+        inference:
+            sample:
+                method: epnp3d2d # epnp3d2d uniform
+            optimizer:
+                beta0: 0.4
+                beta1: 0.6
+                lr: 2e-2 # 5e-3 5e-2
+                epochs: 30 # 30
+
+train: True
+test: True

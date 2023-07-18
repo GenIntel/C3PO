@@ -1,8 +1,0 @@
-# @package _global_
-defaults:
-  - override /datasets@train_dataset: pascal3d_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
-
-ablation_name: train_pascal3d
-
-train: True
-test: True

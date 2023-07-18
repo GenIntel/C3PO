@@ -1,13 +1,19 @@
 # @package _global_
-ablation_name: uniform_sampling
+defaults:
+  - override /datasets@train_dataset: pascal3d_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+
+ablation_name: uniform_train_pascal3d
+
 method:
     nemo:
-        #checkpoint: ${platform.path_exps}/07-12_09-15-12_CO3D_NeMo_lr1e-4_bs24_slurm/nemo.ckpt
-        checkpoint: ${platform.path_exps}/07-13_23-04-57_Pascal3D_NeMo_train_pascal3d_slurm/nemo.ckpt
         inference:
             sample:
                 method: uniform # epnp3d2d uniform
-
+            optimizer:
+                beta0: 0.4
+                beta1: 0.6
+                lr: 2e-2 # 5e-3 5e-2
+                epochs: 30 # 30
             azim:
                 min: '0.'
                 max: math.pi * 2 - (math.pi * 2) / 12.
@@ -23,7 +29,5 @@ method:
                 max: math.pi / 6
                 steps: 3
 
-
-
-train: False
+train: True
 test: True
