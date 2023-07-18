@@ -369,15 +369,7 @@ class NeMo(OD3DMethod):
                 # subsample_ids = torch.multinomial(sim_weight, num_samples = sim_weight.shape[0], replacement=True)
                 # loss = criterion(sim[subsample_ids], batch_vts_ids[subsample_ids])
                 lossCLS = criterion(sim, batch_vts_ids)
-
-                norm_verts = torch.sqrt(torch.einsum('vc,vc->v', self.meshes.verts, self.meshes.verts))
-
                 loss = lossCLS
-                if self.config.train.loss_reg_weight > 0.:
-                    sim_verts_coords = torch.einsum('nvc,nvc->nv', self.meshes.verts[None, ], self.meshes.verts[:, None]) / (norm_verts[None, :] * norm_verts[:, None])
-                    sim_verts_feats = torch.einsum('nvc,nvc->nv', self.meshes.feats[None, ], self.meshes.feats[:, None])
-                    lossREG = (sim_verts_coords - sim_verts_feats).norm(dim=-1).mean() * self.config.train.loss_reg_weight
-                    loss += lossREG
 
                 loss.backward()
                 logger.info(f'loss {loss.item()}')
