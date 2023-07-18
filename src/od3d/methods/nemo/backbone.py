@@ -32,6 +32,7 @@ class DINOv2(OD3D_Backbone):
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
+
         self.dino_feat_dim = 384
         self.feat_dim = config.channels # 128
 
@@ -46,7 +47,7 @@ class DINOv2(OD3D_Backbone):
 
     # 'x_norm_patchtokens', 'x_prenorm'
     def forward(self, x):
-        dinov2_out = self.net.forward_features(resize(x, H_out=518, W_out=518))
+        dinov2_out = self.net.forward_features(resize(x, H_out=512, W_out=512)) # prev. 518, 518
         patch_tokens = dinov2_out['x_prenorm'][:, 1:]
         #patch_tokens = dinov2_out['x_norm_patchtokens']
 
@@ -156,6 +157,7 @@ class ResNetExt(OD3D_Backbone):
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
+
         self.feat_dim = config.channels # 128
 
         # self.net = od3d.methods.nemo.keypoint_representation_net.ResNetExt(pretrained=True)
@@ -170,5 +172,6 @@ class ResNetExt(OD3D_Backbone):
         )
 
     def forward(self, rgb):
-        return self.net.forward_test(resize(rgb, H_out=512, W_out=512))
+        #return self.net.forward_test(resize(rgb, H_out=512, W_out=512))
+        return self.net.forward_test(rgb)
         #return torch.nn.functional.normalize(self.net.net(rgb), p=2, dim=1)

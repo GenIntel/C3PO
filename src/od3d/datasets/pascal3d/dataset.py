@@ -13,7 +13,7 @@ from od3d.cv.geometry.mesh import Meshes
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.io import save_ply
 from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta, Pascal3DFrames
-from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS
+from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS, PASCAL3D_SCALE_NORMALIZE_TO_REAL
 from omegaconf import OmegaConf
 import inspect
 
@@ -45,7 +45,6 @@ class Pascal3D(OD3D_Dataset):
         path_raw: Path,
         path_preprocess: Path,
         path_cuboids: Path,
-        scale_normalized_to_real: DictConfig = None,
         subsets: List[PASCAL3D_SUBSETS] = None,
         categories: List[PASCAL3D_CATEGORIES] = None,
         transform=None,
@@ -54,7 +53,6 @@ class Pascal3D(OD3D_Dataset):
         super().__init__(name=name, modalities=modalities, path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction)
 
         self.path_cuboids = Path(path_cuboids)
-        self.scale_normalized_to_real = scale_normalized_to_real
         self.subsets = subsets if subsets is not None else PASCAL3D_SUBSETS.list()
         self.categories = categories if categories is not None else PASCAL3D_CATEGORIES.list()
 
@@ -191,7 +189,7 @@ class Pascal3D(OD3D_Dataset):
                 cuboid_limits = verts_sorted[torch.stack([min_ids, min_ids + verts_count_axis_coverage], dim=0)].diagonal(dim1=-2, dim2=-1)
 
                 category = path_meshes_category.name
-                cuboid_limits = cuboid_limits * self.scale_normalized_to_real[category]
+                cuboid_limits = cuboid_limits * PASCAL3D_SCALE_NORMALIZE_TO_REAL[category]
                 meshes = Cuboids.create_dense_from_limits(limits=cuboid_limits[None,], verts_count=verts_count)
 
 
@@ -215,7 +213,7 @@ class Pascal3D(OD3D_Dataset):
         frame_meta = self.get_frame_meta_by_rfpath(frame_meta_rfpath)
         return Pascal3DFrame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                              path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
-                             categories=self.categories, scale_normalized_to_real=self.scale_normalized_to_real)
+                             categories=self.categories)
 
     def get_frame_by_name(self, frame_name):
         return self.get_frame_by_rfpath(self.map_frame_name_to_frame_rfpath[frame_name])

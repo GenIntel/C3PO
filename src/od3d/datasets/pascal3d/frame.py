@@ -12,9 +12,11 @@ import numpy as np
 from od3d.cv.geometry.transform import transf4x4_from_spherical
 from od3d.cv.geometry.mesh import Mesh
 from od3d.datasets.dataset import OD3D_Frames, OD3D_FRAME_MODALITIES
-
+from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL
 from od3d.cv.io import read_image, save_image_mask
 from od3d.cv.geometry.mesh import Meshes
+
+
 
 @dataclass
 class Pascal3DFrameMeta(OD3D_FrameMeta):
@@ -41,6 +43,11 @@ class Pascal3DFrameMeta(OD3D_FrameMeta):
 
         objects = annotation['record']['objects'][0][0][0]
         # assert len(objects) == 1
+        if len(objects) != 1:
+            complete = False
+            incomplete_reason = f"num objects = {len(objects)}"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+
         object = objects[0]
         category = object['class'][0]
 
@@ -64,6 +71,7 @@ class Pascal3DFrameMeta(OD3D_FrameMeta):
         if focal == 0:
             complete = False
             incomplete_reason = "focal = 0"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
         theta = viewpoint['theta'][0][0][0][0] * math.pi / 180
         principal = np.array([viewpoint['px'][0][0][0][0],
                               viewpoint['py'][0][0][0][0]])
@@ -120,7 +128,7 @@ class Pascal3DFrameMeta(OD3D_FrameMeta):
         return Pascal3DFrameMeta.get_rfpath_frames().joinpath(subset).joinpath(category)
 
 class Pascal3DFrame(OD3D_Frame):
-    def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str], scale_normalized_to_real: DictConfig):
+    def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
         self.meta: Pascal3DFrameMeta = meta
         self.path_meshes: Path = path_meshes
@@ -129,14 +137,13 @@ class Pascal3DFrame(OD3D_Frame):
         self._kpts2d_annot_vsbl = None
         self._kpts3d = None
         self._mesh = None
-        self.scale_normalized_to_real = scale_normalized_to_real[self.category]
         # , dt_shape_nemo=None, classes: list = None
 
     @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
             self._cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
-            self._cam_tform4x4_obj[:3, 3] *= self.scale_normalized_to_real
+            self._cam_tform4x4_obj[:3, 3] *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
         return self._cam_tform4x4_obj
 
     @property
@@ -187,7 +194,7 @@ class Pascal3DFrame(OD3D_Frame):
     @property
     def kpts3d(self):
         if self._kpts3d is None:
-            self._kpts3d = torch.Tensor(self.meta.l_kpts3d) * self.scale_normalized_to_real
+            self._kpts3d = torch.Tensor(self.meta.l_kpts3d) * PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
         return self._kpts3d
     @property
     def mesh(self):

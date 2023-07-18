@@ -107,16 +107,7 @@ class NeMo(OD3DMethod):
         #self.verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
         # note: somehow vertices are stored in wrong order of classes (starting with last class tvmonitor until first class aeroplane
         # self.verts_feats = self.verts_feats.reshape(len(self.meshes), self.verts_count_max, -1).flip(dims=(0,)).reshape(len(self.meshes) * self.verts_count_max, -1)
-
-
         self.down_sample_rate = self.config.down_sample_rate
-        # self.set_distance = 5.0
-        self.classification_size = [512, 512]
-        self.render_image_size = max(self.classification_size) // self.down_sample_rate
-        self.map_shape = (
-            self.classification_size[0] // self.down_sample_rate,
-            self.classification_size[1] // self.down_sample_rate,
-        )
 
     def normalize_feats(self):
         self.clutter_feats.data = self.clutter_feats.detach() / self.clutter_feats.detach().norm(dim=-1, keepdim=True)
@@ -135,7 +126,7 @@ class NeMo(OD3DMethod):
         self.net.net.load_state_dict(checkpoint["state"], strict=False)
         self.net.net = self.net.net.module
         self.clutter_feats = checkpoint["memory"][mem_verts_feats_count:].clone().detach().cpu()
-        self.clutter_feats = self.clutter_feats.mean(dim=0, keepdim=True)
+        # self.clutter_feats = self.clutter_feats.mean(dim=0, keepdim=True)
         self.clutter_feats = torch.nn.Parameter(self.clutter_feats.to(device=self.device), requires_grad=True)
 
         verts_feats = []
@@ -428,16 +419,23 @@ class NeMo(OD3DMethod):
         return sim
 
     def get_sim(self, feats2d_net, feats2d_rendered, return_sim_pxl=False):
+        sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[0]
+        #sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
+
         if feats2d_rendered.dim() == 5:
+            feats2d_rendered_clutter_mask = feats2d_rendered.norm(dim=2) == 0.
             sim_texture_multiple_cams = torch.einsum('bchw,bvchw->bvhw', feats2d_net, feats2d_rendered)
         else:
+            feats2d_rendered_clutter_mask = (feats2d_rendered.norm(dim=1) == 0.)[:, None]
             sim_texture_multiple_cams = torch.einsum('bchw,bchw->bhw', feats2d_net, feats2d_rendered)[:, None]
 
-        sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[0]
+        # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
+        #sim_pxl_norm0_mask = (sim_pxl == 0.).expand(*sim_pxl.shape)
+
         sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
-        sim_pxl_norm0_mask = (sim_pxl == 0.).expand(*sim_pxl.shape)
-        sim_pxl[sim_pxl_norm0_mask] = torch.max(sim_clutter, dim=1, keepdim=True)[0].expand(*sim_pxl.shape)[
-            sim_pxl_norm0_mask]
+        sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
+
+        #sim = sim_texture_multiple_cams.flatten(2).mean(dim=-1) - sim_clutter.flatten(2).mean(dim=-1)
         sim = sim_pxl.flatten(2).mean(dim=-1)
 
         if return_sim_pxl:
@@ -447,6 +445,17 @@ class NeMo(OD3DMethod):
     def inference_batch(self, batch, config: DictConfig, visual_names_unique=None):
         results = {}
         B = len(batch)
+
+        """
+        # these parameters are used in prev. version
+        batch.cam_tform4x4_obj[:, 2, 3] = 5. * 6. # 5. * 6.
+        batch.cam_tform4x4_obj[:, 0, 3] = 0.
+        batch.cam_tform4x4_obj[:, 1, 3] = 0.
+        batch.cam_intr4x4[:, 0, 0] = 3000.
+        batch.cam_intr4x4[:, 1, 1] = 3000.
+        batch.cam_intr4x4[:, 0, 2] = batch.size[1] / 2.
+        batch.cam_intr4x4[:, 1, 2] = batch.size[0] / 2.
+        """
 
         if config.sample.method == 'uniform':
 
@@ -474,9 +483,10 @@ class NeMo(OD3DMethod):
 
             # assumption 1: distance translation to object is known
             b_cams_multiview_tform4x4_obj[:, :, 2, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
-
+            logger.info(f'dist {batch.cam_tform4x4_obj[:, 2, 3]}')
             # assumption 2: translation to object is known
             # b_cams_multiview_tform4x4_obj[:, :, :3, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]
+
             b_cams_multiview_intr4x4 = batch.cam_intr4x4[:, None].repeat(1, C, 1, 1)
 
 
@@ -516,12 +526,16 @@ class NeMo(OD3DMethod):
             if config.sample.method == 'epnp3d2d':
                 sim_nearest_texture_vals, sim_nearest_texture_ids = torch.einsum('bchw,bvc->bvhw', net_feats2d, self.meshes.get_feats_stacked_with_mesh_ids(pred_class_ids).detach()).max(dim=1)
                 sim_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats.detach()).max(dim=1, keepdim=False)[0]
+                #sim_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats.detach()).mean(dim=1, keepdim=False)
+
                 sim_nearest_texture_verts = torch.stack([self.meshes.get_verts_stacked_with_mesh_ids(pred_class_ids[b: b+1])[0, sim_nearest_texture_ids[b]] for b in range(B)], dim=0)
                 sim_nearest_texture_verts2d = get_pxl2d_like(sim_nearest_texture_verts) # H=sim_clutter.shape[1], W=sim_clutter.shape[2], dtype=sim_nearest_texture_verts.dtype, device=sim_nearest_texture_verts.device)[None,].expand()
 
                 K = config.sample.epnp3d2d.count_cams
                 N = config.sample.epnp3d2d.count_pts
                 prob_well_corresp = (sim_clutter < sim_nearest_texture_vals).flatten(1) * sim_nearest_texture_vals.flatten(1)
+                if (prob_well_corresp.sum(dim=-1) == 0).any():
+                    logger.warning(f"No texture similarity is larger than the clutter similarity")
                 prob_well_corresp[prob_well_corresp.sum(dim=-1) == 0] = 1.
                 masks_in_ids = torch.multinomial(prob_well_corresp, num_samples=K * N).reshape(-1, K, N)
                 masks_in = torch.zeros(size=(B, K, sim_clutter.shape[1] * sim_clutter.shape[2]), device=sim_clutter.device, dtype=torch.bool)
@@ -531,6 +545,7 @@ class NeMo(OD3DMethod):
                 masks_in = masks_in.reshape(B, K, sim_clutter.shape[1], sim_clutter.shape[2])
                 b_cams_multiview_tform4x4_obj = batchwise_fit_se3_to_corresp_3d_2d_and_masks(masks_in=masks_in, pts1=sim_nearest_texture_verts.permute(0, 3, 1, 2),  pxl2=sim_nearest_texture_verts2d.permute(0, 3, 1, 2), proj_mat=batch.cam_intr4x4[:, :2, :3] / self.down_sample_rate, method="cpu-epnp")
                 b_cams_multiview_intr4x4 = batch.cam_intr4x4[:, None].repeat(1, K, 1, 1)
+                b_cams_multiview_tform4x4_obj[b_cams_multiview_tform4x4_obj.flatten(2).isinf().any(dim=2), :, :] = torch.eye(4, device=b_cams_multiview_tform4x4_obj.device)
             
             #  OPTION A: Use 2d gradient of rendered features
             mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj,
@@ -561,6 +576,7 @@ class NeMo(OD3DMethod):
             if config.visualize.samples:
                 for b in range(len(batch)):
                     if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
+                        imgs_sim = sim[b][:].expand(*sim[b].shape) # , *mesh_feats2d_rendered.shape[-2:]
                         imgs = self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj[b],
                                                            cams_intr4x4=b_cams_multiview_intr4x4[b], imgs_sizes=batch.size,
                                                            meshes_ids=pred_class_ids[b:b+1], down_sample_rate=self.down_sample_rate,
@@ -569,36 +585,32 @@ class NeMo(OD3DMethod):
 
                         if config.sample.method == 'uniform':
                             imgs = imgs.reshape(config.azim.steps, config.elev.steps, config.theta.steps, *imgs.shape[-3:])[:, :, 0]
+                            imgs_sim = imgs_sim.reshape(config.azim.steps, config.elev.steps, config.theta.steps)[:, :, 0]
 
                         imgs = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate), imgs)
-                        img = imgs_to_img(imgs)
 
+                        if config.visualize.samples_sorted:
+                            imgs_sim = imgs_sim.flatten(0)
+                            imgs = imgs.reshape(-1, *imgs.shape[-3:])
+                            imgs_sim_ids = imgs_sim.sort(descending=True)[1]
+                            imgs = imgs[imgs_sim_ids]
+                            imgs_sim = imgs_sim[imgs_sim_ids]
+
+                        if config.visualize.samples_scores:
+                            samples_score_size = imgs.shape[-1] // 5
+                            imgs[..., -samples_score_size:, -samples_score_size:] = (255 * imgs_sim.reshape(*imgs_sim.shape, 1, 1, 1).expand(*imgs.shape[:-2], samples_score_size, samples_score_size)).to(torch.uint8)
+
+                        img = imgs_to_img(imgs)
                         results['samples_' + batch.name_unique[b]] = image_as_wandb_image(img)
                         if config.visualize.live:
                             show_img(img)
-
-
-            if config.visualize.samples_scores:
-                for b in range(len(batch)):
-                    if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
-                        imgs = sim[b][:, None, None, None].expand(*sim[b].shape, 3,
-                                                                         *mesh_feats2d_rendered.shape[-2:])
-
-                        if config.sample.method == 'uniform':
-                            imgs = imgs.reshape(config.azim.steps, config.elev.steps, config.theta.steps, *imgs.shape[-3:])[:, :, 0]
-
-                        img = imgs_to_img(imgs)
-
-                        results['samples_scores' + batch.name_unique[b]] = image_as_wandb_image(img)
-                        if config.visualize.live:
-                            show_img(img)
-
+                            logger.info(f"tforms4x4 {b_cams_multiview_tform4x4_obj[b]}")
 
             mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
             cam_transf4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(
                 dim1=-2, dim2=-1).permute(2, 0, 1)
-            
+
             
 
         # show_img(self.meshes.render_feats(cams_tform4x4_obj=init_cams_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4 / 2,
@@ -631,7 +643,7 @@ class NeMo(OD3DMethod):
         if config.pose_iterative_refine:
             obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=(B, 6)).to(device=cam_transf4x4_obj.device),
                                                 requires_grad=True)
-            cam_transf4x4_obj = tform4x4(cam_transf4x4_obj, se3_exp_map(obj_tform6_tmp))
+
 
             optim_inference = torch.optim.Adam(
                 params=[obj_tform6_tmp],
@@ -640,8 +652,14 @@ class NeMo(OD3DMethod):
             )
 
             time_before_pose_iterative = time.time()
+            cam_transf4x4_obj = tform4x4(cam_transf4x4_obj.detach(), se3_exp_map(obj_tform6_tmp))
 
             for epoch in range(config.optimizer.epochs):
+                if config.sample.method == 'uniform':
+                    obj_tform6_tmp.data[:, :3] = 0.
+                cam_transf4x4_obj = tform4x4(cam_transf4x4_obj.detach(), se3_exp_map(obj_tform6_tmp.detach()))
+                obj_tform6_tmp.data[:, :] = 0.
+                cam_transf4x4_obj = tform4x4(cam_transf4x4_obj.detach(), se3_exp_map(obj_tform6_tmp))
 
                 # OPTION A: Use 2d gradient of rendered features
                 mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj,
@@ -650,6 +668,8 @@ class NeMo(OD3DMethod):
                                                                  down_sample_rate=self.down_sample_rate)  # [:, 0]
                 sim, sim_pxl = self.get_sim(feats2d_net=net_feats2d, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=True)
 
+                #mask_down = resize(batch.mask, scale_factor=1./self.down_sample_rate)
+                #sim = (sim_pxl * mask_down).flatten(1).sum(dim=1, keepdim=True) /  mask_down.flatten(1).sum(dim=1, keepdim=True)
                 #sim_texture_multiple_cams = torch.einsum('bchw,bchw->bhw', net_feats2d, mesh_feats2d_rendered)
                 #sim_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats.detach()).max(dim=1, keepdim=False)[0]
                 #sim = torch.max(sim_texture_multiple_cams, sim_clutter).flatten(1).mean(dim=-1)
@@ -687,25 +707,19 @@ class NeMo(OD3DMethod):
                                 show_img(img)
 
                 if config.visualize.live:
-                    for b in range(len(batch)):
-                        if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
-                            # show_img(inner_feats2d_net_bank[0])
-                            show_img(blend_rgb(batch.rgb[b], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[b:b+1],
-                                                                                       cams_intr4x4=batch.cam_intr4x4[b:b+1],
-                                                                                       imgs_sizes=batch.size,
-                                                                                       meshes_ids=pred_class_ids[b:b+1],
-                                                                                       modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
-                                0]).to(dtype=batch.rgb.dtype)))
+                    show_img(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[0:0+1],
+                                                                               cams_intr4x4=batch.cam_intr4x4[0:0+1],
+                                                                               imgs_sizes=batch.size,
+                                                                               meshes_ids=pred_class_ids[0:0+1],
+                                                                               modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
+                        0]).to(dtype=batch.rgb.dtype)))
 
                 loss = mesh_cam_loss.mean()
                 loss.backward()
                 optim_inference.step()
                 optim_inference.zero_grad()
 
-                cam_transf4x4_obj = tform4x4(cam_transf4x4_obj.detach(), se3_exp_map(obj_tform6_tmp.detach()))
-                obj_tform6_tmp.data[:, :] = 0.
-
-                cam_transf4x4_obj = tform4x4(cam_transf4x4_obj, se3_exp_map(obj_tform6_tmp))
+            cam_transf4x4_obj = tform4x4(cam_transf4x4_obj.detach(), se3_exp_map(obj_tform6_tmp.detach()))
 
             results['time_pose_iterative'] = (time.time() - time_before_pose_iterative)
             # logger.info(f"predicted pose iterative took {(time.time() - time_before_pose_iterative):.3f}s")
@@ -800,8 +814,8 @@ class NeMo(OD3DMethod):
             results['label_pred'] = torch.cat(results['label_pred'], dim=0)
 
             results['label_acc'] = (results['label_gt'] == results['label_pred']).to(dtype=float).mean()
-            results['pose_acc_pi6'] = (results['rot_diff_rad'] < math.pi /6).to(dtype=float).mean()
-            results['pose_acc_pi18'] = (results['rot_diff_rad'] < math.pi / 18).to(dtype=float).mean()
+            results['pose_acc_pi6'] = (results['rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
+            results['pose_acc_pi18'] = (results['rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
             results['pose_err_median'] = 180 / math.pi * results['rot_diff_rad'].median()
             #results['pose_err_mean'] = 180 / math.pi * results['rot_diff_rad'].mean()
 

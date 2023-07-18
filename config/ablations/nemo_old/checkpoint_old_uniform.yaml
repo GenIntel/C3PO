@@ -7,7 +7,11 @@ method:
         inference:
             sample:
                 method: uniform # epnp3d2d uniform
-
+            optimizer:
+                beta0: 0.4
+                beta1: 0.6
+                lr: 2e-2 # 5e-3 5e-2
+                epochs: 30 # 30
             azim:
                 min: '0.'
                 max: math.pi * 2 - (math.pi * 2) / 12.
@@ -28,7 +32,16 @@ method:
                 max: '15.'
                 steps: 1
 
+            visualize:
+                num_samples: 5
+                live: True
 
+        test:
+            transform:
+                W: 800 # 512
+                H: 640 # 512
+                dist: 30. # 5. * 6.
+                center3d: [0., 0., 0.] #  None
 
 train: False
 test: True

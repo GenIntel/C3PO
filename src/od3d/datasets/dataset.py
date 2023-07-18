@@ -313,8 +313,8 @@ class OD3D_Frames():
             kpts3d_inf_mask = torch.isinf(self.kpts3d[0]).any(dim=-1)
             if kpts3d_inf_mask.sum() > 0:
                 logger.warning(f'There are {kpts3d_inf_mask.sum()} kpts with infinity for label {self.category[0]}')
-            kpts3d = self.kpts3d[0][~kpts3d_inf_mask]
-            kpts3d = torch.cat([kpts3d, torch.zeros(size=(1, 3,), device=self.device)])
+            kpts3d = self.kpts3d[0][~kpts3d_inf_mask].to(self.device)
+            kpts3d = torch.cat([kpts3d, torch.zeros(size=(1, 3,), device=kpts3d.device)])
             kpts3d2d = proj3d2d_broadcast(proj4x4=self.cam_proj4x4_obj[0], pts3d=kpts3d)
             img = draw_pixels(pxls=kpts3d2d, img=img, colors=[0., 255., 0.])
 

@@ -3,6 +3,7 @@ import logging
 logger = logging.getLogger(__name__)
 import torch
 from od3d.cv.geometry.transform import proj3d2d_origin, rot3x3_from_two_vectors, proj3d2d
+from od3d.datasets.dataset import OD3D_FRAME_MODALITIES
 from od3d.cv.visual.crop import crop
 from omegaconf import DictConfig
 from od3d.datasets.dtd import DTD
@@ -31,12 +32,20 @@ class CenterZoom3D():
                 scale = 1.
         else:
             scale = 1.
+
+        if frame.cam_tform4x4_obj[2, 3] <= 0.:
+            logger.warning(f"dist <= 0")
+
         if self.center3d is not None:
             center = proj3d2d(self.center3d, proj4x4=frame.cam_proj4x4_obj)
+
+            center_princ = frame.cam_intr4x4[:2, 2]
+            if (center_princ - center).norm() > 2:
+                logger.warning(f"principal point is deviating from projected center 3d")
         else:
             center = frame.size.flip(dims=[0]) / 2
 
-        if self.apply_mask:
+        if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
             frame._mask, _ = crop(img=frame.mask, center=center, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
         frame._size[0:1] = self.H
@@ -50,24 +59,14 @@ class CenterZoom3D():
             frame._rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
                                                  ctx=None)
 
-        # we already account for the scale with the transformation, but we cannot do that for the padding
-        #cam_crop_tform_cam[0, 0] = 1.
-        #cam_crop_tform_cam[1, 1] = 1.
-
         frame._cam_intr4x4 = torch.bmm(cam_crop_tform_cam[None,], frame._cam_intr4x4[None,])[0]
 
-        #frame._cam_intr4x4[:2, :] /= scale
-        #frame._cam_tform4x4_obj[2, 3] = frame.cam_tform4x4_obj[2, 3] / scale
-
-        # frame._cam_proj4x4_obj[:, :] = torch.bmm(frame.cam_intr4x4[None,], frame.cam_tform4x4_obj[None,])[0]
-
-
-        if self.apply_bbox_annot:
+        if OD3D_FRAME_MODALITIES.BBOX in frame.modalities:
             frame._bbox = frame.bbox * scale
             frame._bbox[[0, 2]] = frame.bbox[[0, 2]] + cam_crop_tform_cam[0, 2]
             frame._bbox[[1, 3]] = frame.bbox[[1, 3]] + cam_crop_tform_cam[1, 2]
 
-        if self.apply_kpts2d_annot:
+        if OD3D_FRAME_MODALITIES.KPTS in frame.modalities:
             frame._kpts2d_annot = frame.kpts2d_annot * scale
             frame._kpts2d_annot = frame.kpts2d_annot + cam_crop_tform_cam[:2, 2]
 
