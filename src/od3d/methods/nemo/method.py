@@ -697,7 +697,7 @@ class NeMo(OD3DMethod):
                 # net_mesh_nearest_feats_verts2d = proj3d2d_broadcast(proj4x4=tform4x4(batch.cam_intr4x4, cam_transf4x4_obj), pts3d=net_mesh_nearest_feats_verts)
                 # mesh_cam_loss = substract_pxl2d(net_mesh_nearest_feats_verts2d / self.down_sample_rate)[(net_mesh_nearest_feats_sim > clutter_sim)].norm(dim=-1).mean()
 
-                if config.visualize.sim:
+                if config.visualize.sim_pxl:
                     for b in range(len(batch)):
                         if visual_names_unique is not None and batch.name_unique[b] in visual_names_unique:
                             img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate), sim_pxl[b:b+1])
