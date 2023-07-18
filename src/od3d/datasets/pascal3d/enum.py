@@ -24,7 +24,7 @@ PASCAL3D_SCALE_NORMALIZE_TO_REAL = {
     'boat': 1.,
     'bottle': 1.,
     'bus': 1.,
-    'car': 6.,
+    'car': 5., # 5.
     'chair': 1.,
     'diningtable': 1.,
     'motorbike': 1.,
