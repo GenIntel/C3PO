@@ -136,7 +136,7 @@ class CO3D(OD3D_Dataset):
                 frames_rfpaths_partial = [CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_name(category=category, sequence=sequence_name, name=fpath.stem) for fpath in frames_fpaths_partial]
                 frames_rfpaths_partial = sorted(frames_rfpaths_partial, key=lambda rfpath: int(rfpath.stem))
                 if self.frames_count_max_per_sequence is not None:
-                    frames_rfpaths_partial = [frames_rfpaths_partial[fid] for fid in np.linspace(0, len(frames_rfpaths_partial)-1, self.frames_count_max_per_sequence).astype(np.int).tolist()]
+                    frames_rfpaths_partial = [frames_rfpaths_partial[fid] for fid in np.linspace(0, len(frames_rfpaths_partial)-1, self.frames_count_max_per_sequence).astype(int).tolist()]
 
                 if self.frames_block_negative_depth:
                     frames_rfpaths_partial = list(filter(lambda rfpath: self.get_frame_by_rfpath(rfpath).cam_tform4x4_obj[0, 2, 3] >= 0.01, frames_rfpaths_partial))
