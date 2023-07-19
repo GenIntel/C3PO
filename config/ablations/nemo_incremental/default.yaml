@@ -3,7 +3,7 @@ ablation_name: incr_l3
 method:
     nemo:
       train:
-        test: False
+        test: True
         incremental:
           enabled: True
         sequences_tform4x4_labeled_count: 3 # how many sequences at start
@@ -28,4 +28,4 @@ method:
 
 
 train: True
-test: False
+test: True

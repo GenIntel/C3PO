@@ -1,6 +1,5 @@
 name: nemo
-class_name: NeMo
-# class_name: nemo.models.nemo_cls.NeMoCls
+class_name: NeMo_Incremental
 
 num_noise: 5
 max_group: 512
@@ -140,9 +139,3 @@ backbone:
     height: 64
     channels: 128 # 128
 
-
-memory_bank:
-    class_name: nemo.models.feature_banks_cls.NearestMemoryManager
-    input_size: 128
-    K: 1
-    momentum: 0.96

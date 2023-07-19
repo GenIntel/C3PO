@@ -1,14 +1,12 @@
 defaults:
   - logger: wandb
-  - methods@method.nemo: nemo_incr
-  - methods/nemo@method.nemo: co3d
+  - methods@method.nemo: nemo_incremental
+  - methods/nemo_incremental@method.nemo: co3d
   - datasets@train_dataset: co3d_50s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
   - datasets@test_datasets.co3d: co3d_10s_test # co3d_10s_test, co3d_test
   - datasets@test_datasets.pascal3d: pascal3d_test
   - platform@platform_local: local
   - platform: local
-
-
 
 metrics:
   - metricA
@@ -16,11 +14,3 @@ metrics:
 
 train: True
 test: True
-
-#training:
-#    random_seed: 0
-#    scale_iterations_per_epoch: 1.0
-
-#inference:
-#    random_seed: 0
-#    visualize_num_samples: 0

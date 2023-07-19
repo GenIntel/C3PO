@@ -1,7 +1,7 @@
 from torch import nn
 from enum import Enum
 from omegaconf import DictConfig
-import od3d.methods.nemo.keypoint_representation_net #  import NetE2E, ResNetExt
+import od3d.methods.nemo_incremental.keypoint_representation_net #  import NetE2E, ResNetExt
 import torch
 from od3d.cv.visual.resize import resize
 from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize # , CenterZoom3D, RGB_Random
@@ -162,7 +162,7 @@ class ResNetExt(OD3D_Backbone):
 
         # self.net = od3d.methods.nemo.keypoint_representation_net.ResNetExt(pretrained=True)
 
-        self.net = od3d.methods.nemo.keypoint_representation_net.NetE2E(
+        self.net = od3d.methods.nemo_incremental.keypoint_representation_net.NetE2E(
             net_type=config.net_type,
             local_size=[config.local_size[0], config.local_size[1]],
             output_dimension=config.output_dimension,

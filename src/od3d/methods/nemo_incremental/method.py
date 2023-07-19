@@ -4,6 +4,7 @@ from od3d.methods.method import OD3DMethod
 from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
 import pytorch3d.transforms
+from od3d.cv.geometry.transform import se3_log_map
 
 from torch.utils.data import RandomSampler
 import logging
@@ -30,7 +31,7 @@ from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
 from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize
-from od3d.methods.nemo.backbone import OD3D_Backbone
+from od3d.methods.nemo_incremental.backbone import OD3D_Backbone
 from functools import partial
 
 from od3d.cv.geometry.grid import get_pxl2d_like
@@ -38,7 +39,7 @@ from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_mask
 from od3d.cv.geometry.transform import inv_tform4x4
 
 
-class NeMo(OD3DMethod):
+class NeMo_Incremental(OD3DMethod):
     def __init__(
         self,
         config: DictConfig,
@@ -227,7 +228,6 @@ class NeMo(OD3DMethod):
                         seq_obj_tform4x4_est_obj = seq_obj_tform4x4_est_obj[:self.config.train.sequences_tform4x4_estimated_frames_count]
                         seq_obj_tform4x4_est_obj_sim = seq_obj_tform4x4_est_obj_sim[:self.config.train.sequences_tform4x4_estimated_frames_count]
 
-                        from od3d.cv.geometry.transform import se3_log_map
                         seq_obj_tform6_est_obj = se3_log_map(seq_obj_tform4x4_est_obj)
                         seq_obj_transl3_est_obj_dist_mat = (seq_obj_tform6_est_obj[None, :, :3] - seq_obj_tform6_est_obj[:, None, :3]).norm(dim=-1)
                         seq_obj_rot3_est_obj_dist_mat = (seq_obj_tform6_est_obj[None, :, 3:] - seq_obj_tform6_est_obj[:, None, 3:]).norm(dim=-1)
@@ -267,10 +267,11 @@ class NeMo(OD3DMethod):
                     results_train['seq_obj_tform4x4_est_obj_transl_consist'] = torch.stack(list(self.seq_obj_tform4x4_est_obj_transl_consist.values())).mean()
                     results_train['seq_obj_tform4x4_est_obj_rot_consist'] = torch.stack(list(self.seq_obj_tform4x4_est_obj_rot_consist.values())).mean()
 
+                    logger.info(f'seq_obj_tform4x4_est_obj_transl_consist {self.seq_obj_tform4x4_est_obj_transl_consist.values()}')
                     #logger.info(f'estimating obj_tform4x4_obj_est_sims of {self.seq_obj_tform4x4_est_obj_sim}')
 
                     sequences_filtered = list(self.seq_filtered)
-                    results_train["count_sequences"] = len(sequences_filtered)
+                    results_train["count_sequences"] = len(sequences_filtered + self.seq_labeled)
                     dataset_sub = dataset.get_subset_by_sequences(sequences_filtered + self.seq_labeled)
 
                     logger.info(f"Dataset contains {len(dataset_sub)} frames.")
@@ -549,6 +550,7 @@ class NeMo(OD3DMethod):
                 b_cams_multiview_tform4x4_obj = batchwise_fit_se3_to_corresp_3d_2d_and_masks(masks_in=masks_in, pts1=sim_nearest_texture_verts.permute(0, 3, 1, 2),  pxl2=sim_nearest_texture_verts2d.permute(0, 3, 1, 2), proj_mat=batch.cam_intr4x4[:, :2, :3] / self.down_sample_rate, method="cpu-epnp")
                 b_cams_multiview_intr4x4 = batch.cam_intr4x4[:, None].repeat(1, K, 1, 1)
                 b_cams_multiview_tform4x4_obj[b_cams_multiview_tform4x4_obj.flatten(2).isinf().any(dim=2), :, :] = torch.eye(4, device=b_cams_multiview_tform4x4_obj.device)
+                b_cams_multiview_tform4x4_obj[(b_cams_multiview_tform4x4_obj[:, :, 3, :3] != 0.).any(dim=-1), :, :] = torch.eye(4, device=b_cams_multiview_tform4x4_obj.device)
             
             #  OPTION A: Use 2d gradient of rendered features
             mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj,
