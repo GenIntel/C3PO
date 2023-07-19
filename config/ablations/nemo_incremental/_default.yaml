@@ -7,7 +7,7 @@ method:
         incremental:
           enabled: True
         sequences_tform4x4_labeled_count: 3 # how many sequences at start
-        sequences_tform4x4_estimated_frames_count: 8
+        sequences_tform4x4_estimated_frames_count: 4
         sequences_tform4x4_est_sim_min: 0.6
         sequences_tform4x4_est_transl_consist_max: 1. # = 1m
         sequences_tform4x4_est_rot_consist_max: 0.5236 # pi / 6 = 30 degree

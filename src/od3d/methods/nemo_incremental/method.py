@@ -206,7 +206,9 @@ class NeMo_Incremental(OD3DMethod):
                     for s, seq in enumerate(proposals_sequences_names):
 
                         seq_dataset = dataset.get_subset_by_sequences([seq], frames_count_max_per_sequence=self.config.train.sequences_tform4x4_estimated_frames_count)
-                        dataloader_train_seq = torch.utils.data.DataLoader(dataset=seq_dataset, batch_size=self.config.test.dataloader.batch_size, shuffle=True,
+                        seq_dataset.transform = self.transform_test
+                        dataloader_train_seq = torch.utils.data.DataLoader(dataset=seq_dataset, batch_size=self.config.test.dataloader.batch_size,
+                                                                           shuffle=False,
                                                                            collate_fn=dataset.collate_fn,
                                                                            num_workers=self.config.test.dataloader.num_workers,
                                                                            pin_memory=self.config.test.dataloader.pin_memory)
@@ -219,9 +221,10 @@ class NeMo_Incremental(OD3DMethod):
                             if count_frames >= self.config.train.sequences_tform4x4_estimated_frames_count:
                                 break
                             batch.to(device=self.device)
-                            cam_tform4x4_obj_est, est_sim, _ = self.inference_batch(batch, config=self.config.inference)
+                            cam_tform4x4_obj_est, est_sim, results_batch = self.inference_batch(batch, config=self.config.inference, visual_names_unique=[batch.name_unique[j] for j in range(len(batch))])
                             seq_obj_tform4x4_est_obj.append(tform4x4(inv_tform4x4(batch.cam_tform4x4_obj), cam_tform4x4_obj_est))
                             seq_obj_tform4x4_est_obj_sim.append(est_sim)
+
                         seq_obj_tform4x4_est_obj_sim = torch.cat(seq_obj_tform4x4_est_obj_sim, dim=0)
                         seq_obj_tform4x4_est_obj = torch.cat(seq_obj_tform4x4_est_obj, dim=0)
 
@@ -241,6 +244,8 @@ class NeMo_Incremental(OD3DMethod):
                         self.seq_obj_tform4x4_est_obj_transl_consist[seq] = seq_obj_tform4x4_est_obj_transl_consist
                         self.seq_obj_tform4x4_est_obj_rot_consist[seq] = seq_obj_tform4x4_est_obj_rot_consist
 
+
+
                         if seq_obj_tform4x4_est_obj_sim > self.config.train.sequences_tform4x4_est_sim_min\
                                 and seq_obj_tform4x4_est_obj_transl_consist < self.config.train.sequences_tform4x4_est_transl_consist_max\
                                 and seq_obj_tform4x4_est_obj_rot_consist < self.config.train.sequences_tform4x4_est_rot_consist_max:
@@ -248,20 +253,9 @@ class NeMo_Incremental(OD3DMethod):
                             self.seq_filtered.append(seq)
 
                             if self.config.train.visualize.seq_added_tform:
-                                batch.to(self.device)
-                                batch.cam_tform4x4_obj[:1] = tform4x4(batch.cam_tform4x4_obj[:1], self.seq_obj_tform4x4_est_obj[seq])
-                                verts_ncds_in_rgb = blend_rgb(batch.rgb[0], (
-                                self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[:1],
-                                                         cams_intr4x4=batch.cam_intr4x4[:1],
-                                                         imgs_sizes=batch.size, meshes_ids=batch.label[:1],
-                                                         modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(
-                                    dtype=batch.rgb.dtype))
-
-
-                                results_train[f'seq_{seq}_verts_ncds_in_rgb'] = image_as_wandb_image(verts_ncds_in_rgb,
-                                                                                          caption=f'Frame Name {batch.name[0]}')
-                                if self.config.train.visualize.live:
-                                    show_img(verts_ncds_in_rgb)
+                                for key, val in results_batch.items():
+                                    if type(val) == wandb.Image:
+                                        results_train[key] = val
 
                     results_train['seq_obj_tform4x4_est_obj_sim'] = torch.stack(list(self.seq_obj_tform4x4_est_obj_sim.values())).mean()
                     results_train['seq_obj_tform4x4_est_obj_transl_consist'] = torch.stack(list(self.seq_obj_tform4x4_est_obj_transl_consist.values())).mean()
@@ -422,7 +416,7 @@ class NeMo_Incremental(OD3DMethod):
             sim = self.get_sim(feats2d_net=net_feats2d, feats2d_rendered=mesh_feats2d_rendered)
         return sim
 
-    def get_sim(self, feats2d_net, feats2d_rendered, return_sim_pxl=False):
+    def get_sim(self, feats2d_net, feats2d_rendered, return_sim_pxl=False, sim_clutter_only_outside_render=False):
         sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[0]
         #sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
 
@@ -433,13 +427,12 @@ class NeMo_Incremental(OD3DMethod):
             feats2d_rendered_clutter_mask = (feats2d_rendered.norm(dim=1) == 0.)[:, None]
             sim_texture_multiple_cams = torch.einsum('bchw,bchw->bhw', feats2d_net, feats2d_rendered)[:, None]
 
-        # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
-        #sim_pxl_norm0_mask = (sim_pxl == 0.).expand(*sim_pxl.shape)
-
-        sim_pxl = sim_texture_multiple_cams # torch.max(sim_texture_multiple_cams, sim_clutter)
+        if sim_clutter_only_outside_render:
+            sim_pxl = sim_texture_multiple_cams
+        else:
+            sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
         sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
 
-        #sim = sim_texture_multiple_cams.flatten(2).mean(dim=-1) - sim_clutter.flatten(2).mean(dim=-1)
         sim = sim_pxl.flatten(2).mean(dim=-1)
 
         if return_sim_pxl:
@@ -671,7 +664,7 @@ class NeMo_Incremental(OD3DMethod):
                                                                  cams_intr4x4=batch.cam_intr4x4,
                                                                  imgs_sizes=batch.size, meshes_ids=pred_class_ids,
                                                                  down_sample_rate=self.down_sample_rate)  # [:, 0]
-                sim, sim_pxl = self.get_sim(feats2d_net=net_feats2d, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=True)
+                sim, sim_pxl = self.get_sim(feats2d_net=net_feats2d, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=True, sim_clutter_only_outside_render=True)
 
                 #mask_down = resize(batch.mask, scale_factor=1./self.down_sample_rate)
                 #sim = (sim_pxl * mask_down).flatten(1).sum(dim=1, keepdim=True) /  mask_down.flatten(1).sum(dim=1, keepdim=True)
@@ -709,7 +702,7 @@ class NeMo_Incremental(OD3DMethod):
                             results['sim' + batch.name_unique[b]] = image_as_wandb_image(img,
                                                                                   caption=f'mean sim={sim[b]}')
                             if config.visualize.live:
-                                show_img(img)
+                                show_img(img, duration=1)
 
                 if config.visualize.live:
                     show_img(blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_transf4x4_obj[0:0+1],
@@ -717,7 +710,7 @@ class NeMo_Incremental(OD3DMethod):
                                                                                imgs_sizes=batch.size,
                                                                                meshes_ids=pred_class_ids[0:0+1],
                                                                                modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
-                        0]).to(dtype=batch.rgb.dtype)))
+                        0]).to(dtype=batch.rgb.dtype)), duration=1)
 
                 loss = mesh_cam_loss.mean()
                 loss.backward()
