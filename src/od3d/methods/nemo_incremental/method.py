@@ -215,11 +215,7 @@ class NeMo_Incremental(OD3DMethod):
                         logger.info(f'estimating obj_tform4x4_obj_est for {seq}')
                         seq_obj_tform4x4_est_obj = []
                         seq_obj_tform4x4_est_obj_sim = []
-                        count_frames = 0
                         for i, batch in enumerate(iter(dataloader_train_seq)):
-                            count_frames += len(batch)
-                            if count_frames >= self.config.train.sequences_tform4x4_estimated_frames_count:
-                                break
                             batch.to(device=self.device)
                             cam_tform4x4_obj_est, est_sim, results_batch = self.inference_batch(batch, config=self.config.inference, visual_names_unique=[batch.name_unique[j] for j in range(len(batch))])
                             seq_obj_tform4x4_est_obj.append(tform4x4(inv_tform4x4(batch.cam_tform4x4_obj), cam_tform4x4_obj_est))
