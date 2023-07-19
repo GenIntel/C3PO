@@ -435,7 +435,7 @@ class NeMo(OD3DMethod):
         # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
         #sim_pxl_norm0_mask = (sim_pxl == 0.).expand(*sim_pxl.shape)
 
-        sim_pxl = torch.max(sim_texture_multiple_cams) #, sim_clutter)
+        sim_pxl = sim_texture_multiple_cams # torch.max(sim_texture_multiple_cams, sim_clutter)
         sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
 
         #sim = sim_texture_multiple_cams.flatten(2).mean(dim=-1) - sim_clutter.flatten(2).mean(dim=-1)
