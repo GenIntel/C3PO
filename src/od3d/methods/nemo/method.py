@@ -162,6 +162,13 @@ class NeMo(OD3DMethod):
         self.net.train()
         self.meshes.feats.requires_grad = True
 
+        if self.config.train.incremental.enabled:
+            self.seq_obj_tform4x4_est_obj = {}
+            self.seq_obj_tform4x4_est_obj_sim = {}
+            self.seq_obj_tform4x4_est_obj_transl_consist = {}
+            self.seq_obj_tform4x4_est_obj_rot_consist = {}
+            self.seq_filtered = []
+            self.seq_labeled = dataset.sequences_names[:self.config.train.sequences_tform4x4_labeled_count]
 
         accumulate_steps = 0
 
@@ -178,84 +185,93 @@ class NeMo(OD3DMethod):
 
         for e in range(self.config.train.epochs):
 
-            if self.config.train.epochs_to_next_test > 0 and e % self.config.train.epochs_to_next_test == 0:
+            if self.config.train.test and self.config.train.epochs_to_next_test > 0 and e % self.config.train.epochs_to_next_test == 0:
                 for dataset_test in datasets_test:
                     results_test = self.test(dataset_test)
                     wandb.log({f'test_{dataset_test.name}_{k}': v for k, v in results_test.items()})
 
             if self.config.train.incremental.enabled:
-                if self.config.train.epochs_to_next_forget_est_tforms4x4 > 0 and e % self.config.train.epochs_to_next_forget_est_tforms4x4 == 0:
+
+                if True: # self.config.train.epochs_to_next_forget_est_tforms4x4 > 0 and e % self.config.train.epochs_to_next_forget_est_tforms4x4 == 0:
+                    previous_sequences_names = self.seq_labeled + self.seq_filtered
+                    proposals_sequences_names = self.seq_filtered + list(set(dataset.sequences_names) - set(previous_sequences_names))[:self.config.train.sequences_new_proposals_count]
+
                     self.seq_obj_tform4x4_est_obj = {}
                     self.seq_obj_tform4x4_est_obj_sim = {}
-                    for s, seq in enumerate(dataset.sequences_names):
-                        if self.config.train.sequences_tform4x4_labeled_count < 0 or s < self.config.train.sequences_tform4x4_labeled_count:
-                            self.seq_obj_tform4x4_est_obj[dataset.sequences_names[s]] = torch.eye(4, device=self.device)
-                            self.seq_obj_tform4x4_est_obj_sim[dataset.sequences_names[s]] = 1.
-                        else:
-                            seq_dataset = dataset.get_subset_by_sequences([seq])
-                            dataloader_train_seq = torch.utils.data.DataLoader(dataset=seq_dataset, batch_size=self.config.test.dataloader.batch_size, shuffle=True,
-                                                                               collate_fn=dataset.collate_fn,
-                                                                               num_workers=self.config.test.dataloader.num_workers,
-                                                                               pin_memory=self.config.test.dataloader.pin_memory)
-                            logger.info(f'estimating obj_tform4x4_obj_est for {seq}')
-                            seq_obj_tform4x4_est_obj = []
-                            seq_obj_tform4x4_est_obj_sim = []
-                            count_frames = 0
-                            for i, batch in enumerate(iter(dataloader_train_seq)):
-                                count_frames += len(batch)
-                                if count_frames >= self.config.train.sequences_tform4x4_estimated_frames_count:
-                                    break
-                                batch.to(device=self.device)
-                                cam_tform4x4_obj_est, est_sim, _ = self.inference_batch(batch, config=self.config.inference)
-                                seq_obj_tform4x4_est_obj.append(tform4x4(inv_tform4x4(batch.cam_tform4x4_obj), cam_tform4x4_obj_est))
-                                seq_obj_tform4x4_est_obj_sim.append(est_sim)
-                            seq_obj_tform4x4_est_obj_sim = torch.cat(seq_obj_tform4x4_est_obj_sim, dim=0)
-                            seq_obj_tform4x4_est_obj = torch.cat(seq_obj_tform4x4_est_obj, dim=0)
+                    self.seq_obj_tform4x4_est_obj_transl_consist = {}
+                    self.seq_obj_tform4x4_est_obj_rot_consist = {}
+                    self.seq_filtered = []
 
-                            seq_obj_tform4x4_est_obj = seq_obj_tform4x4_est_obj[:self.config.train.sequences_tform4x4_estimated_frames_count]
+                    for s, seq in enumerate(proposals_sequences_names):
 
-                            seq_obj_tform4x4_est_obj_sim = []
-                            count_frames = 0
-                            for i, batch in enumerate(iter(dataloader_train_seq)):
-                                count_frames += len(batch)
-                                if count_frames >= self.config.train.sequences_tform4x4_estimated_frames_count:
-                                    break
-                                batch.to(device=self.device)
-                                #B = len(batch)
-                                #C = self.config.train.sequences_tform4x4_estimated_frames_count
-                                sim = self.get_sim_cam_tform4x4_obj(batch, cam_intr4x4=batch.cam_intr4x4[:, None], cam_tform4x4_obj=tform4x4_broadcast(batch.cam_tform4x4_obj[:, None], seq_obj_tform4x4_est_obj[None, ]), broadcast_batch_and_cams=True)
-                                seq_obj_tform4x4_est_obj_sim.append(sim)
-                            seq_obj_tform4x4_est_obj_sim = torch.cat(seq_obj_tform4x4_est_obj_sim, dim=0).mean(dim=0)
+                        seq_dataset = dataset.get_subset_by_sequences([seq], frames_count_max_per_sequence=self.config.train.sequences_tform4x4_estimated_frames_count)
+                        dataloader_train_seq = torch.utils.data.DataLoader(dataset=seq_dataset, batch_size=self.config.test.dataloader.batch_size, shuffle=True,
+                                                                           collate_fn=dataset.collate_fn,
+                                                                           num_workers=self.config.test.dataloader.num_workers,
+                                                                           pin_memory=self.config.test.dataloader.pin_memory)
+                        logger.info(f'estimating obj_tform4x4_obj_est for {seq}')
+                        seq_obj_tform4x4_est_obj = []
+                        seq_obj_tform4x4_est_obj_sim = []
+                        count_frames = 0
+                        for i, batch in enumerate(iter(dataloader_train_seq)):
+                            count_frames += len(batch)
+                            if count_frames >= self.config.train.sequences_tform4x4_estimated_frames_count:
+                                break
+                            batch.to(device=self.device)
+                            cam_tform4x4_obj_est, est_sim, _ = self.inference_batch(batch, config=self.config.inference)
+                            seq_obj_tform4x4_est_obj.append(tform4x4(inv_tform4x4(batch.cam_tform4x4_obj), cam_tform4x4_obj_est))
+                            seq_obj_tform4x4_est_obj_sim.append(est_sim)
+                        seq_obj_tform4x4_est_obj_sim = torch.cat(seq_obj_tform4x4_est_obj_sim, dim=0)
+                        seq_obj_tform4x4_est_obj = torch.cat(seq_obj_tform4x4_est_obj, dim=0)
 
-                            seq_max_sim_id = seq_obj_tform4x4_est_obj_sim.max(dim=0)[1]
-                            if seq_obj_tform4x4_est_obj_sim[seq_max_sim_id] > self.config.train.sequences_tform4x4_estimated_sim_threshold:
-                                self.seq_obj_tform4x4_est_obj[seq] = seq_obj_tform4x4_est_obj[seq_max_sim_id]
-                                if self.config.train.visualize.seq_added_tform:
-                                    batch.to(self.device)
-                                    batch.cam_tform4x4_obj[:1] = tform4x4(batch.cam_tform4x4_obj[:1], self.seq_obj_tform4x4_est_obj[seq])
-                                    verts_ncds_in_rgb = blend_rgb(batch.rgb[0], (
-                                    self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[:1],
-                                                             cams_intr4x4=batch.cam_intr4x4[:1],
-                                                             imgs_sizes=batch.size, meshes_ids=batch.label[:1],
-                                                             modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(
-                                        dtype=batch.rgb.dtype))
+                        seq_obj_tform4x4_est_obj = seq_obj_tform4x4_est_obj[:self.config.train.sequences_tform4x4_estimated_frames_count]
+                        seq_obj_tform4x4_est_obj_sim = seq_obj_tform4x4_est_obj_sim[:self.config.train.sequences_tform4x4_estimated_frames_count]
+
+                        from od3d.cv.geometry.transform import se3_log_map
+                        seq_obj_tform6_est_obj = se3_log_map(seq_obj_tform4x4_est_obj)
+                        seq_obj_transl3_est_obj_dist_mat = (seq_obj_tform6_est_obj[None, :, :3] - seq_obj_tform6_est_obj[:, None, :3]).norm(dim=-1)
+                        seq_obj_rot3_est_obj_dist_mat = (seq_obj_tform6_est_obj[None, :, 3:] - seq_obj_tform6_est_obj[:, None, 3:]).norm(dim=-1)
+                        seq_obj_tform4x4_est_obj_transl_consist = seq_obj_transl3_est_obj_dist_mat.triu(diagonal=1).sum() / torch.ones_like(seq_obj_transl3_est_obj_dist_mat).triu(diagonal=1).sum()
+                        seq_obj_tform4x4_est_obj_rot_consist = seq_obj_rot3_est_obj_dist_mat.triu(diagonal=1).sum() / torch.ones_like(seq_obj_rot3_est_obj_dist_mat).triu(diagonal=1).sum()
+                        seq_obj_tform4x4_est_obj_sim = seq_obj_tform4x4_est_obj_sim.mean()
+                        seq_obj_tform4x4_est_obj = se3_exp_map(seq_obj_tform6_est_obj.mean(dim=0))
+
+                        self.seq_obj_tform4x4_est_obj[seq] = seq_obj_tform4x4_est_obj
+                        self.seq_obj_tform4x4_est_obj_sim[seq] = seq_obj_tform4x4_est_obj_sim
+                        self.seq_obj_tform4x4_est_obj_transl_consist[seq] = seq_obj_tform4x4_est_obj_transl_consist
+                        self.seq_obj_tform4x4_est_obj_rot_consist[seq] = seq_obj_tform4x4_est_obj_rot_consist
+
+                        if seq_obj_tform4x4_est_obj_sim > self.config.train.sequences_tform4x4_est_sim_min\
+                                and seq_obj_tform4x4_est_obj_transl_consist < self.config.train.sequences_tform4x4_est_transl_consist_max\
+                                and seq_obj_tform4x4_est_obj_rot_consist < self.config.train.sequences_tform4x4_est_rot_consist_max:
+
+                            self.seq_filtered.append(seq)
+
+                            if self.config.train.visualize.seq_added_tform:
+                                batch.to(self.device)
+                                batch.cam_tform4x4_obj[:1] = tform4x4(batch.cam_tform4x4_obj[:1], self.seq_obj_tform4x4_est_obj[seq])
+                                verts_ncds_in_rgb = blend_rgb(batch.rgb[0], (
+                                self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[:1],
+                                                         cams_intr4x4=batch.cam_intr4x4[:1],
+                                                         imgs_sizes=batch.size, meshes_ids=batch.label[:1],
+                                                         modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(
+                                    dtype=batch.rgb.dtype))
 
 
-                                    results_train[f'seq_{seq}_verts_ncds_in_rgb'] = image_as_wandb_image(verts_ncds_in_rgb,
-                                                                                              caption=f'Frame Name {batch.name[0]}')
-                                    if self.config.train.visualize.live:
-                                        show_img(verts_ncds_in_rgb)
-                                self.seq_obj_tform4x4_est_obj_sim[seq] = seq_obj_tform4x4_est_obj_sim[seq_max_sim_id]
+                                results_train[f'seq_{seq}_verts_ncds_in_rgb'] = image_as_wandb_image(verts_ncds_in_rgb,
+                                                                                          caption=f'Frame Name {batch.name[0]}')
+                                if self.config.train.visualize.live:
+                                    show_img(verts_ncds_in_rgb)
 
-                    logger.info(f'estimating obj_tform4x4_obj_est_sims of {self.seq_obj_tform4x4_est_obj_sim}')
+                    results_train['seq_obj_tform4x4_est_obj_sim'] = torch.stack(list(self.seq_obj_tform4x4_est_obj_sim.values())).mean()
+                    results_train['seq_obj_tform4x4_est_obj_transl_consist'] = torch.stack(list(self.seq_obj_tform4x4_est_obj_transl_consist.values())).mean()
+                    results_train['seq_obj_tform4x4_est_obj_rot_consist'] = torch.stack(list(self.seq_obj_tform4x4_est_obj_rot_consist.values())).mean()
 
-                    sequences_filtered = list(self.seq_obj_tform4x4_est_obj_sim.keys())
+                    #logger.info(f'estimating obj_tform4x4_obj_est_sims of {self.seq_obj_tform4x4_est_obj_sim}')
 
+                    sequences_filtered = list(self.seq_filtered)
                     results_train["count_sequences"] = len(sequences_filtered)
-
-                    dataset_sub = dataset.get_subset_by_sequences(sequences_filtered)
-
-
+                    dataset_sub = dataset.get_subset_by_sequences(sequences_filtered + self.seq_labeled)
 
                     logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
@@ -289,15 +305,10 @@ class NeMo(OD3DMethod):
 
                 batch.to(device=self.device)
 
-                batch.cam_tform4x4_obj_sim = torch.zeros(size=(len(batch),), device=self.device)
                 for b in range(len(batch)):
                     if self.config.train.incremental.enabled:
-                        batch.cam_tform4x4_obj[b] = tform4x4(batch.cam_tform4x4_obj[b], self.seq_obj_tform4x4_est_obj[batch.sequence_name[b]])
-                        batch.cam_tform4x4_obj_sim[b] = self.seq_obj_tform4x4_est_obj_sim[batch.sequence_name[b]]
-                    else:
-                        batch.cam_tform4x4_obj_sim[b] = 1.
-
-                batch.cam_tform4x4_obj_sim = batch.cam_tform4x4_obj_sim.detach()
+                        if batch.sequence_name[b] in self.seq_filtered:
+                            batch.cam_tform4x4_obj[b] = tform4x4(batch.cam_tform4x4_obj[b], self.seq_obj_tform4x4_est_obj[batch.sequence_name[b]])
                 batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
                 # logger.info(f'batch.label {batch.label}')
@@ -424,7 +435,7 @@ class NeMo(OD3DMethod):
         # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
         #sim_pxl_norm0_mask = (sim_pxl == 0.).expand(*sim_pxl.shape)
 
-        sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
+        sim_pxl = torch.max(sim_texture_multiple_cams) #, sim_clutter)
         sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
 
         #sim = sim_texture_multiple_cams.flatten(2).mean(dim=-1) - sim_clutter.flatten(2).mean(dim=-1)

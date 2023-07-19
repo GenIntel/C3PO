@@ -162,12 +162,14 @@ class CO3D(OD3D_Dataset):
                 sequences_rfpaths.append(CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=category,name=sequence_name))
         return sequences_rfpaths
 
-    def get_subset_by_sequences(self, sequences_names: List[str]):
+    def get_subset_by_sequences(self, sequences_names: List[str], frames_count_max_per_sequence=None):
+        if frames_count_max_per_sequence is None:
+            frames_count_max_per_sequence = self.frames_count_max_per_sequence
         return CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                  categories=self.categories,
                  sequences_names=sequences_names,
                  frames_block_negative_depth=self.frames_block_negative_depth,
-                 frames_count_max_per_sequence=self.frames_count_max_per_sequence,
+                 frames_count_max_per_sequence=frames_count_max_per_sequence,
                  sequences_require_pcl=self.sequences_require_pcl,
                  sequences_sort_pcl_score=self.sequences_sort_pcl_score,
                  sequences_require_pcl_score=self.sequences_require_pcl_score,
