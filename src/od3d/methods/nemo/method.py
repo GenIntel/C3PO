@@ -192,7 +192,7 @@ class NeMo(OD3DMethod):
 
             if self.config.train.incremental.enabled:
 
-                if True: # self.config.train.epochs_to_next_forget_est_tforms4x4 > 0 and e % self.config.train.epochs_to_next_forget_est_tforms4x4 == 0:
+                if self.config.train.epochs_to_next_forget_est_tforms4x4 > 0 and e % self.config.train.epochs_to_next_forget_est_tforms4x4 == 0:
                     previous_sequences_names = self.seq_labeled + self.seq_filtered
                     proposals_sequences_names = self.seq_filtered + list(set(dataset.sequences_names) - set(previous_sequences_names))[:self.config.train.sequences_new_proposals_count]
 
