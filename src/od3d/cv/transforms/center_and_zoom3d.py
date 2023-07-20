@@ -79,13 +79,17 @@ class CenterZoom3D():
 
 
 class RandomCenterZoom3D():
-    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None, center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.]):
+    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None, dist_min=None, dist_max=None, center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.]):
         self.centerzoom3d = CenterZoom3D(H=H, W=W, dist=dist, center3d=center3d, apply_txtr=apply_txtr,
                                     apply_kpts2d_annot=apply_kpts2d_annot, apply_bbox_annot=apply_bbox_annot,
                                     apply_mask=apply_mask, config=config)
         self.center3d_min = torch.Tensor(center3d_min)
         self.center3d_max = torch.Tensor(center3d_max)
+        self.dist_min = dist_min
+        self.dist_max = dist_max
 
     def __call__(self, frame):
+        if self.dist_min is not None and self.dist_max is not None:
+            self.centerzoom3d.dist = self.dist_min + torch.rand(1)[0] * (self.dist_max - self.dist_min)
         self.centerzoom3d.center3d = self.center3d_min + torch.rand(3) * (self.center3d_max - self.center3d_min)
         return self.centerzoom3d(frame)
