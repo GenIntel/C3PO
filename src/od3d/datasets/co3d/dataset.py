@@ -6,7 +6,7 @@ from co3d.dataset.data_types import (
 from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 from od3d.datasets.co3d.sequence import CO3D_Sequence, CO3D_SequenceMeta
 
-from typing import List
+from typing import List, Dict, Tuple
 import torch
 from pathlib import Path
 
@@ -50,13 +50,13 @@ class CO3D(OD3D_Dataset):
         return co3d
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[CO3D_CATEGORIES]=None,
-                 sequences_names: List[str]=None,
+                 dict_category_sequence_name_frames_names: Dict[str, Dict[str, List[str]]]=None,
                  frames_block_negative_depth=False,
                  frames_count_max_per_sequence=None,
                  sequences_require_pcl=False,
                  sequences_sort_pcl_score=False,
                  sequences_require_pcl_score=-1000.1,
-                 sequences_count_max_per_class=None,
+                 sequences_count_max_per_category=None,
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  transform=None, index_shift=0, subset_fraction=1.):
@@ -65,120 +65,233 @@ class CO3D(OD3D_Dataset):
         self.device = "cpu"
         self.dtype = torch.float32
         self.categories = categories if categories is not None else CO3D_CATEGORIES.list()
-        self.frames_block_negative_depth = frames_block_negative_depth
-        self.frames_count_max_per_sequence = frames_count_max_per_sequence
-        self.sequences_count_max_per_class = sequences_count_max_per_class
-        self.sequences_require_pcl = sequences_require_pcl
-        self.sequences_sort_pcl_score = sequences_sort_pcl_score
-        self.sequences_require_pcl_score = sequences_require_pcl_score
+        #self.frames_block_negative_depth = frames_block_negative_depth
+        #self.frames_count_max_per_sequence = frames_count_max_per_sequence
+
+        #self.sequences_count_max_per_class = sequences_count_max_per_class
+        #self.sequences_require_pcl = sequences_require_pcl
+        #self.sequences_sort_pcl_score = sequences_sort_pcl_score
+        #self.sequences_require_pcl_score = sequences_require_pcl_score
+
         self.cam_tform_obj_source = cam_tform_obj_source
         self.cuboid_source = cuboid_source
 
-        logger.info("reading sequences meta...")
+        logger.info(f"found {len(self.categories)} categories")
+         #self.sequences_names = sequences_names if sequences_names is not None else self.get_sequences_names_meta()
 
-        self.sequences_names = sequences_names if sequences_names is not None else self.get_sequences_names_meta()
+        if dict_category_sequence_name_frames_names is None:
+            # filter categories
+            dict_category_sequences_names = CO3D_SequenceMeta.get_map_category_sequences_names(path_meta=self.path_meta,
+                                                                                               categories=self.categories)
+            # filter sequences
+            self.dict_category_sequences_names = self.filter_sequences(map_category_sequences_names=
+                                                                  dict_category_sequences_names,
+                                                                  require_pcl=sequences_require_pcl,
+                                                                  sort_pcl_score=sequences_sort_pcl_score,
+                                                                  require_pcl_score=sequences_require_pcl_score,
+                                                                  count_max_per_category=sequences_count_max_per_category)
 
-        # filter sequences
-        sequences_meta_rfpaths = self.get_rfpaths_sequences_meta()
-        self.sequences = [self.get_sequence_by_rfpath(sequence_meta_rfpath=rfpath) for rfpath in sequences_meta_rfpaths]
-        if self.sequences_require_pcl:
-            # quality score lies in range [-2.35x, 1.04x]
-            self.sequences = list(filter(lambda sequence: sequence.meta.rfpath_pcl != Path('None'), self.sequences))
-            if self.sequences_require_pcl_score is not None:
-                self.sequences = list(filter(lambda sequence: sequence.meta.pcl_quality_score > self.sequences_require_pcl_score, self.sequences))
-            if self.sequences_sort_pcl_score:
-                self.sequences = sorted(self.sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
+            # get frames from meta
+            dict_category_sequence_name_frames_names = \
+                CO3D_FrameMeta.get_map_category_map_sequence_name_frames_names(categories=self.categories,
+                                                                               path_meta=self.path_meta,
+                                                                               map_category_sequences_names=
+                                                                               dict_category_sequences_names,
+                                                                               count_max_per_sequence=
+                                                                               frames_count_max_per_sequence)
 
-        if self.sequences_count_max_per_class is not None:
-            self.sequences_count_per_class = {category: 0 for category in self.categories}
-            self.sequences_names = []
-            for seq in self.sequences:
-                if self.sequences_count_per_class[seq.category] < self.sequences_count_max_per_class:
-                    self.sequences_count_per_class[seq.category] += 1
-                    self.sequences_names.append(seq.name)
+            # filter frames
+            self.dict_category_sequence_name_frames_names = self.filter_frames(dict_category_sequence_name_frames_names,
+                                                                               block_negative_depth=frames_block_negative_depth)
+        else:
+            # filter categories
+            self.dict_category_sequence_name_frames_names = {category: dict_category_sequence_name_frames_names[category] for category in self.categories}
+            for category, dict_sequence_name_frames_names in self.dict_category_sequence_name_frames_names.items():
+                for sequence_name, frames_names in dict_sequence_name_frames_names.items():
+                    if frames_names is None:
+                        self.dict_category_sequence_name_frames_names[category][sequence_name] = \
+                            CO3D_FrameMeta.get_frames_names_with_category_sequence_name(path_meta=self.path_meta,
+                                                                                        category=category,
+                                                                                        sequence_name=sequence_name,
+                                                                                        count_max_per_sequence=
+                                                                                        frames_count_max_per_sequence)
+            self.dict_category_sequences_names = {category: list(dict_sequence_name_frames_names.keys()) for category, dict_sequence_name_frames_names in dict_category_sequence_name_frames_names.items() }
 
-        self.sequences_meta_rfpaths = [seq.meta.rfpath for seq in self.sequences]
-        self.sequences_names = [rfpath.stem for rfpath in self.sequences_meta_rfpaths]
-        self.map_sequence_name_to_sequence_rfpath = dict(zip(self.sequences_names, self.sequences_meta_rfpaths))
-        self.sequences_count = len(self.sequences_meta_rfpaths)
-        logger.info(f"found {self.sequences_count} sequences.")
-        logger.info("reading frames rfpaths of sequences...")
+        self.sequences_count = sum([len(sequences_names) for category, sequences_names in self.dict_category_sequences_names.items()])
+        logger.info(f"found {self.sequences_count} sequences")
 
-        self.frames_meta_rfpaths, self.sequences_lengths = self.get_rfpaths_frames_meta(return_sequences_lengths=True)
-        self.frames_names = [rfpath.stem for rfpath in self.frames_meta_rfpaths]
-        self.frames_count = len(self.frames_meta_rfpaths)
+        self.list_categories_sequences_names_frames_names = self.dict_category_sequence_name_frames_names_to_list(self.dict_category_sequence_name_frames_names)
+        self.frames_count = len(self.list_categories_sequences_names_frames_names)
 
-        self.map_item_id_to_seq_id = []
-        self.map_item_id_to_frame_id = []
-        for sequence_name in self.sequences_names:
-            self.map_item_id_to_frame_id += list(range(self.sequences_lengths[-1]))
-            self.map_item_id_to_seq_id += list((len(self.sequences_lengths)-1, ) * self.sequences_lengths[-1])
-
-        if self.subset_fraction is not None and self.subset_fraction != 1.:
-            frames_ids_subset = torch.multinomial(torch.ones(size=(self.frames_count,)),
-                                                  num_samples=int(self.subset_fraction * self.frames_count),
-                                                  replacement=False)
-            self.map_item_id_to_seq_id = [self.map_item_id_to_seq_id[id] for id in frames_ids_subset]
-            self.map_item_id_to_frame_id = [self.map_item_id_to_frame_id[id] for id in frames_ids_subset]
-            self.frames_meta_rfpaths = [self.frames_meta_rfpaths[id] for id in frames_ids_subset]
-            self.frames_names = [self.frames_names[id] for id in frames_ids_subset]
-            self.frames_count = len(self.frames_meta_rfpaths)
+        if subset_fraction is not None and subset_fraction != 1.:
+            item_ids_subset = self.get_subset_item_ids(subset_fraction=subset_fraction)
+            self.list_categories_sequences_names_frames_names = self.list_categories_sequences_names_frames_names[item_ids_subset]
+            self.frames_count = len(self.list_categories_sequences_names_frames_names)
 
         logger.info(f"found {self.frames_count} frames.")
 
+    def get_subset_item_ids(self, subset_fraction):
+        return torch.multinomial(torch.ones(size=(self.frames_count,)),
+                                                num_samples=int(subset_fraction * self.frames_count),
+                                                replacement=False)
 
-    def get_rfpaths_frames_meta(self, return_sequences_lengths=False):
-        sequences_lengths = []
-        frames_rfpaths = []
-        for category in self.categories:
-            for sequence_name in self.sequences_names:
-                frames_fpaths_partial = list(CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=self.path_meta, category=category, sequence=sequence_name).iterdir())
-                frames_rfpaths_partial = [CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_name(category=category, sequence=sequence_name, name=fpath.stem) for fpath in frames_fpaths_partial]
-                frames_rfpaths_partial = sorted(frames_rfpaths_partial, key=lambda rfpath: int(rfpath.stem))
-                if self.frames_count_max_per_sequence is not None:
-                    frames_rfpaths_partial = [frames_rfpaths_partial[fid] for fid in np.linspace(0, len(frames_rfpaths_partial)-1, self.frames_count_max_per_sequence).astype(int).tolist()]
+    def get_subset_by_sequences(self, dict_category_sequence_name_frames_names: Dict[str, Dict[str, List[str]]], frames_count_max_per_sequence=None):
+        return CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                    path_preprocess=self.path_preprocess, categories=self.categories,
+                    frames_count_max_per_sequence=frames_count_max_per_sequence,
+                    dict_category_sequence_name_frames_names=dict_category_sequence_name_frames_names,
+                    cam_tform_obj_source=self.cam_tform_obj_source,
+                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
 
-                if self.frames_block_negative_depth:
-                    frames_rfpaths_partial = list(filter(lambda rfpath: self.get_frame_by_rfpath(rfpath).cam_tform4x4_obj[0, 2, 3] >= 0.01, frames_rfpaths_partial))
-                frames_rfpaths += frames_rfpaths_partial
-                sequences_lengths.append(len(frames_rfpaths_partial))
-        if return_sequences_lengths:
-            return frames_rfpaths, sequences_lengths
+    def get_fractionA_from_fractionA_and_fraction_B(self, fractionA: float, fractionB: float=None):
+        if fractionB is None:
+            assert fractionA > 0. and fractionA < 1.
         else:
-            return frames_rfpaths
+            if fractionA + fractionB != 1.:
+                fractionAB = fractionA + fractionB
+                fractionA = fractionA / fractionAB
+                fractionB = fractionB / fractionAB
+                logger.warning(f'Subset fractions dont sum up to 1. Setting A={fractionA}, B={fractionB}')
+        return fractionA
+    def get_split_sequences_shared(self, fractionA: float, fractionB: float=None):
+        fractionA = self.get_fractionA_from_fractionA_and_fraction_B(fractionA=fractionA, fractionB=fractionB)
+        dict_category_sequence_name_frames_names_subsetA = {}
+        dict_category_sequence_name_frames_names_subsetB = {}
+        dict_category_sequence_name_frames_names = self.list_categories_sequences_names_frames_names_to_dict(self.list_categories_sequences_names_frames_names)
+        for category, dict_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
+            dict_category_sequence_name_frames_names_subsetA[category] = {}
+            dict_category_sequence_name_frames_names_subsetB[category] = {}
+            for sequence_name, frames_names in dict_sequence_name_frames_names.items():
+                frames_names = sorted(frames_names, key=lambda fn: int(fn))
+                cutoff = len(frames_names) * fractionA
+                dict_category_sequence_name_frames_names_subsetA[category][sequence_name] = frames_names[:cutoff]
+                dict_category_sequence_name_frames_names_subsetB[category][sequence_name] = frames_names[cutoff:]
 
-    def get_sequences_names_meta(self):
-        sequences_names = []
-        for category in self.categories:
-            sequences_fpaths_partial = list(CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=self.path_meta, category=category).iterdir())
-            sequences_names_partial = [fpath.stem for fpath in sequences_fpaths_partial]
-            sequences_names += sequences_names_partial
-        return sequences_names
+        co3d_subsetA = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                    path_preprocess=self.path_preprocess, categories=self.categories,
+                    dict_category_sequence_name_frames_names=dict_category_sequence_name_frames_names_subsetA,
+                    cam_tform_obj_source=self.cam_tform_obj_source,
+                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
 
-    def get_rfpaths_sequences_meta(self):
-        sequences_rfpaths = []
-        for category in self.categories:
-            for sequence_name in self.sequences_names:
-                sequences_rfpaths.append(CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=category,name=sequence_name))
-        return sequences_rfpaths
+        co3d_subsetB = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                            path_preprocess=self.path_preprocess, categories=self.categories,
+                            dict_category_sequence_name_frames_names=dict_category_sequence_name_frames_names_subsetB,
+                            cam_tform_obj_source=self.cam_tform_obj_source,
+                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
 
-    def get_subset_by_sequences(self, sequences_names: List[str], frames_count_max_per_sequence=None):
-        if frames_count_max_per_sequence is None:
-            frames_count_max_per_sequence = self.frames_count_max_per_sequence
-        return CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw, path_preprocess=self.path_preprocess,
-                 categories=self.categories,
-                 sequences_names=sequences_names,
-                 frames_block_negative_depth=self.frames_block_negative_depth,
-                 frames_count_max_per_sequence=frames_count_max_per_sequence,
-                 sequences_require_pcl=self.sequences_require_pcl,
-                 sequences_sort_pcl_score=self.sequences_sort_pcl_score,
-                 sequences_require_pcl_score=self.sequences_require_pcl_score,
-                 sequences_count_max_per_class=self.sequences_count_max_per_class,
-                 cam_tform_obj_source=self.cam_tform_obj_source,
-                 cuboid_source=self.cuboid_source,
-                 transform=self.transform, index_shift=self.index_shift)
+        return co3d_subsetA, co3d_subsetB
+
+    def get_split_sequences_separated(self, fractionA, fractionB):
+        fractionA = self.get_fractionA_from_fractionA_and_fraction_B(fractionA=fractionA, fractionB=fractionB)
+        dict_category_sequence_name_frames_names_subsetA = {}
+        dict_category_sequence_name_frames_names_subsetB = {}
+        dict_category_sequence_name_frames_names = self.list_categories_sequences_names_frames_names_to_dict(self.list_categories_sequences_names_frames_names)
+        for category, dict_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
+            seqs_names = list(dict_sequence_name_frames_names.keys())
+            cutoff = len(seqs_names) * fractionA
+            dict_category_sequence_name_frames_names_subsetA[category] = {s: dict_sequence_name_frames_names[s] for s in seqs_names[:cutoff]}
+            dict_category_sequence_name_frames_names_subsetB[category] = {s: dict_sequence_name_frames_names[s] for s in seqs_names[cutoff:]}
+
+        co3d_subsetA = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                    path_preprocess=self.path_preprocess, categories=self.categories,
+                    dict_category_sequence_name_frames_names=dict_category_sequence_name_frames_names_subsetA,
+                    cam_tform_obj_source=self.cam_tform_obj_source,
+                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
+
+        co3d_subsetB = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                            path_preprocess=self.path_preprocess, categories=self.categories,
+                            dict_category_sequence_name_frames_names=dict_category_sequence_name_frames_names_subsetB,
+                            cam_tform_obj_source=self.cam_tform_obj_source,
+                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
+
+        return co3d_subsetA, co3d_subsetB
+
+    def get_item(self, item):
+        category, sequence_name, frame_name = self.list_categories_sequences_names_frames_names[item]
+        return self.get_frame_by_category_sequence_and_frame_name(category=category,
+                                                                  sequence_name=sequence_name,
+                                                                  frame_name=frame_name)
+
+    def visualize(self, item: int):
+        pass
+
+    def __len__(self):
+        return self.frames_count #  len(self.frames_meta_rfpaths)
+
+    def get_frame_by_category_sequence_and_frame_name(self, category, sequence_name, frame_name):
+        frame_meta = CO3D_FrameMeta.load_from_meta_with_category_sequence_and_frame_name(
+            path_meta=self.path_meta,
+            category=category,
+            sequence_name=sequence_name,
+            frame_name=frame_name)
+        return self.get_frame_by_meta(frame_meta=frame_meta)
+
+    def get_frame_by_name_unique(self, name_unique: str):
+        frame_meta = CO3D_FrameMeta.load_from_meta_with_name_unique(
+            path_meta=self.path_meta,
+            name_unique=name_unique)
+        return self.get_frame_by_meta(frame_meta=frame_meta)
+
+    def get_frame_by_meta(self, frame_meta: CO3D_FrameMeta):
+        return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+                          meta=frame_meta, modalities=self.modalities, categories=self.categories,
+                          cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source)
+
+    def get_sequence_by_category_and_name(self, category, name):
+        sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta, category=category, name=name)
+        return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+                             meta=sequence_meta, modalities=self.modalities, categories=self.categories,
+                              cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source)
 
 
+
+    def filter_sequences(self, map_category_sequences_names: Dict[str, List[str]], require_pcl, sort_pcl_score, require_pcl_score, count_max_per_category):
+        for category in map_category_sequences_names.keys():
+            sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
+                         in map_category_sequences_names[category]]
+            if require_pcl:
+                sequences = list(filter(lambda sequence: sequence.meta.rfpath_pcl != Path('None'), sequences))
+                if require_pcl_score is not None:
+                    sequences = list(
+                        filter(lambda sequence: sequence.meta.pcl_quality_score > require_pcl_score, sequences))
+                if sort_pcl_score:
+                    sequences = sorted(sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
+            if count_max_per_category is not None:
+                sequences = sequences[:count_max_per_category]
+            map_category_sequences_names[category] = [sequence.name for sequence in sequences]
+        return map_category_sequences_names
+
+    def filter_frames(self, map_category_map_sequence_name_frames_names: Dict[str, Dict[str, List[str]]],
+                      block_negative_depth=False):
+        if block_negative_depth:
+            for category, map_sequence_name_frames_names in map_category_map_sequence_name_frames_names.items():
+                for sequence_name, frames_names in map_sequence_name_frames_names.items():
+                    frames: List[CO3D_Frame] = [
+                        self.get_frame_by_category_sequence_and_frame_name(category=category,
+                                                                           sequence_name=sequence_name,
+                                                                           frame_name=frame_name)
+                        for frame_name in frames_names]
+                    frames = list(filter(lambda frame: frame.cam_tform4x4_obj[2, 3] >= 0.01, frames))
+                    map_category_map_sequence_name_frames_names[category][sequence_name] = [frame.name for frame in frames]
+        return map_category_map_sequence_name_frames_names
+
+    def dict_category_sequence_name_frames_names_to_list(self, dict_category_sequence_name_frames_names):
+        list_categories_sequences_names_frames_names: List[Tuple[str, str, str]] = []
+        for category, map_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
+            for sequence_name, frames_names in map_sequence_name_frames_names.items():
+                for frame_name in frames_names:
+                    list_categories_sequences_names_frames_names.append((category, sequence_name, frame_name))
+        return list_categories_sequences_names_frames_names
+
+    def list_categories_sequences_names_frames_names_to_dict(self, list_categories_sequences_names_frames_names):
+        dict_category_sequence_name_frames_names = {}
+        for category, sequence_name, frame_name in list_categories_sequences_names_frames_names:
+            if category not in dict_category_sequence_name_frames_names.keys():
+                dict_category_sequence_name_frames_names[category] = {}
+            if sequence_name not in dict_category_sequence_name_frames_names[category].keys():
+                dict_category_sequence_name_frames_names[category][sequence_name] = []
+            dict_category_sequence_name_frames_names[category][sequence_name].append(frame_name)
+        return dict_category_sequence_name_frames_names
     @staticmethod
     def setup(config: DictConfig):
 
@@ -256,10 +369,10 @@ class CO3D(OD3D_Dataset):
 
                 frame_name = str(frame_annotation.frame_number)
                 sequence_name = str(frame_annotation.sequence_name)
-                frame_meta_fpath = CO3D_FrameMeta.get_fpath_frame_meta_with_category_sequence_name(path_meta=path_meta,
-                                                                                                   category=category,
-                                                                                                   sequence=sequence_name,
-                                                                                                   name=frame_name)
+                frame_meta_fpath = CO3D_FrameMeta.get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta=path_meta,
+                                                                                                             category=category,
+                                                                                                             sequence_name=sequence_name,
+                                                                                                             name=frame_name)
                 if frame_meta_fpath.exists() and not config.preprocess_meta_override:
                     continue
 
@@ -267,23 +380,7 @@ class CO3D(OD3D_Dataset):
                 frame_meta = CO3D_FrameMeta.load_from_raw(frame_annotation=frame_annotation)
                 frame_meta.save(path_meta=path_meta)
 
-    @staticmethod
-    def get_rfpath_sequence_meta_with_category(category: str, name: str):
-        return Path(category).joinpath(name + '.yaml')
-    @staticmethod
-    def get_path_meta_sequences(path_meta: Path):
-        return path_meta.joinpath("sequences")
 
-    def get_fpath_sequence_meta(self, rfpath_sequence_meta: Path):
-        return CO3D.get_path_meta_sequences(path_meta=self.path_meta).joinpath(rfpath_sequence_meta)
-
-    def get_item_id_by_name(self, sequence_name, frame_name):
-        for i in range(len(self)):
-            seq_id = self.map_item_id_to_seq_id[i]
-            frame_id = self.map_item_id_to_frame_id[i]
-            if self.sequences_names[seq_id] == sequence_name and self.frames_names[seq_id][frame_id] == frame_name:
-                return i
-        return -1
 
     def preprocess(self, preprocess_pcls=True, preprocess_cuboids=True, preprocess_cuboid_avg=True, override=False):
         logger.info("preprocess")
@@ -299,18 +396,20 @@ class CO3D(OD3D_Dataset):
     def preprocess_pcls(self, override=False):
         logger.info("preprocess pcls...")
 
-        for sequence_name in self.sequences_names:
-            logger.info(f"preprocess pcls, sequence {sequence_name}")
-            sequence = self.get_sequence_by_name(sequence_name=sequence_name)
-            sequence.preprocess_pcl_clean(override=override)
+        for category, sequences_names in self.dict_category_sequences_names.items():
+            for sequence_name in sequences_names:
+                logger.info(f"preprocess pcls, sequence {sequence_name}")
+                sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
+                sequence.preprocess_pcl_clean(override=override)
 
     def preprocess_cuboids(self, override=False):
         logger.info("preprocess cuboids...")
 
-        for sequence_name in self.sequences_names:
-            logger.info(f"preprocess cuboids, sequence {sequence_name}")
-            sequence = self.get_sequence_by_name(sequence_name=sequence_name)
-            sequence.preprocess_cuboid(override=override)
+        for category, sequences_names in self.dict_category_sequences_names.items():
+            for sequence_name in sequences_names:
+                logger.info(f"preprocess cuboids, sequence {sequence_name}")
+                sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
+                sequence.preprocess_cuboid(override=override)
 
     def preprocess_cuboid_avg(self, override=False):
         logger.info("preprocess cuboids avg...")
@@ -327,8 +426,9 @@ class CO3D(OD3D_Dataset):
                 from od3d.cv.geometry.transform import transf3d_broadcast
                 from od3d.cv.geometry.primitives import Cuboids
                 pcls = []
-                for sequence_name in self.sequences_names:
-                    sequence = self.get_sequence_by_name(sequence_name)
+                for sequence_name in self.dict_category_sequences_names[category]:
+
+                    sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
                     pcls.append(transf3d_broadcast(voxel_downsampling(sequence.pcl_clean, K=cuboid_pts3d_max_count).to(device=device),
                                                    transf4x4=sequence.cuboid_front_tform4x4_obj.to(device=device)))
                     # batch[0].sequence_name
@@ -348,9 +448,72 @@ class CO3D(OD3D_Dataset):
                 save_ply(fpath, verts=cuboids.verts, faces=cuboids.faces)
                 # show_pcl([cuboids.verts.to(device=device)] + pcls)
 
-    def __len__(self):
-        return len(self.frames_meta_rfpaths)
+    """
+    @staticmethod
+    def get_rfpath_sequence_meta_with_category(category: str, name: str):
+        return Path(category).joinpath(name + '.yaml')
+    @staticmethod
+    def get_path_meta_sequences(path_meta: Path):
+        return path_meta.joinpath("sequences")
 
+    def get_fpath_sequence_meta(self, rfpath_sequence_meta: Path):
+        return CO3D.get_path_meta_sequences(path_meta=self.path_meta).joinpath(rfpath_sequence_meta)
+
+    """
+
+    """
+    def get_item_id_by_name(self, sequence_name, frame_name):
+        for i in range(len(self)):
+            seq_id = self.map_item_id_to_seq_id[i]
+            frame_id = self.map_item_id_to_frame_id[i]
+            if self.sequences_names[seq_id] == sequence_name and self.frames_names[seq_id][frame_id] == frame_name:
+                return i
+        return -1
+    """
+
+    """
+    sequences = [self.get_sequence_by_rfpath(sequence_meta_rfpath=rfpath) for rfpath in sequences_meta_rfpaths]
+    if require_pcl:
+        # quality score lies in range [-2.35x, 1.04x]
+        sequences = list(filter(lambda sequence: sequence.meta.rfpath_pcl != Path('None'), sequences))
+        if require_pcl_score is not None:
+            sequences = list(
+                filter(lambda sequence: sequence.meta.pcl_quality_score > require_pcl_score, sequences))
+        if sort_pcl_score:
+            sequences = sorted(sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
+
+
+    sequences_meta_rfpaths = [seq.meta.rfpath for seq in sequences]
+    return sequences_meta_rfpaths
+    """
+
+    """
+    def get_sequences_names_meta(self):
+        sequences_names = []
+        for category in self.categories:
+            sequences_fpaths_partial = list(CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=self.path_meta, category=category).iterdir())
+            sequences_names_partial = [fpath.stem for fpath in sequences_fpaths_partial]
+            sequences_names += sequences_names_partial
+        return sequences_names
+
+
+    def get_subset_by_sequences(self, map_category_sequences_names: DictConfig, frames_count_max_per_sequence=None):
+        sequences_meta_rfpaths = CO3D_SequenceMeta.get_rfpaths_sequences_meta(categories=self.categories, map_category_sequences_names=map_category_sequences_names)
+        frames_meta_rfpaths = CO3D_FrameMeta.get_rfpaths_frames_meta(path_meta=self.path_meta, )
+        if frames_count_max_per_sequence is None:
+            sequences_meta_rfpaths = list(filter(lambda rfpath:  CO3D_SequenceMeta.meta_rfpath_to_name(rfpath) in map_category_sequences_names[CO3D_SequenceMeta.meta_rfpath_to_category(rfpath)] ))
+            self.frames_meta_rfpaths =
+            frames_count_max_per_sequence = self.frames_count_max_per_sequence
+        return CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+                 categories=self.categories,
+                 frames_meta_rfpaths=self.frames_meta_rfpaths,
+                 map_category_sequences_names=s
+                 cam_tform_obj_source=self.cam_tform_obj_source,
+                 cuboid_source=self.cuboid_source,
+                 transform=self.transform, index_shift=self.index_shift)
+    """
+
+    """
     def get_frame_meta_by_rfpath(self, frame_meta_rfpath):
         return CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_meta, rfpath=frame_meta_rfpath)
 
@@ -359,10 +522,14 @@ class CO3D(OD3D_Dataset):
         return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                           meta=frame_meta, modalities=self.modalities, categories=self.categories,
                           cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source)
+    """
 
-    def get_sequence_meta_by_rfpath(self, sequence_meta_rfpath):
-        return CO3D_SequenceMeta.load_from_meta_with_rfpath(path_meta=self.path_meta, rfpath=sequence_meta_rfpath)
 
+    #def get_sequence_meta_by_rfpath(self, sequence_meta_rfpath):
+    #    return CO3D_SequenceMeta.load_from_meta_with_rfpath(path_meta=self.path_meta, rfpath=sequence_meta_rfpath)
+
+
+    """
     def get_sequence_by_rfpath(self, sequence_meta_rfpath):
         sequence_meta = self.get_sequence_meta_by_rfpath(sequence_meta_rfpath)
         return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
@@ -372,12 +539,8 @@ class CO3D(OD3D_Dataset):
     def get_sequence_by_name(self, sequence_name):
         rfpath = self.map_sequence_name_to_sequence_rfpath[sequence_name]
         return self.get_sequence_by_rfpath(sequence_meta_rfpath=rfpath)
+    """
 
-    def get_item(self, item):
-        return self.get_frame_by_rfpath(frame_meta_rfpath=self.frames_meta_rfpaths[item])
-
-    def visualize(self, item: int):
-        pass
 
 
     """

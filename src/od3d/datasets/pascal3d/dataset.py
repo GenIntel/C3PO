@@ -206,11 +206,15 @@ class Pascal3D(OD3D_Dataset):
     def __len__(self):
         return len(self.frames_meta_rfpaths)
 
-    def get_frame_meta_by_rfpath(self, frame_meta_rfpath):
-        return Pascal3DFrameMeta.load_from_meta_with_rfpath(path_meta=self.path_meta, rfpath=frame_meta_rfpath)
-
     def get_frame_by_rfpath(self, frame_meta_rfpath):
-        frame_meta = self.get_frame_meta_by_rfpath(frame_meta_rfpath)
+        frame_meta = Pascal3DFrameMeta.load_from_meta_with_rfpath(path_meta=self.path_meta, rfpath=frame_meta_rfpath)
+        return self.get_frame_by_meta(frame_meta=frame_meta)
+
+    def get_frame_by_name_unique(self, name_unique: str):
+        frame_meta = Pascal3DFrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=name_unique)
+        return self.get_frame_by_meta(frame_meta=frame_meta)
+
+    def get_frame_by_meta(self, frame_meta: Pascal3DFrameMeta):
         return Pascal3DFrame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                              path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
                              categories=self.categories)

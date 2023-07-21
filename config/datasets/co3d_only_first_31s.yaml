@@ -9,7 +9,15 @@ frames_count_max_per_sequence: 1
 sequences_require_pcl: True
 sequences_require_pcl_score: -10. # 0.5
 sequences_sort_pcl_score: True
-sequences_count_max_per_class:
+sequences_count_max_per_category:
+
+map_bla:
+  185_19982_37678:
+    - a
+    - b
+    - c
+    -
+  185_19982_37672:
 
 sequences:
   - '185_19982_37678'

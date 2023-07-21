@@ -59,6 +59,14 @@ class OD3D_FrameMeta:
     def get_rfpath_frames():
         return Path("frames")
 
+    @property
+    def name_unique(self):
+        raise NotImplementedError
+
+    @property
+    def cam_tform4x4_obj(self):
+        return torch.Tensor(self.l_cam_tform4x4_obj)
+
     def get_fpath(self, path_meta):
         raise NotImplementedError
 
@@ -88,10 +96,9 @@ class OD3D_Frame():
         self.category_id = categories.index(self.category)
         self.modalities = modalities
 
-
     @property
     def name_unique(self):
-        return self.meta.name
+        return self.meta.name_unique
 
     @property
     def size(self):
@@ -189,6 +196,7 @@ class OD3D_Frames():
     kpts_names: None
     kpts3d: None
     bbox: None
+    mesh: None
 
     @staticmethod
     def get_frames_from_list(frames: List[OD3D_Frame], modalities: List[OD3D_FRAME_MODALITIES], dtype, device):
@@ -259,10 +267,15 @@ class OD3D_Frames():
         else:
             bbox = None
 
+        if OD3D_FRAME_MODALITIES.MESH in modalities:
+            mesh = Meshes.load_from_files(fpaths_meshes=[frame.fpath_mesh for frame in frames], device=device)
+        else:
+            mesh = None
+
         return OD3D_Frames(modalities=modalities, length=length,name=name, name_unique=name_unique, dtype=dtype, device=device,
                            path_co3d=path_co3d, size=size, cam_intr4x4=cam_intr4x4, cam_tform4x4_obj=cam_tform4x4_obj,
                            category=category, label=label, sequence_name=sequence_name,
-                           rgb=rgb, depth=depth,
+                           rgb=rgb, depth=depth, mesh=mesh,
                            mask=mask, depth_mask=depth_mask, kpts2d_annot=kpts2d_annot,
                            kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox, sequence=sequence)
 
@@ -305,23 +318,42 @@ class OD3D_Frames():
 
 
         # verts, faces = load_ply(filename)
-        img = blend_rgb(self.rgb[0], self.mask[0] * 255)
 
+        if OD3D_FRAME_MODALITIES.MASK in self.modalities:
+            img = blend_rgb(self.rgb[0], self.mask[0] * 255)
+        else:
+            img = self.rgb[0]
         if OD3D_FRAME_MODALITIES.KPTS in self.modalities:
             img = draw_pixels(pxls=self.kpts2d_annot[0][self.kpts2d_annot_vsbl[0]], img=img, colors=[0., 0., 255.])
+            #img = draw_pixels(pxls=self.kpts2d_annot[0], img=img, colors=[0., 0., 255.])
 
             kpts3d_inf_mask = torch.isinf(self.kpts3d[0]).any(dim=-1)
             if kpts3d_inf_mask.sum() > 0:
                 logger.warning(f'There are {kpts3d_inf_mask.sum()} kpts with infinity for label {self.category[0]}')
             kpts3d = self.kpts3d[0][~kpts3d_inf_mask].to(self.device)
             kpts3d = torch.cat([kpts3d, torch.zeros(size=(1, 3,), device=kpts3d.device)])
+
             kpts3d2d = proj3d2d_broadcast(proj4x4=self.cam_proj4x4_obj[0], pts3d=kpts3d)
             img = draw_pixels(pxls=kpts3d2d, img=img, colors=[0., 255., 0.])
 
         if OD3D_FRAME_MODALITIES.BBOX in self.modalities:
             img = draw_bbox(img=img, bbox=self.bbox[0])
 
-        if self.sequence is not None and self.sequence[0].cuboid_labeled:
+        if OD3D_FRAME_MODALITIES.MESH in self.modalities:
+            # from od3d.cv.geometry.fit3d2d import fit_se3_to_corresp_3d_2d_and_masks
+            cam_tform4x4_obj = self.cam_tform4x4_obj[:1]
+            #cam_tform4x4_obj = fit_se3_to_corresp_3d_2d_and_masks(masks_in=self.kpts2d_annot_vsbl[0][None,] * (~torch.isinf(self.kpts3d[0]).any(dim=-1))[None,], #
+            #                                                  pts1=self.kpts3d[0].T, pxl2=self.kpts2d_annot[0].T,
+            #                                                  proj_mat=self.cam_intr4x4[0][:2, :3].to(device='cpu'))
+            #cam_tform4x4_obj = cam_tform4x4_obj.to(device='cuda:0')
+            #self.mesh.verts *= 5. # this is ionly for pascal3d required currently
+            img = blend_rgb(img, (self.mesh.render_feats(
+                cams_tform4x4_obj=cam_tform4x4_obj,
+                cams_intr4x4=self.cam_intr4x4[:1],
+                imgs_sizes=self.size, meshes_ids=torch.LongTensor([0]),
+                modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=self.rgb.dtype, device=img.device))
+
+        elif self.sequence is not None and self.sequence[0].cuboid_labeled:
             # if self.sequence_name
             img = blend_rgb(img, (self.sequence[0].cuboid.render_feats(
                                     cams_tform4x4_obj=self.cam_tform4x4_obj[:1],

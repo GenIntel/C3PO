@@ -108,6 +108,15 @@ class Pascal3DFrameMeta(OD3D_FrameMeta):
             logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
         return Pascal3DFrameMeta(**OmegaConf.load(fpath_meta))
 
+    @staticmethod
+    def load_from_meta_with_name_unique(path_meta: Path, name_unique: str):
+        subset, category, name = name_unique.split('/')
+        rfpath = Pascal3DFrameMeta.get_rfpath_frame_meta_with_subset_category_name(subset=subset, category=category, name=name)
+        return Pascal3DFrameMeta.load_from_meta_with_rfpath(path_meta=path_meta, rfpath=rfpath)
+    @property
+    def name_unique(self):
+        return f'{self.subset}/{self.category}/{self.name}'
+
     def get_fpath(self, path_meta):
         return Pascal3DFrameMeta.get_fpath_frame_meta_with_category_name(path_meta=path_meta, subset=self.subset, category=self.category, name=self.name)
 
@@ -196,6 +205,9 @@ class Pascal3DFrame(OD3D_Frame):
         if self._kpts3d is None:
             self._kpts3d = torch.Tensor(self.meta.l_kpts3d) * PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
         return self._kpts3d
+    @property
+    def fpath_mesh(self):
+        return self.path_meshes.joinpath(self.meta.rfpath_mesh)
     @property
     def mesh(self):
         if self._mesh is None:

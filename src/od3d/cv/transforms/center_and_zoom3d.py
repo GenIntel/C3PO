@@ -10,15 +10,12 @@ from od3d.datasets.dtd import DTD
 
 class CenterZoom3D():
 
-    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None):
+    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, config:DictConfig = None):
         self.center3d = torch.Tensor(center3d) if center3d is not None else None
         self.H = H
         self.W = W
         self.dist = dist
         self.apply_txtr = apply_txtr
-        self.apply_kpts2d_annot = apply_kpts2d_annot
-        self.apply_bbox_annot=apply_bbox_annot
-        self.apply_mask = apply_mask
         if self.apply_txtr:
             self.dtd = DTD(config=config)
 
@@ -79,10 +76,8 @@ class CenterZoom3D():
 
 
 class RandomCenterZoom3D():
-    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, apply_kpts2d_annot=False, apply_bbox_annot=False, apply_mask=True, config:DictConfig = None, dist_min=None, dist_max=None, center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.]):
-        self.centerzoom3d = CenterZoom3D(H=H, W=W, dist=dist, center3d=center3d, apply_txtr=apply_txtr,
-                                    apply_kpts2d_annot=apply_kpts2d_annot, apply_bbox_annot=apply_bbox_annot,
-                                    apply_mask=apply_mask, config=config)
+    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, config:DictConfig = None, dist_min=None, dist_max=None, center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.]):
+        self.centerzoom3d = CenterZoom3D(H=H, W=W, dist=dist, center3d=center3d, apply_txtr=apply_txtr, config=config)
         self.center3d_min = torch.Tensor(center3d_min)
         self.center3d_max = torch.Tensor(center3d_max)
         self.dist_min = dist_min

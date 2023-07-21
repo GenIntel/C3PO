@@ -18,12 +18,14 @@ def bench_single_method_local(config: DictConfig):
         wandb.init(project=config.logger.wandb_project_name, config=OmegaConf.to_container(config, resolve=True), dir=Path(config.logger.local_dir), name=config.run_name)
 
     # 2. setup datasets
+    datasets_val = []
+    for dataset_val_key in config.val_datasets.keys():
+        datasets_val.append(OD3D_Dataset.subclasses[config.val_datasets[dataset_val_key].class_name].create_from_config(config=config.val_datasets[dataset_val_key]))
 
-
-    # dataset_test = OD3D_Dataset.subclasses[config.test_dataset.class_name](config.test_dataset)
     datasets_test = []
     for dataset_test_key in config.test_datasets.keys():
         datasets_test.append(OD3D_Dataset.subclasses[config.test_datasets[dataset_test_key].class_name].create_from_config(config=config.test_datasets[dataset_test_key]))
+
     dataset_train = OD3D_Dataset.subclasses[config.train_dataset.class_name].create_from_config(config=config.train_dataset)
 
     # 3. setup method
@@ -31,7 +33,7 @@ def bench_single_method_local(config: DictConfig):
 
     # 4. train method
     if config.train:
-        method.train(dataset_train, datasets_test)
+        method.train(dataset_train, datasets_val)
 
     # 5. bench method (logs results inside class)
     if config.test:

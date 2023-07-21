@@ -8,7 +8,7 @@ from od3d.benchmark import bench_single_method_local, bench_single_method_local_
 app = typer.Typer()
 import subprocess
 from omegaconf import open_dict
-
+import time
 from datetime import datetime
 def get_timestamp_as_string():
     now = datetime.now()
@@ -73,6 +73,8 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
             bench_single_method_torque(method_cfg)
         elif method_cfg.platform.link == 'slurm':
             bench_single_method_slurm(method_cfg)
+
+        time.sleep(5)
 
 
 

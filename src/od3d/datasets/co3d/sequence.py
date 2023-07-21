@@ -92,19 +92,64 @@ class CO3D_SequenceMeta():
         return path_meta.joinpath(CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=category, name=name))
 
     @staticmethod
-    def get_rfpath_sequence_meta_with_category_and_name(category: str, name: str):
-        return CO3D_SequenceMeta.get_rfpath_sequences().joinpath(category, name + '.yaml')
-
-    @staticmethod
     def get_rfpath_sequences():
         return Path("sequences")
 
     @staticmethod
+    def get_rfpath_sequences_meta_with_category(category: str):
+        return CO3D_SequenceMeta.get_rfpath_sequences().joinpath(category)
+
+    @staticmethod
+    def get_rfpath_sequence_meta_with_category_and_name(category: str, name: str):
+        return CO3D_SequenceMeta.get_rfpath_sequences_meta_with_category(category=category).joinpath(name + '.yaml')
+
+    @staticmethod
     def get_path_sequences_meta(path_meta: Path):
         return path_meta.joinpath(CO3D_SequenceMeta.get_rfpath_sequences())
+
     @staticmethod
     def get_path_sequences_meta_with_category(path_meta: Path, category: str):
-        return CO3D_SequenceMeta.get_path_sequences_meta(path_meta=path_meta).joinpath(category)
+        return path_meta.joinpath(
+            CO3D_SequenceMeta.get_rfpath_sequences_meta_with_category(category=category))
+
+
+    @staticmethod
+    def get_map_category_sequences_names(path_meta, categories):
+        map_category_sequences_names = {}
+        for category in categories:
+            map_category_sequences_names[category] = list(CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=path_meta, category=category).iterdir())
+        return map_category_sequences_names
+
+    """ 
+    # legacy code
+    @staticmethod
+    def get_rfpaths_sequences_meta(categories, path_meta=None, map_category_sequences_names=None):
+        sequences_rfpaths = []
+        #if categories is None:
+        #    if path_meta is None:
+        #        categories = CO3D_CATEGORIES.list()
+        #    else:
+        #        categories = list(CO3D_SequenceMeta.get_path_sequences_meta(path_meta=path_meta).iterdir())
+        for category in categories:
+            if map_category_sequences_names is None or category not in map_category_sequences_names.keys():
+                if path_meta is None:
+                    logger.error(f'cannot load rfpaths_sequences_meta for category `{category}` as neither map_category_sequences_names nor path_meta are provided')
+                    sequences_names = []
+                else:
+                    sequences_names = list(CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=path_meta, category=category).iterdir())
+            else:
+                sequences_names = map_category_sequences_names[category]
+            for sequence_name in sequences_names:
+                sequences_rfpaths.append(CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=category, name=sequence_name))
+        return sequences_rfpaths
+    """
+
+    @staticmethod
+    def meta_rfpath_to_category(rfpath: Path):
+        return rfpath.parent.stem
+    @staticmethod
+    def meta_rfpath_to_name(rfpath: Path):
+        return rfpath.stem
 
     def get_fpath(self, path_meta):
         return CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta,
@@ -143,22 +188,6 @@ class CO3D_Sequence():
         self._front_name = None
         self._cuboid_front_tform4x4_obj = None
         self._cuboid = None
-
-    # the following variables can be configured dynamically
-
-    #@staticmethod
-    #def create_with_config(config, **kwargs):
-    #    co3d_seq = CO3D_Sequence(**kwargs)
-    #    co3d_seq._config = config
-    #    return co3d_seq
-    #@property
-    #def config(self):
-    #    if self._config is None:
-    #        self._config = OmegaConf.create()
-    #        self._config.cam_tform_obj_source = CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value
-    #        self._config.cuboid_source = CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value
-    #    return self._config
-
 
 
     @property
@@ -414,8 +443,8 @@ class CO3D_Sequence():
     def get_frame_by_name(self, frame_name: str):
         frame_meta = CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_meta,
                                                                rfpath=CO3D_FrameMeta.
-                                                               get_rfpath_frame_meta_with_category_sequence_name(
-                                                                   category=self.category, sequence=self.name,
+                                                               get_rfpath_frame_meta_with_category_sequence_and_frame_name(
+                                                                   category=self.category, sequence_name=self.name,
                                                                    name=frame_name))
         frame = CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                            meta=frame_meta, modalities=self.modalities, categories=self.categories,
