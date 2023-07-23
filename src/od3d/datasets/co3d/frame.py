@@ -1,5 +1,6 @@
 from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES
-from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_Frame, OD3D_FrameMeta
+from od3d.datasets.frame import OD3D_FrameMeta, OD3D_Frame
+from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES
 from omegaconf import DictConfig, OmegaConf
 from co3d.dataset.data_types import (
     load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation)
@@ -86,7 +87,7 @@ class CO3D_FrameMeta(OD3D_FrameMeta):
 
     @staticmethod
     def load_from_meta_with_name_unique(path_meta: Path, name_unique: str):
-        category, sequence_name, name = name_unique.split('/')
+
         return CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=path_meta, rfpath=CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=name))
 
     def get_fpath(self, path_meta):
@@ -126,32 +127,58 @@ class CO3D_FrameMeta(OD3D_FrameMeta):
     def get_rfpath_frame_meta_with_category_sequence_and_frame_name(category: str, sequence_name: str, name: str):
         return CO3D_FrameMeta.get_rfpath_frames().joinpath(category, sequence_name, name + '.yaml')
 
-
+    @staticmethod
+    def get_subset_frames_names_uniform(frames_names, count_max_per_sequence=None):
+        if count_max_per_sequence is not None:
+            frames_names = [frames_names[fid] for fid in
+                            np.linspace(0, len(frames_names) - 1, count_max_per_sequence).astype(int).tolist()]
+        return frames_names
     @staticmethod
     def get_frames_names_with_category_sequence_name(path_meta, category, sequence_name, count_max_per_sequence=None):
         frames_fpath = list(
             CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=path_meta, category=category,
                                                                        sequence=sequence_name).iterdir())
         frames_names = [CO3D_FrameMeta.meta_fpath_to_name(fpath) for fpath in frames_fpath]
-        if count_max_per_sequence is not None:
-            frames_names = [frames_names[fid] for fid in
-                            np.linspace(0, len(frames_names) - 1, count_max_per_sequence).astype(int).tolist()]
+
+        frames_names = CO3D_FrameMeta.get_subset_frames_names_uniform(frames_names,
+                                                                      count_max_per_sequence=count_max_per_sequence)
+
         frames_names = sorted(frames_names, key=lambda frame_name: int(frame_name))
         return frames_names
     @staticmethod
-    def get_map_category_map_sequence_name_frames_names(path_meta, categories, map_category_sequences_names,
-                                                        count_max_per_sequence=None):
-        map_category_map_sequence_name_frames_names = {}
-        for category in categories:
-            map_category_map_sequence_name_frames_names[category] = {}
-            for sequence_name in map_category_sequences_names[category]:
-                frames_names = CO3D_FrameMeta.get_frames_names_with_category_sequence_name(path_meta=path_meta,
-                                                                                           category=category,
-                                                                                           sequence_name=sequence_name,
-                                                                                           count_max_per_sequence=
-                                                                                           count_max_per_sequence)
-                map_category_map_sequence_name_frames_names[category][sequence_name] = frames_names
-        return map_category_map_sequence_name_frames_names
+    def get_dict_category_sequence_name_frames_names(path_meta, categories, dict_category_sequences_names,
+                                                     count_max_per_sequence=None, dict_category_sequence_name_frames_names=None):
+        new_dict_category_sequence_name_frames_names = {}
+        for category in dict_category_sequences_names.keys():
+            if dict_category_sequence_name_frames_names is None or (category in dict_category_sequence_name_frames_names.keys()):
+                new_dict_category_sequence_name_frames_names[category] = {}
+                for sequence_name in dict_category_sequences_names[category]:
+                    if dict_category_sequence_name_frames_names is None or \
+                            dict_category_sequence_name_frames_names[category] is None or \
+                            dict_category_sequence_name_frames_names[category][sequence_name] is None:
+                        frames_names = CO3D_FrameMeta.get_frames_names_with_category_sequence_name(path_meta=path_meta,
+                                                                                                   category=category,
+                                                                                                   sequence_name=sequence_name,
+                                                                                                   count_max_per_sequence=
+                                                                                                   count_max_per_sequence)
+                    else:
+                        frames_names = dict_category_sequence_name_frames_names[category][sequence_name]
+                        frames_names = CO3D_FrameMeta.get_subset_frames_names_uniform(frames_names,
+                                                                                      count_max_per_sequence=count_max_per_sequence)
+                    new_dict_category_sequence_name_frames_names[category][sequence_name] = frames_names
+        return new_dict_category_sequence_name_frames_names
+
+    @staticmethod
+    def get_dict_category_sequence_name_frames_names_with_names_unique(names_unique: List[str]):
+        dict_category_sequence_name_frames_names = {}
+        for name_unique in names_unique:
+            category, sequence_name, name = name_unique.split('/')
+            if category not in dict_category_sequence_name_frames_names:
+                dict_category_sequence_name_frames_names[category] = {}
+            if sequence_name not in dict_category_sequence_name_frames_names[category]:
+                dict_category_sequence_name_frames_names[category][sequence_name] = []
+            dict_category_sequence_name_frames_names[category][sequence_name].append(name_unique)
+        return dict_category_sequence_name_frames_names
 
     """
     # legacy code

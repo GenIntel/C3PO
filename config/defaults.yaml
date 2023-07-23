@@ -1,4 +1,5 @@
 defaults:
+    - logger: wandb
     - platform: local
     - platform@platform_local: local
 

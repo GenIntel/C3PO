@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 import torch.nn
-from typing import List
+from typing import List, Tuple
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES
 from omegaconf import DictConfig
@@ -14,7 +14,7 @@ from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.io import save_ply
 from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta, Pascal3DFrames
 from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS, PASCAL3D_SCALE_NORMALIZE_TO_REAL
-from omegaconf import OmegaConf
+from typing import Dict
 import inspect
 
 
@@ -45,33 +45,74 @@ class Pascal3D(OD3D_Dataset):
         path_raw: Path,
         path_preprocess: Path,
         path_cuboids: Path,
-        subsets: List[PASCAL3D_SUBSETS] = None,
         categories: List[PASCAL3D_CATEGORIES] = None,
+        dict_subset_category_frames_names: Dict[str, Dict[str, List[str]]] = None,
         transform=None,
         subset_fraction=1.
     ):
         super().__init__(name=name, modalities=modalities, path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction)
 
         self.path_cuboids = Path(path_cuboids)
-        self.subsets = subsets if subsets is not None else PASCAL3D_SUBSETS.list()
         self.categories = categories if categories is not None else PASCAL3D_CATEGORIES.list()
 
-        self.frames_meta_rfpaths = self.get_rfpaths_frames_meta()
-        self.frames_names = [rfpath.stem for rfpath in self.frames_meta_rfpaths]
-        self.frames_count = len(self.frames_meta_rfpaths)
+        # get frames
+        self.dict_subset_category_frames_names = Pascal3DFrameMeta.get_dict_subset_category_frames_names(
+            categories=self.categories, path_meta=self.path_meta,
+            dict_subset_category_frames_names=dict_subset_category_frames_names)
 
-        self.map_frame_name_to_frame_rfpath = dict(zip(self.frames_names, self.frames_meta_rfpaths))
+        self.list_subsets_categories_frames_names = self.dict_subset_category_frames_names_to_list(self.dict_subset_category_frames_names)
+
+        self.frames_count = len(self.list_subsets_categories_frames_names)
+        #self.frames_meta_rfpaths = self.get_rfpaths_frames_meta()
+        #self.frames_names = [rfpath.stem for rfpath in self.frames_meta_rfpaths]
+        #self.frames_count = len(self.frames_meta_rfpaths)
+        #
+        #self.map_frame_name_to_frame_rfpath = dict(zip(self.frames_names, self.frames_meta_rfpaths))
 
         if self.subset_fraction is not None and self.subset_fraction != 1.:
-            frames_ids_subset = torch.multinomial(torch.ones(size=(self.frames_count,)),
-                                                  num_samples=int(self.subset_fraction * self.frames_count),
-                                                  replacement=False)
-            self.frames_meta_rfpaths = [self.frames_meta_rfpaths[id] for id in frames_ids_subset]
-            self.frames_names = [self.frames_names[id] for id in frames_ids_subset]
-            self.map_frame_name_to_frame_rfpath = dict(zip(self.frames_names, self.frames_meta_rfpaths))
-            self.frames_count = len(self.frames_meta_rfpaths)
-
+            frames_ids_subset = self.get_subset_item_ids(subset_fraction=subset_fraction)
+            self.list_subsets_categories_frames_names = [self.list_subsets_categories_frames_names[id] for id in frames_ids_subset]
+            self.dict_subset_category_frames_names = self.list_subsets_categories_frames_names_to_dict(self.list_subsets_categories_frames_names)
+            #self.frames_meta_rfpaths = [self.frames_meta_rfpaths[id] for id in frames_ids_subset]
+            #self.frames_names = [self.frames_names[id] for id in frames_ids_subset]
+            #self.map_frame_name_to_frame_rfpath = dict(zip(self.frames_names, self.frames_meta_rfpaths))
+            #self.frames_count = len(self.frames_meta_rfpaths)
+            self.frames_count = len(self.list_subsets_categories_frames_names)
         logger.info(f"found {self.frames_count} frames.")
+
+    def dict_subset_category_frames_names_to_list(self, dict_subset_category_frames_names):
+        list_subsets_categories_frames_names: List[Tuple[str, str, str]] = []
+        for subset, dict_category_frames_names in dict_subset_category_frames_names.items():
+            for category, frames_names in dict_category_frames_names.items():
+                for frame_name in frames_names:
+                    list_subsets_categories_frames_names.append((subset, category, frame_name))
+        return list_subsets_categories_frames_names
+
+    def list_subsets_categories_frames_names_to_dict(self, list_subsets_categories_frames_names):
+        dict_subset_category_frames_names = {}
+        for subset, category, frame_name in list_subsets_categories_frames_names:
+            if subset not in dict_subset_category_frames_names.keys():
+                dict_subset_category_frames_names[subset] = {}
+            if category not in dict_subset_category_frames_names[subset].keys():
+                dict_subset_category_frames_names[subset][category] = []
+            dict_subset_category_frames_names[subset][category].append(frame_name)
+        return dict_subset_category_frames_names
+
+    def get_subset_with_names_unique(self, names_unique: List[str]):
+        dict_subset_category_frames_names = Pascal3DFrameMeta.get_dict_subset_category_frames_names_with_names_unique(names_unique=names_unique)
+        return self.get_subset_with_dict_subset_category_frames_names(dict_subset_category_frames_names=dict_subset_category_frames_names)
+
+    def get_subset_with_dict_subset_category_frames_names(self, dict_subset_category_frames_names:  Dict[str, Dict[str, List[str]]]):
+        return Pascal3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                        path_preprocess=self.path_preprocess, path_cuboids=self.path_cuboids,
+                        categories=self.categories,
+                        dict_subset_category_frames_names=dict_subset_category_frames_names,
+                        transform=self.transform)
+    def get_subset_with_item_ids(self, item_ids):
+        list_subsets_categories_frames_names = [self.list_subsets_categories_frames_names[id] for id in item_ids]
+        dict_subset_category_frames_names = self.list_subsets_categories_frames_names_to_dict(list_subsets_categories_frames_names)
+
+        return self.get_subset_with_dict_subset_category_frames_names(dict_subset_category_frames_names=dict_subset_category_frames_names)
 
     ##### SETUP
     @staticmethod
@@ -107,7 +148,7 @@ class Pascal3D(OD3D_Dataset):
             if path_meta.exists():
                 shutil.rmtree(path_meta)
 
-        frames_subsets, frames_categories, frames_names = Pascal3D.get_frames_names_from_subsets_and_cateogories_from_raw(path_pascal3d_raw=path_raw, subsets=subsets, categories=categories)
+        frames_subsets, frames_categories, frames_names = Pascal3DFrameMeta.get_frames_names_from_subsets_and_cateogories_from_raw(path_pascal3d_raw=path_raw, subsets=subsets, categories=categories)
 
         if config.get('frames', None) is not None:
             frames_names = list(filter(lambda f: f in config.frames, frames_names))
@@ -123,38 +164,9 @@ class Pascal3D(OD3D_Dataset):
                     frame_meta.save(path_meta=path_meta)
 
     @staticmethod
-    def get_frames_names_from_subset_and_category_from_raw(path_pascal3d_raw, subset, category):
-        fpath_frame_names_partial = path_pascal3d_raw.joinpath("Image_sets", f"{category}_imagenet_{subset}.txt")
-        with fpath_frame_names_partial.open() as f:
-            frame_names_partial = f.read().splitlines()
-        return frame_names_partial
-
-    @staticmethod
-    def get_frames_names_from_subsets_and_cateogories_from_raw(path_pascal3d_raw, subsets, categories):
-        frames_names = []
-        frames_categories = []
-        frames_subsets = []
-        for subset in subsets:
-            for category in categories:
-                frame_names_partial = Pascal3D.get_frames_names_from_subset_and_category_from_raw(path_pascal3d_raw=path_pascal3d_raw, subset=subset, category=category)
-                frames_names += frame_names_partial
-                frames_categories += [category] * len(frame_names_partial)
-                frames_subsets += [subset] * len(frame_names_partial)
-
-        return frames_subsets, frames_categories, frames_names
-
-    @staticmethod
     def get_path_meshes(path_raw: Path):
         return path_raw.joinpath("CAD")
 
-    def get_rfpaths_frames_meta(self):
-        frames_rfpaths = []
-        for subset in self.subsets:
-            for category in self.categories:
-                frames_fpaths_partial = list(Pascal3DFrameMeta.get_path_frames_meta_with_subset_category(path_meta=self.path_meta, subset=subset, category=category).iterdir())
-                frames_rfpaths_partial = [Pascal3DFrameMeta.get_rfpath_frame_meta_with_subset_category_name(subset=subset, category=category, name=fpath.stem) for fpath in frames_fpaths_partial]
-                frames_rfpaths += frames_rfpaths_partial
-        return frames_rfpaths
 
 
     ##### PREPROCESS
@@ -204,10 +216,10 @@ class Pascal3D(OD3D_Dataset):
 
     ##### DATASET PROPERTIES
     def __len__(self):
-        return len(self.frames_meta_rfpaths)
-
-    def get_frame_by_rfpath(self, frame_meta_rfpath):
-        frame_meta = Pascal3DFrameMeta.load_from_meta_with_rfpath(path_meta=self.path_meta, rfpath=frame_meta_rfpath)
+        return self.frames_count
+    def get_frame_by_subset_category_name(self, subset: str, category: str, name: str):
+        frame_meta = Pascal3DFrameMeta.load_from_meta_with_subset_category_name(path_meta=self.path_meta, subset=subset,
+                                                                                category=category, name=name)
         return self.get_frame_by_meta(frame_meta=frame_meta)
 
     def get_frame_by_name_unique(self, name_unique: str):
@@ -219,12 +231,9 @@ class Pascal3D(OD3D_Dataset):
                              path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
                              categories=self.categories)
 
-    def get_frame_by_name(self, frame_name):
-        return self.get_frame_by_rfpath(self.map_frame_name_to_frame_rfpath[frame_name])
-
     def get_item(self, item):
-        return self.get_frame_by_rfpath(frame_meta_rfpath=self.frames_meta_rfpaths[item])
-
+        subset, category, frame_name = self.list_subsets_categories_frames_names[item]
+        return self.get_frame_by_subset_category_name(subset=subset, category=category, name=frame_name)
 
     @property
     def path_meshes(self):
@@ -232,5 +241,14 @@ class Pascal3D(OD3D_Dataset):
 
 
 
-
+    """
+    def get_rfpaths_frames_meta(self):
+        frames_rfpaths = []
+        for subset in self.subsets:
+            for category in self.categories:
+                frames_fpaths_partial = list(Pascal3DFrameMeta.get_path_frames_meta_with_subset_category(path_meta=self.path_meta, subset=subset, category=category).iterdir())
+                frames_rfpaths_partial = [Pascal3DFrameMeta.get_rfpath_frame_meta_with_subset_category_name(subset=subset, category=category, name=fpath.stem) for fpath in frames_fpaths_partial]
+                frames_rfpaths += frames_rfpaths_partial
+        return frames_rfpaths
+    """
 

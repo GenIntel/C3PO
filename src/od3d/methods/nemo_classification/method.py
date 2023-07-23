@@ -1,5 +1,5 @@
 from typing import List
-from od3d.methods.method import OD3DMethod
+from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
 import logging
@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class NeMo_Classification(OD3DMethod):
+class NeMo_Classification(OD3D_Method):
     def __init__(
             self,
             config: DictConfig,

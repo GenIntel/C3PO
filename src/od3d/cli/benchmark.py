@@ -4,7 +4,7 @@ from omegaconf import OmegaConf
 from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
-from od3d.benchmark import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
+from od3d.benchmark.run import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
 app = typer.Typer()
 import subprocess
 from omegaconf import open_dict
@@ -14,6 +14,44 @@ def get_timestamp_as_string():
     now = datetime.now()
     timestamp = now.strftime("%m-%d_%H-%M-%S")
     return timestamp
+
+from tabulate import tabulate
+@app.command()
+def table():
+    logging.basicConfig(level=logging.INFO)
+    import wandb
+    config = od3d.io.load_hierarchical_config()
+
+    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+
+    # Initialize wandb
+     # wandb.init(project=config.logger.wandb_project_name)
+
+    # Access the API
+    api = wandb.Api()
+
+
+    # config.logger.wandb_project_name
+    # Fetch all the runs in your project
+    runs = api.runs(config.logger.wandb_project_name)
+
+
+    runs = list(filter(lambda run: all([metric in list(run.summary.keys()) for metric in metrics]), runs))
+
+
+    rows = []
+    for run in runs:
+        logger.info(f'runs {run.name}')
+        run_summary = run.summary
+        row = [run.name]
+        for metric in metrics:
+            row.append(run_summary[metric])
+
+        rows.append(row)
+    logger.info(rows)
+    cols = ['name'] + metrics
+    logger.info(tabulate(rows, headers=cols))
+
 
 @app.command()
 def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),

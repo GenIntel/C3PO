@@ -23,6 +23,7 @@ class MESH_RENDER_MODALITIES(str, Enum):
     MASK_VERTS_VSBL = 'mask_verts_vsbl'
     VERTS_NCDS = 'verts_ncds'
 
+
 class Mesh:
     def __init__(self, verts, faces, rgb=None, feats=None):
         self.verts = verts
@@ -31,10 +32,10 @@ class Mesh:
         self.feats = feats
 
     @staticmethod
-    def load_from_file(fpath: Path, device='cpu'):
+    def load_from_file(fpath: Path, device='cpu', scale=1.):
         io = IO()
         mesh = io.load_mesh(fpath, device=device)
-        verts = mesh[0].verts_list()[0]
+        verts = mesh[0].verts_list()[0] * scale
         faces = mesh[0].faces_list()[0]
         return Mesh(verts=verts, faces=faces)
 
@@ -45,6 +46,8 @@ class Mesh:
 
     def verts_count(self):
         return self.verts.shape[0]
+
+
 class Meshes(torch.nn.Module):
     def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None, feats: List[torch.Tensor]=None):
         super().__init__()
@@ -89,9 +92,12 @@ class Meshes(torch.nn.Module):
         meshes = []
         for fpath_mesh in fpaths_meshes:
             meshes.append(Mesh.load_from_file(fpath=fpath_mesh, device=device))
+        return Meshes.load_from_meshes(meshes=meshes)
 
-        verts = [mesh.verts for mesh in meshes]
-        faces = [mesh.faces for mesh in meshes]
+    @staticmethod
+    def load_from_meshes(meshes: List[Mesh], device='cpu'):
+        verts = [mesh.verts.to(device=device) for mesh in meshes]
+        faces = [mesh.faces.to(device=device) for mesh in meshes]
 
         return Meshes(verts=verts, faces=faces)
 

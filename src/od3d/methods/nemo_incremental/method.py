@@ -1,6 +1,6 @@
 import time
 from typing import List
-from od3d.methods.method import OD3DMethod
+from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
 import pytorch3d.transforms
@@ -19,25 +19,9 @@ from od3d.cv.visual.show import imgs_to_img
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
 from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4_broadcast, tform4x4, rot3x3
-from od3d.cv.visual.show import show_imgs, show_img
-import torchvision
-from od3d.cv.visual.blend import blend_rgb
-from od3d.cv.geometry.transform import transf4x4_from_pos_and_theta
-from sklearn.metrics import confusion_matrix
-from od3d.cv.differentiation.gradient import calc_batch_gradients
-from od3d.cv.visual.sample import sample_pxl2d_pts
-from tqdm import tqdm
-from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
-from od3d.cv.io import image_as_wandb_image
-from od3d.cv.visual.resize import resize
-from od3d.methods.nemo_incremental.backbone import OD3D_Backbone
-from functools import partial
-
-from od3d.cv.geometry.grid import get_pxl2d_like
-from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks #  fit_se3_to_corresp_3d_2d_and_masks
 from od3d.cv.geometry.transform import inv_tform4x4
-from od3d.methods.nemo_incremental.nemo import NeMo
+from od3d.methods.nemo import NeMo
 
 
 class NeMo_Incremental(NeMo):
@@ -47,6 +31,25 @@ class NeMo_Incremental(NeMo):
         logging_dir,
     ):
         super().__init__(config=config, logging_dir=logging_dir)
+
+    def train(self):
+        if self.config.train.incremental.enabled:
+            self.seq_obj_tform4x4_est_obj = {}
+            self.seq_obj_tform4x4_est_obj_sim = {}
+            self.seq_obj_tform4x4_est_obj_transl_consist = {}
+            self.seq_obj_tform4x4_est_obj_rot_consist = {}
+            self.seq_filtered = []
+            self.seq_labeled = dataset.sequences_names[:self.config.train.sequences_tform4x4_labeled_count]
+
+        if self.config.train.test and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
+            pass
+
+    def train_batch(self, batch):
+        for b in range(len(batch)):
+            if self.config.train.incremental.enabled:
+                if batch.sequence_name[b] in self.seq_filtered:
+                    batch.cam_tform4x4_obj[b] = tform4x4(batch.cam_tform4x4_obj[b],
+                                                         self.seq_obj_tform4x4_est_obj[batch.sequence_name[b]])
 
     def get_dataset_sub(self, dataset):
         if self.config.train.epochs_to_next_forget_est_tforms4x4 > 0 and e % self.config.train.epochs_to_next_forget_est_tforms4x4 == 0:

@@ -1,11 +1,14 @@
+import logging
+logger = logging.getLogger(__name__)
 import abc
 import subprocess
 import sys
+from od3d.benchmark.results import OD3D_Results
 from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
 from typing import List
 
-class OD3DMethod(abc.ABC):
+class OD3D_Method(abc.ABC):
     subclasses = {}
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -21,7 +24,9 @@ class OD3DMethod(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def test(self, datasets_test: List[OD3D_Dataset]):
+    def test(self, datasets_test: List[OD3D_Dataset]) -> OD3D_Results:
         raise NotImplementedError
+
+
     def install(self, package):
         subprocess.check_call([sys.executable, "-m", "pip", "install", package])

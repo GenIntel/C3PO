@@ -3,10 +3,10 @@ class_name: Pascal3D
 
 modalities:
     - 'rgb'
-    #- 'mask'
+    - 'mask'
     - 'kpts'
     #- 'bbox'
-    - 'mesh'
+    #- 'mesh'
 
 url_pascal3d_raw: ftp://cs.stanford.edu/cs/cvgl/PASCAL3D+_release1.1.zip
 rpath_pascal3d_raw: PASCAL3D+_release1.1

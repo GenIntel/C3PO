@@ -1,4 +1,4 @@
-from od3d.methods.method import OD3DMethod
+from od3d.methods.method import OD3D_Method
 from omegaconf import DictConfig
 import torchvision
 from od3d.methods.method import OD3D_Dataset

@@ -1,6 +1,6 @@
 defaults:
   - logger: wandb
-  - methods@method.nemo: nemo_incremental
+  - methods@method.nemo: nemo
   - methods/nemo_incremental@method.nemo: co3d
   - datasets@train_dataset: co3d_55s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
   - datasets@val_datasets.pascal3d: pascal3d_train

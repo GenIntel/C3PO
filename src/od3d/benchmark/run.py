@@ -1,46 +1,10 @@
 import subprocess
-
 from omegaconf import DictConfig, OmegaConf
-import wandb
-from od3d.datasets.dataset import OD3D_Dataset
-from od3d.methods.method import OD3DMethod
-from pathlib import Path
-import datetime
+from od3d.benchmark.benchmark import OD3D_Benchmark
 
 def bench_single_method_local(config: DictConfig):
-
-    # 1. setup logger
-
-    logging_dir = Path(config.logger.local_dir).joinpath(config.run_name)
-    logging_dir.mkdir(parents=True)
-    if config.logger.use_wandb:
-        wandb.login()
-        wandb.init(project=config.logger.wandb_project_name, config=OmegaConf.to_container(config, resolve=True), dir=Path(config.logger.local_dir), name=config.run_name)
-
-    # 2. setup datasets
-    datasets_val = []
-    for dataset_val_key in config.val_datasets.keys():
-        datasets_val.append(OD3D_Dataset.subclasses[config.val_datasets[dataset_val_key].class_name].create_from_config(config=config.val_datasets[dataset_val_key]))
-
-    datasets_test = []
-    for dataset_test_key in config.test_datasets.keys():
-        datasets_test.append(OD3D_Dataset.subclasses[config.test_datasets[dataset_test_key].class_name].create_from_config(config=config.test_datasets[dataset_test_key]))
-
-    dataset_train = OD3D_Dataset.subclasses[config.train_dataset.class_name].create_from_config(config=config.train_dataset)
-
-    # 3. setup method
-    method = OD3DMethod.subclasses[config.method.class_name](config.method, logging_dir=logging_dir)
-
-    # 4. train method
-    if config.train:
-        method.train(dataset_train, datasets_val)
-
-    # 5. bench method (logs results inside class)
-    if config.test:
-        for dataset_test in datasets_test:
-            results_test = method.test(dataset_test)
-            wandb.log({f'test_{dataset_test.name}_{k}': v for k, v in results_test.items()})
-
+    benchmark = OD3D_Benchmark(config=config)
+    benchmark.run()
 
 def bench_single_method_local_separate_venv(cfg: DictConfig):
     # 1. save config
