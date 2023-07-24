@@ -69,7 +69,7 @@ class NeMo(OD3D_Method):
 
         self.transform_train = torchvision.transforms.Compose([
             RandomCenterZoom3D(**config.train.transform),
-            RGB_Random() if config.tran.transform.color_random else None,
+            RGB_Random() if config.train.transform.color_random else None,
             self.net.transform,
         ])
         self.transform_test = torchvision.transforms.Compose([
