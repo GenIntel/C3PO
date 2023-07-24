@@ -45,6 +45,7 @@ from od3d.cv.transforms import RandomCenterZoom3D, RGB_Random, CenterZoom3D
 from od3d.data.ext_enum import ExtEnum
 class VISUAL_MODALITIES(str, ExtEnum):
     VERTS_NCDS_IN_RGB = 'verts_ncds_in_rgb'
+    GT_VERTS_NCDS_IN_RGB = 'gt_verts_ncds_in_rgb'
     NET_FEATS_NEAREST_VERTS = 'net_feats_nearest_verts'
     SIM_PXL = 'sim_pxl'
     SAMPLES = 'samples'
@@ -68,7 +69,7 @@ class NeMo(OD3D_Method):
 
         self.transform_train = torchvision.transforms.Compose([
             RandomCenterZoom3D(**config.train.transform),
-            RGB_Random(),
+            RGB_Random() if config.tran.transform.color_random else None,
             self.net.transform,
         ])
         self.transform_test = torchvision.transforms.Compose([
@@ -170,40 +171,34 @@ class NeMo(OD3D_Method):
         self.meshes.set_feats_cat(checkpoint['meshes_feats'])
         self.clutter_feats = checkpoint['clutter_feats']
 
+    @property
+    def path_checkpoint(self):
+        return self.logging_dir.joinpath('nemo.ckpt')
+
     def train(self, dataset: OD3D_Dataset, datasets_val: List[OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
 
-        dataset.transform = self.transform_train
-        self.net.train()
-        self.meshes.feats.requires_grad = True
-
         train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1.-self.config.train.val_fraction,
                                                                fraction2=self.config.train.val_fraction)
 
-        dataloader_train = torch.utils.data.DataLoader(dataset=train_dataset_sub,
-                                                       batch_size=self.config.train.dataloader.batch_size,
-                                                       shuffle=True,
-                                                       collate_fn=dataset.collate_fn,
-                                                       num_workers=self.config.train.dataloader.num_workers,
-                                                       pin_memory=self.config.train.dataloader.pin_memory)
-
         for epoch in range(self.config.train.epochs):
-
-            if self.config.train.test and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
+            if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
                 for dataset_val in datasets_val + [val_dataset_sub]:
                     results_val = self.test(dataset_val)
                     results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
                     score_latest = results_val[score_metric_name]
 
-                if (epoch + 1) % self.config.train.epochs_to_next_ckpt == 0 and score_latest > score_ckpt_val:
+                if score_latest > score_ckpt_val:
                     score_ckpt_val = score_latest
-                    self.save_checkpoint(path_checkpoint=self.logging_dir.joinpath('nemo.ckpt'))
+                    self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 
             self.net.train()
             self.meshes.feats.requires_grad = True
-            self.train_epoch(dataloader_train=dataloader_train, epoch=epoch)
+            results_epoch = self.train_epoch(dataset=train_dataset_sub)
+            results_epoch.log_with_prefix('train')
+        self.load_checkpoint(path_checkpoint=self.path_checkpoint)
 
 
     def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None, pose_iterative_refine=True):
@@ -227,7 +222,7 @@ class NeMo(OD3D_Method):
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
 
-            results_batch = self.inference_batch(batch=batch, config=config_inference)
+            results_batch = self.inference_batch(batch=batch)
             results_epoch += results_batch
 
         count_pred_frames = len(results_epoch['item_id'])
@@ -235,34 +230,51 @@ class NeMo(OD3D_Method):
 
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
                                                  rank_metric_name='rot_diff_rad',
-                                                 config_inference=config_inference,
-                                                 count_best=config_inference.visualize.count_best,
-                                                 count_worst=config_inference.visualize.count_worst,
-                                                 count_rand=config_inference.visualize.count_rand,
-                                                 modalities=config_inference.visualize.modalities,
-                                                 live=config_inference.visualize.live)
+                                                 config_visualize=self.config.test.visualize)
         results_epoch = results_epoch.mean()
         results_epoch += results_visual
         return results_epoch
 
 
-    def train_epoch(self, dataloader_train, epoch) -> OD3D_Results:
+    def train_epoch(self, dataset: OD3D_Dataset) -> OD3D_Results:
+        self.net.train()
+        self.meshes.feats.requires_grad = True
+        dataset.transform = self.transform_train
+        dataloader_train = torch.utils.data.DataLoader(dataset=dataset,
+                                                       batch_size=self.config.train.dataloader.batch_size,
+                                                       shuffle=True,
+                                                       collate_fn=dataset.collate_fn,
+                                                       num_workers=self.config.train.dataloader.num_workers,
+                                                       pin_memory=self.config.train.dataloader.pin_memory)
+
         results_epoch = OD3D_Results()
+        accumulate_steps = 0
         for i, batch in enumerate(iter(dataloader_train)):
             results_batch: OD3D_Results = self.train_batch(batch=batch)
+            accumulate_steps += 1
+            if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
+                self.optim.step()
+                self.normalize_feats()
+                self.optim.zero_grad()
+
             results_epoch += results_batch
             results_batch.log_with_prefix('train')
 
         self.scheduler.step()
-
         self.optim.zero_grad()
+
+        results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
+                                                 rank_metric_name='sim',
+                                                 config_visualize=self.config.train.visualize)
+        results_epoch = results_epoch.mean()
+        results_epoch += results_visual
         return results_epoch
 
 
     def train_batch(self, batch) -> OD3D_Results:
         results_batch = OD3D_Results()
 
-        accumulate_steps = 0
+
         batch.to(device=self.device)
 
 
@@ -311,7 +323,12 @@ class NeMo(OD3D_Method):
 
         sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
 
+        sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=mask_vts2d_vsbl.device), mask_vts2d_vsbl.sum(dim=1).cumsum(dim=0)], dim=0)
+        sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
+        results_batch['sim'] = sim_batchwise
+
         sim = sim / self.config.train.T
+
         # subsample_ids = torch.multinomial(sim_weight, num_samples = sim_weight.shape[0], replacement=True)
         # loss = criterion(sim[subsample_ids], batch_vts_ids[subsample_ids])
         lossCLS = self.criterion(sim, batch_vts_ids)
@@ -322,13 +339,8 @@ class NeMo(OD3D_Method):
 
         results_batch['loss'] = loss[None,]
 
-        accumulate_steps += 1
-        if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
-            self.optim.step()
-            self.normalize_feats()
-            self.optim.zero_grad()
-
         results_batch['item_id'] = batch.item_id
+        results_batch['name_unique'] = batch.name_unique
 
         return results_batch
 
@@ -347,7 +359,7 @@ class NeMo(OD3D_Method):
     """
 
 
-    def inference_batch(self, batch, config: DictConfig):
+    def inference_batch(self, batch):
         results = OD3D_Results()
         B = len(batch)
 
@@ -397,7 +409,7 @@ class NeMo(OD3D_Method):
 
             results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,])
 
-            b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=config.sample,
+            b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
                                                                                        cam_intr4x4=batch.cam_intr4x4,
                                                                                        cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                                                        feats2d_net=net_feats2d,
@@ -416,21 +428,21 @@ class NeMo(OD3D_Method):
             cam_tform4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(
                 dim1=-2, dim2=-1).permute(2, 0, 1)
 
-        if config.pose_iterative_refine:
+        if self.config.inference.pose_iterative_refine:
             obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=(B, 6)).to(device=cam_tform4x4_obj.device),
                                                 requires_grad=True)
 
             optim_inference = torch.optim.Adam(
                 params=[obj_tform6_tmp],
-                lr=config.optimizer.lr,
-                betas=(config.optimizer.beta0, config.optimizer.beta1),
+                lr=self.config.inference.optimizer.lr,
+                betas=(self.config.inference.optimizer.beta0, self.config.inference.optimizer.beta1),
             )
 
             time_before_pose_iterative = time.time()
             cam_tform4x4_obj = tform4x4(cam_tform4x4_obj.detach(), se3_exp_map(obj_tform6_tmp))
 
-            for epoch in range(config.optimizer.epochs):
-                if config.sample.method == 'uniform':
+            for epoch in range(self.config.inference.optimizer.epochs):
+                if self.config.inference.sample.method == 'uniform':
                     obj_tform6_tmp.data[:, :3] = 0.
                 cam_tform4x4_obj = tform4x4(cam_tform4x4_obj.detach(), se3_exp_map(obj_tform6_tmp.detach()))
                 obj_tform6_tmp.data[:, :] = 0.
@@ -443,7 +455,7 @@ class NeMo(OD3D_Method):
                                                                   broadcast_batch_and_cams=False)
                 mesh_cam_loss = -sim
 
-                if config.visualize.live:
+                if self.config.inference.live:
                     show_img(
                         blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_tform4x4_obj[0:0 + 1],
                                                                           cams_intr4x4=batch.cam_intr4x4[0:0 + 1],
@@ -484,13 +496,14 @@ class NeMo(OD3D_Method):
 
         return results
 
-
-
-
-    def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_inference: DictConfig, rank_metric_name='rot_diff_rad',
-                           count_best: int=0, count_worst: int=0, count_rand: int=0,
-                           modalities: List[VISUAL_MODALITIES]=[], live=False):
+    def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_visualize: DictConfig, rank_metric_name='rot_diff_rad'):
         results = OD3D_Results()
+
+        count_best = config_visualize.count_best
+        count_worst = config_visualize.count_worst
+        count_rand = config_visualize.count_rand
+        modalities = config_visualize.modalities
+        live = config_visualize.live
 
         if len(modalities) == 0:
             return results
@@ -522,8 +535,7 @@ class NeMo(OD3D_Method):
                 batch_result_ids = torch.LongTensor([dict_name_unique_to_result_id[batch.name_unique[b]] for b in range(B)]).to(device=self.device)
                 batch_sel_names = [dict_name_unique_to_sel_name[batch.name_unique[b]] for b in range(B)]
 
-                batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
-                batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
+
 
                 feats2d_net = self.net(batch.rgb)
 
@@ -537,7 +549,7 @@ class NeMo(OD3D_Method):
                             show_img(img)
 
                 if VISUAL_MODALITIES.SAMPLES in modalities:
-                    s_cam_tform4x4_obj, s_cam_intr4x4 = self.get_samples(config_sample=config_inference.sample,
+                    s_cam_tform4x4_obj, s_cam_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
                                                                                                cam_intr4x4=batch.cam_intr4x4,
                                                                                                cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                                                                feats2d_net=feats2d_net,
@@ -556,20 +568,20 @@ class NeMo(OD3D_Method):
                     for b in range(len(batch)):
                         imgs = ncds[b]
                         imgs_sim = sim[b][:].expand(*sim[b].shape)  # , *mesh_feats2d_rendered.shape[-2:]
-                        if config_inference.sample.method == 'uniform':
-                            imgs = imgs.reshape(config_inference.sample.uniform.azim.steps, config_inference.sample.uniform.elev.steps, config_inference.sample.uniform.theta.steps,
+                        if self.config.inference.sample.method == 'uniform':
+                            imgs = imgs.reshape(self.config.inference.sample.uniform.azim.steps, self.config.inference.sample.uniform.elev.steps, self.config.inference.sample.uniform.theta.steps,
                                                 *imgs.shape[-3:])[:, :, 0]
-                            imgs_sim = imgs_sim.reshape(config_inference.sample.uniform.azim.steps, config_inference.sample.uniform.elev.steps, config_inference.sample.uniform.theta.steps)[:, :, 0]
+                            imgs_sim = imgs_sim.reshape(self.config.inference.sample.uniform.azim.steps, self.config.inference.sample.uniform.elev.steps, self.config.inference.sample.uniform.theta.steps)[:, :, 0]
                         imgs = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate), imgs)
 
-                        if config_inference.visualize.samples_sorted:
+                        if config_visualize.samples_sorted:
                             imgs_sim = imgs_sim.flatten(0)
                             imgs = imgs.reshape(-1, *imgs.shape[-3:])
                             imgs_sim_ids = imgs_sim.sort(descending=True)[1]
                             imgs = imgs[imgs_sim_ids]
                             imgs_sim = imgs_sim[imgs_sim_ids]
 
-                        if config_inference.visualize.samples_scores:
+                        if config_visualize.samples_scores:
                             samples_score_size = imgs.shape[-1] // 5
                             imgs[..., -samples_score_size:, -samples_score_size:] = (
                                     255 * imgs_sim.reshape(*imgs_sim.shape, 1, 1, 1).expand(*imgs.shape[:-2],
@@ -584,6 +596,8 @@ class NeMo(OD3D_Method):
 
 
                 if VISUAL_MODALITIES.SIM_PXL in modalities:
+                    batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
+                    batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
                     sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                                       cam_intr4x4=batch.cam_intr4x4,
                                                                       cam_tform4x4_obj=batch_pred_cam_tform4x4,
@@ -599,6 +613,8 @@ class NeMo(OD3D_Method):
 
 
                 if VISUAL_MODALITIES.VERTS_NCDS_IN_RGB in modalities:
+                    batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
+                    batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
                     ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=batch_pred_cam_tform4x4, categories_ids=batch_pred_label, size=batch.size, down_sample_rate=self.down_sample_rate)
                     for b in range(len(batch)):
                         img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate),
@@ -607,6 +623,19 @@ class NeMo(OD3D_Method):
                         if live:
                             show_img(img)
 
+                if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities:
+                    ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4,
+                                                  cam_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                  categories_ids=batch.label, size=batch.size,
+                                                  down_sample_rate=self.down_sample_rate)
+                    for b in range(len(batch)):
+                        img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate),
+                                        ncds[b])
+                        results[
+                            f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.VERTS_NCDS_IN_RGB}'] = image_as_wandb_image(
+                            img, caption=batch_sel_names[b])
+                        if live:
+                            show_img(img)
         return results
 
 
@@ -732,10 +761,10 @@ class NeMo(OD3D_Method):
             b_cams_multiview_tform4x4_obj = cams_multiview_tform4x4_cuboid[None,].repeat(B, 1, 1, 1)
 
             # assumption 1: distance translation to object is known
-            b_cams_multiview_tform4x4_obj[:, :, 2, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
+            # b_cams_multiview_tform4x4_obj[:, :, 2, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
             # logger.info(f'dist {batch.cam_tform4x4_obj[:, 2, 3]}')
             # assumption 2: translation to object is known
-            # b_cams_multiview_tform4x4_obj[:, :, :3, 3] = batch.cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]
+            b_cams_multiview_tform4x4_obj[:, :, :3, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]
 
             b_cams_multiview_intr4x4 = cam_intr4x4[:, None].repeat(1, C, 1, 1)
 

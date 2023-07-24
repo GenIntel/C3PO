@@ -21,15 +21,20 @@ class OD3D_Benchmark:
         # 1. setup datasets
         datasets_val = []
         for dataset_val_key in self.config.val_datasets.keys():
+            logger.info(f'create val dataset {self.config.val_datasets[dataset_val_key].name}')
             datasets_val.append(
                 OD3D_Dataset.subclasses[self.config.val_datasets[dataset_val_key].class_name].create_from_config(
                     config=self.config.val_datasets[dataset_val_key]))
 
         datasets_test = []
         for dataset_test_key in self.config.test_datasets.keys():
+            logger.info(f'create test dataset {self.config.test_datasets[dataset_test_key].name}')
+
             datasets_test.append(
                 OD3D_Dataset.subclasses[self.config.test_datasets[dataset_test_key].class_name].create_from_config(
                     config=self.config.test_datasets[dataset_test_key]))
+
+        logger.info(f'create train dataset {self.config.train_dataset.name}')
 
         dataset_train = OD3D_Dataset.subclasses[self.config.train_dataset.class_name].create_from_config(
             config=self.config.train_dataset)
@@ -39,10 +44,13 @@ class OD3D_Benchmark:
 
         # 3. train method
         if self.config.train:
+            logger.info('train')
             method.train(dataset_train, datasets_val)
 
         # 4. test method (logs results inside class)
         if self.config.test:
+
+            logger.info('test')
             for dataset_test in datasets_test:
                 results_test = method.test(dataset_test)
                 results_test.log_with_prefix(prefix=f'test/{dataset_test.name}')
