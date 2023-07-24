@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 from torchvision.transforms.transforms import Normalize
 import torchvision
 class RGB_UInt8ToFloat:
