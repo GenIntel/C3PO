@@ -194,8 +194,6 @@ class NeMo(OD3D_Method):
                     score_ckpt_val = score_latest
                     self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 
-            self.net.train()
-            self.meshes.feats.requires_grad = True
             results_epoch = self.train_epoch(dataset=train_dataset_sub)
             results_epoch.log_with_prefix('train')
         self.load_checkpoint(path_checkpoint=self.path_checkpoint)
@@ -251,6 +249,7 @@ class NeMo(OD3D_Method):
         accumulate_steps = 0
         for i, batch in enumerate(iter(dataloader_train)):
             results_batch: OD3D_Results = self.train_batch(batch=batch)
+            results_batch.log_with_prefix('train')
             accumulate_steps += 1
             if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
                 self.optim.step()
@@ -258,7 +257,6 @@ class NeMo(OD3D_Method):
                 self.optim.zero_grad()
 
             results_epoch += results_batch
-            results_batch.log_with_prefix('train')
 
         self.scheduler.step()
         self.optim.zero_grad()

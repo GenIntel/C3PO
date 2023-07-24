@@ -6,6 +6,15 @@ ablation_name: ransac_train_pascal3d
 
 method:
     nemo:
+        train:
+            transform:
+                random_color: True
+                random_center_zoom3d:
+                    W: 800
+                    H: 640
+                    dist: 15. #  None #  None #15.
+                    dist_min:
+                    dist_max:
         inference:
             sample:
                 method: epnp3d2d # epnp3d2d uniform

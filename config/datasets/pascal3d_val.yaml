@@ -1,7 +1,7 @@
 defaults:
   - pascal3d
 
-name: pascal3d_train
+name: pascal3d_val
 
 dict_subset_category_frames_names:
   train:
