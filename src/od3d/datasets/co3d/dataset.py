@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 import shutil
 from tqdm import tqdm
 import torch.utils.data
-import numpy as np
 from od3d.cv.io import load_ply, save_ply
 
 from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CATEGORIES
@@ -89,7 +88,7 @@ class CO3D(OD3D_Dataset):
                                                               require_pcl_score=sequences_require_pcl_score,
                                                               count_max_per_category=sequences_count_max_per_category)
 
-
+        logger.info(f'sequences filtered {dict_category_sequences_names}')
         # get frames
         dict_category_sequence_name_frames_names = \
             CO3D_FrameMeta.get_dict_category_sequence_name_frames_names(categories=self.categories,
@@ -196,6 +195,7 @@ class CO3D(OD3D_Dataset):
                                                                   sequence_name=sequence_name,
                                                                   frame_name=frame_name)
 
+
     def visualize(self, item: int):
         pass
 
@@ -280,20 +280,20 @@ class CO3D(OD3D_Dataset):
     def setup(config: DictConfig):
 
         # logger.info(OmegaConf.to_yaml(config))
-        path_co3d_raw = Path(config.path_co3d_raw)
-        if path_co3d_raw.exists() and config.setup_remove_previous:
+        path_raw = Path(config.path_raw)
+        if path_raw.exists() and config.setup_remove_previous:
             logger.info(f"Removing previous CO3D")
-            shutil.rmtree(path_co3d_raw)
+            shutil.rmtree(path_raw)
 
-        if path_co3d_raw.exists() and not config.setup_override:
-            logger.info(f"Found CO3D dataset at {path_co3d_raw}")
+        if path_raw.exists() and not config.setup_override:
+            logger.info(f"Found CO3D dataset at {path_raw}")
         else:
-            path_co3d_repo = path_co3d_raw.joinpath('co3d')
+            path_co3d_repo = path_raw.joinpath('co3d')
             path_co3d_repo.mkdir(parents=True, exist_ok=True)
             logger.info(f"Cloning CO3D github repository to {path_co3d_repo}")
-            run_cmd(cmd=f'cd {path_co3d_raw} && git clone git@github.com:facebookresearch/co3d.git', live=True, logger=logger)
-            logger.info(f"Downloading CO3D dataset at {path_co3d_raw}")
-            run_cmd(cmd=f'python {path_co3d_repo.joinpath("co3d/download_dataset.py")} --download_folder {path_co3d_raw}', live=True, logger=logger)
+            run_cmd(cmd=f'cd {path_raw} && git clone git@github.com:facebookresearch/co3d.git', live=True, logger=logger)
+            logger.info(f"Downloading CO3D dataset at {path_raw}")
+            run_cmd(cmd=f'python {path_co3d_repo.joinpath("co3d/download_dataset.py")} --download_folder {path_raw}', live=True, logger=logger)
             # --n_download_workers 1 --n_extract_workers 1
 
     @staticmethod
