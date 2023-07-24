@@ -19,8 +19,11 @@ def crop(img, center, H_out, W_out, scale=1., ctx=None):
     pad = [max(-bbox_in[0], 0), max(bbox_in[2] - img_in_shape[1], 0), max(-bbox_in[1], 0),
            max(bbox_in[3] - img_in_shape[0], 0)]
 
-    img = torch.nn.functional.pad(img, pad=pad)
-    img_crop_bbox_in = img[:, bbox_in[1]+pad[2]: bbox_in[3]+pad[2], bbox_in[0]+pad[0]:bbox_in[2]+pad[0]]
+    #img = torch.nn.functional.pad(img, pad=pad)
+
+    img_padded = torch.zeros(size=img.shape[:-2] + torch.Size([img.shape[-2]+pad[2]+pad[3], img.shape[-1]+pad[0]+pad[1]]), dtype=dtype, device=device)
+    img_padded[:, pad[2]:-pad[3], pad[0]:-pad[1]] = img
+    img_crop_bbox_in = img_padded[:, bbox_in[1]+pad[2]: bbox_in[3]+pad[2], bbox_in[0]+pad[0]:bbox_in[2]+pad[0]]
 
     img_out = resize(img_crop_bbox_in, H_out=H_out, W_out=W_out)
 
