@@ -67,11 +67,18 @@ class NeMo(OD3D_Method):
         # init Network
         self.net = OD3D_Backbone.subclasses[config.backbone.class_name](config.backbone)
 
-        self.transform_train = torchvision.transforms.Compose([
-            RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-            RGB_Random() if config.train.transform.random_color else None,
-            self.net.transform,
-        ])
+        if config.train.transform.random_color:
+            self.transform_train = torchvision.transforms.Compose([
+                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
+                RGB_Random(),
+                self.net.transform,
+            ])
+        else:
+            self.transform_train = torchvision.transforms.Compose([
+                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
+                self.net.transform,
+            ])
+
         self.transform_test = torchvision.transforms.Compose([
             CenterZoom3D(**config.test.transform),
             self.net.transform
