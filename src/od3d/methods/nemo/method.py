@@ -154,7 +154,7 @@ class NeMo(OD3D_Method):
             verts_feats.append(checkpoint["memory"][mesh_old_id * verts_count_max: (mesh_old_id + 1) * verts_count_max].clone().detach().cpu())
         self.meshes.set_feats_cat_with_pad(torch.cat(verts_feats, dim=0))
 
-    def save_checkpoint(self, path_checkpoint):
+    def save_checkpoint(self, path_checkpoint: Path):
         torch.save({
             'net_state_dict': self.net.state_dict(),
             'optimizer_state_dict': self.optim.state_dict(),
