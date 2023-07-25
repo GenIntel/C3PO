@@ -34,7 +34,7 @@ def crop(img, center, H_out, W_out, scale=1., ctx=None):
         img_padded[:, pad_in[2]:pad_y_upper, pad_in[0]:pad_x_upper] = img
         img_cropped = img_padded[:, bbox_in[1] + pad_in[2]: bbox_in[3] + pad_in[2], bbox_in[0] + pad_in[0]:bbox_in[2] + pad_in[0]]
         img_out = resize(img_cropped, H_out=H_out, W_out=W_out)
-        logger.info(f'scale < 1. out size: ({img_out.shape[1]}, {img_out.shape[1]})')
+        logger.info(f'scale >= 1. out size: ({img_out.shape[1]}, {img_out.shape[2]})')
 
     # b) first resize then crop (preferred if scale < 1. -> pad on lower-resolution image)
     else:
@@ -50,7 +50,8 @@ def crop(img, center, H_out, W_out, scale=1., ctx=None):
         img_padded[:, pad_in_res[2]:pad_in_res[2]+img_res.shape[1], pad_in_res[0]:pad_in_res[0]+img_res.shape[2]] = img_res
         img_out = img_padded[:, bbox_in_res[1] + pad_in_res[2]: bbox_in_res[3] + pad_in_res[2],
                       bbox_in_res[0] + pad_in_res[0]:bbox_in_res[2] + pad_in_res[0]]
-        logger.info(f'scale < 1. out size: ({img_out.shape[1]}, {img_out.shape[1]})')
+        logger.info(f'scale > 1. out size: ({img_out.shape[1]}, {img_out.shape[2]})')
+        img_out = resize(img_out, H_out=H_out, W_out=W_out)
 
     if ctx is not None:
         bbox_out = torch.LongTensor([math.ceil(pad_in[0] * scale),
