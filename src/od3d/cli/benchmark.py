@@ -190,21 +190,25 @@ def status_torque():
 def stop_torque(job: str = typer.Option(None, '-j', '--job')):
     logging.basicConfig(level=logging.INFO)
 
-    torque_result = subprocess.run(f'ssh torque "qdel {job}"', capture_output=True, shell=True)
-    for line in torque_result.stdout.decode("utf-8").split("\n"):
-        logger.info(line)
+    jobs = job.split(',')
+    for job in jobs:
+        torque_result = subprocess.run(f'ssh torque "qdel {job}"', capture_output=True, shell=True)
+        for line in torque_result.stdout.decode("utf-8").split("\n"):
+            logger.info(line)
 
 @app.command()
 def stop_slurm(job: str = typer.Option(None, '-j', '--job')):
     logging.basicConfig(level=logging.INFO)
 
-    if job.startswith('l'):
-        slurm_jobs_ids = get_slurm_jobs_ids(int(job[1:]))
-        logger.info(f'stop slurm job ids {slurm_jobs_ids}')
-    else:
-        slurm_jobs_ids = [int(job)]
+    jobs = job.split(',')
+    for job in jobs:
+        if job.startswith('l'):
+            slurm_jobs_ids = get_slurm_jobs_ids(int(job[1:]))
+            logger.info(f'stop slurm job ids {slurm_jobs_ids}')
+        else:
+            slurm_jobs_ids = [int(job)]
 
-    for job_id in slurm_jobs_ids:
-        slurm_result = subprocess.run(f'ssh slurm "scancel {str(job_id)}"', capture_output=True, shell=True)
-        for line in slurm_result.stdout.decode("utf-8").split("\n"):
-            logger.info(line)
+        for job_id in slurm_jobs_ids:
+            slurm_result = subprocess.run(f'ssh slurm "scancel {str(job_id)}"', capture_output=True, shell=True)
+            for line in slurm_result.stdout.decode("utf-8").split("\n"):
+                logger.info(line)
