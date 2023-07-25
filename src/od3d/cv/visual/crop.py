@@ -38,6 +38,7 @@ def crop(img, center, H_out, W_out, scale=1., ctx=None):
 
     # b) first resize then crop (preferred if scale < 1. -> pad on lower-resolution image)
     else:
+
         img_res = resize(img, scale_factor=scale)
         bbox_in_res = (bbox_in * scale).to(torch.long)
         bbox_in_res[3] = H_out + bbox_in_res[1]
@@ -45,14 +46,16 @@ def crop(img, center, H_out, W_out, scale=1., ctx=None):
         pad_in_res = (pad_in * scale).to(torch.long)
         img_padded = torch.zeros(
             size=img_res.shape[:-2] + torch.Size(
-                [H_out + pad_in_res[2] + pad_in_res[3], W_out + pad_in_res[0] + pad_in_res[1]]),
+                [max(bbox_in_res[3], img_res.shape[1]) + pad_in_res[2] + 1, max(bbox_in_res[2], img_res.shape[2]) + pad_in_res[0] + 1]),
             dtype=img_res.dtype, device=device)
         img_padded[:, pad_in_res[2]:pad_in_res[2]+img_res.shape[1], pad_in_res[0]:pad_in_res[0]+img_res.shape[2]] = img_res
         img_out = img_padded[:, bbox_in_res[1] + pad_in_res[2]: bbox_in_res[3] + pad_in_res[2],
                       bbox_in_res[0] + pad_in_res[0]:bbox_in_res[2] + pad_in_res[0]]
         #logger.info(f'scale > 1. out size: ({img_out.shape[1]}, {img_out.shape[2]})')
         # TODO: unsolved bug, requires to resize here, despite the previous resizing works fine
-        img_out = resize(img_out, H_out=H_out, W_out=W_out)
+        #except Exception as e:
+        #    logger.info(e)
+        #img_out = resize(img_out, H_out=H_out, W_out=W_out)
 
     if ctx is not None:
         bbox_out = torch.LongTensor([math.ceil(pad_in[0] * scale),
