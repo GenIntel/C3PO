@@ -88,7 +88,7 @@ def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
     subdirs = list([path.name for path in paths_source.iterdir() if path.name not in ['labelstudio']]) # 'meta'
     logger.info(subdirs)
     for subdir in subdirs:
-        od3d.io.run_cmd(cmd=f'rsync -avrzP {source_link}{paths_source.joinpath(subdir)} {target_link}{paths_target.joinpath(subdir).parent}', live=True, logger=logger)
+        od3d.io.run_cmd(cmd=f'rsync -avrzP --delete {source_link}{paths_source.joinpath(subdir)} {target_link}{paths_target.joinpath(subdir).parent}', live=True, logger=logger)
 
 @app.command()
 def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
