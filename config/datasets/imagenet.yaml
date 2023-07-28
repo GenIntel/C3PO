@@ -3,7 +3,7 @@ class_name: ImageNet
 
 modalities:
   - 'rgb'
-  - 'category'
+  #- 'category'
   - 'size'
   - 'bbox'
 
@@ -19,7 +19,7 @@ preprocess_meta_override: False
 credentials:
   kaggle: ${credentials.kaggle}
 
-#dict_nested_frames:
+#dict_nested_frames: # 'train_cls', 'train_loc', 'val', 'test']
 #    test:
 #        car:
 

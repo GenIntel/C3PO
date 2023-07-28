@@ -260,7 +260,6 @@ class OD3D_FrameMeta(OD3D_Meta):
     def get_rfpath_metas(cls):
         return Path("frames")
 
-
 @dataclass
 class OD3D_SequenceMeta(OD3D_Meta):
     @classmethod
