@@ -4,12 +4,18 @@ import math
 import torch
 from od3d.cv.visual.resize import resize
 from od3d.cv.visual.show import show_img
-def crop(img, center, H_out, W_out, scale=1., ctx=None):
+def crop(img, H_out, W_out, center=None, scale=1., ctx=None):
     device = img.device
-    dtype = center.dtype
+    dtype = img.dtype
     img_in_shape = img.shape[1:]
+
+    if center is None:
+        center = [img_in_shape[1] // 2, img_in_shape[0] // 2]
+
     bbox_in_shape_xhalf = 1. * (W_out / scale) / 2.
     bbox_in_shape_yhalf = 1. * (H_out / scale) / 2.
+
+
 
     #  x0", "y0", "x1", "y1"
     bbox_in = torch.LongTensor([math.floor(center[0] - bbox_in_shape_xhalf),
@@ -19,7 +25,6 @@ def crop(img, center, H_out, W_out, scale=1., ctx=None):
     # x-, x+, y-, y+
     pad_in = torch.LongTensor([max(-bbox_in[0], 0), max(bbox_in[2] - img_in_shape[1], 0), max(-bbox_in[1], 0),
               max(bbox_in[3] - img_in_shape[0], 0)]).to(device)
-
 
 
     # two options:
@@ -69,5 +74,5 @@ def crop(img, center, H_out, W_out, scale=1., ctx=None):
     cam_crop_tform_cam = torch.Tensor([[scale, 0., -bbox_in[0] * scale, 0.],
                                        [0., scale, -bbox_in[1] * scale, 0.],
                                        [0., 0., 1., 0.],
-                                       [0., 0., 0., 1.]]).to(device=device, dtype=dtype)
+                                       [0., 0., 0., 1.]]).to(device=device, dtype=torch.float)
     return img_out, cam_crop_tform_cam

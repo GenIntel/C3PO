@@ -1,13 +1,13 @@
 defaults:
   - co3d
 
-name: co3d_55s_train
+name: co3d_3s_train
 
-# frames_count_max_per_sequence: 10
+frames_count_max_per_sequence: 1
 
 subset_fraction: 1.
 
-dict_category_sequence_name_frames_names:
+dict_nested_frames:
   car:
 #    '185_19982_37678':
 #    '206_21799_45886':

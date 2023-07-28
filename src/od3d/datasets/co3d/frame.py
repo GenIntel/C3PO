@@ -21,18 +21,31 @@ import torch.utils.data
 from typing import List
 import numpy as np
 
+from od3d.datasets.frame import OD3D_FrameMeta, \
+    OD3D_FrameMetaSequenceMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
+    OD3D_FrameMetaSizeMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaDepthMixin, OD3D_FrameMetaDepthMaskMixin, \
+    OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4Mixin
+
 @dataclass
-class CO3D_FrameMeta(OD3D_FrameMeta):
-    sequence_name: str
-    frame_number: int
+class CO3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4Mixin,
+                     OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaSequenceMixin, OD3D_FrameMetaDepthMaskMixin,
+                     OD3D_FrameMetaDepthMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaRGBMixin,
+                     OD3D_FrameMetaSizeMixin, OD3D_FrameMeta):
     depth_scale: float
     frame_type: str
+
+    @property
+    def name_unique(self):
+        return f'{self.category}/{self.sequence_name}/{self.name}'
+
+    @staticmethod
+    def get_name_unique_with_category_sequence_and_name(category: str, sequence_name: str, name: str):
+        return f'{category}/{sequence_name}/{name}'
 
     @staticmethod
     def load_from_raw(frame_annotation: FrameAnnotation):
         category = frame_annotation.image.path.split('/')[0]
         sequence_name = frame_annotation.sequence_name
-        frame_number = frame_annotation.frame_number
         frame_type = frame_annotation.meta['frame_type']
         name = f'{frame_annotation.frame_number}'
 
@@ -66,37 +79,54 @@ class CO3D_FrameMeta(OD3D_FrameMeta):
         l_size = size.tolist()
         l_cam_intr4x4 = cam_intr4x4.tolist()
         l_cam_tform4x4_obj = cam_tform4x4_obj.tolist()
-        return CO3D_FrameMeta(category=category, frame_number=frame_number, frame_type=frame_type,
+        return CO3D_FrameMeta(category=category, frame_type=frame_type,
                    name=name, rfpath_mask=rfpath_mask, rfpath_depth=rfpath_depth, rfpath_depth_mask=rfpath_depth_mask,
-                   rfpath_rgb=rfpath_rgb, H=H, W=W, l_size=l_size, l_cam_intr4x4=l_cam_intr4x4,
+                   rfpath_rgb=rfpath_rgb, l_size=l_size, l_cam_intr4x4=l_cam_intr4x4,
                    sequence_name=sequence_name,
                    l_cam_tform4x4_obj=l_cam_tform4x4_obj, depth_scale=depth_scale)
 
-
     @staticmethod
-    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
-        fpath_meta = path_meta.joinpath(rfpath)
-        if not fpath_meta.exists():
-            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
-        return CO3D_FrameMeta(**OmegaConf.load(fpath_meta))
-
+    def get_subset_frames_names_uniform(frames_names, count_max_per_sequence=None):
+        if count_max_per_sequence is not None:
+            frames_names = [frames_names[fid] for fid in
+                            np.linspace(0, len(frames_names) - 1, count_max_per_sequence).astype(int).tolist()]
+        return frames_names
 
     @staticmethod
     def load_from_meta_with_category_sequence_and_frame_name(path_meta: Path, category: str, sequence_name:str, frame_name: str):
-        return CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=path_meta, rfpath=CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=frame_name))
+        return CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=path_meta,
+                                                         rfpath=CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=frame_name))
 
+    @staticmethod
+    def get_rfpath_frame_meta_with_category_sequence_and_frame_name(category: str, sequence_name: str, name: str):
+        return CO3D_FrameMeta.get_rfpath_metas().joinpath(category, sequence_name, name + '.yaml')
+
+    @staticmethod
+    def get_path_frames_meta_with_category_sequence(path_meta: Path, category: str, sequence: str):
+        return path_meta.joinpath(CO3D_FrameMeta.get_rpath_frames_meta_with_category_sequence_name(category=category, sequence=sequence))
+
+    @staticmethod
+    def get_rpath_frames_meta_with_category_sequence_name(category: str, sequence: str):
+        return CO3D_FrameMeta.get_rfpath_metas().joinpath(category, sequence)
+
+    @staticmethod
+    def get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta: Path, category: str, sequence_name: str, name: str):
+        return path_meta.joinpath(CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=name))
+
+    """
+    @staticmethod
+    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
+        return CO3D_FrameMeta(**CO3D_FrameMeta.load_omega_conf_with_rfpath(path_meta=path_meta, rfpath=rfpath))
+
+    
     @staticmethod
     def load_from_meta_with_name_unique(path_meta: Path, name_unique: str):
 
         return CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=path_meta, rfpath=CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=name))
+    """
 
-    def get_fpath(self, path_meta):
-        return CO3D_FrameMeta.get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta=path_meta, category=self.category, sequence_name=self.sequence_name, name=self.name)
 
-    @property
-    def name_unique(self):
-        return f'{self.category}/{self.sequence_name}/{self.name}'
-
+    """"
     @staticmethod
     def meta_rfpath_to_sequence_name(rfpath: Path):
         return rfpath.parent.stem
@@ -111,28 +141,13 @@ class CO3D_FrameMeta(OD3D_FrameMeta):
     def meta_rfpath_to_name(rfpath: Path):
         return rfpath.stem
 
-    @staticmethod
-    def get_rpath_frames_meta_with_category_sequence_name(category: str, sequence: str):
-        return CO3D_FrameMeta.get_rfpath_frames().joinpath(category, sequence)
 
-    @staticmethod
-    def get_path_frames_meta_with_category_sequence(path_meta: Path, category: str, sequence: str):
-        return path_meta.joinpath(CO3D_FrameMeta.get_rpath_frames_meta_with_category_sequence_name(category=category, sequence=sequence))
 
-    @staticmethod
-    def get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta: Path, category: str, sequence_name: str, name: str):
-        return path_meta.joinpath(CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=name))
 
-    @staticmethod
-    def get_rfpath_frame_meta_with_category_sequence_and_frame_name(category: str, sequence_name: str, name: str):
-        return CO3D_FrameMeta.get_rfpath_frames().joinpath(category, sequence_name, name + '.yaml')
 
-    @staticmethod
-    def get_subset_frames_names_uniform(frames_names, count_max_per_sequence=None):
-        if count_max_per_sequence is not None:
-            frames_names = [frames_names[fid] for fid in
-                            np.linspace(0, len(frames_names) - 1, count_max_per_sequence).astype(int).tolist()]
-        return frames_names
+    """
+
+    """
     @staticmethod
     def get_frames_names_with_category_sequence_name(path_meta, category, sequence_name, count_max_per_sequence=None):
         frames_fpath = list(
@@ -179,7 +194,7 @@ class CO3D_FrameMeta(OD3D_FrameMeta):
                 dict_category_sequence_name_frames_names[category][sequence_name] = []
             dict_category_sequence_name_frames_names[category][sequence_name].append(name_unique)
         return dict_category_sequence_name_frames_names
-
+    """
     """
     # legacy code
     @staticmethod
@@ -240,14 +255,14 @@ class CO3D_Frame(OD3D_Frame):
                                                                                     name=self.meta.sequence_name)
             self._sequence = CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                                            path_meta=self.path_meta, meta=sequence_meta, modalities=self.modalities,
-                                           categories=self.categories, cam_tform_obj_source=self.cam_tform_obj_source,
+                                           categories=self.all_categories, cam_tform_obj_source=self.cam_tform_obj_source,
                                            cuboid_source=self.cuboid_source)
         return self._sequence
 
     @property
     def depth(self):
         if self._depth is None:
-            self._depth = read_co3d_depth_image(self.path_raw.joinpath(self.meta.rfpath_depth)) * self.meta.depth_scale
+            self._depth = read_co3d_depth_image(self.fpath_depth) * self.meta.depth_scale
         return self._depth
 
     @property

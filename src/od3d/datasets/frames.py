@@ -21,6 +21,7 @@ class OD3D_Frames():
     cam_intr4x4: torch.Tensor
     cam_tform4x4_obj: torch.Tensor
     category: List[str]
+    categories: List[List[str]]
     label: torch.LongTensor
     dtype: None
     device: None
@@ -49,10 +50,27 @@ class OD3D_Frames():
         item_id = torch.cat([torch.LongTensor([frame.item_id, ]) for frame in frames], dim=0)
         path_co3d = frame0.path_raw
         size = frame0.size # .to(device=device)
-        cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0) # .to(device=device)
-        cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0) #.to(device=device)
-        category = [frame.category for frame in frames]
-        label = torch.LongTensor([frame.category_id for frame in frames]) # .to(device=device)
+
+        if OD3D_FRAME_MODALITIES.CAM_INTR4X4 in modalities:
+            cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0) # .to(device=device)
+        else:
+            cam_intr4x4 = None
+        if OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ in modalities:
+            cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0) #.to(device=device)
+        else:
+            cam_tform4x4_obj = None
+
+        if OD3D_FRAME_MODALITIES.CATEGORIES in modalities:
+            categories = [frame.categories for frame in frames]
+        else:
+            categories = None
+
+        if OD3D_FRAME_MODALITIES.CATEGORY in modalities:
+            category = [frame.category for frame in frames]
+            label = torch.LongTensor([frame.category_id for frame in frames]) # .to(device=device)
+        else:
+            category = None
+            label = None
 
         if OD3D_FRAME_MODALITIES.SEQUENCE_NAME in modalities:
             sequence_name = [frame.sequence.name for frame in frames]
@@ -114,7 +132,7 @@ class OD3D_Frames():
 
         return OD3D_Frames(modalities=modalities, length=length, name=name, name_unique=name_unique, dtype=dtype, device=device, item_id=item_id,
                            path_co3d=path_co3d, size=size, cam_intr4x4=cam_intr4x4, cam_tform4x4_obj=cam_tform4x4_obj,
-                           category=category, label=label, sequence_name=sequence_name,
+                           category=category, categories=categories, label=label, sequence_name=sequence_name,
                            rgb=rgb, depth=depth, mesh=mesh,
                            mask=mask, depth_mask=depth_mask, kpts2d_annot=kpts2d_annot,
                            kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox, sequence=sequence)
@@ -124,6 +142,7 @@ class OD3D_Frames():
         return OD3D_Frames(modalities=self.modalities, length=len(items), name=[self.name[item] for item in items], name_unique=[self.name_unique[item] for item in items], dtype=self.dtype, device=self.device,
                            item_id=self.item_id[items],
                            path_co3d=self.path_co3d, size=self.size, cam_intr4x4=self.cam_intr4x4[items], cam_tform4x4_obj=self.cam_tform4x4_obj[items],
+                           categories=[self.categories[item] for item in items],
                            category=[self.category[item] for item in items], label=self.label[items],
                            sequence_name=[self.sequence_name[item] for item in items] if self.sequence_name is not None else None,
                            rgb=self.rgb[items] if self.rgb is not None else None,

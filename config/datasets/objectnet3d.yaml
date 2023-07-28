@@ -1,0 +1,31 @@
+name: objectnet3d
+class_name: ObjectNet3D
+
+modalities:
+  - 'rgb'
+    # - 'mask'
+  - 'cam_intr4x4'
+  #- 'cam_tform4x4_objs'
+  - 'categories'
+  - 'size'
+    #- 'bboxs'
+    #- 'meshs'
+
+path_raw: ${platform.path_datasets}/ObjectNet3D
+path_preprocess: ${platform.path_datasets}/ObjectNet3D_Preprocess
+
+setup_remove_previous: False
+setup_override: False
+
+preprocess_meta_remove_previous: False
+preprocess_meta_override: False
+
+dict_nested_frames:
+    test:
+#        car:
+
+path_cuboids: '${.path_preprocess}/cuboids'
+
+#categories:
+#    - 'car'
+

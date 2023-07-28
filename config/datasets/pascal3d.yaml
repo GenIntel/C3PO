@@ -3,8 +3,12 @@ class_name: Pascal3D
 
 modalities:
     - 'rgb'
-    - 'mask'
+    - 'category'
+    # - 'mask'
     - 'kpts'
+    - 'cam_intr4x4'
+    - 'cam_tform4x4_obj'
+    - 'size'
     #- 'bbox'
     #- 'mesh'
 

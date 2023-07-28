@@ -5,6 +5,10 @@ name: co3d
 class_name: CO3D
 
 modalities:
+    - 'size'
+    - 'cam_intr4x4'
+    - 'cam_tform4x4_obj'
+    - 'category'
     - 'rgb'
     - 'mask'
     - 'sequence_name'
@@ -29,7 +33,7 @@ setup_override: False
 
 
 preprocess_meta: False
-preprocess_meta_override: False
+preprocess_meta_override: True
 preprocess_meta_remove_previous: False
 
 preprocess: False
@@ -105,7 +109,7 @@ sequences_require_pcl: True
 #    '590_88878_176205':
 #    '590_88877_176199':
 
-path_cuboids: ${.path_preprocess}/cuboids/avg/${.name}
+path_cuboids: ${.path_preprocess}/cuboids/avg/co3d_50s_train # ${.name}
 fpaths_cuboids:
     car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
 

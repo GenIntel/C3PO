@@ -71,6 +71,8 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         # create one config per ablation
         ablation_dir = ablations_root_dir.joinpath(ablation)
         for ablation_file_fpath in ablation_dir.iterdir():
+            if ablation_file_fpath.is_dir():
+                continue
             ablation_fpath_rel = ablation_file_fpath.relative_to(ablations_root_dir).with_suffix('')
             if not ablation_fpath_rel.name.startswith("_"):
                 cfgs.append(od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform, ablation=str(ablation_fpath_rel)))
@@ -90,7 +92,6 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                 methods_cfgs.append(method_cfg)
 
     print(f"{len(methods_cfgs)} configs with single method.")
-
 
 
     for method_cfg in methods_cfgs:
@@ -168,7 +169,6 @@ def rsync(platform_source: str = typer.Option('slurm', '-s', '--source'),
     path_source = Path(config_source.platform.path_exps).joinpath(run)
     path_target = Path(config_target.platform.path_exps).joinpath(run)
     od3d.io.run_cmd(cmd=f'rsync -avrzP {source_link}{path_source} {target_link}{path_target.parent}', live=True, logger=logger)
-
 
 @app.command()
 def status_slurm():

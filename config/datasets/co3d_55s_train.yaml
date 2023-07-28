@@ -7,7 +7,7 @@ name: co3d_55s_train
 
 subset_fraction: 1.
 
-dict_category_sequence_name_frames_names:
+dict_nested_frames:
   car:
 #    '185_19982_37678':
 #    '206_21799_45886':

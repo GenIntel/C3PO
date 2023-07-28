@@ -1,5 +1,6 @@
 from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES
 from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
+from od3d.datasets.frame import OD3D_SequenceMeta
 
 from tqdm import tqdm
 import logging
@@ -12,6 +13,7 @@ import od3d.io
 import subprocess
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_Frame
+
 from omegaconf import DictConfig, OmegaConf
 from co3d.dataset.data_types import (
     load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
@@ -43,13 +45,30 @@ import od3d.io
 import cv2
 
 @dataclass
-class CO3D_SequenceMeta():
-    name: str
+class CO3D_SequenceMeta(OD3D_SequenceMeta):
     category: str
     pcl_pts_count: int
     pcl_quality_score: float
     rfpath_pcl: Path
     viewpoint_quality_score: float
+
+
+    @property
+    def name_unique(self):
+        return f'{self.category}/{self.name}'
+
+    @staticmethod
+    def load_from_meta_with_category_and_name(path_meta: Path, category: str, name: str):
+        name_unique = f'{category}/{name}'
+        return CO3D_SequenceMeta.load_from_meta_with_name_unique(path_meta=path_meta, name_unique=name_unique)
+
+    @staticmethod
+    def get_name_unique_with_category_and_name(category: str, name: str):
+        return f'{category}/{name}'
+
+    @staticmethod
+    def get_fpath_sequence_meta_with_category_and_name(path_meta: Path, category: str, name: str):
+        return path_meta.joinpath(CO3D_SequenceMeta.get_rfpath_metas(), CO3D_SequenceMeta.get_name_unique_with_category_and_name(category=category, name=name))
 
     @staticmethod
     def load_from_raw(sequence_annotation: SequenceAnnotation):
@@ -70,6 +89,7 @@ class CO3D_SequenceMeta():
                                  pcl_pts_count=pcl_pts_count, pcl_quality_score=pcl_quality_score,
                                  viewpoint_quality_score=viewpoint_quality_score)
 
+    """
     @staticmethod
     def load_from_meta_with_category_and_name(path_meta: Path, category: str, name: str):
         fpath_meta = CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta, category=category, name=name)
@@ -87,9 +107,6 @@ class CO3D_SequenceMeta():
     def get_fpath_sequence_meta_with_rfpath(path_meta: Path, rfpath_meta: Path):
         return path_meta.joinpath(rfpath_meta)
 
-    @staticmethod
-    def get_fpath_sequence_meta_with_category_and_name(path_meta: Path, category: str, name: str):
-        return path_meta.joinpath(CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=category, name=name))
 
     @staticmethod
     def get_rfpath_sequences():
@@ -117,9 +134,10 @@ class CO3D_SequenceMeta():
     def get_map_category_sequences_names(path_meta, categories):
         map_category_sequences_names = {}
         for category in categories:
-            map_category_sequences_names[category] = list(CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=path_meta, category=category).iterdir())
+            map_category_sequences_names[category] = [fpath.stem for fpath in CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=path_meta, category=category).iterdir()]
         return map_category_sequences_names
 
+    """
     """ 
     # legacy code
     @staticmethod
@@ -144,6 +162,7 @@ class CO3D_SequenceMeta():
         return sequences_rfpaths
     """
 
+    """
     @staticmethod
     def meta_rfpath_to_category(rfpath: Path):
         return rfpath.parent.stem
@@ -165,7 +184,7 @@ class CO3D_SequenceMeta():
         if not sequence_meta_fpath.parent.exists():
             sequence_meta_fpath.parent.mkdir(parents=True)
         OmegaConf.save(sequence_meta_config, sequence_meta_fpath, resolve=True)
-
+    """
 
 class CO3D_Sequence():
 
@@ -189,7 +208,6 @@ class CO3D_Sequence():
         self._cuboid_front_tform4x4_obj = None
         self._cuboid = None
 
-
     @property
     def name(self):
         return self.meta.name
@@ -204,18 +222,15 @@ class CO3D_Sequence():
         if override or not fpath_front_name.exists():
             from od3d.datasets.co3d.dataset import CO3D
 
-            config = OmegaConf.create()
-            config.sequences = [self.name]
-            config.path = []
-            config.path_meta = self.path_meta
-            config.classes = [self.category]
-            config.preprocess = False
-            config.setup = False
-            dataset = CO3D(config=config)
+            dict_nested_frames = {self.category: {self.name: None}}
+
+            dataset = CO3D(name='sequence', path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+                           modalities=self.modalities, dict_nested_frames=dict_nested_frames,
+                           categories=[CO3D_CATEGORIES[self.category]])
 
             if fpath_front_name.exists():
                 self._front_name = od3d.io.read_str_from_file(fpath_front_name)
-                front_item_id = dataset.get_item_id_by_name(self.name, self._front_name)
+                front_item_id = dataset.get_item_id_by_name_unique(CO3D_FrameMeta.get_name_unique_with_category_sequence_and_name(category=self.category, sequence_name=self.name, name=self._front_name))
             else:
                 front_item_id = 0
 
@@ -457,7 +472,10 @@ class CO3D_Sequence():
 
     @property
     def first_frame(self):
-        first_frame_fpath = sorted(CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=self.path_meta, category=self.category, sequence=self.name).iterdir(), key=lambda p: int(p.stem))[0]
+        first_frame_fpath = sorted(CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=self.path_meta,
+                                                                                              category=self.category,
+                                                                                              sequence=self.name).iterdir(),
+                                   key=lambda p: int(p.stem))[0]
         return self.get_frame_by_name(frame_name=first_frame_fpath.stem)
 
     @property
@@ -479,7 +497,8 @@ class CO3D_Sequence():
 
             dataset = CO3D(name='co3d', modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK],
                            path_raw=self.path_raw, path_preprocess=self.path_preprocess,
-                           categories=[CO3D_CATEGORIES(self.category).value], sequences_names=[self.name], cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D.value)
+                           categories=[CO3D_CATEGORIES(self.category).value], dict_nested_frames={self.category: {self.name: None}},
+                           cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D.value)
             dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
                                                      collate_fn=dataset.collate_fn,
                                                      num_workers=0)

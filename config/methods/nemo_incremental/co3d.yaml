@@ -57,8 +57,6 @@ train:
     epochs_to_next_val: 1 # 6
     epochs_to_next_test: 1 # 6
     epochs_to_next_forget_est_tforms4x4: 2
-    epochs: 100
-    val_fraction: 0.01
 
 test:
     transform:

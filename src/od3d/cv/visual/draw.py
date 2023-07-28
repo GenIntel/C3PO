@@ -113,3 +113,40 @@ def get_colors(K, device=None, last_white=False, last_white_grey=False, K_rel=No
         torch_colors = torch_colors.to(device)
     # K x 3
     return torch_colors
+
+
+def draw_text_as_img(H: int, W: int, text: str, fontScale=1., lineThickness: int=2):
+    img = torch.zeros(size=(3, H, W))
+    return draw_text_in_rgb(img, text=text, fontScale=fontScale, lineThickness=lineThickness)
+
+def draw_text_in_rgb(img, text='title0', fontScale=1., lineThickness: int=2):
+    # 3xHxW
+    _, H, W = img.shape
+    device = img.device
+    dtype = img.dtype
+
+    img = tensor_to_cv_img(img.clone())
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = img.astype(np.float32)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    topLeftCornerOfText = (10, 50)  # left, top
+    fontColor = (255, 255, 255)
+
+    for i, line in enumerate(text.split('\n')):
+        gap = cv2.getTextSize(line, font, fontScale, lineThickness)[0][1] + 5
+        topLeftCornerOfLine = (topLeftCornerOfText[0], topLeftCornerOfText[1] + gap * i)
+
+        cv2.putText(img, line,
+                    topLeftCornerOfLine,
+                    font,
+                    fontScale,
+                    fontColor,
+                    lineThickness)
+
+    img = img / 255.0
+    img = torch.from_numpy(img).permute(2, 0, 1)
+    img = img.to(device)
+
+    return img

@@ -205,7 +205,7 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
     if fpath is not None:
         if not os.path.exists(os.path.dirname(fpath)):
             os.makedirs(os.path.dirname(fpath))
-        cv2.imwrite(fpath, img)
+        cv2.imwrite(str(fpath), img)
     else:
         cv2.imshow("img", img)
         cv2.waitKey(duration)

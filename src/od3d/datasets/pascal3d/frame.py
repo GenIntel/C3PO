@@ -10,43 +10,54 @@ import scipy.io
 import math
 import numpy as np
 from od3d.cv.geometry.transform import transf4x4_from_spherical
-from od3d.cv.geometry.mesh import Mesh
 from od3d.datasets.dataset import OD3D_Frames, OD3D_FRAME_MODALITIES
 from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL, PASCAL3D_CATEGORIES
 from od3d.cv.io import read_image, save_image_mask
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.mesh import Mesh, Meshes
 
-
+from od3d.datasets.frame import OD3D_FrameMeta, \
+    OD3D_FrameMetaMeshMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
+    OD3D_FrameMetaSizeMixin, OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin, \
+    OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4Mixin
 
 @dataclass
-class Pascal3DFrameMeta(OD3D_FrameMeta):
-    subset: str
-    complete: bool
-    kpts_names: List[str]
-    l_bbox: List[float]
-    l_kpts2d_annot: List[List[float]]
-    l_kpts2d_annot_vsbl: List[bool]
-    l_kpts3d: List[List[float]]
-    incomplete_reason: str
-    rfpath_mesh: Path
+class Pascal3DFrameMeta(OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin,
+                        OD3D_FrameMetaMeshMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaCamTform4x4ObjMixin,
+                        OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMeta):
+    #complete: bool
+    #incomplete_reason: str
+
+    """
+    @staticmethod
+    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
+        return Pascal3DFrameMeta(**Pascal3DFrameMeta.load_omega_conf_with_rfpath(path_meta=path_meta, rfpath=rfpath))
+    """
+
+    @property
+    def name_unique(self):
+        return f'{self.subset}/{self.category}/{self.name}'
 
     @staticmethod
-    def load_from_raw(frame_name: str, subset: str, category: str, path_raw: Path, path_meshes: Path):
+    def get_name_unique_from_category_subset_name(category, subset, name):
+        return f'{subset}/{category}/{name}'
+
+
+    @staticmethod
+    def load_from_raw(frame_name: str, subset: str, category: str, path_raw: Path, rpath_meshes: Path):
         frame_rfpath = f"{category}_imagenet/{frame_name}"
         rfpath_annotation = Path("Annotations").joinpath(f"{frame_rfpath}.mat")
         rfpath_rgb = Path("Images").joinpath(f"{frame_rfpath}.JPEG")
 
         annotation = scipy.io.loadmat(path_raw.joinpath(rfpath_annotation))
         name = annotation['record']['filename'][0][0][0].split('.')[0]
-        complete = True
-        incomplete_reason = ""
 
         objects = annotation['record']['objects'][0][0][0]
         # assert len(objects) == 1
         if len(objects) != 1:
-            complete = False
+            # complete = False
             incomplete_reason = f"num objects = {len(objects)}"
             logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
 
         object = objects[0]
         category = object['class'][0]
@@ -87,20 +98,20 @@ class Pascal3DFrameMeta(OD3D_FrameMeta):
         cam_intr4x4 = np.vstack((cam_intr4x4, [0, 0, 0, 1]))
         cam_intr4x4 = torch.from_numpy(cam_intr4x4).to(dtype=cam_tform4x4_obj.dtype)
 
-        rfpath_mesh = Path(category).joinpath(f"{(mesh_index + 1):02d}.off")
+        rfpath_mesh = path_raw.joinpath(rpath_meshes, category, f"{(mesh_index + 1):02d}.off")
 
-        fpath_mesh_kpoints3d = path_meshes.joinpath(f"{category}.mat")
+        fpath_mesh_kpoints3d = path_raw.joinpath(rpath_meshes, f"{category}.mat")
         annotation_mesh3d = scipy.io.loadmat(fpath_mesh_kpoints3d)
         kpts3d = np.stack([annotation_mesh3d[category][n][0][mesh_index][0] if len(annotation_mesh3d[category][n][0][mesh_index]) > 0 else np.array([np.inf, np.inf, np.inf]) for n in kpts_names])
         kpts3d = torch.from_numpy(kpts3d)
 
-        return Pascal3DFrameMeta(subset=subset, name=name, complete=complete, incomplete_reason=incomplete_reason,
-                      rfpath_rgb=rfpath_rgb, rfpath_mesh=rfpath_mesh,
-                      l_bbox=bbox.tolist(), kpts_names=kpts_names, l_kpts2d_annot=kpts2d_annot.tolist(), l_kpts2d_annot_vsbl=kpts2d_annot_vsbl.tolist(), W=W, H=H, l_size=size.tolist(),
-                      l_cam_tform4x4_obj=cam_tform4x4_obj.tolist(), l_cam_intr4x4=cam_intr4x4.tolist(), l_kpts3d=kpts3d.tolist(), category=category,
-                             rfpath_mask=Path('mask').joinpath(f'{name}.png'), rfpath_depth=Path("None"), rfpath_depth_mask=Path("None")
-                      )
+        return Pascal3DFrameMeta(subset=subset, name=name, rfpath_rgb=rfpath_rgb, rfpath_mesh=rfpath_mesh,
+                                 l_bbox=bbox.tolist(), kpts_names=kpts_names, l_kpts2d_annot=kpts2d_annot.tolist(),
+                                 l_kpts2d_annot_vsbl=kpts2d_annot_vsbl.tolist(), l_size=size.tolist(),
+                                 l_cam_tform4x4_obj=cam_tform4x4_obj.tolist(), l_cam_intr4x4=cam_intr4x4.tolist(),
+                                 l_kpts3d=kpts3d.tolist(), category=category)
 
+    """
     @staticmethod
     def get_dict_subset_category_frames_names(
             categories: List[PASCAL3D_CATEGORIES], path_meta: Path,
@@ -139,12 +150,6 @@ class Pascal3DFrameMeta(OD3D_FrameMeta):
             dict_subset_category_frames_names[subset][category].append(name)
         return dict_subset_category_frames_names
 
-    @staticmethod
-    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
-        fpath_meta = path_meta.joinpath(rfpath)
-        if not fpath_meta.exists():
-            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
-        return Pascal3DFrameMeta(**OmegaConf.load(fpath_meta))
 
     @staticmethod
     def load_from_meta_with_name_unique(path_meta: Path, name_unique: str):
@@ -158,9 +163,6 @@ class Pascal3DFrameMeta(OD3D_FrameMeta):
                                                                                    name=name)
         return Pascal3DFrameMeta.load_from_meta_with_rfpath(path_meta=path_meta, rfpath=rfpath)
 
-    @property
-    def name_unique(self):
-        return f'{self.subset}/{self.category}/{self.name}'
 
     def get_fpath(self, path_meta):
         return Pascal3DFrameMeta.get_fpath_frame_meta_with_category_name(path_meta=path_meta, subset=self.subset, category=self.category, name=self.name)
@@ -202,17 +204,12 @@ class Pascal3DFrameMeta(OD3D_FrameMeta):
                 frames_subsets += [subset] * len(frame_names_partial)
 
         return frames_subsets, frames_categories, frames_names
+        """
 
 class Pascal3DFrame(OD3D_Frame):
     def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
-        self.meta: Pascal3DFrameMeta = meta
-        self.path_meshes: Path = path_meshes
-        self._bbox = None
-        self._kpts2d_annot = None
-        self._kpts2d_annot_vsbl = None
-        self._kpts3d = None
-        self._mesh = None
+
         # , dt_shape_nemo=None, classes: list = None
 
     @property
@@ -223,14 +220,8 @@ class Pascal3DFrame(OD3D_Frame):
         return self._cam_tform4x4_obj
 
     @property
-    def bbox(self):
-        if self._bbox is None:
-            self._bbox = torch.Tensor(self.meta.l_bbox)
-        return self._bbox
-
-    @property
     def fpath_mask(self):
-        return self.path_preprocess.joinpath(self.meta.rfpath_mask)
+        return self.path_preprocess.joinpath('mask', self.meta.name_unique + '.png')
 
     @property
     def mask(self):
@@ -254,31 +245,15 @@ class Pascal3DFrame(OD3D_Frame):
             save_image_mask(mask, path=self.fpath_mask)
 
     @property
-    def kpts_names(self):
-        return self.meta.kpts_names
-    @property
-    def kpts2d_annot(self):
-        if self._kpts2d_annot is None:
-            self._kpts2d_annot = torch.Tensor(self.meta.l_kpts2d_annot)
-        return self._kpts2d_annot
-
-    @property
-    def kpts2d_annot_vsbl(self):
-        if self._kpts2d_annot_vsbl is None:
-            self._kpts2d_annot_vsbl = torch.Tensor(self.meta.l_kpts2d_annot_vsbl).to(dtype=bool)
-        return self._kpts2d_annot_vsbl
-    @property
     def kpts3d(self):
         if self._kpts3d is None:
-            self._kpts3d = torch.Tensor(self.meta.l_kpts3d) * PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
+            self._kpts3d = self.meta.kpts3d * PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
         return self._kpts3d
-    @property
-    def fpath_mesh(self):
-        return self.path_meshes.joinpath(self.meta.rfpath_mesh)
+
     @property
     def mesh(self):
         if self._mesh is None:
-            self._mesh = Mesh.load_from_file(fpath=self.path_meshes.joinpath(self.meta.rfpath_mesh), scale=PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category])
+            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh, scale=PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category])
         return self._mesh
 
     @staticmethod
@@ -298,6 +273,3 @@ class Pascal3DFrame(OD3D_Frame):
 class Pascal3DFrames(OD3D_Frames):
     def __init__(self, frames: List[Pascal3DFrame], modalities: List[OD3D_FRAME_MODALITIES], dtype, device):
         super().__init__(frames=frames, modalities=modalities, dtype=dtype, device=device)
-        frame0 = frames[0]
-        self.rfpaths_meshes = [frame.meta.rfpath_mesh for frame in frames]
-        self.path_meshes = frame0.path_meshes

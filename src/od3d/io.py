@@ -10,6 +10,11 @@ import os
 import gdown
 from hydra import compose, initialize
 
+from omegaconf import DictConfig, OmegaConf
+import json
+from typing import Dict
+import subprocess
+
 def reporthook(count, block_size, total_size):
     global start_time
     if count == 0:
@@ -61,7 +66,19 @@ def load_hierarchical_config(benchmark="defaults", platform="local", ablation=No
             cfg = compose(config_name=benchmark, overrides=["+ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg
 
-import subprocess
+def write_config_to_json_file(config: DictConfig, fpath: Path):
+    write_json(config=dict(config), fpath=fpath)
+
+def write_json(config: Dict, fpath: Path):
+    fpath.expanduser().parent.mkdir(parents=True, exist_ok=True)
+    with open(fpath.expanduser(), "w") as outfile:
+        json.dump(config, outfile)
+
+def load_json(fpath: Path):
+    with open(fpath.expanduser(), 'r') as openfile:
+        config = json.load(openfile)
+    return config
+
 def run_cmd(cmd, logger, live=False, background=False):
     if logger is not None:
         logger.info(f'Run command {cmd}')
@@ -89,8 +106,6 @@ def run_cmd(cmd, logger, live=False, background=False):
             return res.stdout.decode("utf-8")
         else:
             subprocess.run(cmd, capture_output=False, shell=True)
-
-
 
 
 def read_str_from_file(fpath: Path):

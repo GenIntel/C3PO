@@ -3,8 +3,9 @@ defaults:
 
 name: pascal3d_train
 
-dict_subset_category_frames_names:
+dict_nested_frames:
   train:
+    car:
 
 subset_fraction: 1. # 0.05
 

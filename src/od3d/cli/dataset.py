@@ -16,13 +16,6 @@ def classes():
     print(list(OD3D_Dataset.subclasses.keys()))
 
 @app.command()
-def setup(config_fpath: str = typer.Option(None, '-c', '--config')):
-    logging.basicConfig(level=logging.DEBUG)
-    print(config_fpath)
-    config = OmegaConf.load(config_fpath)
-    od3ddataset = OD3D_Dataset.subclasses[config.class_name].create_from_config(config=config)
-    od3ddataset.setup()
-@app.command()
 def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
               dataset_ban: str = typer.Option(None, '-b', '--dataset-ban'),
               platform: str = typer.Option('local', '-p', '--platform')):
@@ -98,6 +91,58 @@ def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
         od3d.io.run_cmd(cmd=f'rsync -avrzP {source_link}{paths_source.joinpath(subdir)} {target_link}{paths_target.joinpath(subdir).parent}', live=True, logger=logger)
 
 @app.command()
+def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
+              platform: str = typer.Option('local', '-p', '--platform'),
+              rfpath: Path = typer.Option(None, '-f', '--rfpath'),
+              frames_count_per_category: int = typer.Option(10, '-c', '--count')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    loggging_dir = Path(config.logger.local_dir)
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+    import torchvision
+    from od3d.cv.transforms import Crop, CenterZoom3D, RandomCenterZoom3D
+    # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
+    H = 128
+    W = 128
+    dataset.transform = torchvision.transforms.Compose([
+        Crop(H=H, W=W), #
+        # RandomCenterZoom3D(H=640, W=800, dist=5., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=False, config=config.dataset),
+        dataset.transform,
+    ]
+    )
+
+    categories = dataset.categories
+
+    dict_imgs_stacked = dataset.get_frames_categories(max_frames_count_per_category=frames_count_per_category)
+
+    from od3d.cv.visual.show import show_imgs
+    from od3d.cv.visual.draw import draw_text_as_img
+    dtype = torch.float
+    device = 'cpu'
+    imgs = []
+    for i, category in enumerate(categories):
+        if i + 1 < len(categories):
+            text = category
+        else:
+            text = category + f'\n {len(categories)}'
+        img_category_text = draw_text_as_img(H=H, W=W, text=text, fontScale=0.6, lineThickness=1).to(dtype=dtype, device=device)
+        if category in dict_imgs_stacked.keys():
+            imgs_category = dict_imgs_stacked[category]
+        else:
+            imgs_category = torch.zeros(size=(0, 3, H, W), dtype=dtype, device=device)
+        imgs_place_holders = torch.zeros(size=(frames_count_per_category - len(imgs_category), 3, H, W), dtype=dtype, device=device)
+        imgs.append(torch.cat([img_category_text[None,], imgs_category, imgs_place_holders], dim=0))
+
+    imgs = torch.stack(imgs, dim=0)
+    if rfpath is not None:
+        fpath = loggging_dir.joinpath('datasets', 'categories', rfpath)
+        logger.info(f'writing image at {fpath}')
+        show_imgs(rgbs=imgs, fpath=fpath)
+    else:
+        show_imgs(rgbs=imgs)
+
+
+@app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
@@ -107,10 +152,11 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     from od3d.cv.transforms import CenterZoom3D, RandomCenterZoom3D
     # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
     dataset.transform = torchvision.transforms.Compose([
-        RandomCenterZoom3D(H=640, W=800, dist=25., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=False, config=config.dataset),
+        # RandomCenterZoom3D(H=640, W=800, dist=5., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=False, config=config.dataset),
         dataset.transform,
     ]
     )
+
 
     """
     from od3d.cv.visual.show import show_pcl
@@ -320,7 +366,7 @@ def label_start(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'
                 restart: bool = typer.Option(False, '-r', '--restart')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
-    config.dataset.categories = [category]
+    config.dataset.all_categories = [category]
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     logging.info(f"Dataset contains {len(dataset)} frames.")
     project_name = f'{dataset.name}_{category}'
@@ -379,9 +425,9 @@ def label_start(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'
 
     for i in range(len(dataset)):
         frame = dataset.__getitem__(i)
-        fname = f'{frame.name_unique}{frame.path_rgb.suffix}'
+        fname = f'{frame.name_unique}{frame.fpath_rgb.suffix}'
         if not path_labelstudio_in.joinpath(fname).exists():
-            cmd = f'cp "{frame.path_rgb}" "{path_labelstudio_in.joinpath(fname)}"'
+            cmd = f'cp "{frame.fpath_rgb}" "{path_labelstudio_in.joinpath(fname)}"'
             run_cmd(cmd, live=True, logger=logger)
 
     cmd = f'label-studio init {project_name} --username abc@def.com --password abcdefghj --data-dir {path_labelstudio_out} --label-config {path_labelstudio_labelconfig}'
