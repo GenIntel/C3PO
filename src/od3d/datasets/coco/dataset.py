@@ -63,6 +63,16 @@ class COCO(OD3D_Dataset):
                          path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
 
+    def filter_list_frames_unique(self, list_frames_unique):
+        list_frames_unique = super().filter_list_frames_unique(list_frames_unique)
+        list_frames_unique_filtered = []
+        logger.info('filtering frames categorical...')
+        for frame_name_unique in tqdm(list_frames_unique):
+            meta = COCO_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=frame_name_unique)
+            if len(set(self.categories).intersection(set(meta.categories))) > 0:
+                list_frames_unique_filtered.append(frame_name_unique)
+        return list_frames_unique_filtered
+
     def get_item(self, item):
         frame_meta = COCO_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
         return OD3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta, meta=frame_meta, modalities=self.modalities, categories=self.categories)

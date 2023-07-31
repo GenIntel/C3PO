@@ -61,7 +61,6 @@ class Pascal3D(OD3D_Dataset):
                         path_cuboids=self.path_cuboids)
 
 
-    ##### SETUP
     @staticmethod
     def setup(config):
         path_pascal3d_raw = Path(config.path_raw)
@@ -80,12 +79,30 @@ class Pascal3D(OD3D_Dataset):
             od3d.io.move_dir(src=fpath.parent.joinpath(Path(config.url_pascal3d_raw).with_suffix("").name),
                              dst=fpath.parent)
 
+    ##### SETUP
+    def filter_dict_nested_frames(self, dict_nested_frames):
+        dict_nested_frames = super().filter_dict_nested_frames(dict_nested_frames)
+        logger.info('filtering frames categorical...')
+        dict_nested_frames_filtered = {}
+        for subset, dict_category_frames in dict_nested_frames.items():
+            dict_nested_frames_filtered[subset] = {}
+            for category, list_frames in dict_category_frames.items():
+                if category in self.categories:
+                    dict_nested_frames_filtered[subset][category] = list_frames
+
+        dict_nested_frames = dict_nested_frames_filtered
+        return dict_nested_frames
+
 
     #### PREPROCESS META
     @staticmethod
     def preprocess_meta(config: DictConfig):
-        subsets = config.get("subsets", PASCAL3D_SUBSETS.list())
-        categories = config.get("categories", PASCAL3D_CATEGORIES.list())
+        subsets = config.get("subsets", None)
+        if subsets is None:
+            subsets = PASCAL3D_SUBSETS.list()
+        categories = config.get("categories", None)
+        if categories is None:
+            categories = PASCAL3D_CATEGORIES.list()
 
         path_raw = Pascal3D.get_path_raw(config=config)
         path_meta = Pascal3D.get_path_meta(config=config)

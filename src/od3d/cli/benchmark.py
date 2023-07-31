@@ -22,7 +22,8 @@ def table():
     import wandb
     config = od3d.io.load_hierarchical_config()
 
-    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
 
     # Initialize wandb
      # wandb.init(project=config.logger.wandb_project_name)
@@ -50,7 +51,7 @@ def table():
         rows.append(row)
     logger.info(rows)
     cols = ['name'] + metrics
-    logger.info(tabulate(rows, headers=cols))
+    logger.info(tabulate(rows, headers=cols, tablefmt='github')) # 'github', 'tsv'
 
 
 @app.command()

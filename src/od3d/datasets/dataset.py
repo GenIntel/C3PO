@@ -42,13 +42,13 @@ class OD3D_Dataset(Dataset):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.subclasses[cls.__name__] = cls
-    def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path, categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1., dict_nested_frames: Dict=None):
+    def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
+                 categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1.,
+                 dict_nested_frames: Dict=None):
         self.name = name
         self.path_raw: Path = Path(path_raw)
         self.path_preprocess: Path = Path(path_preprocess)
         self.subset_fraction: float = subset_fraction
-
-
 
         if transform is None:
             import torchvision
@@ -64,30 +64,44 @@ class OD3D_Dataset(Dataset):
         self.splits_featured = [OD3D_DATASET_SPLITS.RANDOM]
         self.categories = categories if categories is not None else []
 
-        dict_nested_frames = OD3D_FrameMeta.complete_nested_frames(path_meta=self.path_meta,
-                                                                   dict_nested_frames=dict_nested_frames)
-        self.dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames)
+        logger.info('completing nested frames..., can take up to 500 seconds...')
+        dict_nested_frames = OD3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta,
+                                                                  dict_nested_metas=dict_nested_frames)
 
-        self.list_frames_unique = OD3D_FrameMeta.unroll_nested_frames(dict_nested_meta=self.dict_nested_frames)
-        self.frames_count = len(self.list_frames_unique)
+
+        dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames)
+
+        logger.info('unrolling nested frames...')
+        list_frames_unique = OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames)
+
+        logger.info('filtering frames...')
+        list_frames_unique = self.filter_list_frames_unique(list_frames_unique)
 
         if self.subset_fraction is not None and self.subset_fraction != 1.:
+            logger.info('filtering with subset fraction...')
             frames_ids_subset = self.get_subset_item_ids(subset_fraction=subset_fraction)
-            self.list_frames_unique = [self.list_frames_unique[id] for id in frames_ids_subset]
-            self.dict_nested_frames = OD3D_FrameMeta.rollup_flattened_frames(
-                list_meta_names_unique=self.list_frames_unique)
-            self.frames_count = len(self.list_frames_unique)
+            list_frames_unique = [list_frames_unique[id] for id in frames_ids_subset]
 
+        self.set_list_frames_unique(list_frames_unique=list_frames_unique)
         logger.info(f"found {self.frames_count} frames.")
 
     def filter_dict_nested_frames(self, dict_nested_frames):
         return dict_nested_frames
+
+    def filter_list_frames_unique(self, list_frames_unique):
+        return list_frames_unique
 
     def __len__(self):
         return self.frames_count
 
     def get_subset_with_dict_nested_frames(self, dict_nested_frames: Dict):
         raise NotImplementedError
+
+    def set_list_frames_unique(self, list_frames_unique):
+        self.list_frames_unique = list_frames_unique
+        self.dict_nested_frames = OD3D_FrameMeta.rollup_flattened_frames(
+            list_meta_names_unique=self.list_frames_unique)
+        self.frames_count = len(self.list_frames_unique)
 
     def get_subset_with_item_ids(self, item_ids):
         list_frames_unique = [self.list_frames_unique[id] for id in item_ids]
@@ -214,6 +228,8 @@ class OD3D_Dataset(Dataset):
                 else:
                     categories = []
                 for category in categories:
+                    if category not in self.categories:
+                        continue
                     # logger.info(batch.categories[b])
                     if len(dict_frames[category]) < max_frames_count_per_category:
                         dict_frames[category].append(batch.rgb[b])

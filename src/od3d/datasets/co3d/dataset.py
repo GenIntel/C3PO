@@ -61,7 +61,8 @@ class CO3D(OD3D_Dataset):
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  transform=None, index_shift=0, subset_fraction=1.):
 
-        self.categories = categories if categories is not None else CO3D_CATEGORIES.list()
+        categories = categories if categories is not None else CO3D_CATEGORIES.list()
+        self.categories = categories
         self.path_raw = Path(path_raw)
         self.path_preprocess = Path(path_preprocess)
         self.modalities = modalities
@@ -69,17 +70,29 @@ class CO3D(OD3D_Dataset):
         self.cuboid_source = cuboid_source
         self.splits_featured = [OD3D_DATASET_SPLITS.RANDOM, OD3D_DATASET_SPLITS.SEQUENCES_SEPARATED, OD3D_DATASET_SPLITS.SEQUENCES_SHARED]
 
+        logger.info("filtering frames...")
+        if dict_nested_frames is not None:
+            dict_nested_sequences = {}
+            for category, dict_sequence_frames in dict_nested_frames.items():
+                if dict_sequence_frames is not None:
+                    for sequence, frames in dict_sequence_frames.items():
+                        dict_nested_sequences[category] = sequence
+                else:
+                    dict_nested_sequences[category] = None
+        else:
+            dict_nested_sequences = None
+
         # get sequences
-        if dict_nested_frames is None:
-            dict_category_sequences_names = CO3D_SequenceMeta.complete_nested_frames(path_meta=self.path_meta, dict_nested_frames=dict_nested_frames)
+        dict_category_sequences_names = CO3D_SequenceMeta.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_sequences)
             #get_map_category_sequences_names(path_meta=self.path_meta,
             #                                                                                   categories=categories)
-        else:
-            dict_category_sequences_names = {category: list(dict_sequence_name_frames_names.keys()) for
-                                                  category, dict_sequence_name_frames_names in
-                                                  dict_nested_frames.items()}
+
+        #dict_category_sequences_names = {category: list(dict_sequence_name_frames_names.keys()) for
+        #                                 category, dict_sequence_name_frames_names in
+        #                                 dict_nested_frames.items()}
 
         # filter sequences
+        logger.info("filtering sequences...")
         self.dict_category_sequences_names = self.filter_dict_nested_sequences(dict_nested_sequences=
                                                                                dict_category_sequences_names,
                                                                                require_pcl=sequences_require_pcl,
@@ -88,6 +101,11 @@ class CO3D(OD3D_Dataset):
                                                                                count_max_per_category=sequences_count_max_per_category)
 
         logger.info(f'sequences filtered {dict_category_sequences_names}')
+
+        logger.info('completing nested frames..., can take up to 500 seconds... ')
+        dict_nested_frames = CO3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta,
+                                                                  dict_nested_metas=dict_nested_frames)
+        logger.info("filtering frames...")
         if dict_nested_frames is not None:
             dict_nested_frames_filtered = {}
             for category, dict_sequence_frames in dict_nested_frames.items():
@@ -96,11 +114,15 @@ class CO3D(OD3D_Dataset):
                     dict_nested_frames_filtered[category][sequence] = frames
             dict_nested_frames = dict_nested_frames_filtered
 
-        dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames, frames_count_max_per_sequence=frames_count_max_per_sequence)
+
+
+        dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames,
+                                                            frames_count_max_per_sequence=frames_count_max_per_sequence)
 
         super().__init__(categories=categories, name=name, modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction,
                          index_shift=index_shift, dict_nested_frames=dict_nested_frames)
+
 
         """
         self.device = "cpu"
@@ -250,7 +272,7 @@ class CO3D(OD3D_Dataset):
 
     def filter_dict_nested_frames(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], frames_count_max_per_sequence: int=None, block_negative_depth=False):
         if frames_count_max_per_sequence is not None or block_negative_depth:
-            dict_nested_frames = CO3D_FrameMeta.complete_nested_frames(path_meta=self.path_meta, dict_nested_frames=dict_nested_frames)
+            dict_nested_frames = CO3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_frames)
 
         if frames_count_max_per_sequence is not None:
             dict_nested_frames_filtered = {}
@@ -305,19 +327,20 @@ class CO3D(OD3D_Dataset):
 
 
     def filter_dict_nested_sequences(self, dict_nested_sequences: Dict[str, List[str]], require_pcl, sort_pcl_score, require_pcl_score, count_max_per_category):
-        for category in dict_nested_sequences.keys():
-            sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
-                         in dict_nested_sequences[category]]
-            if require_pcl:
-                sequences = list(filter(lambda sequence: sequence.meta.rfpath_pcl != Path('None'), sequences))
-                if require_pcl_score is not None:
-                    sequences = list(
-                        filter(lambda sequence: sequence.meta.pcl_quality_score > require_pcl_score, sequences))
-                if sort_pcl_score:
-                    sequences = sorted(sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
-            if count_max_per_category is not None:
-                sequences = sequences[:count_max_per_category]
-            dict_nested_sequences[category] = [sequence.name for sequence in sequences]
+        for i, category in tqdm(enumerate(dict_nested_sequences.keys())):
+            if require_pcl or count_max_per_category is not None:
+                sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
+                             in dict_nested_sequences[category]]
+                if require_pcl:
+                    sequences = list(filter(lambda sequence: sequence.meta.rfpath_pcl != Path('None'), sequences))
+                    if require_pcl_score is not None:
+                        sequences = list(
+                            filter(lambda sequence: sequence.meta.pcl_quality_score > require_pcl_score, sequences))
+                    if sort_pcl_score:
+                        sequences = sorted(sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
+                if count_max_per_category is not None:
+                    sequences = sequences[:count_max_per_category]
+                dict_nested_sequences[category] = [sequence.name for sequence in sequences]
         return dict_nested_sequences
 
     """

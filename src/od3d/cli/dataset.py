@@ -98,20 +98,51 @@ def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     loggging_dir = Path(config.logger.local_dir)
-    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+
+
+
+
     import torchvision
     from od3d.cv.transforms import Crop, CenterZoom3D, RandomCenterZoom3D
     # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
     H = 128
     W = 128
+
+
+    from od3d.datasets.co3d.enum import CO3D_CATEGORIES, MAP_CO3D_OBJECTNET3D, MAP_CO3D_PASCAL3D, MAP_CO3D_COCO
+    co3d_categories = CO3D_CATEGORIES.list()
+    map_co3d_to_dataset = None
+    if 'objectnet3d' in config.dataset.name:
+        map_co3d_to_dataset = MAP_CO3D_OBJECTNET3D
+    elif 'pascal3d' in config.dataset.name:
+        map_co3d_to_dataset = MAP_CO3D_PASCAL3D
+    elif 'coco' in config.dataset.name:
+        map_co3d_to_dataset = MAP_CO3D_COCO
+    else:
+        map_co3d_to_dataset = None
+
+    if map_co3d_to_dataset is not None:
+        dataset_categories = [map_co3d_to_dataset[cat] for cat in co3d_categories]
+        from omegaconf import open_dict
+        with open_dict(config):
+            config.dataset.categories = dataset_categories
+
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     dataset.transform = torchvision.transforms.Compose([
         Crop(H=H, W=W), #
         # RandomCenterZoom3D(H=640, W=800, dist=5., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=False, config=config.dataset),
         dataset.transform,
     ]
     )
+    if rfpath is None:
+        rfpath = f'{dataset.name}.png'
 
-    categories = dataset.categories
+    if map_co3d_to_dataset is None:
+        dataset_categories = dataset.categories
+        all_categories = dataset_categories
+    else:
+        all_categories = co3d_categories
+
 
     dict_imgs_stacked = dataset.get_frames_categories(max_frames_count_per_category=frames_count_per_category)
 
@@ -120,11 +151,11 @@ def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
     dtype = torch.float
     device = 'cpu'
     imgs = []
-    for i, category in enumerate(categories):
-        if i + 1 < len(categories):
+    for i, category in enumerate(all_categories):
+        if i + 1 < len(all_categories):
             text = category
         else:
-            text = category + f'\n {len(categories)}'
+            text = category + f'\n {len(all_categories)}'
         img_category_text = draw_text_as_img(H=H, W=W, text=text, fontScale=0.6, lineThickness=1).to(dtype=dtype, device=device)
         if category in dict_imgs_stacked.keys():
             imgs_category = dict_imgs_stacked[category]

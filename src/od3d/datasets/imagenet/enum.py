@@ -525,7 +525,7 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     COWBOY_BOOT = "cowboy_boot"
     COWBOY_HAT_TEN_GALLON_HAT = "cowboy_hat_ten_gallon_hat"
     CRADLE = "cradle"
-    CRANE = "crane"
+    CRANE2 = "crane2"
     CRASH_HELMET = "crash_helmet"
     CRATE = "crate"
     CRIB_COT = "crib_cot"

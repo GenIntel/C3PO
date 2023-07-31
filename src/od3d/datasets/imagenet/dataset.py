@@ -7,6 +7,8 @@ from od3d.datasets.dataset import OD3D_Dataset
 from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame, OD3D_FrameMeta, OD3D_FrameMetaRGBMixin, \
     OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaSubsetMixin, OD3D_FrameMetaSizeMixin
 #from od3d.datasets.objectnet3d.enum import OBJECTNET3D_CATEOGORIES
+from od3d.datasets.imagenet.enum import IMAGENET_CATEOGORIES, IMAGENET_CATEGORIES_CRYPTED
+from od3d.datasets.co3d.enum import CO3D_CATEGORIES
 from pathlib import Path
 from typing import List, Dict
 from omegaconf import DictConfig
@@ -34,8 +36,19 @@ class ImageNet(OD3D_Dataset):
                  categories: List=None,
                  dict_nested_frames: Dict=None,
                  transform=None, index_shift=0, subset_fraction=1.):
-
+        # crane twice:
+        #   134 : BIRD
+        #   517 : MACHINE
+        imagenet_cats = IMAGENET_CATEOGORIES.list()
+        # imagenet_cats[134], imagenet_cats[517]
+        from od3d.datasets.co3d.enum import CO3D_CATEGORIES
+        co3d_cats = CO3D_CATEGORIES.list()
+        map_categories_co3d_to_imagenet = {}
+        for co3d_cat in co3d_cats:
+            map_categories_co3d_to_imagenet[co3d_cat] = list(filter(lambda cat: co3d_cat in cat, imagenet_cats))
+        from od3d.datasets.co3d.enum import CO3D_CATEGORIES
         categories = categories if categories is not None else  [] # TODO: OBJECTNET3D_CATEOGORIES.list()
+
         super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, name=name, modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)

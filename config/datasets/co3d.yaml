@@ -6,18 +6,20 @@ class_name: CO3D
 
 modalities:
     - 'size'
-    - 'cam_intr4x4'
-    - 'cam_tform4x4_obj'
     - 'category'
+    #- 'cam_intr4x4'
+    #- 'cam_tform4x4_obj'
+    #- 'category'
     - 'rgb'
-    - 'mask'
-    - 'sequence_name'
-    - 'sequence'
+    #- 'mask'
+    #- 'sequence_name'
+    #- 'sequence'
 
 cuboid_source: 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl'
-cam_tform_obj_source: 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame'
+cam_tform_obj_source: 'kpts2d_orient_and_pcl'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame'
 
-# frames_count_max_per_sequence:
+frames_count_max_per_sequence:
+block_negative_depth: False
 
 path_raw: ${platform.path_datasets}/CO3D
 path_preprocess: ${platform.path_datasets}/CO3D_Preprocess
@@ -43,10 +45,11 @@ preprocess_cuboids: True
 preprocess_cuboid_avg: True
 
 
-sequences_require_pcl: True
+sequences_require_pcl: False
 # sequences_count_max_per_category:
 
-#dict_category_sequence_name_frames_names:
+dict_nested_frames:
+#  wineglass:
 #  car:
 #    '185_19982_37678':
 #    '206_21799_45886':
@@ -114,7 +117,7 @@ fpaths_cuboids:
     car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
 
 categories:
-  - car
+#  - car
 #  - apple
 #  - backpack
 #  - ball

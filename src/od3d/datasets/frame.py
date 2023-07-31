@@ -186,30 +186,35 @@ class OD3D_Meta(ABC):
     def get_path_metas(cls, path_meta: Path):
         return path_meta.joinpath(cls.get_rfpath_metas())
 
+
     @classmethod
-    def complete_nested_frames(cls, path_meta: Path, dict_nested_frames: Union[Dict, DictConfig, None], parent_key='', separator='/'):
-        if dict_nested_frames is None:
-            dict_nested_frames = {'': None}
+    def complete_nested_metas(cls, path_meta: Path, dict_nested_metas: Union[Dict, DictConfig, None], parent_key='', separator='/'):
+        if dict_nested_metas is None:
+            dict_nested_metas = {'': None}
         dict_nested_frames_completed = {}
-        for key, value in dict_nested_frames.items():
+
+        for key, value in dict_nested_metas.items():
             new_key = f"{parent_key}{separator}{key}" if parent_key else key
             if value is None:
                 dir_fpaths = [fpath for fpath in list(
                     cls.get_path_metas(path_meta=path_meta).joinpath(new_key).iterdir())]
                 if dir_fpaths[0].is_dir():
                     dict_nested_frames_completed[key] = \
-                        cls.complete_nested_frames(path_meta=path_meta, parent_key=new_key,
-                                                         dict_nested_frames={f'{dir_fpath.stem}': None
-                                                                                  for dir_fpath in dir_fpaths})
+                        cls.complete_nested_metas(path_meta=path_meta, parent_key=new_key,
+                                                  dict_nested_metas={f'{dir_fpath.stem}': None
+                                                                      for dir_fpath in dir_fpaths})
                 else:
                     dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in dir_fpaths]
 
             elif isinstance(value,  Union[Dict, DictConfig]):
-                dict_nested_frames_completed[key] = cls.complete_nested_frames(path_meta=path_meta,
-                                                                                     parent_key=new_key,
-                                                                                     dict_nested_frames=value)
+                dict_nested_frames_completed[key] = cls.complete_nested_metas(path_meta=path_meta,
+                                                                              parent_key=new_key,
+                                                                              dict_nested_metas=value)
             else:
                 dict_nested_frames_completed[key] = value
+
+        if len(dict_nested_frames_completed.keys()) == 1 and '' in dict_nested_frames_completed.keys():
+            dict_nested_frames_completed = dict_nested_frames_completed['']
         return dict_nested_frames_completed
 
     @property
@@ -217,7 +222,7 @@ class OD3D_Meta(ABC):
         return self.get_rfpath_from_name_unique(self.name_unique)
 
     @staticmethod
-    def unroll_nested_frames(dict_nested_meta: Dict, separator='/'):
+    def unroll_nested_metas(dict_nested_meta: Dict, separator='/'):
         dict_frames = unroll_nested_dict(dict_nested_meta, separator=separator)
         list_frames_names_unique = []
         for key, frames_names in dict_frames.items():
