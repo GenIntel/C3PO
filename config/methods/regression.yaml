@@ -1,0 +1,91 @@
+
+name: regression
+class_name: Regression
+
+model:
+  backbone:
+    class_name: ResNet
+    layers_returned: [4, 3, 2] # always start with depest layer...
+  head:
+    class_name: ResNet
+    out_dim: 3
+    conv_blocks:
+      out_dims: [2048]
+      strides: [1]
+
+
+train:
+  dataloader:
+    num_workers: 4
+    batch_size: 12
+    pin_memory: True
+
+  val: True
+  transform:
+    random_color: True
+    random_center_zoom3d:
+      W: 512
+      H: 512
+      dist: #  None #  None #15.
+      dist_min:
+      dist_max:
+      center3d_min:
+        - -0.5
+        - -0.5
+        - -0.5
+      center3d_max:
+        - +0.5
+        - +0.5
+        - +0.5
+  apply_txtr: False
+  epochs_to_next_ckpt: 5
+  epochs_to_next_val: 5
+  epochs_to_next_forget_est_tforms4x4: 10
+  epochs_to_next_test: 20
+  epochs: 20
+  val_fraction: 0.01
+  batch_accumulate_to_next_step: 2
+  T: 0.07
+  optimizer:
+    class_name: torch.optim.Adam
+    lr: 1e-4 # 0.0001
+    weight_decay: 0.0001
+
+  scheduler:
+    class_name: torch.optim.lr_scheduler.MultiStepLR
+    milestones:
+      - 400
+      - 600
+    gamma: 0.2
+
+# class_name
+
+
+test:
+    transform:
+        W: 512
+        H: 512
+        dist: # 14.
+        center3d: #
+
+    dataloader:
+        num_workers: 4
+        batch_size: 4
+        pin_memory: True
+
+    visualize:
+      count_best: 3
+      count_worst: 3
+      count_rand: 1
+      modalities:
+        - 'verts_ncds_in_rgb'
+        - 'net_feats_nearest_verts'
+        - 'sim_pxl'
+        - 'samples'
+      samples_scores: True
+      samples_sorted: True
+      live: False
+
+
+inference:
+    live: False

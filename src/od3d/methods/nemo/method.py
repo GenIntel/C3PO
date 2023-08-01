@@ -2,44 +2,33 @@ import time
 from typing import List
 from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
-from od3d.datasets.frames import OD3D_Frames
 from od3d.benchmark.results import OD3D_Results
 from omegaconf import DictConfig
 import pytorch3d.transforms
-from od3d.cv.geometry.transform import se3_log_map
 
 from torch.utils.data import RandomSampler
 import logging
 
 logger = logging.getLogger(__name__)
 import torch
-import numpy as np
-import wandb
-import math
-from od3d.cv.visual.draw import draw_pixels
 from od3d.cv.geometry.transform import se3_exp_map
 from od3d.cv.visual.show import imgs_to_img
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
-from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4_broadcast, tform4x4, rot3x3
-from od3d.cv.visual.show import show_imgs, show_img
+from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4, rot3x3
+from od3d.cv.visual.show import show_img
 import torchvision
 from od3d.cv.visual.blend import blend_rgb
-from od3d.cv.geometry.transform import transf4x4_from_pos_and_theta
-from sklearn.metrics import confusion_matrix
-from od3d.cv.differentiation.gradient import calc_batch_gradients
 from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
 from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize
-from od3d.methods.nemo.backbone import OD3D_Backbone
-from functools import partial
+from od3d.models.backbones.backbone import OD3D_Backbone
 
 from od3d.cv.geometry.grid import get_pxl2d_like
 from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks  # fit_se3_to_corresp_3d_2d_and_masks
-from od3d.cv.geometry.transform import inv_tform4x4
 from od3d.cv.transforms import RandomCenterZoom3D, RGB_Random, CenterZoom3D
 
 from od3d.data.ext_enum import ExtEnum

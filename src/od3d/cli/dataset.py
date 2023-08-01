@@ -122,7 +122,7 @@ def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
         map_co3d_to_dataset = None
 
     if map_co3d_to_dataset is not None:
-        dataset_categories = [map_co3d_to_dataset[cat] for cat in co3d_categories]
+        dataset_categories = [map_co3d_to_dataset[cat] for cat in co3d_categories  if map_co3d_to_dataset[cat] is not None]
         from omegaconf import open_dict
         with open_dict(config):
             config.dataset.categories = dataset_categories
@@ -145,6 +145,13 @@ def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
 
 
     dict_imgs_stacked = dataset.get_frames_categories(max_frames_count_per_category=frames_count_per_category)
+
+    if map_co3d_to_dataset is not None:
+        dict_imgs_stacked_remapped = {}
+        for co3d_cat in co3d_categories:
+            if map_co3d_to_dataset[co3d_cat] is not None:
+                dict_imgs_stacked_remapped[co3d_cat] = dict_imgs_stacked[map_co3d_to_dataset[co3d_cat]]
+        dict_imgs_stacked = dict_imgs_stacked_remapped
 
     from od3d.cv.visual.show import show_imgs
     from od3d.cv.visual.draw import draw_text_as_img

@@ -221,7 +221,7 @@ MAP_CO3D_COCO = {
     "carrot": "carrot",
     "cellphone": "cell phone",
     "chair": "chair",
-    "couch": "sofa",
+    "couch": "couch",
     "cup": "cup",
     "donut": "donut",
     "frisbee": "frisbee",

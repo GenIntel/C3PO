@@ -154,8 +154,8 @@ class ObjectNet3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjsMixin, OD3D_FrameMetaMe
                                      categories=objs_categories)
 
     @staticmethod
-    def get_path_frames_meta_with_subset(path_meta:Path, subset: str):
-        return ObjectNet3D_FrameMeta.get_path_frames(path_meta=path_meta).joinpath(subset)
+    def get_path_frames_meta_with_subset(path_meta: Path, subset: str):
+        return ObjectNet3D_FrameMeta.get_path_metas(path_meta=path_meta).joinpath(subset)
 
 class ObjectNet3D_Frame(OD3D_Frame):
     def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: ObjectNet3D_FrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):

@@ -77,6 +77,7 @@ class OD3D_Dataset(Dataset):
         logger.info('filtering frames...')
         list_frames_unique = self.filter_list_frames_unique(list_frames_unique)
 
+        self.frames_count = len(list_frames_unique)
         if self.subset_fraction is not None and self.subset_fraction != 1.:
             logger.info('filtering with subset fraction...')
             frames_ids_subset = self.get_subset_item_ids(subset_fraction=subset_fraction)

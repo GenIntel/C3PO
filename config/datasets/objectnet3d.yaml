@@ -20,6 +20,8 @@ setup_override: False
 preprocess_meta_remove_previous: False
 preprocess_meta_override: False
 
+filter_frames_categorical: False
+
 dict_nested_frames:
     test:
 #        car:

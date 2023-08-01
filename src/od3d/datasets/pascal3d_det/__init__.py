@@ -1,1 +1,0 @@
-from od3d.datasets.pascal3d_det.dataset import Pascal3DPlusDet

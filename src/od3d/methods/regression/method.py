@@ -1,26 +1,22 @@
+import logging
+logger = logging.getLogger(__name__)
+from od3d.benchmark.results import OD3D_Results
 from omegaconf import DictConfig
 import torchvision
 from od3d.methods.method import OD3D_Dataset
 from typing import List
 import torch
+from od3d.cv.geometry.transform import rot3x3, se3_exp_map, se3_log_map, so3_log_map, so3_exp_map, transf4x4_from_rot3x3
 from od3d.methods.method import OD3D_Method
-from od3d.methods.nemo.backbone import OD3D_Backbone
+from od3d.models.model import OD3D_Model #  backbones.backbone import OD3D_Backbone
 from od3d.cv.transforms.center_and_zoom3d import RandomCenterZoom3D, CenterZoom3D
 from od3d.cv.transforms.rgb import RGB_Random
 from pathlib import Path
 from torch import nn as nn
-
-class RegressionNet(nn.Module):
-    def __init__(self, backbone: nn.Module, dim: int):
-        super().__init__()
-        self.backbone = backbone
-        self.dim = dim
-
-    def forward(self, img):
-        feats = self.backbone(img)
-        pred = feats
-
-        return pred
+import time
+from tqdm import tqdm
+import torch.utils.data
+import pytorch3d
 
 class Regression(OD3D_Method):
     def __init__(
@@ -32,10 +28,7 @@ class Regression(OD3D_Method):
 
         self.device = 'cuda:0'
 
-
-        # init Network
-        backbone = OD3D_Backbone.subclasses[config.backbone.class_name](config.backbone)
-        self.net = RegressionNet(backbone=backbone, dim=3)
+        self.net = OD3D_Model(config.model)
 
         if config.train.transform.random_color:
             self.transform_train = torchvision.transforms.Compose([
@@ -54,7 +47,6 @@ class Regression(OD3D_Method):
             self.net.transform
         ])
 
-        self.criterion = torch.nn.CrossEntropyLoss().cuda()
         # self.net = torch.nn.DataParallel(self.net).cuda()
         self.net.cuda()
         self.net.eval()
@@ -104,3 +96,114 @@ class Regression(OD3D_Method):
             results_epoch.log_with_prefix('train')
         self.load_checkpoint(path_checkpoint=self.path_checkpoint)
 
+
+    def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None, pose_iterative_refine=True):
+        logger.info(f'test dataset {dataset.name}')
+        if config_inference is None:
+            config_inference = self.config.inference
+        self.net.eval()
+        dataset.transform = self.transform_test
+
+        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
+                                                 shuffle=False,
+                                                 collate_fn=dataset.collate_fn,
+                                                 num_workers=self.config.test.dataloader.num_workers,
+                                                 pin_memory=self.config.test.dataloader.pin_memory)
+
+        logger.info(f"Dataset contains {len(dataset)} frames.")
+
+        results_epoch = OD3D_Results()
+        for i, batch in tqdm(enumerate(iter(dataloader))):
+            batch.to(device=self.device)
+
+            results_batch = self.inference_batch(batch=batch)
+            results_epoch += results_batch
+
+        count_pred_frames = len(results_epoch['item_id'])
+        logger.info(f'Predicted {count_pred_frames} frames.')
+
+        #results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
+        #                                         rank_metric_name='rot_diff_rad',
+        #                                         config_visualize=self.config.test.visualize)
+        results_epoch = results_epoch.mean()
+        #results_epoch += results_visual
+        return results_epoch
+
+
+    def train_epoch(self, dataset: OD3D_Dataset) -> OD3D_Results:
+        self.net.train()
+        dataset.transform = self.transform_train
+        dataloader_train = torch.utils.data.DataLoader(dataset=dataset,
+                                                       batch_size=self.config.train.dataloader.batch_size,
+                                                       shuffle=True,
+                                                       collate_fn=dataset.collate_fn,
+                                                       num_workers=self.config.train.dataloader.num_workers,
+                                                       pin_memory=self.config.train.dataloader.pin_memory)
+
+        results_epoch = OD3D_Results()
+        accumulate_steps = 0
+        for i, batch in enumerate(iter(dataloader_train)):
+            results_batch: OD3D_Results = self.train_batch(batch=batch)
+            results_batch.log_with_prefix('train')
+            accumulate_steps += 1
+            if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
+                self.optim.step()
+                self.optim.zero_grad()
+
+            results_epoch += results_batch
+
+        self.scheduler.step()
+        self.optim.zero_grad()
+
+        #results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
+        #                                         rank_metric_name='sim',
+        #                                         config_visualize=self.config.train.visualize)
+        results_epoch = results_epoch.mean()
+        #results_epoch += results_visual
+        return results_epoch
+
+    def train_batch(self, batch) -> OD3D_Results:
+        results_batch = OD3D_Results()
+        batch.to(device=self.device)
+
+        pred = self.net(batch.rgb)
+        loss = (pred - so3_log_map(batch.cam_tform4x4_obj[:, :3, :3])).norm(dim=-1).mean()
+        loss.backward()
+        logger.info(f'loss {loss.item()}')
+
+        results_batch['loss'] = loss[None,]
+
+        results_batch['item_id'] = batch.item_id
+        results_batch['name_unique'] = batch.name_unique
+
+        return results_batch
+
+    def inference_batch(self, batch) -> OD3D_Results:
+        results = OD3D_Results()
+        B = len(batch)
+
+        time_loaded = time.time()
+        with torch.no_grad():
+            pred = self.net(batch.rgb)
+            cam_rot3x3_obj = so3_exp_map(pred)
+
+        results['time_pose'] = torch.Tensor([time.time() - time_loaded,])
+
+        diff_rot3x3 = rot3x3(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_rot3x3_obj[:, :3, :3])
+
+        try:
+            diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3)
+            diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
+        except ValueError:
+            logger.warning(
+                f'Cannot calculate deviation in rotation angle due to rot3x3 trace being too small, setting deviation to 0.')
+            diff_rot_angle_rad = 0.
+        results['rot_diff_rad'] = diff_rot_angle_rad
+        #results['label_gt'] = batch.label
+        #results['label_pred'] = pred_class_ids
+        #results['sim'] = sim
+        results['cam_tform4x4_obj'] = transf4x4_from_rot3x3(cam_rot3x3_obj)
+        results['item_id'] = batch.item_id
+        results['name_unique'] = batch.name_unique
+
+        return results

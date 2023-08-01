@@ -16,9 +16,9 @@ class OD3D_Method(abc.ABC):
     def __init__(self, config: DictConfig, logging_dir):
         self.config = config
         self.logging_dir = logging_dir
-    @abc.abstractmethod
-    def setup(self):
-        raise NotImplementedError
+    #@abc.abstractmethod
+    #def setup(self):
+    #    raise NotImplementedError
     @abc.abstractmethod
     def train(self, dataset: OD3D_Dataset, datasets_val: List[OD3D_Dataset]):
         raise NotImplementedError

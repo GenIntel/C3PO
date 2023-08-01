@@ -18,12 +18,14 @@ class ObjectNet3D(OD3D_Dataset):
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[OBJECTNET3D_CATEOGORIES]=None,
                  dict_nested_frames: Dict=None,
-                 transform=None, index_shift=0, subset_fraction=1.):
+                 transform=None, index_shift=0, subset_fraction=1., filter_frames_categorical=False):
 
         categories = categories if categories is not None else OBJECTNET3D_CATEOGORIES.list()
+        self.filter_frames_categorical = filter_frames_categorical
         super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, name=name, modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
+
 
     def get_item(self, item):
         frame_meta = ObjectNet3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
@@ -31,13 +33,15 @@ class ObjectNet3D(OD3D_Dataset):
 
     def filter_list_frames_unique(self, list_frames_unique):
         list_frames_unique = super().filter_list_frames_unique(list_frames_unique)
-        list_frames_unique_filtered = []
-        logger.info('filtering frames categorical...')
-        for frame_name_unique in tqdm(list_frames_unique):
-            meta = ObjectNet3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=frame_name_unique)
-            if len(set(self.categories).intersection(set(meta.categories))) > 0:
-                list_frames_unique_filtered.append(frame_name_unique)
-        return list_frames_unique_filtered
+        if self.filter_frames_categorical:
+            list_frames_unique_filtered = []
+            logger.info('filtering frames categorical...')
+            for frame_name_unique in tqdm(list_frames_unique):
+                meta = ObjectNet3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=frame_name_unique)
+                if len(set(self.categories).intersection(set(meta.categories))) > 0:
+                    list_frames_unique_filtered.append(frame_name_unique)
+            list_frames_unique = list_frames_unique_filtered
+        return list_frames_unique
 
     @staticmethod
     def setup(config: DictConfig):
