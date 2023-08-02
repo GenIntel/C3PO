@@ -231,6 +231,9 @@ class Pascal3DFrame(OD3D_Frame):
                 self.preprocess_mask()
             self._mask = read_image(fpath) == 255
         return self._mask
+    @mask.setter
+    def mask(self, value: torch.Tensor):
+            self._mask = value
 
     def preprocess_mask(self, override=False):
         if not self.fpath_mask.exists() or override:

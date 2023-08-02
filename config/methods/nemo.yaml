@@ -21,7 +21,8 @@ model:
       strides: [1]
     fully_connected:
       out_dim: # None means that there is no linear layer
-
+    normalize: True
+    normalize_detach_norm: True
 
 train:
   val: True

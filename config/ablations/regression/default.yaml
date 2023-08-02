@@ -18,4 +18,5 @@ method:
           strides: [1]
         fully_connected:
           out_dim: 3 # None means that there is no linear layer
+        normalize: False
 

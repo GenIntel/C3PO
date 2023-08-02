@@ -6,6 +6,9 @@ ablation_name: uniform_train_co3d_55s
 
 method:
     nemo:
+        model:
+            head:
+                normalize_detach_norm: False
         train:
             epochs: 10
             transform:
