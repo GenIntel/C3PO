@@ -28,11 +28,7 @@ train:
         - +0.5
         - +0.5
         - +0.5
-  apply_txtr: False
-  epochs_to_next_ckpt: 5
-  epochs_to_next_val: 5
-  epochs_to_next_forget_est_tforms4x4: 10
-  epochs_to_next_test: 20
+  epochs_to_next_test: 1
   epochs: 20
   val_fraction: 0.01
   batch_accumulate_to_next_step: 2

@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - /methods@method.regression: regression
+
+train_dataset:
+  subset: 0.01
+
+ablation_name: regression_resnet

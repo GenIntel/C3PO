@@ -3,14 +3,14 @@
 train_dataset:
   subset: 0.01
 
-ablation_name: regression_resnet
+ablation_name: regression_resnet_only_last_layer
 
 method:
   regression:
     model:
       backbone:
         class_name: ResNet
-        #layers_returned: [ 4, ] # always start with depest layer...
+        layers_returned: [ 4, ] # always start with depest layer...
       head:
         class_name: ResNet
         out_dim: 3
