@@ -74,9 +74,10 @@ class CO3D(OD3D_Dataset):
         if dict_nested_frames is not None:
             dict_nested_sequences = {}
             for category, dict_sequence_frames in dict_nested_frames.items():
+                dict_nested_sequences[category] = []
                 if dict_sequence_frames is not None:
                     for sequence, frames in dict_sequence_frames.items():
-                        dict_nested_sequences[category] = sequence
+                        dict_nested_sequences[category].append(sequence)
                 else:
                     dict_nested_sequences[category] = None
         else:

@@ -113,7 +113,7 @@ class Regression(OD3D_Method):
         logger.info(f"Dataset contains {len(dataset)} frames.")
 
         results_epoch = OD3D_Results()
-        for i, batch in tqdm(enumerate(iter(dataloader))):
+        for i, batch in enumerate(iter(dataloader)):
             batch.to(device=self.device)
 
             results_batch = self.inference_batch(batch=batch)
@@ -142,7 +142,7 @@ class Regression(OD3D_Method):
 
         results_epoch = OD3D_Results()
         accumulate_steps = 0
-        for i, batch in enumerate(iter(dataloader_train)):
+        for i, batch in tqdm(enumerate(iter(dataloader_train))):
             results_batch: OD3D_Results = self.train_batch(batch=batch)
             results_batch.log_with_prefix('train')
             accumulate_steps += 1

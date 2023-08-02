@@ -1,3 +1,5 @@
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -134,3 +136,6 @@ wandb/
 
 # temporary thought support file
 ts.txt
+
+# credentials
+config/credentials/*
