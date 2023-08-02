@@ -19,9 +19,6 @@ fpaths_meshes: ${test_datasets.co3d.fpaths_cuboids}
 # checkpoint: /misc/lmbraid19/sommerl/exps/06-21_18-05-55_CO3D_NeMo_local/nemo.ckpt
 # checkpoint: /misc/lmbraid19/sommerl/exps/06-22_11-10-13_CO3D_NeMo_local/nemo.ckpt
 
-backbone:
-    class_name: ResNetExt #  ResNetExt # ResNetExt DINOv2 ResNet
-
 train:
     sequences_tform4x4_labeled_count: -1 #
     sequences_tform4x4_estimated_frames_count: 4

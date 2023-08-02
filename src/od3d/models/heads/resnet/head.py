@@ -47,9 +47,13 @@ class ResNet(OD3D_Head):
                                                             nn.BatchNorm2d(self.conv_blocks_out_dims[i])))
                                            for i in range(self.conv_blocks_count)])
 
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.linear_in_dim = self.conv_blocks_out_dims[-1]
-        self.fc = nn.Linear(self.linear_in_dim, self.out_dim)
+        if config.fully_connected.out_dim is not None:
+            self.fc_enabled = True
+            self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+            self.linear_in_dim = self.conv_blocks_out_dims[-1]
+            self.fc = nn.Linear(self.linear_in_dim, self.out_dim)
+        else:
+            self.fc_enabled = False
 
     def forward(self, x):
         if len(self.in_dims) == 1:
@@ -65,7 +69,8 @@ class ResNet(OD3D_Head):
 
         x_res = self.conv_blocks(x_res)
 
-        x_res = self.avgpool(x_res)
-        x_res = torch.flatten(x_res, 1)
-        x_res = self.fc(x_res)
+        if self.fc_enabled:
+            x_res = self.avgpool(x_res)
+            x_res = torch.flatten(x_res, 1)
+            x_res = self.fc(x_res)
         return x_res

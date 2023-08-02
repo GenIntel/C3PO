@@ -25,11 +25,13 @@ from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
 from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize
-from od3d.models.backbones.backbone import OD3D_Backbone
+from od3d.models.model import OD3D_Model
 
 from od3d.cv.geometry.grid import get_pxl2d_like
 from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks  # fit_se3_to_corresp_3d_2d_and_masks
 from od3d.cv.transforms import RandomCenterZoom3D, RGB_Random, CenterZoom3D
+import math
+
 
 from od3d.data.ext_enum import ExtEnum
 class VISUAL_MODALITIES(str, ExtEnum):
@@ -54,7 +56,8 @@ class NeMo(OD3D_Method):
         self.device = 'cuda:0'
 
         # init Network
-        self.net = OD3D_Backbone.subclasses[config.backbone.class_name](config.backbone)
+        self.net = OD3D_Model(config.model)
+
 
         if config.train.transform.random_color:
             self.transform_train = torchvision.transforms.Compose([
@@ -85,10 +88,10 @@ class NeMo(OD3D_Method):
         self.mem_clutter_feats_count = config.num_noise * config.max_group
         self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
 
-        self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.net.feat_dim), device=self.device),
+        self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.net.out_dim), device=self.device),
                                                 requires_grad=True)
         self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(
-            torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.feat_dim), device=self.device),
+            torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.out_dim), device=self.device),
             requires_grad=True))
         # self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.feat_dim), device=self.device), requires_grad=True))
 

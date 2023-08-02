@@ -10,6 +10,19 @@ classes: ${train_dataset.categories}
 transforms:
     - class_name: nemo.datasets.pascal3d.Normalize
 
+model:
+  backbone:
+    class_name: ResNet
+    layers_returned: [4, 3, 2] # always start with depest layer...
+  head:
+    class_name: ResNet
+    conv_blocks:
+      out_dims: [128]
+      strides: [1]
+    fully_connected:
+      out_dim: # None means that there is no linear layer
+
+
 train:
   val: True
   transform:
@@ -111,20 +124,4 @@ inference:
         epochs: 30 # 30
 
 
-
-backbone:
-    class_name: ResNetExt #  ResNetExt # ResNetExt DINOv2 ResNet
-    net_type: resnetext
-    local_size:
-        - 1
-        - 1
-    noise_on_mask: false
-    output_dimension: 128
-    reduce_function: None
-    pretrain: true
-    # n_noise_points: 5 # duplicate of num_noise?
-
-    width: 64
-    height: 64
-    channels: 128 # 128
 

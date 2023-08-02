@@ -3,6 +3,7 @@ defaults:
 
 class_name: NeMo_Incremental
 
+
 train:
   sequences_tform4x4_labeled_count: 3 # how many sequences at start
   sequences_tform4x4_estimated_frames_count: 4

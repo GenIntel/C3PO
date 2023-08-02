@@ -8,10 +8,11 @@ model:
     layers_returned: [4, 3, 2] # always start with depest layer...
   head:
     class_name: ResNet
-    out_dim: 3
     conv_blocks:
       out_dims: [2048]
       strides: [1]
+    fully_connected:
+      out_dim: 3 # None means that there is no linear layer
 
 
 train:
@@ -39,7 +40,7 @@ train:
         - +0.5
         - +0.5
   epochs_to_next_test: 1
-  epochs: 20
+  epochs: 40
   val_fraction: 0.01
   batch_accumulate_to_next_step: 2
   T: 0.07
