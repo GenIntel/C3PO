@@ -15,5 +15,4 @@ class OD3D_Head(nn.Module):
         self.in_upsample_scales = in_upsample_scales
         self.out_dim = config.fully_connected.out_dim if config.fully_connected.out_dim is not None else config.conv_blocks.out_dims[-1] #.get('out_dim', None) if config.get('out_dim', None) is not None else 3
         self.normalize = config.normalize
-        self.normalize_detach_norm = config.normalize_detach_norm
 

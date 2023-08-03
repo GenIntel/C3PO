@@ -75,10 +75,6 @@ class ResNet(OD3D_Head):
             x_res = self.fc(x_res)
 
         if self.normalize:
-            if self.normalize_detach_norm:
-                denom = x_res.norm(p=2.0, dim=1, keepdim=True).clamp_min(1e-12).expand_as(x_res)
-                x_res = x_res / denom.detach()
-            else:
-                x_res = torch.nn.functional.normalize(x_res, p=2, dim=1)
+            x_res = torch.nn.functional.normalize(x_res, p=2, dim=1)
 
         return x_res

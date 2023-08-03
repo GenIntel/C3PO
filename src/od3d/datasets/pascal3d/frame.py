@@ -98,7 +98,7 @@ class Pascal3DFrameMeta(OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_F
         cam_intr4x4 = np.vstack((cam_intr4x4, [0, 0, 0, 1]))
         cam_intr4x4 = torch.from_numpy(cam_intr4x4).to(dtype=cam_tform4x4_obj.dtype)
 
-        rfpath_mesh = path_raw.joinpath(rpath_meshes, category, f"{(mesh_index + 1):02d}.off")
+        rfpath_mesh = rpath_meshes.joinpath(category, f"{(mesh_index + 1):02d}.off")
 
         fpath_mesh_kpoints3d = path_raw.joinpath(rpath_meshes, f"{category}.mat")
         annotation_mesh3d = scipy.io.loadmat(fpath_mesh_kpoints3d)
