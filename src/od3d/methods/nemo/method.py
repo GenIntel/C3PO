@@ -1,5 +1,7 @@
 import time
 from typing import List
+
+import od3d.io
 from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.benchmark.results import OD3D_Results
@@ -106,11 +108,8 @@ class NeMo(OD3D_Method):
         self.meshes.cuda()
         self.net.eval()
 
-        self.optim = torch.optim.Adam(list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats],
-                                      lr=self.config.train.optimizer.lr,  #
-                                      weight_decay=self.config.train.optimizer.weight_decay)  #
-        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optim, gamma=self.config.train.scheduler.gamma,
-                                                              milestones=self.config.train.scheduler.milestones)
+        self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats])
+        self.scheduler = od3d.io.get_obj_from_config(self.optim, config=self.config.train.scheduler)
 
         # load checkpoint
         if config.get("checkpoint", None) is not None:

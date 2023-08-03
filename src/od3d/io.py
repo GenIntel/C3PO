@@ -15,6 +15,9 @@ import json
 from typing import Dict
 import subprocess
 
+import importlib
+
+
 def reporthook(count, block_size, total_size):
     global start_time
     if count == 0:
@@ -116,3 +119,11 @@ def read_str_from_file(fpath: Path):
 def write_str_to_file(fpath: Path, text: str):
     with open(fpath, "w") as file:
         file.write(text)
+
+def get_obj_from_config(*args, config: DictConfig, **kwargs):
+    class_name_split = config.class_name.split('.')
+    module_name = '.'.join(class_name_split[:-1])
+    class_name = class_name_split[-1]
+    module = importlib.import_module(module_name)
+    class_ = getattr(module, class_name)
+    return class_(*args, **{**kwargs, **config.kwargs})

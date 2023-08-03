@@ -6,6 +6,8 @@ from omegaconf import DictConfig, open_dict
 from od3d.models.backbones.backbone import OD3D_Backbone
 from od3d.models.heads.head import OD3D_Head
 
+
+
 class OD3D_Model(nn.Module):
 
     def __init__(self, config: DictConfig):

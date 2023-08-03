@@ -17,6 +17,7 @@ import time
 from tqdm import tqdm
 import torch.utils.data
 import pytorch3d
+import od3d.io
 
 class Regression(OD3D_Method):
     def __init__(
@@ -51,11 +52,9 @@ class Regression(OD3D_Method):
         self.net.cuda()
         self.net.eval()
 
-        self.optim = torch.optim.Adam(list(self.net.parameters()),
-                                      lr=self.config.train.optimizer.lr,  #
-                                      weight_decay=self.config.train.optimizer.weight_decay)  #
-        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optim, gamma=self.config.train.scheduler.gamma,
-                                                              milestones=self.config.train.scheduler.milestones)
+        self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()))
+        self.scheduler = od3d.io.get_obj_from_config(self.optim, config=self.config.train.scheduler)
+
 
     def save_checkpoint(self, path_checkpoint: Path):
         torch.save({
