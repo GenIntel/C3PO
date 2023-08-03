@@ -52,6 +52,7 @@ train:
   T: 0.07
 
   visualize:
+      down_sample_rate: 4.
       count_best: 3
       count_worst: 3
       count_rand: 1
@@ -75,11 +76,12 @@ test:
         pin_memory: True
 
     visualize:
+      down_sample_rate: 4.
       count_best: 3
       count_worst: 3
       count_rand: 1
       modalities:
-        - 'verts_ncds_in_rgb'
+        - 'pred_vs_gt_verts_ncds_in_rgb'
         - 'net_feats_nearest_verts'
         - 'sim_pxl'
         - 'samples'
