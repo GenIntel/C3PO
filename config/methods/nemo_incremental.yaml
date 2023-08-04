@@ -12,7 +12,7 @@ train:
     sequences_labeled_count: 3
     sequences_new_pseudo_labeled_count: 3
     pseudo_label_multiview_count: 4
-    pseudo_label_threshold: 0.1 # 0.6
+    pseudo_label_threshold: 0.6 # 0.6
 
   #sequences_tform4x4_labeled_count: 3 # how many sequences at start
   #sequences_tform4x4_estimated_frames_count: 4

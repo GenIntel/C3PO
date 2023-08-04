@@ -174,7 +174,8 @@ def rsync(platform_source: str = typer.Option('slurm', '-s', '--source'),
 @app.command()
 def status_slurm():
     logging.basicConfig(level=logging.INFO)
-    format = '"%.18i %.9P %.40j %.8u %.8T %.10M %.9l %.6D %R"'
+    # 60j = 60 characters
+    format = '"%.18i %.9P %.60j %.8u %.8T %.10M %.9l %.6D %R"'
     slurm_result = subprocess.run(f"ssh slurm 'squeue --me --format={format}'", capture_output=True, shell=True)
     slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
     for slurm_job in slurm_jobs:

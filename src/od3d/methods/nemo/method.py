@@ -539,11 +539,13 @@ class NeMo(OD3D_Method):
 
 
                 feats2d_net = self.net(batch.rgb)
-                feats2d_net = resize(feats2d_net, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
+                #feats2d_net = resize(feats2d_net,
+                #                     scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
 
                 if VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS in modalities:
                     verts3d = self.get_nearest_verts3d_to_feats2d_net(feats2d_net=feats2d_net, categories_ids=batch.label,
                                                                       zero_if_sim_clutter_larger=True)
+                    verts3d = resize(verts3d, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
                     for b in range(len(batch)):
                         img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate), verts3d[b])
                         results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_sel_scores[b]}')
@@ -566,6 +568,7 @@ class NeMo(OD3D_Method):
                                                              cam_intr4x4=s_cam_intr4x4,
                                                              categories_ids=batch.label,
                                                              broadcast_batch_and_cams=True)
+
 
                     for b in range(len(batch)):
                         imgs = ncds[b]
@@ -605,7 +608,7 @@ class NeMo(OD3D_Method):
                                                                       cam_tform4x4_obj=batch_pred_cam_tform4x4,
                                                                       categories_ids=batch_pred_label, return_sim_pxl=True,
                                                                       broadcast_batch_and_cams=False)
-
+                    sim_pxl = resize(sim_pxl, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
                     for b in range(len(batch)):
                         img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
                                         sim_pxl[b])

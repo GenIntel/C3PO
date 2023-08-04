@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: incr_l3
+ablation_name: incr_th05
 method:
     nemo:
       train:
