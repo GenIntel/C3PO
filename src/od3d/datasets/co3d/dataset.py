@@ -125,13 +125,17 @@ class CO3D(OD3D_Dataset):
                          index_shift=index_shift, dict_nested_frames=dict_nested_frames)
 
 
+        self.splits_featured = [OD3D_DATASET_SPLITS.RANDOM, OD3D_DATASET_SPLITS.SEQUENCES_SEPARATED,
+                                OD3D_DATASET_SPLITS.SEQUENCES_SHARED]
+        self.cam_tform_obj_source = cam_tform_obj_source
+        self.cuboid_source = cuboid_source
+
         """
         self.device = "cpu"
         self.dtype = torch.float32
         self.categories = categories if categories is not None else CO3D_CATEGORIES.list()
-        self.cam_tform_obj_source = cam_tform_obj_source
-        self.cuboid_source = cuboid_source
-        self.splits_featured = [OD3D_DATASET_SPLITS.RANDOM, OD3D_DATASET_SPLITS.SEQUENCES_SEPARATED, OD3D_DATASET_SPLITS.SEQUENCES_SHARED]
+        
+        
 
         logger.info(f"found {len(self.categories)} categories")
 
@@ -189,7 +193,12 @@ class CO3D(OD3D_Dataset):
         logger.info(f"found {self.frames_count} frames.")
         """
 
-    def get_subset_by_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], frames_count_max_per_sequence=None):
+    def get_subset_by_sequences(self, dict_category_sequences: Dict[str, List[str]], frames_count_max_per_sequence=None):
+        dict_nested_frames = {}
+        for cat, seqs in dict_category_sequences.items():
+            dict_nested_frames[cat] = {}
+            for seq in seqs:
+                 dict_nested_frames[cat][seq] = None
         return CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
                     path_preprocess=self.path_preprocess, categories=self.categories,
                     frames_count_max_per_sequence=frames_count_max_per_sequence,
@@ -200,7 +209,8 @@ class CO3D(OD3D_Dataset):
     def get_split_sequences_shared(self, fraction1: float):
         dict_category_sequence_name_frames_names_subsetA = {}
         dict_category_sequence_name_frames_names_subsetB = {}
-        dict_category_sequence_name_frames_names = self.list_categories_sequences_names_frames_names_to_dict(self.list_frames_unique)
+        dict_category_sequence_name_frames_names = CO3D_FrameMeta.rollup_flattened_frames(self.list_frames_unique)
+        #dict_category_sequence_name_frames_names = self.list_categories_sequences_names_frames_names_to_dict(self.list_frames_unique)
         for category, dict_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
             dict_category_sequence_name_frames_names_subsetA[category] = {}
             dict_category_sequence_name_frames_names_subsetB[category] = {}
@@ -215,7 +225,8 @@ class CO3D(OD3D_Dataset):
     def get_split_sequences_separated(self, fraction1: float):
         dict_category_sequence_name_frames_names_subsetA = {}
         dict_category_sequence_name_frames_names_subsetB = {}
-        dict_category_sequence_name_frames_names = self.list_categories_sequences_names_frames_names_to_dict(self.list_frames_unique)
+        dict_category_sequence_name_frames_names = CO3D_FrameMeta.rollup_flattened_frames(self.list_frames_unique)
+        #dict_category_sequence_name_frames_names = self.list_categories_sequences_names_frames_names_to_dict(self.list_frames_unique)
         for category, dict_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
             seqs_names = list(dict_sequence_name_frames_names.keys())
             cutoff = int(len(seqs_names) * fraction1)
@@ -367,6 +378,7 @@ class CO3D(OD3D_Dataset):
         return dict_nested_frames
     """
 
+    """
     def dict_category_sequence_name_frames_names_to_list(self, dict_category_sequence_name_frames_names):
         list_categories_sequences_names_frames_names: List[Tuple[str, str, str]] = []
         for category, map_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
@@ -374,16 +386,21 @@ class CO3D(OD3D_Dataset):
                 for frame_name in frames_names:
                     list_categories_sequences_names_frames_names.append((category, sequence_name, frame_name))
         return list_categories_sequences_names_frames_names
+    """
 
+    """
     def list_categories_sequences_names_frames_names_to_dict(self, list_categories_sequences_names_frames_names):
         dict_category_sequence_name_frames_names = {}
-        for category, sequence_name, frame_name in list_categories_sequences_names_frames_names:
+        for frame_name_unique in list_categories_sequences_names_frames_names:
+            category, sequence_name, frame_name = frame_name_unique.split('/')
             if category not in dict_category_sequence_name_frames_names.keys():
                 dict_category_sequence_name_frames_names[category] = {}
             if sequence_name not in dict_category_sequence_name_frames_names[category].keys():
                 dict_category_sequence_name_frames_names[category][sequence_name] = []
             dict_category_sequence_name_frames_names[category][sequence_name].append(frame_name)
         return dict_category_sequence_name_frames_names
+    """
+
     @staticmethod
     def setup(config: DictConfig):
 

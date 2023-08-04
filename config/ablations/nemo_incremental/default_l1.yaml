@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: incr_l10
+ablation_name: incr_l1
 method:
     nemo:
       train:
@@ -7,7 +7,7 @@ method:
         epochs: 100
         incremental:
           enabled: True
-          sequences_labeled_count: 10
+          sequences_labeled_count: 1
           sequences_new_pseudo_labeled_count: 3
           pseudo_label_multiview_count: 4
           pseudo_label_threshold: 0.6
@@ -15,4 +15,3 @@ method:
 
 train: True
 test: True
-
