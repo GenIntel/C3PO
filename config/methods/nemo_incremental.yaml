@@ -7,6 +7,7 @@ checkpoint: ${platform.path_exps}/08-07_14-10-07_CO3D_NeMo_train_co3d_3s_split_s
 
 train:
   val: True
+  split: sequences_separated # 'random' 'sequences_separated' 'seqences_shared'
   epochs: 100
   incremental:
     enabled: True

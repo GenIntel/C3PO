@@ -13,6 +13,16 @@ method:
           H: 640 # 640 512
           dist: 25. # 5. (scale_normalized_to_real) * 5. (default distance used)
           center3d: [ 0., 0., 0. ] #  None
+          dist_min: 25.
+          dist_max: 25.
+          center3d_min:
+            - -0.
+            - -0.
+            - -0.
+          center3d_max:
+            - +0.
+            - +0.
+            - +0.
 
         test:
           transform:

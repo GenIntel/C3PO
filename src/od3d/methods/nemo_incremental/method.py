@@ -63,12 +63,13 @@ class NeMo_Incremental(NeMo):
 
         dataloader = torch.utils.data.DataLoader(dataset=dataset_update, batch_size=self.config.train.incremental.pseudo_label_multiview_count, #self.config.test.dataloader.batch_size,
                                                  shuffle=False,
-                                                 collate_fn=dataset_update.collate_fn)#,
-                                                 #num_workers=self.config.test.dataloader.num_workers,
-                                                 #pin_memory=self.config.test.dataloader.pin_memory)
+                                                 collate_fn=dataset_update.collate_fn,
+                                                 num_workers=self.config.test.dataloader.num_workers,
+                                                 pin_memory=self.config.test.dataloader.pin_memory)
 
         results = OD3D_Results()
         for i, batch in tqdm(enumerate(iter(dataloader))):
+
             batch.to(device=self.device)
             results_batch = self.inference_batch_multiview(batch=batch)
             results += results_batch
