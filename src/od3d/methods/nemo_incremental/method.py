@@ -99,7 +99,7 @@ class NeMo_Incremental(NeMo):
 
 
         dataset_train, dataset_val_train = dataset.get_split(fraction1=1.-self.config.train.val_fraction,
-                                                             fraction2=self.config.train.val_fraction)
+                                                             fraction2=self.config.train.val_fraction, split=self.config.train.split)
 
         self.train_sequences = list(dataset_train.dict_nested_frames['car'].keys())
         self.train_sequences_labeled = random.sample(self.train_sequences, k=self.config.train.incremental.sequences_labeled_count)

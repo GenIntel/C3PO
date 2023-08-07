@@ -180,7 +180,7 @@ class NeMo(OD3D_Method):
         score_latest = 0.
 
         train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1.-self.config.train.val_fraction,
-                                                               fraction2=self.config.train.val_fraction)
+                                                               fraction2=self.config.train.val_fraction, split=self.config.train.split)
 
         for epoch in range(self.config.train.epochs):
             if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:

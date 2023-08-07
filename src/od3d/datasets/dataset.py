@@ -138,16 +138,16 @@ class OD3D_Dataset(Dataset):
                 logger.warning(f'Subset fractions dont sum up to 1. Setting 1.={fraction1}, 2.={fraction2}')
         return fraction1
 
-    def get_split(self, fraction1: float, fraction2: float):
+    def get_split(self, fraction1: float, fraction2: float, split: OD3D_DATASET_SPLITS = OD3D_DATASET_SPLITS.RANDOM):
         fraction1 = self.get_fractionA_from_fractionA_and_fraction_B(fraction1, fraction2)
-        if OD3D_DATASET_SPLITS.SEQUENCES_SHARED in self.splits_featured:
+        if split == OD3D_DATASET_SPLITS.SEQUENCES_SHARED:
             return self.get_split_sequences_shared(fraction1=fraction1)
-        elif OD3D_DATASET_SPLITS.RANDOM in self.splits_featured:
+        elif split == OD3D_DATASET_SPLITS.RANDOM:
             return self.get_split_random(fraction1=fraction1)
-        elif OD3D_DATASET_SPLITS.SEQUENCES_SEPARATED in self.splits_featured:
+        elif split == OD3D_DATASET_SPLITS.SEQUENCES_SEPARATED:
             return self.get_split_sequences_separated(fraction1=fraction1)
         else:
-            logger.warning(f'Dataset features none or only unknown splits {self.splits_featured}')
+            logger.warning(f'Unknown split {split}.')
 
 
     def get_split_random(self, fraction1: float):

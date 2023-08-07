@@ -8,6 +8,5 @@ method:
     nemo:
         train:
             epochs: 10
-            split: random
 train: True
 test: True

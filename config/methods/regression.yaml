@@ -19,7 +19,7 @@ model:
     normalize: False
 
 train:
-
+  split: random # 'random' 'sequences_separated' 'seqences_shared'
   dataloader:
     num_workers: 4
     batch_size: 12

@@ -35,7 +35,12 @@ from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+from od3d.data.ext_enum import ExtEnum
 
+class MultiViewType(str, ExtEnum):
+    SINGLE = 'single'
+    MULTIVIEW = 'multiview'
+    MULTIVIEW_MEAN_SE3 = 'multiview_mean_se3'
 
 class NeMo_MultiView(NeMo):
     def __init__(
@@ -85,11 +90,21 @@ class NeMo_MultiView(NeMo):
         return results_epoch
 
     def inference_batch(self, batch):
-        if self.config.multiview.enabled:
+        if self.config.multiview.type == MultiViewType.MULTIVIEW:
             return self.inference_batch_multiview(batch)
-        else:
+        elif self.config.multiview.type == MultiViewType.SINGLE:
             return super().inference_batch(batch)
-
+        elif self.config.multiview.type == MultiViewType.MULTIVIEW_MEAN_SE3:
+            results_batch = super().inference_batch(batch)
+            obj_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(batch.cam_tform4x4_obj), results_batch['cam_tform4x4_obj'])
+            obj_tform6_cuboid_front = se3_log_map(obj_tform4x4_cuboid_front).mean(dim=0, keepdim=True)
+            obj_tform4x4_cuboid_front = se3_exp_map(obj_tform6_cuboid_front)
+            cam_tform4x4_obj = tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front)
+            results_batch['cam_tform4x4_obj'] = cam_tform4x4_obj
+            results_batch['obj_tform4x4_cuboid_front'] = obj_tform4x4_cuboid_front
+            return results_batch
+        else:
+            logger.warning(f"Unknown multiview type {self.config.multiview.type}")
 
     def inference_batch_multiview(self, batch):
         results = OD3D_Results()

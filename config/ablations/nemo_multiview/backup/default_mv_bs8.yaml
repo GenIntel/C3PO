@@ -3,7 +3,7 @@ ablation_name: multiview_bs8
 method:
     nemo:
       multiview:
-        enabled: True
+        type: multiview # single multiview multiview-mean-se3
         batch_size: 8
 
 train: False

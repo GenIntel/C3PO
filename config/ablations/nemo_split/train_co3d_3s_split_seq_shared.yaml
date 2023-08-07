@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+  - override /datasets@train_dataset: co3d_3s_train #  co3d_55s_train, pascal3d_train
+
+ablation_name: train_co3d_3s_split_seq_shared
+
+method:
+    nemo:
+        train:
+            epochs: 20
+            split: seqences_shared # 'random' 'sequences_separated' 'seqences_shared'
+
+train: True
+test: True

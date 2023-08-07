@@ -2,11 +2,13 @@
 defaults:
   - override /datasets@train_dataset: co3d_3s_train #  co3d_55s_train, pascal3d_train
 
-ablation_name: uniform_train_co3d_3s
+ablation_name: train_co3d_3s_split_seq_separated
 
 method:
     nemo:
         train:
             epochs: 20
+            split: sequences_separated # 'random' 'sequences_separated' 'seqences_shared'
+
 train: True
 test: True

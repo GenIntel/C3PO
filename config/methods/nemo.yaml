@@ -29,6 +29,7 @@ model:
 
 train:
   val: True
+  split: random # 'random' 'sequences_separated' 'seqences_shared'
   transform:
     random_color: True
     random_center_zoom3d:

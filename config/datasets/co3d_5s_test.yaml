@@ -5,7 +5,7 @@ name: co3d_5s_test
 
 #frames_count_max_per_sequence: 10
 
-subset_fraction: 0.05
+subset_fraction: 1.
 
 dict_nested_frames:
   car:
