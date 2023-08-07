@@ -140,10 +140,14 @@ class OD3D_Dataset(Dataset):
 
     def get_split(self, fraction1: float, fraction2: float):
         fraction1 = self.get_fractionA_from_fractionA_and_fraction_B(fraction1, fraction2)
-        if OD3D_DATASET_SPLITS.SEQUENCES_SEPARATED in self.splits_featured:
+        if OD3D_DATASET_SPLITS.SEQUENCES_SHARED in self.splits_featured:
+            return self.get_split_sequences_shared(fraction1=fraction1)
+        elif OD3D_DATASET_SPLITS.RANDOM in self.splits_featured:
+            return self.get_split_random(fraction1=fraction1)
+        elif OD3D_DATASET_SPLITS.SEQUENCES_SEPARATED in self.splits_featured:
             return self.get_split_sequences_separated(fraction1=fraction1)
         else:
-            return self.get_split_random(fraction1=fraction1)
+            logger.warning(f'Dataset features none or only unknown splits {self.splits_featured}')
 
 
     def get_split_random(self, fraction1: float):
