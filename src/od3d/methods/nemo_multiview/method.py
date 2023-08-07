@@ -102,6 +102,15 @@ class NeMo_MultiView(NeMo):
             cam_tform4x4_obj = tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front)
             results_batch['cam_tform4x4_obj'] = cam_tform4x4_obj
             results_batch['obj_tform4x4_cuboid_front'] = obj_tform4x4_cuboid_front
+            diff_rot3x3 = rot3x3(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_tform4x4_obj[:, :3, :3])
+            try:
+                diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3.permute(0, 2, 1))
+                diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
+            except ValueError:
+                logger.warning(
+                    f'Cannot calculate deviation in rotation angle due to rot3x3 trace being too small, setting deviation to 0.')
+                diff_rot_angle_rad = 0.
+            results_batch['rot_diff_rad'] = diff_rot_angle_rad
             return results_batch
         else:
             logger.warning(f"Unknown multiview type {self.config.multiview.type}")

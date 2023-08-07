@@ -3,6 +3,7 @@ defaults:
 
 class_name: NeMo_Incremental
 
+checkpoint: ${platform.path_exps}/08-07_14-10-07_CO3D_NeMo_train_co3d_3s_split_seq_separated_slurm/nemo.ckpt
 
 train:
   val: True
@@ -11,7 +12,7 @@ train:
     enabled: True
     sequences_labeled_count: 3
     sequences_new_pseudo_labeled_count: 3
-    pseudo_label_multiview_count: 4
+    pseudo_label_multiview_count: 8
     pseudo_label_threshold: 0.6 # 0.6
 
   #sequences_tform4x4_labeled_count: 3 # how many sequences at start

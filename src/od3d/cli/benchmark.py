@@ -9,6 +9,7 @@ app = typer.Typer()
 import subprocess
 from omegaconf import open_dict
 import time
+import json
 from datetime import datetime
 def get_timestamp_as_string():
     now = datetime.now()
@@ -22,8 +23,8 @@ def table():
     import wandb
     config = od3d.io.load_hierarchical_config()
 
-    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
-    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
+    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
 
     # Initialize wandb
      # wandb.init(project=config.logger.wandb_project_name)
@@ -39,22 +40,54 @@ def table():
 
     runs = list(filter(lambda run: all([metric in list(run.summary.keys()) for metric in metrics]), runs))
 
+    runs = list(filter(lambda run: 'multiview' in run.name, runs))
 
     rows = []
     for run in runs:
-        logger.info(f'runs {run.name}')
-        run_summary = run.summary
-        row = [run.name]
-        for metric in metrics:
-            row.append(run_summary[metric])
+        try:
+            logger.info(f'runs {run.name}')
+            run_summary = run.summary
+            row = [run.name]
+            row.append(json.loads(run.json_config)["method"]['value']['multiview']['type'].replace('_', ' '))
+            row.append(json.loads(run.json_config)["method"]['value']['multiview']['batch_size'])
+            for metric in metrics:
+                row.append(run_summary[metric])
 
-        rows.append(row)
+            rows.append(row)
+        except Exception as e:
+
+            logger.warning(f'skipping run {run.name} due to {e}')
     logger.info(rows)
-    cols = ['name'] + metrics
-    logger.info(tabulate(rows, headers=cols, tablefmt='github')) # 'github', 'tsv'
+
+    #cols = ['name'] + metrics
+
+    cols = ['name', 'type', 'batch_size'] + metrics
 
     import pandas as pd
-    my_df = pd.DataFrame([cols] + rows)
+    my_df = pd.DataFrame(rows, columns=cols)
+
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    metrics_new_names = ['Acc. PI/6 [%]', 'Acc. PI/18 [%]', 'Error Median [deg]', 'Error Mean [deg]']
+    my_df[metrics[0]] *= 100
+    my_df[metrics[1]] *= 100
+    my_df = my_df.rename(columns={'batch_size': 'multiview #frames', metrics[0]: metrics_new_names[0], metrics[1]: metrics_new_names[1], metrics[2]: metrics_new_names[2], metrics[3]: metrics_new_names[3]})
+    for i, metric in enumerate(metrics_new_names):
+        mv_plot = sns.catplot(
+            x="multiview #frames",  # x variable name
+            y=metric,  # y variable name
+            hue="type",  # group variable name
+            data=my_df,  # dataframe to plot
+            kind="bar",
+        )
+        #fig = mv_plot.get_figure()
+        plt.savefig(f"multiview_{metrics[i].replace('/', '_')}.png")
+
+
+    logger.info(tabulate(rows, headers=cols, tablefmt='github')) # 'github', 'tsv'
+
+
     my_df.to_csv('output.csv', index=False, header=False)
 
 

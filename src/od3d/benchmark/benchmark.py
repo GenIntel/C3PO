@@ -15,7 +15,7 @@ class OD3D_Benchmark:
         if self.config.logger.use_wandb:
             wandb.login()
             wandb.init(project=self.config.logger.wandb_project_name, config=OmegaConf.to_container(self.config, resolve=True),
-                       dir=Path(self.config.logger.local_dir), name=self.config.run_name)
+                       dir=Path(self.config.logger.local_dir), name=self.config.run_name, reinit=True)
 
     def run(self):
         # 1. setup datasets

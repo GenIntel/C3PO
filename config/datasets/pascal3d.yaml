@@ -63,31 +63,6 @@ preprocess_override: False
 preprocess_cuboids: True
 preprocess_masks: True
 
-index_shift: 0
-pad_texture: false
-remove_no_bg: 8
-center: true
-resize: true
-resize_dists_min: 5.
-resize_dists_max: 10.
-
-cache: # None, Disk, RAM
-
-# enable_cache: true
-# weighted: true
-#training_only: false
-#evaluation_only: false
-#augment_by_dist: false
-#prepare_mode: first
-#center_and_resize: true
-#skip_3d_anno: false
-
-occ_level: 0
-occ_levels:
-    train: [0]
-    val: [0, 1, 2, 3]
-
-
 image_sizes:
     aeroplane: [512, 512]
     bicycle: [512, 512]
@@ -102,19 +77,6 @@ image_sizes:
     train: [512, 512]
     tvmonitor: [512, 512]
 
-#image_sizes:
-#    aeroplane: [320, 672]
-#    bicycle: [608, 608]
-#    boat: [384, 672]
-#    bottle: [480, 800]
-#    bus: [320, 736]
-#    car: [256, 672]
-#    chair: [608, 384]
-#    diningtable: [384, 800]
-#    motorbike: [512, 512]
-#    sofa: [352, 736]
-#    train: [256, 608]
-#    tvmonitor: [480, 448]
 
 categories:
 #    - aeroplane
@@ -129,11 +91,3 @@ categories:
 #    - sofa
 #    - train
 #    - tvmonitor
-
-#transforms:
-#    - class_name: od3d.datasets.transforms.ToTensor
-#sampler: None
-
-# root_path: data/PASCAL3D_NeMo
-#seg_data_url: https://docs.google.com/uc?export=download&id=1hx6eErHtuR7TCGlQMyl2_03gXDTQw3Qm
-#seg_data_path: data/PASCAL3D_segmentation
