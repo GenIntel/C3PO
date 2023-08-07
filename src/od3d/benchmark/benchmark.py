@@ -20,11 +20,12 @@ class OD3D_Benchmark:
     def run(self):
         # 1. setup datasets
         datasets_val = []
-        for dataset_val_key in self.config.val_datasets.keys():
-            logger.info(f'create val dataset {self.config.val_datasets[dataset_val_key].name}')
-            datasets_val.append(
-                OD3D_Dataset.subclasses[self.config.val_datasets[dataset_val_key].class_name].create_from_config(
-                    config=self.config.val_datasets[dataset_val_key]))
+        if "val_datasets" in self.config.keys():
+            for dataset_val_key in self.config.val_datasets.keys():
+                logger.info(f'create val dataset {self.config.val_datasets[dataset_val_key].name}')
+                datasets_val.append(
+                    OD3D_Dataset.subclasses[self.config.val_datasets[dataset_val_key].class_name].create_from_config(
+                        config=self.config.val_datasets[dataset_val_key]))
 
         datasets_test = []
         for dataset_test_key in self.config.test_datasets.keys():

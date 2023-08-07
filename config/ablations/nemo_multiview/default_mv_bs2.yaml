@@ -1,0 +1,10 @@
+# @package _global_
+ablation_name: multiview_bs2
+method:
+    nemo:
+      multiview:
+        enabled: True
+        batch_size: 2
+
+train: False
+test: True

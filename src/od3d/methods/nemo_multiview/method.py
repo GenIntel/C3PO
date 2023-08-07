@@ -1,7 +1,6 @@
 import time
 from typing import List
 from od3d.methods.method import OD3D_Method
-from od3d.datasets.dataset import OD3D_Dataset
 from od3d.datasets.co3d.dataset import CO3D
 from omegaconf import DictConfig
 import pytorch3d.transforms
@@ -38,13 +37,7 @@ from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
 
-@dataclass
-class SequencePseudoLabel():
-    obj_tform4x4_cuboid_front: torch.Tensor
-    sim: float
-
-
-class NeMo_Incremental(NeMo):
+class NeMo_MultiView(NeMo):
     def __init__(
         self,
         config: DictConfig,
@@ -52,92 +45,50 @@ class NeMo_Incremental(NeMo):
     ):
         super().__init__(config=config, logging_dir=logging_dir)
 
-    def update_pseudo_labels(self, dataset_train: CO3D):
+
+    def test(self, dataset: CO3D, config_inference: DictConfig = None, pose_iterative_refine=True):
+        logger.info(f'test dataset {dataset.name}')
+        if config_inference is None:
+            config_inference = self.config.inference
         self.net.eval()
         self.meshes.feats.requires_grad = False
-        update_sequences_random = self.train_sequences_pseudo_labeled + random.choices(self.train_sequences_unlabeled, k=self.config.train.incremental.sequences_new_pseudo_labeled_count)
-        dict_category_sequences = {'car': update_sequences_random}
-        dataset_update = dataset_train.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
-                                                               frames_count_max_per_sequence=self.config.train.incremental.pseudo_label_multiview_count)
-        dataset_update.transform = self.transform_test
+        clutter_feats = self.clutter_feats.detach()
+        dataset.transform = self.transform_test
+        dict_category_sequences = {'car': list(dataset.dict_nested_frames['car'].keys())}
+        dataset_sub = dataset.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
+                                                      frames_count_max_per_sequence=self.config.multiview.batch_size)
 
-        dataloader = torch.utils.data.DataLoader(dataset=dataset_update, batch_size=self.config.train.incremental.pseudo_label_multiview_count, #self.config.test.dataloader.batch_size,
+
+        dataloader = torch.utils.data.DataLoader(dataset=dataset_sub, batch_size=self.config.multiview.batch_size,
                                                  shuffle=False,
-                                                 collate_fn=dataset_update.collate_fn)#,
-                                                 #num_workers=self.config.test.dataloader.num_workers,
-                                                 #pin_memory=self.config.test.dataloader.pin_memory)
+                                                 collate_fn=dataset_sub.collate_fn,
+                                                 num_workers=self.config.test.dataloader.num_workers,
+                                                 pin_memory=self.config.test.dataloader.pin_memory)
 
-        results = OD3D_Results()
+        logger.info(f"Dataset contains {len(dataset_sub)} frames.")
+
+        results_epoch = OD3D_Results()
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
-            results_batch = self.inference_batch_multiview(batch=batch)
-            results += results_batch
-            sim = results_batch["sim"].mean()
-            obj_tform4x4_cuboid_front = results_batch["obj_tform4x4_cuboid_front"]
-            if sim > self.config.train.incremental.pseudo_label_threshold:
-                self.train_sequences_pseudo_labels[batch.sequence_name[0]] = SequencePseudoLabel(obj_tform4x4_cuboid_front=obj_tform4x4_cuboid_front, sim=sim)
-                if batch.sequence_name[0] not in self.train_sequences_pseudo_labeled:
-                    self.train_sequences_pseudo_labeled.append(batch.sequence_name[0])
-            else:
-                if batch.sequence_name[0] in self.train_sequences_pseudo_labeled:
-                    del self.train_sequences_pseudo_labels[batch.sequence_name[0]]
-                    self.train_sequences_pseudo_labeled.remove(batch.sequence_name[0])
-        results_visual = self.get_results_visual(results_epoch=results, dataset=dataset_update,
-                                                 rank_metric_name='sim',
+
+            results_batch = self.inference_batch(batch=batch)
+            results_epoch += results_batch
+
+        count_pred_frames = len(results_epoch['item_id'])
+        logger.info(f'Predicted {count_pred_frames} frames.')
+
+        results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset_sub,
+                                                 rank_metric_name='rot_diff_rad',
                                                  config_visualize=self.config.test.visualize)
-        results = results.mean()
-        results += results_visual
-        results['count'] = len(self.train_sequences_pseudo_labels)
+        results_epoch = results_epoch.mean()
+        results_epoch += results_visual
+        return results_epoch
 
-
-        results.log_with_prefix(prefix=f'pseudo_labels/{dataset_update.name}')
-
-    def train(self, dataset: CO3D, datasets_val: List[OD3D_Dataset]):
-        score_metric_name = 'pose/acc_pi6'
-        score_ckpt_val = 0.
-        score_latest = 0.
-
-
-        dataset_train, dataset_val_train = dataset.get_split(fraction1=1.-self.config.train.val_fraction,
-                                                             fraction2=self.config.train.val_fraction)
-
-        self.train_sequences = list(dataset_train.dict_nested_frames['car'].keys())
-        self.train_sequences_labeled = random.sample(self.train_sequences, k=self.config.train.incremental.sequences_labeled_count)
-        self.train_sequences_unlabeled = list(set(self.train_sequences) - set(self.train_sequences_labeled))
-        self.train_sequences_pseudo_labeled = []
-        self.train_sequences_pseudo_labels: Dict[str, SequencePseudoLabel] = {}
-
-        for epoch in range(self.config.train.epochs):
-            if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
-                for dataset_val in datasets_val + [dataset_val_train]:
-                    results_val = self.test(dataset_val)
-                    results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
-                    score_latest = results_val[score_metric_name]
-
-                if score_latest > score_ckpt_val:
-                    score_ckpt_val = score_latest
-                    self.save_checkpoint(path_checkpoint=self.path_checkpoint)
-
-            self.train_sequences_random = self.train_sequences_labeled + self.train_sequences_pseudo_labeled
-            dict_category_sequences = {'car': self.train_sequences_random}
-            train_dataset_sub = dataset_train.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
-                                                                      frames_count_max_per_sequence=None)
-
-            results_epoch = self.train_epoch(dataset=train_dataset_sub)
-            results_epoch.log_with_prefix('train')
-
-            if self.config.train.incremental.enabled:
-                self.update_pseudo_labels(dataset_train=dataset_train)
-
-        self.load_checkpoint(path_checkpoint=self.path_checkpoint)
-
-    def train_batch(self, batch) -> OD3D_Results:
-        for b in range(len(batch)):
-            if self.config.train.incremental.enabled:
-                if batch.sequence_name[b] in self.train_sequences_pseudo_labels:
-                    batch.cam_tform4x4_obj[b] = tform4x4(batch.cam_tform4x4_obj[b],
-                                                         self.train_sequences_pseudo_labels[batch.sequence_name[b]].obj_tform4x4_cuboid_front.to(device=batch.cam_tform4x4_obj.device))
-        return super().train_batch(batch=batch)
+    def inference_batch(self, batch):
+        if self.config.multiview.enabled:
+            return self.inference_batch_multiview(batch)
+        else:
+            return super().inference_batch(batch)
 
 
     def inference_batch_multiview(self, batch):

@@ -3,7 +3,7 @@ defaults:
 
 name: co3d_3s_train
 
-frames_count_max_per_sequence: 1
+#frames_count_max_per_sequence: 1
 
 subset_fraction: 1.
 

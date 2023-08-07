@@ -8,7 +8,7 @@ class_name: Regression
 model:
   backbone:
     class_name: ResNet
-    layers_returned: [4, 3, 2] # always start with depest layer...
+    layers_returned: [4, 3, 2] # always start with deepest layer...
   head:
     class_name: ResNet
     conv_blocks:

@@ -1,0 +1,15 @@
+defaults:
+  - nemo
+
+class_name: NeMo_MultiView
+
+checkpoint: ${platform.path_exps}/08-07_10-06-17_CO3D_NeMo_uniform_train_co3d_3s_slurm/nemo.ckpt
+
+multiview:
+  enabled: True
+  batch_size: 4
+
+train:
+  val: True
+  epochs: 100
+

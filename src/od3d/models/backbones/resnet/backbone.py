@@ -6,6 +6,11 @@ import torch
 from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize # , CenterZoom3D, RGB_Random
 import torchvision
 from od3d.models.backbones.backbone import OD3D_Backbone
+from od3d.data.ext_enum import ExtEnum
+
+#class RESNET50_WEIGHTS(ExtEnum):
+#    IMAGENET1K_2 = torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V2
+#    I
 
 class ResNet(OD3D_Backbone):
     def __init__(

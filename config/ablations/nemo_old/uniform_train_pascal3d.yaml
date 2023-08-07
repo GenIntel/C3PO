@@ -7,7 +7,7 @@ ablation_name: uniform_train_pascal3d
 method:
     nemo:
         train:
-            epochs: 10
+            epochs: 20
 
 train: True
 test: True
