@@ -6,6 +6,7 @@ defaults:
   - datasets@val_datasets.pascal3d: pascal3d_val
   - datasets@test_datasets.co3d: co3d_5s_test # co3d_10s_test, co3d_test
   - datasets@test_datasets.pascal3d: pascal3d_test
+  - datasets@texture_dataset: dtd
   - platform@platform_local: local
   - platform: local
 

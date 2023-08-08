@@ -67,7 +67,7 @@ class OD3D_FrameKPTS2D3DMixin():
         return torch.Tensor(self.l_kpts3d)
 
 @dataclass
-class OD3D_FrameMetaSubsetMixin():
+class OD3D_FrameMetaSubsetMixin:
     subset: str
 
 @dataclass

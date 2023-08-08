@@ -1,0 +1,14 @@
+# @package _global_
+ablation_name: incr_th05
+method:
+    nemo:
+      train:
+        val: True
+        epochs: 100
+        incremental:
+          enabled: True
+          pseudo_label_threshold: 0.5
+
+
+train: True
+test: True

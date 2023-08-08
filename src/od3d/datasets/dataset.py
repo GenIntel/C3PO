@@ -11,6 +11,7 @@ from od3d.datasets.frames import OD3D_Frames
 from od3d.data import ExtEnum
 import inspect
 from tqdm import tqdm
+import numpy as np
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -170,6 +171,9 @@ class OD3D_Dataset(Dataset):
 
     def get_item(self, item):
         raise NotImplementedError
+
+    def get_random_item(self):
+        return self.__getitem__(np.random.choice(self.__len__()))
 
     def get_item_id_by_name_unique(self, name_unique: str):
         for i in range(len(self)):

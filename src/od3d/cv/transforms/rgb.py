@@ -2,12 +2,23 @@ import logging
 logger = logging.getLogger(__name__)
 from torchvision.transforms.transforms import Normalize
 import torchvision
+import torch
+
 class RGB_UInt8ToFloat:
     def __init__(self):
         pass
     def __call__(self, frame):
         frame._rgb = frame.rgb / 255.
         return frame
+
+class RGB_FloatToUInt8:
+    def __init__(self):
+        pass
+
+    def __call__(self, frame):
+        frame._rgb = (frame.rgb * 255.).to(dtype=torch.uint8)
+        return frame
+
 
 class RGB_Normalize:
     def __init__(self, mean=None, std=None):

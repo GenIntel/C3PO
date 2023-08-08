@@ -184,13 +184,13 @@ def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
-    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset, "+datasets@dtd=dtd"])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     import torchvision
     from od3d.cv.transforms import CenterZoom3D, RandomCenterZoom3D
     # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
     dataset.transform = torchvision.transforms.Compose([
-        # RandomCenterZoom3D(H=640, W=800, dist=5., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=False, config=config.dataset),
+        RandomCenterZoom3D(H=640, W=800, dist=25., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=True, config=config.dtd),
         dataset.transform,
     ]
     )

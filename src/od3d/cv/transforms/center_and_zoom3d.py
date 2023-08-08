@@ -7,17 +7,17 @@ from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame
 from od3d.cv.visual.crop import crop
 from omegaconf import DictConfig
 from od3d.datasets.dtd import DTD
-
+import torchvision
 class CenterZoom3D():
 
-    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, config:DictConfig = None):
+    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, config: DictConfig = None):
         self.center3d = torch.Tensor(center3d) if center3d is not None else None
         self.H = H
         self.W = W
         self.dist = dist
         self.apply_txtr = apply_txtr
         if self.apply_txtr:
-            self.dtd = DTD(config=config)
+            self.dtd = DTD.create_from_config(config=config, transform=torchvision.transforms.Compose([]))
 
     def __call__(self, frame: OD3D_Frame):
         # logger.info(f"Frame name {self.name}")
@@ -48,7 +48,7 @@ class CenterZoom3D():
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
         if self.apply_txtr:
             frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
-                                                  ctx=self.dtd.get_random_item())
+                                                  ctx=self.dtd.get_random_item().rgb)
         else:
             frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
                                                  ctx=None)
