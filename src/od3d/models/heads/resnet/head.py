@@ -40,6 +40,7 @@ class ResNet(OD3D_Head):
         self.upsample = nn.ModuleList()
         self.block_type: RESNET_CONV_BLOCK_TYPES = config.block_type
 
+        self.in_upsampled_dim = config.get("in_upsampled_dim", self.in_dims[-1])
         assert len(self.in_upsample_scales) == len(self.in_dims) - 1
 
         for i in range(len(self.in_dims) - 1):
@@ -47,21 +48,28 @@ class ResNet(OD3D_Head):
             #    nn.Conv2d(self.in_dims[i] + self.in_dims[i + 1], self.in_dims[i + 1], kernel_size=1, stride=1, bias=False),
             #    nn.BatchNorm2d(self.in_dims[i + 1]))
             #self.upsample_conv_blocks.append(Bottleneck(inplanes=self.in_dims[i] + self.in_dims[i + 1], planes=self.in_dims[i + 1] // 4, downsample=downsample_channels))
-            self.upsample_conv_blocks.append(get_block(block_type=self.block_type,
-                                                       in_dim=self.in_dims[i] + self.in_dims[i + 1],
-                                                       out_dim=self.in_dims[i + 1],
-                                                       stride=1))
+            if self.in_upsampled_dim != self.in_dims[-1]:
+                self.upsample_conv_blocks.append(get_block(block_type=self.block_type,
+                                                           in_dim=self.in_upsampled_dim + self.in_dims[i + 1],
+                                                           out_dim=self.in_upsampled_dim,
+                                                           stride=1))
+            else:
+                self.upsample_conv_blocks.append(get_block(block_type=self.block_type,
+                                                           in_dim=self.in_dims[i] + self.in_dims[i + 1],
+                                                           out_dim=self.in_dims[i + 1],
+                                                           stride=1))
+
             self.upsample.append(nn.Upsample(scale_factor=self.in_upsample_scales[i]))
 
         self.conv_blocks = nn.ModuleList()
         self.conv_blocks_out_dims = config.conv_blocks.out_dims
         self.conv_blocks_count = len(self.conv_blocks_out_dims)
         self.conv_blocks_strides = config.conv_blocks.strides
-        self.conv_blocks_in_dims = [self.in_dims[-1]] + [config.conv_blocks.out_dims[i] for i in range(self.conv_blocks_count - 1)]
+        self.conv_blocks_in_dims = [self.in_upsampled_dim] + [config.conv_blocks.out_dims[i] for i in range(self.conv_blocks_count - 1)]
 
         assert len(self.conv_blocks_in_dims) == len(self.conv_blocks_out_dims)
         assert len(self.conv_blocks_out_dims) == len(self.conv_blocks_strides)
-        assert len(self.conv_blocks_in_dims) == 0 or self.conv_blocks_in_dims[0] == self.in_dims[-1]
+        assert len(self.conv_blocks_in_dims) == 0 or self.conv_blocks_in_dims[0] == self.in_upsampled_dim
 
         #self.conv_blocks = nn.Sequential(*[Bottleneck(inplanes=self.conv_blocks_in_dims[i],
         #                                              planes=self.conv_blocks_out_dims[i] // 4,
