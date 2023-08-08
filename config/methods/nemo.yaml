@@ -17,7 +17,7 @@ transforms:
 model:
   backbone:
     class_name: ResNet
-    weights: 'imagenet1k_v2' # 'imagenet1k_v2' 'imagenet1k_v1' 'none'
+    weights: 'imagenet1k_v1' # 'imagenet1k_v2' 'imagenet1k_v1' 'none'
     freeze: False
     layers_returned: [4, 3, 2] # always start with depest layer...
   head:
@@ -97,7 +97,7 @@ test:
       live: False
 
 inference:
-    live: True
+    live: False
     sample:
       method: uniform # epnp3d2d uniform
       epnp3d2d:

@@ -6,7 +6,7 @@ import sys
 from od3d.benchmark.results import OD3D_Results
 from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
-from typing import List
+from typing import List, Dict
 
 class OD3D_Method(abc.ABC):
     subclasses = {}
@@ -20,7 +20,7 @@ class OD3D_Method(abc.ABC):
     #def setup(self):
     #    raise NotImplementedError
     @abc.abstractmethod
-    def train(self, dataset: OD3D_Dataset, datasets_val: List[OD3D_Dataset]):
+    def train(self, dataset: OD3D_Dataset, datasets_val: Dict[str, OD3D_Dataset]):
         raise NotImplementedError
 
     @abc.abstractmethod

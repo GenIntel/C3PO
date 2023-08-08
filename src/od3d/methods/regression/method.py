@@ -18,6 +18,7 @@ from tqdm import tqdm
 import torch.utils.data
 import pytorch3d
 import od3d.io
+from typing import Dict
 
 class Regression(OD3D_Method):
     def __init__(
@@ -72,20 +73,26 @@ class Regression(OD3D_Method):
     @property
     def path_checkpoint(self):
         return self.logging_dir.joinpath('nemo.ckpt')
-    def train(self, dataset: OD3D_Dataset, datasets_val: List[OD3D_Dataset]):
+    def train(self, dataset: OD3D_Dataset, datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
 
-        train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1.-self.config.train.val_fraction,
-                                                               fraction2=self.config.train.val_fraction, split=self.config.train.split)
+        if 'main' in datasets_val.keys():
+            train_dataset_sub = dataset
+        else:
+            train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1. - self.config.train.val_fraction,
+                                                                   fraction2=self.config.train.val_fraction,
+                                                                   split=self.config.train.split)
+            datasets_val['main'] = val_dataset_sub
 
         for epoch in range(self.config.train.epochs):
             if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
-                for dataset_val in datasets_val + [val_dataset_sub]:
+                for dataset_val_key, dataset_val in datasets_val.items():
                     results_val = self.test(dataset_val)
                     results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
-                    score_latest = results_val[score_metric_name]
+                    if dataset_val_key == 'main':
+                        score_latest = results_val[score_metric_name]
 
                 if score_latest > score_ckpt_val:
                     score_ckpt_val = score_latest

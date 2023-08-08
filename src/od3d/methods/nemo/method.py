@@ -34,7 +34,7 @@ from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_mask
 from od3d.cv.transforms import RandomCenterZoom3D, RGB_Random, CenterZoom3D
 import math
 
-
+from typing import Dict
 from od3d.data.ext_enum import ExtEnum
 class VISUAL_MODALITIES(str, ExtEnum):
     PRED_VERTS_NCDS_IN_RGB = 'pred_verts_ncds_in_rgb'
@@ -174,20 +174,26 @@ class NeMo(OD3D_Method):
     def path_checkpoint(self):
         return self.logging_dir.joinpath('nemo.ckpt')
 
-    def train(self, dataset: OD3D_Dataset, datasets_val: List[OD3D_Dataset]):
+    def train(self, dataset: OD3D_Dataset, datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
 
-        train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1.-self.config.train.val_fraction,
-                                                               fraction2=self.config.train.val_fraction, split=self.config.train.split)
+        if 'main' in datasets_val.keys():
+            train_dataset_sub = dataset
+        else:
+            train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1. - self.config.train.val_fraction,
+                                                                   fraction2=self.config.train.val_fraction,
+                                                                   split=self.config.train.split)
+            datasets_val['main'] = val_dataset_sub
 
         for epoch in range(self.config.train.epochs):
             if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
-                for dataset_val in datasets_val + [val_dataset_sub]:
+                for dataset_val_key, dataset_val in datasets_val.items():
                     results_val = self.test(dataset_val)
                     results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
-                    score_latest = results_val[score_metric_name]
+                    if dataset_val_key == 'main':
+                        score_latest = results_val[score_metric_name]
 
                 if score_latest > score_ckpt_val:
                     score_ckpt_val = score_latest
@@ -226,7 +232,6 @@ class NeMo(OD3D_Method):
         logger.info(f'Predicted {count_pred_frames} frames.')
 
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
-                                                 rank_metric_name='rot_diff_rad',
                                                  config_visualize=self.config.test.visualize)
         results_epoch = results_epoch.mean()
         results_epoch += results_visual
@@ -261,7 +266,6 @@ class NeMo(OD3D_Method):
         self.optim.zero_grad()
 
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
-                                                 rank_metric_name='sim',
                                                  config_visualize=self.config.train.visualize)
         results_epoch = results_epoch.mean()
         results_epoch += results_visual
@@ -493,7 +497,7 @@ class NeMo(OD3D_Method):
 
         return results
 
-    def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_visualize: DictConfig, rank_metric_name='rot_diff_rad'):
+    def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_visualize: DictConfig):
         results = OD3D_Results()
 
         count_best = config_visualize.count_best
@@ -505,17 +509,26 @@ class NeMo(OD3D_Method):
         if len(modalities) == 0:
             return results
 
-        # sorts values ascending
-        epoch_ranked_ids = results_epoch[rank_metric_name].sort(dim=0)[1]
+        caption_metrics = ['sim', 'rot_diff_rad']
+
+        if 'rot_diff_rad' in results_epoch.keys():
+            rank_metric_name = 'rot_diff_rad'
+            # sorts values ascending
+            epoch_ranked_ids = results_epoch[rank_metric_name].sort(dim=0)[1]
+        elif 'sim' in results_epoch.keys():
+            rank_metric_name = 'sim'
+            # sorts values descending
+            epoch_ranked_ids = results_epoch[rank_metric_name].sort(dim=0, descending=True)[1]
+        else:
+            logger.warning(f'Could not find a suitable rank metric in results {results_epoch.keys()}')
+            return results
+
         epoch_best_ids = epoch_ranked_ids[:count_best]
-        epoch_best_scores = results_epoch[rank_metric_name][epoch_best_ids]
-        epoch_best_names = [f'best_{i+1}' for i in range(len(epoch_best_ids))]
+        epoch_best_names = [f'best/{i+1}' for i in range(len(epoch_best_ids))]
         epoch_worst_ids = epoch_ranked_ids[-count_worst:]
-        epoch_worst_names = [f'worst_{len(epoch_worst_ids) - i}' for i in range(len(epoch_worst_ids))]
-        epoch_worst_scores = results_epoch[rank_metric_name][epoch_worst_ids]
+        epoch_worst_names = [f'worst/{len(epoch_worst_ids) - i}' for i in range(len(epoch_worst_ids))]
         epoch_rand_ids = epoch_ranked_ids[torch.randperm(len(epoch_ranked_ids))[:count_rand]]
-        epoch_rand_names = [f'rand_{i+1}' for i in range(len(epoch_rand_ids))]
-        epoch_rand_scores = results_epoch[rank_metric_name][epoch_rand_ids]
+        epoch_rand_names = [f'rand/{i+1}' for i in range(len(epoch_rand_ids))]
 
         sel_rank_ids = torch.cat([epoch_best_ids, epoch_worst_ids, epoch_rand_ids], dim=0)
         sel_item_ids = results_epoch['item_id'][sel_rank_ids]
@@ -535,8 +548,9 @@ class NeMo(OD3D_Method):
                 B = len(batch)
                 batch_result_ids = torch.LongTensor([dict_name_unique_to_result_id[batch.name_unique[b]] for b in range(B)]).to(device=self.device)
                 batch_sel_names = [dict_name_unique_to_sel_name[batch.name_unique[b]] for b in range(B)]
-                batch_sel_scores = results_epoch[rank_metric_name].to(device=self.device)[batch_result_ids].cpu().detach()
-
+                batch_sel_scores = []
+                for b in range(B):
+                    batch_sel_scores.append(', '.join([f'{metric}={results_epoch[metric].to(device=self.device)[batch_result_ids[b]].cpu().detach().item():.3f}' for metric in caption_metrics if metric in results_epoch.keys()]))
 
                 feats2d_net = self.net(batch.rgb)
                 #feats2d_net = resize(feats2d_net,

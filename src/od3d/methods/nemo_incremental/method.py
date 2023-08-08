@@ -84,25 +84,29 @@ class NeMo_Incremental(NeMo):
                     del self.train_sequences_pseudo_labels[batch.sequence_name[0]]
                     self.train_sequences_pseudo_labeled.remove(batch.sequence_name[0])
         results_visual = self.get_results_visual(results_epoch=results, dataset=dataset_update,
-                                                 rank_metric_name='sim',
                                                  config_visualize=self.config.test.visualize)
         results = results.mean()
         results += results_visual
         results['count'] = len(self.train_sequences_pseudo_labels)
 
-
         results.log_with_prefix(prefix=f'pseudo_labels/{dataset_update.name}')
 
-    def train(self, dataset: CO3D, datasets_val: List[OD3D_Dataset]):
+    def train(self, dataset: CO3D, datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
 
 
-        dataset_train, dataset_val_train = dataset.get_split(fraction1=1.-self.config.train.val_fraction,
-                                                             fraction2=self.config.train.val_fraction, split=self.config.train.split)
+        if 'main' in datasets_val.keys():
+            train_dataset_sub = dataset
+        else:
+            train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1. - self.config.train.val_fraction,
+                                                                   fraction2=self.config.train.val_fraction,
+                                                                   split=self.config.train.split)
+            datasets_val['main'] = val_dataset_sub
 
-        self.train_sequences = list(dataset_train.dict_nested_frames['car'].keys())
+
+        self.train_sequences = list(train_dataset_sub.dict_nested_frames['car'].keys())
         self.train_sequences_labeled = random.sample(self.train_sequences, k=self.config.train.incremental.sequences_labeled_count)
         self.train_sequences_unlabeled = list(set(self.train_sequences) - set(self.train_sequences_labeled))
         self.train_sequences_pseudo_labeled = []
@@ -110,10 +114,11 @@ class NeMo_Incremental(NeMo):
 
         for epoch in range(self.config.train.epochs):
             if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
-                for dataset_val in datasets_val + [dataset_val_train]:
+                for dataset_val_key, dataset_val in datasets_val.items():
                     results_val = self.test(dataset_val)
                     results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
-                    score_latest = results_val[score_metric_name]
+                    if dataset_val_key == 'main':
+                        score_latest = results_val[score_metric_name]
 
                 if score_latest > score_ckpt_val:
                     score_ckpt_val = score_latest
@@ -121,14 +126,14 @@ class NeMo_Incremental(NeMo):
 
             self.train_sequences_random = self.train_sequences_labeled + self.train_sequences_pseudo_labeled
             dict_category_sequences = {'car': self.train_sequences_random}
-            train_dataset_sub = dataset_train.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
-                                                                      frames_count_max_per_sequence=None)
+            train_dataset_sub_sub = train_dataset_sub.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
+                                                                              frames_count_max_per_sequence=None)
 
-            results_epoch = self.train_epoch(dataset=train_dataset_sub)
+            results_epoch = self.train_epoch(dataset=train_dataset_sub_sub)
             results_epoch.log_with_prefix('train')
 
             if self.config.train.incremental.enabled:
-                self.update_pseudo_labels(dataset_train=dataset_train)
+                self.update_pseudo_labels(dataset_train=train_dataset_sub)
 
         self.load_checkpoint(path_checkpoint=self.path_checkpoint)
 

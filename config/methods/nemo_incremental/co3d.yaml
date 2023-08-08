@@ -27,7 +27,7 @@ train:
     transform:
       random_color: True
       random_center_zoom3d:
-        apply_txtr: False
+        apply_txtr: True
         config: ${texture_dataset}
         W: 512
         H: 512

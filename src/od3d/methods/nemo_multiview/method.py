@@ -83,7 +83,6 @@ class NeMo_MultiView(NeMo):
         logger.info(f'Predicted {count_pred_frames} frames.')
 
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset_sub,
-                                                 rank_metric_name='rot_diff_rad',
                                                  config_visualize=self.config.test.visualize)
         results_epoch = results_epoch.mean()
         results_epoch += results_visual

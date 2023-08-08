@@ -46,6 +46,9 @@ class OD3D_Dataset(Dataset):
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1.,
                  dict_nested_frames: Dict=None):
+
+        logger.info(f'init dataset {name}...')
+
         self.name = name
         self.path_raw: Path = Path(path_raw)
         self.path_preprocess: Path = Path(path_preprocess)
