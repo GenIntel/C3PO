@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: resnet_in_upsampled_dim_2048
+ablation_name: resnet_in_upsampled_dim_1024
 
 method:
     nemo:
@@ -12,7 +12,7 @@ method:
         head:
           class_name: ResNet
           block_type: 'bottleneck' # 'bottleneck', 'basic'
-          in_upsampled_dim: 2048
+          in_upsampled_dim: 1024
           conv_blocks:
             out_dims: [ 128 ]
             strides: [ 1 ]

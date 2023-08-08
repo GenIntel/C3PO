@@ -6,6 +6,19 @@ from pathlib import Path
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.methods.method import OD3D_Method
 
+import json
+from datetime import datetime
+def get_timestamp_as_string():
+    now = datetime.now()
+    timestamp = now.strftime("%m-%d_%H-%M-%S")
+    return timestamp
+
+def get_timestamp_from_string(string):
+    now = datetime.now()
+    year = now.strftime("%Y")
+    timestamp = datetime.strptime('_'.join( f'{year}-{string}'.split('_')[:2]), "%Y-%m-%d_%H-%M-%S")
+    return timestamp
+
 class OD3D_Benchmark:
     def __init__(self, config: DictConfig):
         self.config = config

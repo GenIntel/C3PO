@@ -5,16 +5,14 @@ from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
 from od3d.benchmark.run import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
+from od3d.benchmark.benchmark import get_timestamp_as_string, get_timestamp_from_string
+import json
 app = typer.Typer()
 import subprocess
 from omegaconf import open_dict
 import time
-import json
-from datetime import datetime
-def get_timestamp_as_string():
-    now = datetime.now()
-    timestamp = now.strftime("%m-%d_%H-%M-%S")
-    return timestamp
+
+import datetime
 
 from tabulate import tabulate
 @app.command()
@@ -41,6 +39,7 @@ def table():
     runs = list(filter(lambda run: all([metric in list(run.summary.keys()) for metric in metrics]), runs))
 
     runs = list(filter(lambda run: 'multiview' in run.name, runs))
+    runs = list(filter(lambda run: get_timestamp_from_string(run.name) > datetime.datetime.now()-datetime.timedelta(hours=2), runs))
 
     rows = []
     for run in runs:
@@ -72,7 +71,11 @@ def table():
     metrics_new_names = ['Acc. PI/6 [%]', 'Acc. PI/18 [%]', 'Error Median [deg]', 'Error Mean [deg]']
     my_df[metrics[0]] *= 100
     my_df[metrics[1]] *= 100
+
+    #my_df = my_df.groupby(['type', 'batch_size']).head(1)
     my_df = my_df.rename(columns={'batch_size': 'multiview #frames', metrics[0]: metrics_new_names[0], metrics[1]: metrics_new_names[1], metrics[2]: metrics_new_names[2], metrics[3]: metrics_new_names[3]})
+    my_df = my_df.sort_values(by=['type'])
+
     for i, metric in enumerate(metrics_new_names):
         mv_plot = sns.catplot(
             x="multiview #frames",  # x variable name
