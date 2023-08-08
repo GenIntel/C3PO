@@ -11,6 +11,7 @@ class OD3D_Backbone(nn.Module):
     def __init__(self, config: DictConfig):
         super().__init__()
         self.config = config
+        self.freeze = config.get("freeze", False)
         self.transform = None
 
     pass

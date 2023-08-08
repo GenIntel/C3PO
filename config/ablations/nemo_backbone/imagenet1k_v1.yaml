@@ -1,11 +1,13 @@
 # @package _global_
-ablation_name: resnet_bottleneck_dim_128_stride_1
+ablation_name: resnet_imagenet1k_v1
 
 method:
     nemo:
       model:
         backbone:
           class_name: ResNet
+          weights: 'imagenet1k_v1' # 'imagenet1k_v2' 'imagenet1k_v1' 'none'
+          freeze: False
           layers_returned: [ 4, 3, 2 ] # always start with depest layer...
         head:
           class_name: ResNet

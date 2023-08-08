@@ -8,9 +8,16 @@ import torchvision
 from od3d.models.backbones.backbone import OD3D_Backbone
 from od3d.data.ext_enum import ExtEnum
 
-#class RESNET50_WEIGHTS(str, ExtEnum):
-#    IMAGENET1K_2 = torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V2
+class RESNET50_WEIGHTS(str, ExtEnum):
+    IMAGENET1K_V2 = 'imagenet1k_v2'  # torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V2
+    IMAGENET1K_V1 = 'imagenet1k_v1'  # torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V1
+    NONE = 'none'
 
+MAP_RESNET50_WEIGHTS = {
+    'imagenet1k_v2': torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V2,
+    'imagenet1k_v1': torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V1,
+    'none': None
+}
 
 class ResNet(OD3D_Backbone):
     def __init__(
@@ -28,7 +35,7 @@ class ResNet(OD3D_Backbone):
         self.layers_returned = config.layers_returned # choose from [1, 2, 3, 4]
         self.layers_count = len(self.layers_returned)
 
-        resnet = torchvision.models.resnet50(weights=torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V2)
+        resnet = torchvision.models.resnet50(weights=MAP_RESNET50_WEIGHTS[config.weights])
 
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
@@ -42,6 +49,11 @@ class ResNet(OD3D_Backbone):
 
         self.out_dims = [self.layers[layer_id - 1][-1].conv3.out_channels for layer_id in self.layers_returned]
         self.out_downsample_scales = [2**(self.layers_returned[i]-self.layers_returned[i+1]) for i in range(self.layers_count - 1)]
+
+        if self.freeze:
+            for param in self.parameters():
+                param.requires_grad = False
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
