@@ -97,7 +97,7 @@ test:
       live: False
 
 inference:
-    live: False
+    live: True
     sample:
       method: uniform # epnp3d2d uniform
       epnp3d2d:

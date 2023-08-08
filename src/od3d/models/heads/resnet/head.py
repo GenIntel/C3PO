@@ -49,10 +49,16 @@ class ResNet(OD3D_Head):
             #    nn.BatchNorm2d(self.in_dims[i + 1]))
             #self.upsample_conv_blocks.append(Bottleneck(inplanes=self.in_dims[i] + self.in_dims[i + 1], planes=self.in_dims[i + 1] // 4, downsample=downsample_channels))
             if self.in_upsampled_dim != self.in_dims[-1]:
-                self.upsample_conv_blocks.append(get_block(block_type=self.block_type,
-                                                           in_dim=self.in_upsampled_dim + self.in_dims[i + 1],
-                                                           out_dim=self.in_upsampled_dim,
-                                                           stride=1))
+                if i == 0:
+                    self.upsample_conv_blocks.append(get_block(block_type=self.block_type,
+                                                               in_dim=self.in_dims[i] + self.in_dims[i + 1],
+                                                               out_dim=self.in_upsampled_dim,
+                                                               stride=1))
+                else:
+                    self.upsample_conv_blocks.append(get_block(block_type=self.block_type,
+                                                               in_dim=self.in_upsampled_dim + self.in_dims[i + 1],
+                                                               out_dim=self.in_upsampled_dim,
+                                                               stride=1))
             else:
                 self.upsample_conv_blocks.append(get_block(block_type=self.block_type,
                                                            in_dim=self.in_dims[i] + self.in_dims[i + 1],
