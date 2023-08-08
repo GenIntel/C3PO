@@ -19,6 +19,7 @@ model:
     class_name: ResNet
     layers_returned: [4, 3, 2] # always start with depest layer...
   head:
+    block_type: 'bottleneck' # 'bottleneck', 'basic'
     class_name: ResNet
     conv_blocks:
       out_dims: [128]

@@ -8,9 +8,9 @@ import torchvision
 from od3d.models.backbones.backbone import OD3D_Backbone
 from od3d.data.ext_enum import ExtEnum
 
-#class RESNET50_WEIGHTS(ExtEnum):
+#class RESNET50_WEIGHTS(str, ExtEnum):
 #    IMAGENET1K_2 = torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V2
-#    I
+
 
 class ResNet(OD3D_Backbone):
     def __init__(
@@ -25,8 +25,8 @@ class ResNet(OD3D_Backbone):
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-        self.layers_returned = config.layers_returned
-        self.layers_count = len(self.layers_returned) # choose from [1, 2, 3, 4]
+        self.layers_returned = config.layers_returned # choose from [1, 2, 3, 4]
+        self.layers_count = len(self.layers_returned)
 
         resnet = torchvision.models.resnet50(weights=torchvision.models.resnet.ResNet50_Weights.IMAGENET1K_V2)
 

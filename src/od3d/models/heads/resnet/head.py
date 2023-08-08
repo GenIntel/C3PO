@@ -20,8 +20,8 @@ def get_block(block_type: RESNET_CONV_BLOCK_TYPES, in_dim: int, out_dim: int, st
                           downsample=nn.Sequential(nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, bias=False),
                                                    nn.BatchNorm2d(out_dim)))
     elif block_type == RESNET_CONV_BLOCK_TYPES.BOTTLENECK:
-        return Bottleneck(inplanes=in_dim, planes=out_dim, stride=stride,
-                          downsample=nn.Sequential(nn.Conv2d(in_dim, out_dim // 4, kernel_size=1, stride=1, bias=False),
+        return Bottleneck(inplanes=in_dim, planes=out_dim // 4, stride=stride,
+                          downsample=nn.Sequential(nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, bias=False),
                                                    nn.BatchNorm2d(out_dim)))
     else:
         logger.error(f'Unknown block type {block_type}.')

@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: resnet_basic_block
+ablation_name: resnet_basic_block_dim_128_stride_1
 
 method:
     nemo:
