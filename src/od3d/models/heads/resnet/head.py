@@ -4,9 +4,28 @@ from od3d.models.heads.head import OD3D_Head
 from omegaconf import DictConfig
 import torch
 import torchvision.models.resnet
-from torchvision.models.resnet import Bottleneck
+from torchvision.models.resnet import Bottleneck, BasicBlock
 import torch.nn as nn
 from typing import List
+from od3d.data.ext_enum import ExtEnum
+
+class RESNET_CONV_BLOCK_TYPES(str, ExtEnum):
+    BOTTLENECK = 'bottleneck'
+    BASIC = 'basic'
+
+
+def get_block(block_type: RESNET_CONV_BLOCK_TYPES, in_dim: int, out_dim: int, stride: int):
+    if block_type == RESNET_CONV_BLOCK_TYPES.BASIC:
+        return BasicBlock(inplanes=in_dim, planes=out_dim, stride=stride,
+                          downsample=nn.Sequential(nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, bias=False),
+                                                   nn.BatchNorm2d(out_dim)))
+    elif block_type == RESNET_CONV_BLOCK_TYPES.BOTTLENECK:
+        return Bottleneck(inplanes=in_dim, planes=out_dim, stride=stride,
+                          downsample=nn.Sequential(nn.Conv2d(in_dim, out_dim // 4, kernel_size=1, stride=1, bias=False),
+                                                   nn.BatchNorm2d(out_dim)))
+    else:
+        logger.error(f'Unknown block type {block_type}.')
+        raise NotImplementedError
 
 class ResNet(OD3D_Head):
     def __init__(
@@ -19,14 +38,19 @@ class ResNet(OD3D_Head):
 
         self.upsample_conv_blocks = nn.ModuleList()
         self.upsample = nn.ModuleList()
+        self.block_type: RESNET_CONV_BLOCK_TYPES = config.block_type
 
         assert len(self.in_upsample_scales) == len(self.in_dims) - 1
 
         for i in range(len(self.in_dims) - 1):
-            downsample_channels = nn.Sequential(
-                nn.Conv2d(self.in_dims[i] + self.in_dims[i + 1], self.in_dims[i + 1], kernel_size=1, stride=1, bias=False),
-                nn.BatchNorm2d(self.in_dims[i + 1]))
-            self.upsample_conv_blocks.append(Bottleneck(inplanes=self.in_dims[i] + self.in_dims[i + 1], planes=self.in_dims[i + 1] // 4, downsample=downsample_channels))
+            #downsample_channels = nn.Sequential(
+            #    nn.Conv2d(self.in_dims[i] + self.in_dims[i + 1], self.in_dims[i + 1], kernel_size=1, stride=1, bias=False),
+            #    nn.BatchNorm2d(self.in_dims[i + 1]))
+            #self.upsample_conv_blocks.append(Bottleneck(inplanes=self.in_dims[i] + self.in_dims[i + 1], planes=self.in_dims[i + 1] // 4, downsample=downsample_channels))
+            self.upsample_conv_blocks.append(get_block(block_type=self.block_type,
+                                                       in_dim=self.in_dims[i] + self.in_dims[i + 1],
+                                                       out_dim=self.in_dims[i + 1],
+                                                       stride=1))
             self.upsample.append(nn.Upsample(scale_factor=self.in_upsample_scales[i]))
 
         self.conv_blocks = nn.ModuleList()
@@ -39,12 +63,18 @@ class ResNet(OD3D_Head):
         assert len(self.conv_blocks_out_dims) == len(self.conv_blocks_strides)
         assert len(self.conv_blocks_in_dims) == 0 or self.conv_blocks_in_dims[0] == self.in_dims[-1]
 
-        self.conv_blocks = nn.Sequential(*[Bottleneck(inplanes=self.conv_blocks_in_dims[i],
-                                                      planes=self.conv_blocks_out_dims[i] // 4,
-                                                      stride=self.conv_blocks_strides[i],
-                                                      downsample=nn.Sequential(
-                                                            nn.Conv2d(self.conv_blocks_in_dims[i], self.conv_blocks_out_dims[i], kernel_size=1, stride=1, bias=False),
-                                                            nn.BatchNorm2d(self.conv_blocks_out_dims[i])))
+        #self.conv_blocks = nn.Sequential(*[Bottleneck(inplanes=self.conv_blocks_in_dims[i],
+        #                                              planes=self.conv_blocks_out_dims[i] // 4,
+        #                                              stride=self.conv_blocks_strides[i],
+        #                                              downsample=nn.Sequential(
+        #                                                    nn.Conv2d(self.conv_blocks_in_dims[i], self.conv_blocks_out_dims[i], kernel_size=1, stride=1, bias=False),
+        #                                                    nn.BatchNorm2d(self.conv_blocks_out_dims[i])))
+        #                                   for i in range(self.conv_blocks_count)])
+
+        self.conv_blocks = nn.Sequential(*[get_block(block_type=self.block_type,
+                                                     in_dim=self.conv_blocks_in_dims[i],
+                                                     out_dim=self.conv_blocks_out_dims[i],
+                                                     stride=self.conv_blocks_strides[i])
                                            for i in range(self.conv_blocks_count)])
 
         if config.fully_connected.out_dim is not None:

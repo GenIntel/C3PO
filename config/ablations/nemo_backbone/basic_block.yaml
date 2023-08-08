@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: resnet_dim_2048_128_stride_1_1
+ablation_name: resnet_basic_block
 
 method:
     nemo:
@@ -9,9 +9,10 @@ method:
           layers_returned: [ 4, 3, 2 ] # always start with depest layer...
         head:
           class_name: ResNet
+          block_type: 'basic' # 'bottleneck', 'basic'
           conv_blocks:
-            out_dims: [ 2048, 128 ]
-            strides: [ 1, 1 ]
+            out_dims: [ 128 ]
+            strides: [ 1 ]
 
 
 train: True

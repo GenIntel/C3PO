@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: resnet_bottleneck_dim_128_stride_1
+ablation_name: resnet_dim_2048_128_stride_1_1
 
 method:
     nemo:
@@ -11,8 +11,8 @@ method:
           class_name: ResNet
           block_type: 'bottleneck' # 'bottleneck', 'basic'
           conv_blocks:
-            out_dims: [ 128 ]
-            strides: [ 1 ]
+            out_dims: [ 2048, 128 ]
+            strides: [ 1, 1 ]
 
 
 train: True

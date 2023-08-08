@@ -1,11 +1,11 @@
 # @package _global_
-ablation_name: aug_color_dist_center
+ablation_name: aug_color_dist_center_texture
 
 method:
     nemo:
       #checkpoint: ${platform.path_exps}/07-25_13-49-09_CO3D_NeMo_aug_color_dist_center_slurm/nemo.ckpt
       train:
-        val: False
+        val: True
         epoch: 5
         transform:
           random_color: True
