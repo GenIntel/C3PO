@@ -119,7 +119,7 @@ def draw_text_as_img(H: int, W: int, text: str, fontScale=1., lineThickness: int
     img = torch.zeros(size=(3, H, W))
     return draw_text_in_rgb(img, text=text, fontScale=fontScale, lineThickness=lineThickness)
 
-def draw_text_in_rgb(img, text='title0', fontScale=1., lineThickness: int=2):
+def draw_text_in_rgb(img, text='title0', fontScale=1., lineThickness: int=2, fontColor = (255, 255, 255)):
     # 3xHxW
     _, H, W = img.shape
     device = img.device
@@ -132,7 +132,7 @@ def draw_text_in_rgb(img, text='title0', fontScale=1., lineThickness: int=2):
 
     font = cv2.FONT_HERSHEY_SIMPLEX
     topLeftCornerOfText = (10, 50)  # left, top
-    fontColor = (255, 255, 255)
+
 
     for i, line in enumerate(text.split('\n')):
         gap = cv2.getTextSize(line, font, fontScale, lineThickness)[0][1] + 5
@@ -147,6 +147,8 @@ def draw_text_in_rgb(img, text='title0', fontScale=1., lineThickness: int=2):
 
     img = img / 255.0
     img = torch.from_numpy(img).permute(2, 0, 1)
-    img = img.to(device)
+    if dtype == torch.uint8:
+        img = img * 255.
+    img = img.to(device=device, dtype=dtype)
 
     return img

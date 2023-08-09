@@ -50,7 +50,7 @@ test:
         center3d: [ 0., 0., 0. ] #  None
 
     dataloader:
-        num_workers: 4
+        num_workers: 0
         batch_size: 4
         pin_memory: True
 

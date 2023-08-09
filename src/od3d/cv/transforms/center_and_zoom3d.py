@@ -67,6 +67,11 @@ class CenterZoom3D():
             frame.kpts2d_annot = frame.kpts2d_annot * scale
             frame.kpts2d_annot = frame.kpts2d_annot + cam_crop_tform_cam[:2, 2]
 
+        # assumption: depth of all image points is the same (which of course does only approximately holds)
+        #frame.cam_tform4x4_obj[:2, 3] = 0.
+        #frame.cam_intr4x4[0, 2] = self.W / 2.
+        #frame.cam_intr4x4[1, 2] = self.H / 2.
+
         return frame
 
         """

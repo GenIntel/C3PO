@@ -88,13 +88,13 @@ class NeMo_MultiView(NeMo):
         results_epoch += results_visual
         return results_epoch
 
-    def inference_batch(self, batch):
+    def inference_batch(self, batch, return_samples_with_sim=True):
         if self.config.multiview.type == MultiViewType.MULTIVIEW:
-            return self.inference_batch_multiview(batch)
+            return self.inference_batch_multiview(batch, return_samples_with_sim=return_samples_with_sim)
         elif self.config.multiview.type == MultiViewType.SINGLE:
-            return super().inference_batch(batch)
+            return super().inference_batch(batch, return_samples_with_sim=return_samples_with_sim)
         elif self.config.multiview.type == MultiViewType.MULTIVIEW_MEAN_SE3:
-            results_batch = super().inference_batch(batch)
+            results_batch = super().inference_batch(batch, return_samples_with_sim=return_samples_with_sim)
             obj_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(batch.cam_tform4x4_obj), results_batch['cam_tform4x4_obj'])
             obj_tform6_cuboid_front = se3_log_map(obj_tform4x4_cuboid_front).mean(dim=0, keepdim=True)
             obj_tform4x4_cuboid_front = se3_exp_map(obj_tform6_cuboid_front)
@@ -114,7 +114,7 @@ class NeMo_MultiView(NeMo):
         else:
             logger.warning(f"Unknown multiview type {self.config.multiview.type}")
 
-    def inference_batch_multiview(self, batch):
+    def inference_batch_multiview(self, batch, return_samples_with_sim=True):
         results = OD3D_Results()
         B = len(batch)
 
@@ -180,12 +180,20 @@ class NeMo_MultiView(NeMo):
                                                      cam_intr4x4=b_cams_multiview_intr4x4,
                                                      categories_ids=pred_class_ids,
                                                      broadcast_batch_and_cams=True)
+
+            sim = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
+
+            if return_samples_with_sim:
+                results['samples_cam_tform4x4_obj'] = b_cams_multiview_tform4x4_obj
+                results['samples_cam_intr4x4'] = b_cams_multiview_intr4x4
+                results['samples_sim'] = sim
+
             mesh_multiple_cams_loss = -sim
 
 
-            mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.mean(dim=0, keepdim=True).min(dim=1)
+            mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
-            obj_tform4x4_cuboid_front = objs_multiview_tform4x4_cuboid_front[0, mesh_cam_loss_min_id]
+            obj_tform4x4_cuboid_front = objs_multiview_tform4x4_cuboid_front[0, mesh_cam_loss_min_id[0]]
 
             #cam_tform4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(
             #    dim1=-2, dim2=-1).permute(2, 0, 1)
@@ -252,7 +260,7 @@ class NeMo_MultiView(NeMo):
         results['rot_diff_rad'] = diff_rot_angle_rad
         results['label_gt'] = batch.label
         results['label_pred'] = pred_class_ids
-        results['sim'] = sim
+        results['sim'] = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
         results['cam_tform4x4_obj'] = cam_tform4x4_obj
         results['obj_tform4x4_cuboid_front'] = obj_tform4x4_cuboid_front
         results['item_id'] = batch.item_id

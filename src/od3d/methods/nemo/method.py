@@ -360,7 +360,7 @@ class NeMo(OD3D_Method):
     """
 
 
-    def inference_batch(self, batch):
+    def inference_batch(self, batch, return_samples_with_sim=True):
         results = OD3D_Results()
         B = len(batch)
 
@@ -421,6 +421,12 @@ class NeMo(OD3D_Method):
                                                      cam_intr4x4=b_cams_multiview_intr4x4,
                                                      categories_ids=pred_class_ids,
                                                      broadcast_batch_and_cams=True)
+
+            if return_samples_with_sim:
+                results['samples_cam_tform4x4_obj'] = b_cams_multiview_tform4x4_obj
+                results['samples_cam_intr4x4'] = b_cams_multiview_intr4x4
+                results['samples_sim'] = sim
+
             mesh_multiple_cams_loss = -sim
 
 
@@ -523,6 +529,33 @@ class NeMo(OD3D_Method):
             logger.warning(f'Could not find a suitable rank metric in results {results_epoch.keys()}')
             return results
 
+        if 'name_unique' in results_epoch.keys() and len(results_epoch['name_unique']) > 0:
+            # this only groups the ranked elements depending on their category / sequence etc.
+            group_names = list(set(['/'.join(name_unique.split('/')[:-1]) for name_unique in results_epoch['name_unique']]))
+            group_ids = [ group_id for group_id, group_name in enumerate(group_names) for name_unique in results_epoch['name_unique'] if name_unique.startswith(group_name)]
+            group_ids_unique = list(range(len(group_names)))
+            group_ids_count = []
+            for group_id in group_ids_unique:
+                group_ids_count.append(len(list(filter(lambda g: g == group_id, group_ids))))
+            from copy import copy
+            group_ids_available = copy(group_ids_unique)
+            group_ids_used = []
+            group_ids_used_count = [0] * len(group_ids_unique)
+            epoch_ranked_ids_with_groups = []
+            for i in range(len(epoch_ranked_ids)):
+                for ranked_id in epoch_ranked_ids:
+                    group_id = group_ids[ranked_id]
+                    if len(group_ids_available) > 1 and group_id in group_ids_used[-(len(group_ids_available)-1):]:
+                        continue
+                    if ranked_id in epoch_ranked_ids_with_groups:
+                        continue
+                    epoch_ranked_ids_with_groups.append(ranked_id)
+                    group_ids_used.append(group_id)
+                    group_ids_used_count[group_id] += 1
+                    if group_ids_used_count[group_id] == group_ids_count[group_id]:
+                        group_ids_available.remove(group_ids[ranked_id])
+            epoch_ranked_ids = torch.stack(epoch_ranked_ids_with_groups, dim=0)
+
         epoch_best_ids = epoch_ranked_ids[:count_best]
         epoch_best_names = [f'best/{i+1}' for i in range(len(epoch_best_ids))]
         epoch_worst_ids = epoch_ranked_ids[-count_worst:]
@@ -550,7 +583,7 @@ class NeMo(OD3D_Method):
                 batch_sel_names = [dict_name_unique_to_sel_name[batch.name_unique[b]] for b in range(B)]
                 batch_sel_scores = []
                 for b in range(B):
-                    batch_sel_scores.append(', '.join([f'{metric}={results_epoch[metric].to(device=self.device)[batch_result_ids[b]].cpu().detach().item():.3f}' for metric in caption_metrics if metric in results_epoch.keys()]))
+                    batch_sel_scores.append('\n'.join([f'{metric}={results_epoch[metric].to(device=self.device)[batch_result_ids[b]].cpu().detach().item():.3f}' for metric in caption_metrics if metric in results_epoch.keys()]))
 
                 feats2d_net = self.net(batch.rgb)
                 #feats2d_net = resize(feats2d_net,
@@ -567,21 +600,28 @@ class NeMo(OD3D_Method):
                             show_img(img)
 
                 if VISUAL_MODALITIES.SAMPLES in modalities:
+                    s_cam_tform4x4_obj = results_epoch['samples_cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
+                    s_cam_intr4x4 = results_epoch['samples_cam_intr4x4'].to(device=self.device)[batch_result_ids]
+                    sim = results_epoch['samples_sim'].to(device=self.device)[batch_result_ids]
+
+                    """        
                     s_cam_tform4x4_obj, s_cam_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
                                                                                                cam_intr4x4=batch.cam_intr4x4,
                                                                                                cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                                                                feats2d_net=feats2d_net,
                                                                                                categories_ids=batch.label)
-
-                    ncds = self.get_ncds_with_cam(cam_tform4x4_obj=s_cam_tform4x4_obj,
-                                                  cam_intr4x4=s_cam_intr4x4, size=batch.size,
-                                                  categories_ids=batch.label, down_sample_rate=config_visualize.down_sample_rate, broadcast_batch_and_cams=True)
-
                     sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                              cam_tform4x4_obj=s_cam_tform4x4_obj,
                                                              cam_intr4x4=s_cam_intr4x4,
                                                              categories_ids=batch.label,
                                                              broadcast_batch_and_cams=True)
+                    """
+
+                    ncds = self.get_ncds_with_cam(cam_tform4x4_obj=s_cam_tform4x4_obj,
+                                                  cam_intr4x4=s_cam_intr4x4, size=batch.size,
+                                                  categories_ids=batch.label, down_sample_rate=config_visualize.down_sample_rate, broadcast_batch_and_cams=True)
+
+
 
 
                     for b in range(len(batch)):
@@ -589,27 +629,44 @@ class NeMo(OD3D_Method):
                         imgs_sim = sim[b][:].expand(*sim[b].shape)  # , *mesh_feats2d_rendered.shape[-2:]
                         if self.config.inference.sample.method == 'uniform':
                             imgs = imgs.reshape(self.config.inference.sample.uniform.azim.steps, self.config.inference.sample.uniform.elev.steps, self.config.inference.sample.uniform.theta.steps,
-                                                *imgs.shape[-3:])[:, :, 0]
-                            imgs_sim = imgs_sim.reshape(self.config.inference.sample.uniform.azim.steps, self.config.inference.sample.uniform.elev.steps, self.config.inference.sample.uniform.theta.steps)[:, :, 0]
+                                                *imgs.shape[-3:])[:, :, :]
+                            imgs_sim = imgs_sim.reshape(self.config.inference.sample.uniform.azim.steps, self.config.inference.sample.uniform.elev.steps, self.config.inference.sample.uniform.theta.steps)[:, :, :]
                         imgs = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate), imgs)
 
                         if config_visualize.samples_sorted:
                             imgs_sim = imgs_sim.flatten(0)
                             imgs = imgs.reshape(-1, *imgs.shape[-3:])
                             imgs_sim_ids = imgs_sim.sort(descending=True)[1]
+                            imgs_sim_ids = imgs_sim_ids[:49]
                             imgs = imgs[imgs_sim_ids]
                             imgs_sim = imgs_sim[imgs_sim_ids]
 
                         if config_visualize.samples_scores:
+                            import matplotlib.pyplot as plt
+                            plt.ioff()
+                            fig, ax = plt.subplots()
+                            ax.plot(imgs_sim.detach().cpu().numpy(), label='sim')  # density=False would make counts
+                            #ax.set_ylim(0., 1.)
+                            #ax.ylabel('sim')
+                            #ax.xlabel('samples')
+                            from od3d.cv.visual.show import get_img_from_plot
+                            from od3d.cv.visual.draw import draw_text_in_rgb
+                            img = get_img_from_plot(ax=ax, fig=fig)
+                            img = resize(img, H_out=imgs.shape[-2], W_out=imgs.shape[-2])
+                            img = draw_text_in_rgb(img, fontScale=0.4, lineThickness=2, fontColor=(0, 0, 0), text=f'{batch_sel_scores[b]}\nmin={imgs_sim.min().item():.3f}\nmax={imgs_sim.max().item():.3f}')
+                            imgs = torch.cat([imgs, img[None,].to(device=imgs.device)], dim=0)
+                            #resize(img, )
+                            """
                             samples_score_size = imgs.shape[-1] // 5
                             imgs[..., -samples_score_size:, -samples_score_size:] = (
                                     255 * imgs_sim.reshape(*imgs_sim.shape, 1, 1, 1).expand(*imgs.shape[:-2],
                                                                                             samples_score_size,
                                                                                             samples_score_size)).to(
                                 torch.uint8)
+                            """
 
                         img = imgs_to_img(imgs)
-                        results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.SAMPLES}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_sel_scores[b]}')
+                        results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.SAMPLES}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_sel_scores[b]}, min={imgs_sim.min().item():.3f}, max={imgs_sim.max().item():.3f}')
                         if live:
                             show_img(img)
 
@@ -622,6 +679,7 @@ class NeMo(OD3D_Method):
                                                                       cam_tform4x4_obj=batch_pred_cam_tform4x4,
                                                                       categories_ids=batch_pred_label, return_sim_pxl=True,
                                                                       broadcast_batch_and_cams=False)
+
                     sim_pxl = resize(sim_pxl, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
                     for b in range(len(batch)):
                         img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
@@ -795,7 +853,7 @@ class NeMo(OD3D_Method):
             b_cams_multiview_tform4x4_obj = cams_multiview_tform4x4_cuboid[None,].repeat(B, 1, 1, 1)
 
             # assumption 1: distance translation to object is known
-            # b_cams_multiview_tform4x4_obj[:, :, 2, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
+            #b_cams_multiview_tform4x4_obj[:, :, 2, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
             # logger.info(f'dist {batch.cam_tform4x4_obj[:, 2, 3]}')
             # assumption 2: translation to object is known
             b_cams_multiview_tform4x4_obj[:, :, :3, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]

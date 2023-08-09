@@ -6,7 +6,9 @@ ablation_name: uniform_train_co3d_3s
 
 method:
     nemo:
+        checkpoint: ${platform.path_exps}/08-08_17-27-08_CO3D_NeMo_uniform_train_co3d_3s_slurm/nemo.ckpt
+
         train:
             epochs: 20
-train: True
+train: False
 test: True

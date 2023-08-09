@@ -209,3 +209,20 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
     else:
         cv2.imshow("img", img)
         cv2.waitKey(duration)
+
+
+def get_img_from_plot(ax, fig):
+    import numpy as np
+
+    # Image from plot
+    ax.axis('off')
+    fig.tight_layout(pad=0)
+
+    # To remove the huge white borders
+    ax.margins(0)
+
+    fig.canvas.draw()
+    image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    image_from_plot: np.ndarray = image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+
+    return torch.from_numpy(image_from_plot.copy()).permute(2, 0, 1)

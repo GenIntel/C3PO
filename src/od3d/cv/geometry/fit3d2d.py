@@ -66,6 +66,9 @@ def fit_se3_to_corresp_3d_2d(pts1, pxl2, weights, proj_mat, method="cpu-epnp", p
     if method.startswith("cpu"):
         #method2 = "cpu-epnp"
         se3_mats = fit_se3_to_corresp_3d_2d_opencv(pts1, pxl2, weights, proj_mat, method, prev_se3_mats)
+        se3_mats[se3_mats.isnan().flatten(1).any(dim=1)] = torch.eye(4, device=se3_mats.device, dtype=se3_mats.dtype).expand(se3_mats.isnan().flatten(1).any(dim=1).sum(), 4, 4)
+        se3_mats[se3_mats.isinf().flatten(1).any(dim=1)] = torch.eye(4, device=se3_mats.device, dtype=se3_mats.dtype).expand(se3_mats.isinf().flatten(1).any(dim=1).sum(), 4, 4)
+
         return se3_mats
     elif method == "gpu-epnp":
         K = len(pts1)
