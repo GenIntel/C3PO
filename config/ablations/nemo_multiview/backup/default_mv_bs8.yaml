@@ -6,5 +6,13 @@ method:
         type: multiview # single multiview multiview-mean-se3
         batch_size: 8
 
+#      inference:
+#        live: False
+#        sample:
+#          method: epnp3d2d # epnp3d2d uniform
+#          epnp3d2d:
+#            count_cams: 100
+#            count_pts: 4
+
 train: False
 test: True

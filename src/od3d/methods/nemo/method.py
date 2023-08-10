@@ -174,18 +174,18 @@ class NeMo(OD3D_Method):
     def path_checkpoint(self):
         return self.logging_dir.joinpath('nemo.ckpt')
 
-    def train(self, dataset: OD3D_Dataset, datasets_val: Dict[str, OD3D_Dataset]):
+    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
 
         if 'main' in datasets_val.keys():
-            train_dataset_sub = dataset
+            dataset_train_sub = datasets_train['labeled']
         else:
-            train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1. - self.config.train.val_fraction,
-                                                                   fraction2=self.config.train.val_fraction,
-                                                                   split=self.config.train.split)
-            datasets_val['main'] = val_dataset_sub
+            dataset_train_sub, dataset_val_sub = datasets_train['labeled'].get_split(fraction1=1. - self.config.train.val_fraction,
+                                                                                     fraction2=self.config.train.val_fraction,
+                                                                                     split=self.config.train.split)
+            datasets_val['main'] = dataset_val_sub
 
         for epoch in range(self.config.train.epochs):
             if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
@@ -199,7 +199,7 @@ class NeMo(OD3D_Method):
                     score_ckpt_val = score_latest
                     self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 
-            results_epoch = self.train_epoch(dataset=train_dataset_sub)
+            results_epoch = self.train_epoch(dataset=dataset_train_sub)
             results_epoch.log_with_prefix('train')
         self.load_checkpoint(path_checkpoint=self.path_checkpoint)
 

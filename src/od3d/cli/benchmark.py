@@ -40,7 +40,7 @@ def table():
     runs = list(filter(lambda run: all([metric in list(run.summary.keys()) for metric in metrics]), runs))
 
     runs = list(filter(lambda run: 'multiview' in run.name, runs))
-    runs = list(filter(lambda run: get_timestamp_from_string(run.name) > datetime.datetime.now() - datetime.timedelta(hours=2), runs))
+    runs = list(filter(lambda run: get_timestamp_from_string(run.name) > datetime.datetime.now() - datetime.timedelta(hours=15), runs))
 
     rows = []
     for run in runs:
@@ -73,7 +73,7 @@ def table():
     my_df[metrics[0]] *= 100
     my_df[metrics[1]] *= 100
 
-    #my_df = my_df.groupby(['type', 'batch_size']).head(1)
+    my_df = my_df.groupby(['type', 'batch_size']).head(1)
     my_df = my_df.rename(columns={'batch_size': 'multiview #frames', metrics[0]: metrics_new_names[0], metrics[1]: metrics_new_names[1], metrics[2]: metrics_new_names[2], metrics[3]: metrics_new_names[3]})
     my_df = my_df.sort_values(by=['type'])
 
@@ -87,10 +87,7 @@ def table():
         )
         #fig = mv_plot.get_figure()
         plt.savefig(f"multiview_{metrics[i].replace('/', '_')}.png")
-
-
     logger.info(tabulate(rows, headers=cols, tablefmt='github')) # 'github', 'tsv'
-
 
     my_df.to_csv('output.csv', index=False, header=False)
 
@@ -140,9 +137,9 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         with open_dict(method_cfg):
             ablation_name = method_cfg.get("ablation_name", None)
             if ablation_name is not None:
-                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_dataset.class_name}_{method_cfg.method.class_name}_{ablation_name}_{method_cfg.platform.link}'
+                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{ablation_name}_{method_cfg.platform.link}'
             else:
-                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_dataset.class_name}_{method_cfg.method.class_name}_{method_cfg.platform.link}'
+                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{method_cfg.platform.link}'
 
         if method_cfg.platform.link == 'local':
             bench_single_method_local(method_cfg)

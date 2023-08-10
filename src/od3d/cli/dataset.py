@@ -190,7 +190,10 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     from od3d.cv.transforms import CenterZoom3D, RandomCenterZoom3D
     # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
     dataset.transform = torchvision.transforms.Compose([
-        RandomCenterZoom3D(H=640, W=800, dist=25., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=True, config=config.dtd),
+        #RandomCenterZoom3D(H=640, W=800, dist=25., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=True, config=config.dtd),
+        CenterZoom3D(H=640, W=800, dist=None, center3d=[0., 0., 0.],
+                           apply_txtr=False, config=config.dtd),
+
         dataset.transform,
     ]
     )

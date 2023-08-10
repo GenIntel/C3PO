@@ -91,24 +91,26 @@ class NeMo_Incremental(NeMo):
 
         results.log_with_prefix(prefix=f'pseudo_labels/{dataset_update.name}')
 
-    def train(self, dataset: CO3D, datasets_val: Dict[str, OD3D_Dataset]):
+    def train(self, datasets_train: Dict[str, CO3D], datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
 
 
         if 'main' in datasets_val.keys():
-            train_dataset_sub = dataset
+            dataset_train_sub = datasets_train['labeled']
         else:
-            train_dataset_sub, val_dataset_sub = dataset.get_split(fraction1=1. - self.config.train.val_fraction,
-                                                                   fraction2=self.config.train.val_fraction,
-                                                                   split=self.config.train.split)
-            datasets_val['main'] = val_dataset_sub
+            dataset_train_sub, dataset_val_sub = datasets_train['labeled'].get_split(fraction1=1. - self.config.train.val_fraction,
+                                                                                     fraction2=self.config.train.val_fraction,
+                                                                                     split=self.config.train.split)
+            datasets_val['main'] = dataset_val_sub
 
 
-        self.train_sequences = list(train_dataset_sub.dict_nested_frames['car'].keys())
-        self.train_sequences_labeled = random.sample(self.train_sequences, k=self.config.train.incremental.sequences_labeled_count)
-        self.train_sequences_unlabeled = list(set(self.train_sequences) - set(self.train_sequences_labeled))
+        self.train_sequences = list(dataset_train_sub.dict_nested_frames['car'].keys())
+        self.train_sequences_labeled = list(datasets_train['labeled'].dict_nested_frames['car'].keys())
+        #random.sample(self.train_sequences, k=self.config.train.incremental.sequences_labeled_count)
+        self.train_sequences_unlabeled = list(datasets_train['unlabeled'].dict_nested_frames['car'].keys())
+        #list(set(self.train_sequences) - set(self.train_sequences_labeled))
         self.train_sequences_pseudo_labeled = []
         self.train_sequences_pseudo_labels: Dict[str, SequencePseudoLabel] = {}
 
@@ -126,14 +128,14 @@ class NeMo_Incremental(NeMo):
 
             self.train_sequences_random = self.train_sequences_labeled + self.train_sequences_pseudo_labeled
             dict_category_sequences = {'car': self.train_sequences_random}
-            train_dataset_sub_sub = train_dataset_sub.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
+            train_dataset_sub_sub = dataset_train_sub.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
                                                                               frames_count_max_per_sequence=None)
 
             results_epoch = self.train_epoch(dataset=train_dataset_sub_sub)
             results_epoch.log_with_prefix('train')
 
             if self.config.train.incremental.enabled:
-                self.update_pseudo_labels(dataset_train=train_dataset_sub)
+                self.update_pseudo_labels(dataset_train=dataset_train_sub)
 
         self.load_checkpoint(path_checkpoint=self.path_checkpoint)
 
@@ -146,7 +148,7 @@ class NeMo_Incremental(NeMo):
         return super().train_batch(batch=batch)
 
 
-    def inference_batch_multiview(self, batch):
+    def inference_batch_multiview(self, batch, return_samples_with_sim=True):
         results = OD3D_Results()
         B = len(batch)
 
@@ -212,12 +214,20 @@ class NeMo_Incremental(NeMo):
                                                      cam_intr4x4=b_cams_multiview_intr4x4,
                                                      categories_ids=pred_class_ids,
                                                      broadcast_batch_and_cams=True)
+
+            sim = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
+
+            if return_samples_with_sim:
+                results['samples_cam_tform4x4_obj'] = b_cams_multiview_tform4x4_obj
+                results['samples_cam_intr4x4'] = b_cams_multiview_intr4x4
+                results['samples_sim'] = sim
+
             mesh_multiple_cams_loss = -sim
 
 
-            mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.mean(dim=0, keepdim=True).min(dim=1)
+            mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
-            obj_tform4x4_cuboid_front = objs_multiview_tform4x4_cuboid_front[0, mesh_cam_loss_min_id]
+            obj_tform4x4_cuboid_front = objs_multiview_tform4x4_cuboid_front[0, mesh_cam_loss_min_id[0]]
 
             #cam_tform4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(
             #    dim1=-2, dim2=-1).permute(2, 0, 1)
@@ -284,13 +294,14 @@ class NeMo_Incremental(NeMo):
         results['rot_diff_rad'] = diff_rot_angle_rad
         results['label_gt'] = batch.label
         results['label_pred'] = pred_class_ids
-        results['sim'] = sim
+        results['sim'] = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
         results['cam_tform4x4_obj'] = cam_tform4x4_obj
         results['obj_tform4x4_cuboid_front'] = obj_tform4x4_cuboid_front
         results['item_id'] = batch.item_id
         results['name_unique'] = batch.name_unique
 
         return results
+
 
     """
     def train(self):

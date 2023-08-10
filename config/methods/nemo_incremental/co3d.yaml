@@ -43,14 +43,9 @@ train:
           - +0.
 
 test:
-    transform:
-        W: 512 # 800 512
-        H: 512 # 640 512
-        dist: 25. # 5. (scale_normalized_to_real) * 5. (default distance used)
-        center3d: [ 0., 0., 0. ] #  None
 
     dataloader:
-        num_workers: 0
+        num_workers: 4
         batch_size: 4
         pin_memory: True
 
