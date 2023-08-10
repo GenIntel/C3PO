@@ -652,6 +652,7 @@ class NeMo(OD3D_Method):
                             from od3d.cv.visual.show import get_img_from_plot
                             from od3d.cv.visual.draw import draw_text_in_rgb
                             img = get_img_from_plot(ax=ax, fig=fig)
+                            plt.close()
                             img = resize(img, H_out=imgs.shape[-2], W_out=imgs.shape[-2])
                             img = draw_text_in_rgb(img, fontScale=0.4, lineThickness=2, fontColor=(0, 0, 0), text=f'{batch_sel_scores[b]}\nmin={imgs_sim.min().item():.3f}\nmax={imgs_sim.max().item():.3f}')
                             imgs = torch.cat([imgs, img[None,].to(device=imgs.device)], dim=0)

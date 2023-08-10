@@ -1,7 +1,7 @@
 defaults:
   - co3d
 
-name: co3d_3s_train
+name: co3d_47s_train
 
 #frames_count_max_per_sequence: 1
 
