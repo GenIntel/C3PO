@@ -7,7 +7,8 @@ from od3d.datasets.dataset import OD3D_Dataset
 from od3d.benchmark.results import OD3D_Results
 from omegaconf import DictConfig
 import pytorch3d.transforms
-
+import pandas as pd
+import numpy as np
 from torch.utils.data import RandomSampler
 import logging
 
@@ -537,32 +538,14 @@ class NeMo(OD3D_Method):
 
         if 'name_unique' in results_epoch.keys() and len(results_epoch['name_unique']) > 0:
             # this only groups the ranked elements depending on their category / sequence etc.
+            # https://stackoverflow.com/questions/51408344/pandas-dataframe-interleaved-reordering
+
+
             group_names = list(set(['/'.join(name_unique.split('/')[:-1]) for name_unique in results_epoch['name_unique']]))
             group_ids = [ group_id for group_id, group_name in enumerate(group_names) for name_unique in results_epoch['name_unique'] if name_unique.startswith(group_name)]
-            group_ids_unique = list(range(len(group_names)))
-            group_ids_count = []
-            for group_id in group_ids_unique:
-                group_ids_count.append(len(list(filter(lambda g: g == group_id, group_ids))))
-            from copy import copy
-            group_ids_available = copy(group_ids_unique)
-            group_ids_used = []
-            group_ids_used_count = [0] * len(group_ids_unique)
-            epoch_ranked_ids_with_groups = []
-            for i in range(len(epoch_ranked_ids)):
-                for ranked_id in epoch_ranked_ids:
-                    group_id = group_ids[ranked_id]
-                    if len(group_ids_available) > 1 and group_id in group_ids_used[-(len(group_ids_available)-1):]:
-                        continue
-                    if ranked_id in epoch_ranked_ids_with_groups:
-                        continue
+            df = pd.DataFrame(np.stack([epoch_ranked_ids.detach().cpu().numpy(), np.array(group_ids)], axis=-1), columns=['rank', 'group'])
+            epoch_ranked_ids = torch.from_numpy(df.loc[df.groupby("group").cumcount().sort_values(kind='mergesort').index]['rank'].values)
 
-                    epoch_ranked_ids_with_groups.append(ranked_id)
-                    group_ids_used.append(group_id)
-                    group_ids_used_count[group_id] += 1
-                    if group_ids_used_count[group_id] == group_ids_count[group_id]:
-                        group_ids_available.remove(group_ids[ranked_id])
-                    break
-            epoch_ranked_ids = torch.stack(epoch_ranked_ids_with_groups, dim=0)
 
         epoch_best_ids = epoch_ranked_ids[:count_best]
         epoch_best_names = [f'best/{i+1}' for i in range(len(epoch_best_ids))]

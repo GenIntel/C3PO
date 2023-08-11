@@ -1,12 +1,18 @@
 # @package _global_
 defaults:
-    - override /datasets@test_datasets.co3d: co3d_50s_test # co3d_10s_test, co3d_test
+  - override /datasets@test_datasets.co3d: co3d_50s_test # co3d_50s_test # co3d_10s_test, co3d_test
+  - override /datasets@test_datasets.pascal3d: pascal3d_test
 
 ablation_name: debug
 
 test_datasets:
     co3d:
-        frames_count_max_per_sequence: 8
+      skip: True
+      frames_count_max_per_sequence: 1 # 8
+    pascal3d:
+      skip: False
+      subset_fraction: 0.01
+
 
 method:
     nemo:
