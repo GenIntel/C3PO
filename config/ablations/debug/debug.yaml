@@ -15,24 +15,26 @@ test_datasets:
 
 
 method:
-    nemo:
-        checkpoint: ${platform.path_exps}/08-08_17-27-08_CO3D_NeMo_uniform_train_co3d_3s_slurm/nemo.ckpt
+  nemo:
+    checkpoint: ${platform.path_exps}/08-08_17-27-08_CO3D_NeMo_uniform_train_co3d_3s_slurm/nemo.ckpt
 
-        inference:
-            visualize:
-                live: False
+    inference:
+      visualize:
+        live: False
 
-        test:
-            dataloader:
-                num_workers: 4
-                batch_size: 4
-                pin_memory: True
+    test:
+      dataloader:
+        num_workers: 4
+        batch_size: 4
+        pin_memory: True
 
-        train:
-            dataloader:
-                num_workers: 0
-                batch_size: 1
-                pin_memory: True
+    train:
+      val: False
+      dataloader:
+        num_workers: 0
+        batch_size: 1
+        pin_memory: True
 
-train: False
+
+train: True
 test: True

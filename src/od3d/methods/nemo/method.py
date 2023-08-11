@@ -104,7 +104,22 @@ class NeMo(OD3D_Method):
         self.seq_obj_tform4x4_est_obj_sim = {}
 
         self.normalize_feats()
-        self.criterion = torch.nn.CrossEntropyLoss().cuda()
+
+        if self.config.train.loss == 'cross_entropy':
+            self.criterion = torch.nn.CrossEntropyLoss().cuda()
+        elif self.config.train.loss == 'nll_softmax':
+            self.softmax = torch.nn.LogSoftmax(dim=1)
+            self.criterion = torch.nn.NLLLoss().cuda()
+        elif self.config.train.loss == 'nll_clip':
+            self.criterion = torch.nn.NLLLoss().cuda()
+        elif self.config.train.loss == 'nll_affine_to_prob':
+            self.criterion = torch.nn.NLLLoss().cuda()
+        elif self.config.train.loss == 'l2':
+            self.criterion = torch.nn.MSELoss().cuda()
+        elif self.config.train.loss == 'l2_squared':
+            self.criterion = torch.nn.MSELoss().cuda()
+
+
         # self.net = torch.nn.DataParallel(self.net).cuda()
         self.net.cuda()
         self.meshes.cuda()
@@ -323,18 +338,41 @@ class NeMo(OD3D_Method):
 
         bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
 
-        sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
 
+        sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
         sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=mask_vts2d_vsbl.device), mask_vts2d_vsbl.sum(dim=1).cumsum(dim=0)], dim=0)
         sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
         results_batch['sim'] = sim_batchwise
 
-        sim = sim / self.config.train.T
+        # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
+        # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
 
-        # subsample_ids = torch.multinomial(sim_weight, num_samples = sim_weight.shape[0], replacement=True)
-        # loss = criterion(sim[subsample_ids], batch_vts_ids[subsample_ids])
-        lossCLS = self.criterion(sim, batch_vts_ids)
-        loss = lossCLS
+        if self.config.train.loss == 'cross_entropy':
+            loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
+        elif self.config.train.loss == 'nll_softmax':
+            loss = self.criterion(self.softmax(sim / self.config.train.T), batch_vts_ids)
+        elif self.config.train.loss == 'nll_clip':
+            loss = self.criterion(torch.log(torch.clamp(sim, 0., 1.)), batch_vts_ids)
+        elif self.config.train.loss == 'nll_affine_to_prob':
+            loss = self.criterion(torch.log((sim + 1.) / 2.), batch_vts_ids)
+        elif self.config.train.loss == 'l2':
+            pass
+            """
+            loss_pos = self.criterion(net_feats, bank_feats[batch_vts_ids])
+            batch_vts_neg_mask = torch.ones(size=(batch_vts_ids.shape[0], bank_feats.shape[0], bank_feats.shape[1]), dtype=torch.bool, device=bank_feats.device)
+            batch_vts_pos_mask = torch.ones(size=(batch_vts_ids.shape[0], bank_feats.shape[0], bank_feats.shape[1]),
+                                            dtype=torch.bool, device=bank_feats.device)
+
+            batch_vts_neg_mask[torch.arange(batch_vts_ids.shape[0]), batch_vts_ids] = False
+            batch_vts_neg_mask = False batch_vts_ids
+            loss_neg = -self.criterion(net_feats, bank_feats[batch_vts_ids])
+            loss = loss_neg + loss_pos
+            """
+            loss = 0.
+        elif self.config.train.loss == 'l2_squared':
+            loss_pos = (self.criterion(net_feats, bank_feats)**2)
+            loss_neg = -(self.criterion(net_feats, bank_feats)**2)
+            loss = loss_neg + loss_pos
 
         loss.backward()
         logger.info(f'loss {loss.item()}')
