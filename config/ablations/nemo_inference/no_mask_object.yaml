@@ -14,3 +14,6 @@ method:
 
         inference:
           use_mask_object: False
+
+train: False
+test: True

@@ -381,7 +381,7 @@ class NeMo(OD3D_Method):
             feats2d_net = self.net(batch.rgb)
             feats2d_net_mask = resize(batch.mask_rgb, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
             if self.config.inference.use_mask_object:
-                feats2d_net_mask *= resize(batch.mask, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+                feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
 
             time_pred_net_feats2d = time.time()
             # logger.info(
@@ -575,7 +575,10 @@ class NeMo(OD3D_Method):
         sel_name_unique = [results_epoch['name_unique'][id] for id in sel_rank_ids]
         dict_name_unique_to_result_id = dict(zip(sel_name_unique, sel_rank_ids))
         dict_name_unique_to_sel_name = dict(zip(sel_name_unique, sel_names))
+        logger.info('create dataset ...')
         dataset_visualize = dataset.get_subset_with_item_ids(item_ids=sel_item_ids)
+
+        logger.info('create dataloader ...')
         dataloader = torch.utils.data.DataLoader(dataset=dataset_visualize, batch_size=self.config.test.dataloader.batch_size,
                                                  shuffle=False,
                                                  collate_fn=dataset.collate_fn,
@@ -596,6 +599,8 @@ class NeMo(OD3D_Method):
                 #                     scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
 
                 if VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS in modalities:
+
+                    logger.info('create net_feats_nearest_verts ...')
                     verts3d = self.get_nearest_verts3d_to_feats2d_net(feats2d_net=feats2d_net, categories_ids=batch.label,
                                                                       zero_if_sim_clutter_larger=True)
                     verts3d = resize(verts3d, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
@@ -606,6 +611,7 @@ class NeMo(OD3D_Method):
                             show_img(img)
 
                 if VISUAL_MODALITIES.SAMPLES in modalities:
+                    logger.info('create samples ...')
                     s_cam_tform4x4_obj = results_epoch['samples_cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
                     s_cam_intr4x4 = results_epoch['samples_cam_intr4x4'].to(device=self.device)[batch_result_ids]
                     sim = results_epoch['samples_sim'].to(device=self.device)[batch_result_ids]
@@ -648,6 +654,7 @@ class NeMo(OD3D_Method):
                             imgs_sim = imgs_sim[imgs_sim_ids]
 
                         if config_visualize.samples_scores:
+                            logger.info('create plot samples scores...')
                             import matplotlib.pyplot as plt
                             plt.ioff()
                             fig, ax = plt.subplots()
@@ -679,6 +686,7 @@ class NeMo(OD3D_Method):
 
 
                 if VISUAL_MODALITIES.SIM_PXL in modalities:
+                    logger.info('create sim pxl...')
                     batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
                     batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
                     sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
@@ -697,6 +705,7 @@ class NeMo(OD3D_Method):
 
 
                 if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities or VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
+                    logger.info('create pred verts ncds...')
                     batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
                     batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
                     pred_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=batch_pred_cam_tform4x4, categories_ids=batch_pred_label, size=batch.size, down_sample_rate=config_visualize.down_sample_rate)
@@ -709,6 +718,7 @@ class NeMo(OD3D_Method):
                                 show_img(img)
 
                 if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities or VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
+                    logger.info('create gt verts ncds...')
                     gt_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4,
                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                   categories_ids=batch.label, size=batch.size,
@@ -723,6 +733,7 @@ class NeMo(OD3D_Method):
                             if live:
                                 show_img(img)
                 if VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
+                    logger.info('create pred vs gt verts ncds...')
                     for b in range(len(batch)):
                         img1 = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
                                          pred_verts_ncds[b])

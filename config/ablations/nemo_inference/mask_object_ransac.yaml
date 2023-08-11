@@ -2,7 +2,7 @@
 defaults:
     - override /datasets@test_datasets.co3d: co3d_50s_test # co3d_10s_test, co3d_test
 
-ablation_name: inference_mask_object
+ablation_name: inference_mask_object_ransac
 
 test_datasets:
     co3d:
@@ -14,6 +14,8 @@ method:
 
         inference:
           use_mask_object: True
+          sample:
+              method: epnp3d2d # epnp3d2d uniform
 
 train: False
 test: True
