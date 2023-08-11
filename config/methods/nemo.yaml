@@ -98,6 +98,7 @@ test:
 
 inference:
     live: False
+    use_mask_object: True
     sample:
       method: uniform # epnp3d2d uniform
       epnp3d2d:

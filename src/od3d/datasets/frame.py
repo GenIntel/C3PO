@@ -291,6 +291,7 @@ class OD3D_Frame():
         self.item_id = None
         self._cam_tform4x4_obj = None
         self._cam_intr4x4 = None
+        self._mask_rgb = None
         self._size = None
         self._rgb = None
         self._mask = None
@@ -312,6 +313,16 @@ class OD3D_Frame():
         return self.meta.name_unique
 
     @property
+    def mask_rgb(self):
+        if self._mask_rgb is None:
+            self._mask_rgb = torch.ones(size=(1, self.H, self.W), dtype=torch.bool)
+        return self._mask_rgb
+
+    @mask_rgb.setter
+    def mask_rgb(self, value: torch.Tensor):
+        self._mask_rgb = value
+
+    @property
     def size(self):
         if self._size is None:
             self._size = self.meta.size
@@ -323,11 +334,11 @@ class OD3D_Frame():
 
     @property
     def H(self):
-        return self.size[0]
+        return int(self.size[0].item())
 
     @property
     def W(self):
-        return self.size[1]
+        return int(self.size[1].item())
 
     @property
     def cam_intr4x4(self):

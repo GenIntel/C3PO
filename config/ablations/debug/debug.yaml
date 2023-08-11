@@ -1,21 +1,25 @@
 # @package _global_
+defaults:
+    - override /datasets@test_datasets.co3d: co3d_50s_test # co3d_10s_test, co3d_test
+
 ablation_name: debug
+
+test_datasets:
+    co3d:
+        frames_count_max_per_sequence: 8
+
 method:
     nemo:
+        checkpoint: ${platform.path_exps}/08-08_17-27-08_CO3D_NeMo_uniform_train_co3d_3s_slurm/nemo.ckpt
+
         inference:
             visualize:
-                num_samples: 5
-                live: True
-                samples_sorted: True
-                samples: True
-                samples_scores: True
-                verts_ncds_in_rgb: True
-                net_feats_nearest_verts: True
+                live: False
 
         test:
             dataloader:
-                num_workers: 0
-                batch_size: 1
+                num_workers: 4
+                batch_size: 4
                 pin_memory: True
 
         train:
@@ -23,13 +27,6 @@ method:
                 num_workers: 0
                 batch_size: 1
                 pin_memory: True
-
-            visualize:
-                num_samples: 5
-                live: False
-                verts_ncds_in_rgb: True
-                net_feats_nearest_verts: True
-                seq_added_tform: True
 
 train: False
 test: True

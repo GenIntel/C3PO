@@ -378,7 +378,10 @@ class NeMo(OD3D_Method):
 
         time_loaded = time.time()
         with torch.no_grad():
-            net_feats2d = self.net(batch.rgb)
+            feats2d_net = self.net(batch.rgb)
+            feats2d_net_mask = resize(batch.mask_rgb, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+            if self.config.inference.use_mask_object:
+                feats2d_net_mask *= resize(batch.mask, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
 
             time_pred_net_feats2d = time.time()
             # logger.info(
@@ -391,8 +394,8 @@ class NeMo(OD3D_Method):
                 bank_feats = torch.cat([self.meshes.get_feats_with_mesh_id(mesh_id), self.clutter_feats.detach()],
                                        dim=0)
                 # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
-                out_shape = net_feats2d.shape[:1] + torch.Size([1]) + net_feats2d.shape[2:]
-                inner_feats2d_net_bank_vts_max_vals = torch.einsum('bchw,kc->bkhw', net_feats2d, bank_feats).max(dim=1,
+                out_shape = feats2d_net.shape[:1] + torch.Size([1]) + feats2d_net.shape[2:]
+                inner_feats2d_net_bank_vts_max_vals = torch.einsum('bchw,kc->bkhw', feats2d_net, bank_feats).max(dim=1,
                                                                                                                  keepdim=True).values
                 # inner_feats2d_net_bank_vts_max_vals, inner_feats2d_net_bank_vts_max_ids = inner_feats2d.max(dim=1)
                 # show_img(self.meshes.get_verts_with_mesh_id[mesh_id][inner_feats2d_net_bank_vts_max_ids[0, 0]].permute(2, 0, 1), normalize=True)
@@ -413,10 +416,12 @@ class NeMo(OD3D_Method):
             b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
                                                                                        cam_intr4x4=batch.cam_intr4x4,
                                                                                        cam_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                                                       feats2d_net=net_feats2d,
-                                                                                       categories_ids=pred_class_ids)
+                                                                                       feats2d_net=feats2d_net,
+                                                                                       categories_ids=pred_class_ids,
+                                                                                       feats2d_net_mask=feats2d_net_mask)
             #  OPTION A: Use 2d gradient of rendered features
-            sim = self.get_sim_feats2d_net_with_cams(feats2d_net=net_feats2d,
+            sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
+                                                     feats2d_net_mask=feats2d_net_mask,
                                                      cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
                                                      cam_intr4x4=b_cams_multiview_intr4x4,
                                                      categories_ids=pred_class_ids,
@@ -455,7 +460,8 @@ class NeMo(OD3D_Method):
                 obj_tform6_tmp.data[:, :] = 0.
                 cam_tform4x4_obj = tform4x4(cam_tform4x4_obj.detach(), se3_exp_map(obj_tform6_tmp))
 
-                sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=net_feats2d,
+                sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
+                                                                  feats2d_net_mask=feats2d_net_mask,
                                                                   cam_tform4x4_obj=cam_tform4x4_obj,
                                                                   cam_intr4x4=batch.cam_intr4x4,
                                                                   categories_ids=pred_class_ids, return_sim_pxl=True,
@@ -652,7 +658,7 @@ class NeMo(OD3D_Method):
                             from od3d.cv.visual.show import get_img_from_plot
                             from od3d.cv.visual.draw import draw_text_in_rgb
                             img = get_img_from_plot(ax=ax, fig=fig)
-                            plt.close()
+                            plt.close(fig)
                             img = resize(img, H_out=imgs.shape[-2], W_out=imgs.shape[-2])
                             img = draw_text_in_rgb(img, fontScale=0.4, lineThickness=2, fontColor=(0, 0, 0), text=f'{batch_sel_scores[b]}\nmin={imgs_sim.min().item():.3f}\nmax={imgs_sim.max().item():.3f}')
                             imgs = torch.cat([imgs, img[None,].to(device=imgs.device)], dim=0)
@@ -765,7 +771,7 @@ class NeMo(OD3D_Method):
                                         broadcast_batch_and_cams=broadcast_batch_and_cams)
 
     def get_sim_feats2d_net_with_cams(self, feats2d_net, cam_tform4x4_obj, cam_intr4x4, categories_ids, return_sim_pxl=False,
-                                      broadcast_batch_and_cams=False):
+                                      broadcast_batch_and_cams=False, feats2d_net_mask=None):
         size = torch.Tensor([feats2d_net.shape[2] * self.down_sample_rate, feats2d_net.shape[3] * self.down_sample_rate])
         mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_tform4x4_obj,
                                                          cams_intr4x4=cam_intr4x4,
@@ -773,33 +779,35 @@ class NeMo(OD3D_Method):
                                                          down_sample_rate=self.down_sample_rate,
                                                          broadcast_batch_and_cams=broadcast_batch_and_cams)
 
-        return self.get_sim_feats2d_net_and_rendered(feats2d_net=feats2d_net, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=return_sim_pxl)
+        return self.get_sim_feats2d_net_and_rendered(feats2d_net=feats2d_net, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=return_sim_pxl, feats2d_net_mask=feats2d_net_mask)
 
     def get_sim_feats2d_net_with_samples(self, config_sample: DictConfig, cam_intr4x4: torch.Tensor,
                                          cam_tform4x4_obj: torch.Tensor, feats2d_net: torch.Tensor,
-                                         categories_ids: torch.Tensor, return_sim_pxl=False):
+                                         categories_ids: torch.Tensor, return_sim_pxl=False, feats2d_net_mask=None):
         b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=config_sample,
                                                                                    cam_intr4x4=cam_intr4x4,
                                                                                    cam_tform4x4_obj=cam_tform4x4_obj,
                                                                                    feats2d_net=feats2d_net,
-                                                                                   categories_ids=categories_ids)
+                                                                                   categories_ids=categories_ids,
+                                                                                   feats2d_net_mask=feats2d_net_mask)
         return self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                   cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
                                                   cam_intr4x4=b_cams_multiview_intr4x4,
                                                   categories_ids=categories_ids, return_sim_pxl=return_sim_pxl,
-                                                  broadcast_batch_and_cams=True)
+                                                  broadcast_batch_and_cams=True,
+                                                  feats2d_net_mask=feats2d_net_mask)
 
-    def get_nearest_corresp2d3d(self, feats2d_net, meshes_ids):
+    def get_nearest_corresp2d3d(self, feats2d_net, meshes_ids, feats2d_net_mask: torch.Tensor=None):
         nearest_verts3d, sim_texture, sim_clutter = self.get_nearest_verts3d_to_feats2d_net(feats2d_net, meshes_ids, return_sim_texture_and_clutter=True)
         nearest_verts2d = get_pxl2d_like(nearest_verts3d.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
 
         # H=sim_clutter.shape[1], W=sim_clutter.shape[2], dtype=sim_nearest_texture_verts.dtype, device=sim_nearest_texture_verts.device)[None,].expand()
         prob_corresp2d3d = (sim_clutter < sim_texture) * sim_texture
+        prob_corresp2d3d *= feats2d_net_mask
 
         return nearest_verts3d, nearest_verts2d, prob_corresp2d3d
 
-
-    def get_sim_feats2d_net_and_rendered(self, feats2d_net, feats2d_rendered, return_sim_pxl=False):
+    def get_sim_feats2d_net_and_rendered(self, feats2d_net, feats2d_rendered, return_sim_pxl=False, feats2d_net_mask=None):
         sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[
             0]
         # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
@@ -814,7 +822,11 @@ class NeMo(OD3D_Method):
         sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
         sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
 
-        sim = sim_pxl.flatten(2).mean(dim=-1)
+        if feats2d_net_mask is None:
+            sim = sim_pxl.flatten(2).mean(dim=-1)
+        else:
+            sim_pxl *= feats2d_net_mask
+            sim = sim_pxl.flatten(2).sum(dim=-1) / (feats2d_net_mask.flatten(2).sum(dim=-1) + 1e-10)
 
         if return_sim_pxl:
             return sim, sim_pxl
@@ -822,7 +834,7 @@ class NeMo(OD3D_Method):
             return sim
 
     def get_samples(self, config_sample: DictConfig, cam_intr4x4: torch.Tensor, cam_tform4x4_obj: torch.Tensor,
-                    feats2d_net: torch.Tensor, categories_ids: torch.Tensor):
+                    feats2d_net: torch.Tensor, categories_ids: torch.Tensor, feats2d_net_mask: torch.Tensor=None):
         B = len(feats2d_net)
         if config_sample.method == 'uniform':
             azim = torch.linspace(start=eval(config_sample.uniform.azim.min), end=eval(config_sample.uniform.azim.max), steps=config_sample.uniform.azim.steps).to(
@@ -864,7 +876,8 @@ class NeMo(OD3D_Method):
         elif config_sample.method == 'epnp3d2d':
 
             nearest_verts3d, nearest_verts2d, prob_well_corresp = self.get_nearest_corresp2d3d(feats2d_net=feats2d_net,
-                                                                                               meshes_ids=categories_ids)
+                                                                                               meshes_ids=categories_ids,
+                                                                                               feats2d_net_mask=feats2d_net_mask)
             H, W = feats2d_net.shape[2:]
             prob_well_corresp = prob_well_corresp.flatten(1)
             if (prob_well_corresp.sum(dim=-1) == 0).any():

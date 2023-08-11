@@ -39,16 +39,14 @@ class CenterZoom3D():
                 logger.warning(f'Scale is < 0.01. Setting scale to 1.')
                 scale = 1.
         else:
-            #scale = 1.
             centered_frame_H = int(max(abs(frame.H - center[1]), abs(center[1])) * 2)
             centered_frame_W = int(max(abs(frame.W - center[0]), abs(center[0])) * 2)
             scale = min(self.H / centered_frame_H, self.W / centered_frame_W)
 
-
+        frame.mask_rgb, _ = crop(frame.mask_rgb, center=center, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
         if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
             frame.mask, _ = crop(img=frame.mask, center=center, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
-
 
 
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)

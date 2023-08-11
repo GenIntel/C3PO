@@ -28,6 +28,7 @@ class OD3D_Frames():
     sequence_name: None
     sequence: None
     rgb: None
+    mask_rgb: None
     depth: None
     mask: None
     depth_mask: None
@@ -50,6 +51,7 @@ class OD3D_Frames():
         item_id = torch.cat([torch.LongTensor([frame.item_id, ]) for frame in frames], dim=0)
         path_co3d = frame0.path_raw
         size = frame0.size # .to(device=device)
+
 
         if OD3D_FRAME_MODALITIES.CAM_INTR4X4 in modalities:
             cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0) # .to(device=device)
@@ -91,8 +93,10 @@ class OD3D_Frames():
 
         if OD3D_FRAME_MODALITIES.RGB in modalities:
             rgb = torch.stack([frame.rgb for frame in frames], dim=0) #.to(device=device)
+            mask_rgb = torch.stack([frame.mask_rgb for frame in frames], dim=0) #.to(device=device)
         else:
             rgb = None
+            mask_rgb = None
 
         if OD3D_FRAME_MODALITIES.MASK in modalities:
             mask = torch.stack([frame.mask for frame in frames], dim=0) #.to(device=device)
@@ -135,7 +139,7 @@ class OD3D_Frames():
                            category=category, categories=categories, label=label, sequence_name=sequence_name,
                            rgb=rgb, depth=depth, mesh=mesh,
                            mask=mask, depth_mask=depth_mask, kpts2d_annot=kpts2d_annot,
-                           kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox, sequence=sequence)
+                           kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox, sequence=sequence, mask_rgb=mask_rgb)
 
 
     def get_items(self, items):
@@ -146,6 +150,7 @@ class OD3D_Frames():
                            category=[self.category[item] for item in items], label=self.label[items],
                            sequence_name=[self.sequence_name[item] for item in items] if self.sequence_name is not None else None,
                            rgb=self.rgb[items] if self.rgb is not None else None,
+                           mask_rgb=self.mask_rgb[items] if self.mask_rgb is not None else None,
                            depth=self.depth[items] if self.depth is not None else None,
                            mask=self.mask[items] if self.mask is not None else None,
                            depth_mask=self.depth_mask[items] if self.depth_mask is not None else None,
