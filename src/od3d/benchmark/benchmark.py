@@ -40,6 +40,8 @@ class OD3D_Benchmark:
 
         datasets_test = []
         for dataset_test_key in self.config.test_datasets.keys():
+            if self.config.test_datasets[dataset_test_key].get('skip', False):
+                continue
             logger.info(f'create test dataset {self.config.test_datasets[dataset_test_key].name}')
 
             datasets_test.append(

@@ -555,11 +555,13 @@ class NeMo(OD3D_Method):
                         continue
                     if ranked_id in epoch_ranked_ids_with_groups:
                         continue
+
                     epoch_ranked_ids_with_groups.append(ranked_id)
                     group_ids_used.append(group_id)
                     group_ids_used_count[group_id] += 1
                     if group_ids_used_count[group_id] == group_ids_count[group_id]:
                         group_ids_available.remove(group_ids[ranked_id])
+                    break
             epoch_ranked_ids = torch.stack(epoch_ranked_ids_with_groups, dim=0)
 
         epoch_best_ids = epoch_ranked_ids[:count_best]
