@@ -12,7 +12,7 @@ method:
         head:
           class_name: ResNet
           block_type: 'bottleneck' # 'bottleneck', 'basic'
-          in_upsampled_dim: 2048
+          in_upsampled_dim: 384
           conv_blocks:
             out_dims: [ 128 ]
             strides: [ 1 ]

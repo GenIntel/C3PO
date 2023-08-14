@@ -1,0 +1,14 @@
+# @package _global_
+ablation_name: resnet50_frozen
+
+method:
+    nemo:
+      train:
+        val: True
+      model:
+        backbone:
+          class_name: ResNet
+          freeze: True
+
+train: True
+test: True

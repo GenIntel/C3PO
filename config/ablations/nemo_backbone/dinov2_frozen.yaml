@@ -1,0 +1,25 @@
+# @package _global_
+ablation_name: dinov2_frozen
+
+method:
+    nemo:
+      train:
+        val: True
+      model:
+        backbone:
+          class_name: DINOv2
+          weights: 'default' # 'default' 'none'
+          freeze: True
+          layers_returned: [ 0 ] # always start with depest layer...
+        head:
+          class_name: ResNet
+          block_type: 'bottleneck' # 'bottleneck', 'basic'
+          conv_blocks:
+            out_dims: [ 512, 512, 128 ]
+            strides: [ 1, 1, 1 ]
+          fully_connected:
+            out_dim: # None means that there is no linear layer
+          normalize: True
+
+train: True
+test: True
