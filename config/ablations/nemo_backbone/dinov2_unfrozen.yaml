@@ -1,5 +1,5 @@
 # @package _global_
-ablation_name: dinov2_frozen
+ablation_name: dinov2_unfrozen
 
 method:
     nemo:
@@ -9,7 +9,7 @@ method:
         backbone:
           class_name: DINOv2
           weights: 'default' # 'default' 'none'
-          freeze: True
+          freeze: False
           layers_returned: [ 0 ] # always start with depest layer...
         head:
           class_name: ResNet

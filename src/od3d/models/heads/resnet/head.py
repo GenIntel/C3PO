@@ -14,18 +14,26 @@ class RESNET_CONV_BLOCK_TYPES(str, ExtEnum):
     BASIC = 'basic'
 
 
-def get_block(block_type: RESNET_CONV_BLOCK_TYPES, in_dim: int, out_dim: int, stride: int):
+def get_block(block_type: RESNET_CONV_BLOCK_TYPES, in_dim: int, out_dim: int, stride: int, pre_upsampling: float = 1.):
+    moudule_list = nn.ModuleList()
+    if pre_upsampling != 1.:
+        moudule_list.append(nn.Upsample(scale_factor=pre_upsampling))
+
     if block_type == RESNET_CONV_BLOCK_TYPES.BASIC:
-        return BasicBlock(inplanes=in_dim, planes=out_dim, stride=stride,
-                          downsample=nn.Sequential(nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, bias=False),
-                                                   nn.BatchNorm2d(out_dim)))
+        moudule_list.append(BasicBlock(inplanes=in_dim, planes=out_dim, stride=stride,
+                                        downsample=nn.Sequential(
+                                            nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, bias=False),
+                                            nn.BatchNorm2d(out_dim))))
+
     elif block_type == RESNET_CONV_BLOCK_TYPES.BOTTLENECK:
-        return Bottleneck(inplanes=in_dim, planes=out_dim // 4, stride=stride,
+        moudule_list.append(Bottleneck(inplanes=in_dim, planes=out_dim // 4, stride=stride,
                           downsample=nn.Sequential(nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, bias=False),
-                                                   nn.BatchNorm2d(out_dim)))
+                                                   nn.BatchNorm2d(out_dim))))
     else:
         logger.error(f'Unknown block type {block_type}.')
         raise NotImplementedError
+
+    return nn.Sequential(*moudule_list)
 
 class ResNet(OD3D_Head):
     def __init__(
@@ -72,10 +80,11 @@ class ResNet(OD3D_Head):
         self.conv_blocks_count = len(self.conv_blocks_out_dims)
         self.conv_blocks_strides = config.conv_blocks.strides
         self.conv_blocks_in_dims = [self.in_upsampled_dim] + [config.conv_blocks.out_dims[i] for i in range(self.conv_blocks_count - 1)]
-
+        self.conv_blocks_pre_upsampling = config.conv_blocks.pre_upsampling
         assert len(self.conv_blocks_in_dims) == len(self.conv_blocks_out_dims)
         assert len(self.conv_blocks_out_dims) == len(self.conv_blocks_strides)
         assert len(self.conv_blocks_in_dims) == 0 or self.conv_blocks_in_dims[0] == self.in_upsampled_dim
+        assert len(self.conv_blocks_out_dims) == len(self.conv_blocks_pre_upsampling)
 
         #self.conv_blocks = nn.Sequential(*[Bottleneck(inplanes=self.conv_blocks_in_dims[i],
         #                                              planes=self.conv_blocks_out_dims[i] // 4,
@@ -88,7 +97,8 @@ class ResNet(OD3D_Head):
         self.conv_blocks = nn.Sequential(*[get_block(block_type=self.block_type,
                                                      in_dim=self.conv_blocks_in_dims[i],
                                                      out_dim=self.conv_blocks_out_dims[i],
-                                                     stride=self.conv_blocks_strides[i])
+                                                     stride=self.conv_blocks_strides[i],
+                                                     pre_upsampling=self.conv_blocks_pre_upsampling[i])
                                            for i in range(self.conv_blocks_count)])
 
         if config.fully_connected.out_dim is not None:

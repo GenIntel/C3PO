@@ -42,9 +42,10 @@ class DINOv2(OD3D_Backbone):
                 param.requires_grad = False
 
     def forward(self, x):
-        x = resize(x, H_out=64 * 14, W_out=64 * 14)
+        x = resize(x, H_out=32 * 14, W_out=32 * 14)
         x = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
-        x = x.reshape(-1, 64, 64, 384).permute(0, 3, 1, 2)
+        x = x.reshape(-1, 32, 32, 384).permute(0, 3, 1, 2)
+        # x = resize(x, H_out=64, W_out=64)
 
         x_layers = [x]
         return x_layers
