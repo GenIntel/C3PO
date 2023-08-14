@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
-  - override /datasets@train_datasets.labeled: co3d_3s_train #  co3d_55s_train, pascal3d_train
   - /datasets@val_datasets.co3d: co3d_5s_val  #  co3d_55s_train, pascal3d_train
+  - override /datasets@train_datasets.labeled: co3d_3s_train #  co3d_55s_train, pascal3d_train
 
 ablation_name: split_train_co3d_3s_val_random
 
