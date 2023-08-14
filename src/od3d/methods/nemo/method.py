@@ -299,21 +299,29 @@ class NeMo(OD3D_Method):
 
         # logger.info(f'batch.label {batch.label}')
         # B x x N x 2
-        vts2d, mask_vts2d_vsbl = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
+        vts2d, vts2d_mask = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
                                                      cams_tform4x4_obj=batch.cam_tform4x4_obj,
                                                      imgs_sizes=batch.size, mesh_ids=batch.label,
                                                      down_sample_rate=self.down_sample_rate)
+
         N = vts2d.shape[1]
         # B x F+N x C
-        net_feats2d = self.net(batch.rgb)
-        H, W = net_feats2d.shape[-2:]
+        feats2d_net = self.net(batch.rgb)
+        feats2d_net_mask = resize(batch.mask_rgb, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+        if self.config.train.use_mask_object:
+            feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
+                                                              W_out=feats2d_net.shape[3])
+
+        H, W = feats2d_net.shape[-2:]
         xy = torch.stack(
             torch.meshgrid(torch.arange(W, device=self.device), torch.arange(H, device=self.device),
                            indexing='xy'), dim=0)  # HxW
-        prob_noise = (1. - 1. * resize(batch.mask, scale_factor=1. / self.down_sample_rate)).flatten(1)
+        prob_noise = (1. - 1. * resize(feats2d_net_mask, scale_factor=1. / self.down_sample_rate)).flatten(1)
         prob_noise[prob_noise.sum(dim=-1) == 0.] = 1.
         noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise)].permute(1, 2, 0)
-        net_feats = sample_pxl2d_pts(net_feats2d, pxl2d=torch.cat([vts2d, noise2d], dim=1))
+        vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
+        vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
+        net_feats = sample_pxl2d_pts(feats2d_net, pxl2d=torch.cat([vts2d, noise2d], dim=1))
 
         C = net_feats.shape[2]
         # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
@@ -330,9 +338,9 @@ class NeMo(OD3D_Method):
         # sim_weight = batch.cam_tform4x4_obj_sim[:, None].expand(*net_feats.shape[:2])
         # sim_weight = torch.cat([sim_weight[:, :N][mask_vts2d_vsbl], sim_weight[:, N:].reshape(-1)], dim=0)
 
-        batch_vts_ids = torch.cat([batch_vts_ids[:, :N][mask_vts2d_vsbl], batch_vts_ids[:, N:].reshape(-1)],
+        batch_vts_ids = torch.cat([batch_vts_ids[:, :N][vts2d_mask], batch_vts_ids[:, N:].reshape(-1)],
                                   dim=0)
-        net_feats = torch.cat([net_feats[:, :N][mask_vts2d_vsbl], net_feats[:, N:].reshape(-1, C)], dim=0)
+        net_feats = torch.cat([net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)], dim=0)
 
         # batch_vts_ids = self.meshes.get_feats_ids_stacked(batch.label.tolist())
 
@@ -353,7 +361,7 @@ class NeMo(OD3D_Method):
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
             sim = None
 
-        sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=mask_vts2d_vsbl.device), mask_vts2d_vsbl.sum(dim=1).cumsum(dim=0)], dim=0)
+        sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=vts2d_mask.device), vts2d_mask.sum(dim=1).cumsum(dim=0)], dim=0)
         sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
         results_batch['sim'] = sim_batchwise
 

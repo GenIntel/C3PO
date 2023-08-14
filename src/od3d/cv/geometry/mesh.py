@@ -321,6 +321,59 @@ class Meshes(torch.nn.Module):
                                    showaxeslabels=True, showticklabels=True))
         fig.show()
         input('bla')
+
+    def get_pre_rendered_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, broadcast_batch_and_cams=False, down_sample_rate=1.):
+        assert self.pre_rendered_feats_cams_tform4x4_obj == cams_tform4x4_obj
+        assert self.pre_rendered_feats_cams_intr4x4 == cams_intr4x4
+        assert self.pre_rendered_feats_imgs_sizes == imgs_sizes
+        assert self.pre_rendered_feats_meshes_ids == meshes_ids
+        assert self.pre_rendered_feats_broadcast_batch_and_cams == broadcast_batch_and_cams
+        assert self.pre_rendered_feats_down_sample_rate == down_sample_rate
+
+        if self.pre_rendered_feats is None:
+            self.pre_rendered_feats_cams_tform4x4_obj = cams_tform4x4_obj
+            self.pre_rendered_feats_cams_intr4x4 = cams_intr4x4
+            self.pre_rendered_feats_imgs_sizes = imgs_sizes
+            self.pre_rendered_feats_meshes_ids = meshes_ids
+            self.pre_rendered_feats_broadcast_batch_and_cams = broadcast_batch_and_cams
+            self.pre_rendered_feats_down_sample_rate = down_sample_rate
+            self.pre_rendered_feats = self.render_feats(
+                cams_tform4x4_obj=self.pre_rendered_feats_cams_tform4x4_obj,
+                cams_intr4x4=self.pre_rendered_feats_cams_intr4x4, imgs_sizes=self.pre_rendered_feats_imgs_sizes,
+                meshes_ids=self.pre_rendered_feats_meshes_ids, modality=MESH_RENDER_MODALITIES.FEATS,
+                broadcast_batch_and_cams=self.pre_rendered_feats_broadcast_batch_and_cams,
+                down_sample_rate=self.pre_rendered_feats_down_sample_rate)
+
+        return self.pre_rendered_feats
+
+
+    def get_pre_rendered_masks(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, broadcast_batch_and_cams=False, down_sample_rate=1.):
+        assert self.pre_rendered_masks_verts_vsbl_cams_tform4x4_obj == cams_tform4x4_obj
+        assert self.pre_rendered_masks_verts_vsbl_cams_intr4x4 == cams_intr4x4
+        assert self.pre_rendered_masks_verts_vsbl_imgs_sizes == imgs_sizes
+        assert self.pre_rendered_masks_verts_vsbl_meshes_ids == meshes_ids
+        assert self.pre_rendered_masks_verts_vsbl_broadcast_batch_and_cams == broadcast_batch_and_cams
+        assert self.pre_rendered_masks_verts_vsbl_down_sample_rate == down_sample_rate
+
+        if self.pre_rendered_feats is None:
+            self.pre_rendered_masks_verts_vsbl_cams_tform4x4_obj = cams_tform4x4_obj
+            self.pre_rendered_masks_verts_vsbl_cams_intr4x4 = cams_intr4x4
+            self.pre_rendered_masks_verts_vsbl_imgs_sizes = imgs_sizes
+            self.pre_rendered_feats_meshes_ids = meshes_ids
+            self.pre_rendered_feats_broadcast_batch_and_cams = broadcast_batch_and_cams
+            self.pre_rendered_feats_down_sample_rate = down_sample_rate
+            self.pre_rendered_feats = self.render_feats(
+                cams_tform4x4_obj=self.pre_rendered_feats_cams_tform4x4_obj,
+                cams_intr4x4=self.pre_rendered_feats_cams_intr4x4, imgs_sizes=self.pre_rendered_feats_imgs_sizes,
+                meshes_ids=self.pre_rendered_feats_meshes_ids, modality=MESH_RENDER_MODALITIES.MASK_VERTS_VSBL,
+                broadcast_batch_and_cams=self.pre_rendered_feats_broadcast_batch_and_cams,
+                down_sample_rate=self.pre_rendered_feats_down_sample_rate)
+
+        return self.pre_rendered_feats
+
+    #def get_pre_rendered_masks(self):
+
+
     def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
         dtype = cams_tform4x4_obj.dtype
         device = cams_tform4x4_obj.device
