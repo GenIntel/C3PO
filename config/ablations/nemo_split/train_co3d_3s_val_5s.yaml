@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+  - override /datasets@train_datasets.labeled: co3d_3s_train #  co3d_55s_train, pascal3d_train
+
+ablation_name: split_train_co3d_3s_val_5s
+
+method:
+    nemo:
+        train:
+            epochs: 20
+
+train: True
+test: True

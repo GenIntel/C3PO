@@ -16,17 +16,17 @@ transforms:
 
 model:
   backbone:
-    class_name: ResNet
-    weights: 'imagenet1k_v1' # 'imagenet1k_v2' 'imagenet1k_v1' 'none'
-    freeze: False
-    layers_returned: [4, 3, 2] # always start with depest layer...
+    class_name: DINOv2
+    weights: 'default' # 'default' 'none'
+    freeze: True
+    layers_returned: [ 0 ] # always start with depest layer...
   head:
     class_name: ResNet
     block_type: 'bottleneck' # 'bottleneck', 'basic'
     conv_blocks:
-      out_dims: [128]
-      strides: [1]
-      pre_upsampling: [1.]
+      out_dims: [ 512, 512, 128 ]
+      strides: [ 1, 1, 1 ]
+      pre_upsampling: [1., 1., 2.]
     fully_connected:
       out_dim: # None means that there is no linear layer
     normalize: True
@@ -59,7 +59,7 @@ train:
         - +0.5
         - +0.5
   epochs_to_next_test: 1
-  epochs: 20
+  epochs: 5
   val_fraction: 0.01
   batch_accumulate_to_next_step: 2
 

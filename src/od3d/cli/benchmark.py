@@ -80,7 +80,8 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
 
     df = pd.DataFrame(rows, columns=cols)
 
-    logger.info(tabulate(rows, headers=cols, tablefmt='github')) # 'github', 'tsv'
+    #logger.info(tabulate(rows, headers=cols, tablefmt='github',  floatfmt=".3f")) # 'github', 'tsv'
+    #logger.info(tabulate(rows, headers=cols, tablefmt='html',  floatfmt=".3f")) # 'github', 'tsv'
 
     return df
 @app.command()
@@ -89,16 +90,56 @@ def table():
     import wandb
     config = od3d.io.load_hierarchical_config()
 
-    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
-    metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
+    # 08-14_10-02-12_CO3D_NeMo_use_mask_rgb_and_object_slurm
+    # 08-14_09-05-31_CO3D_NeMo_moving_average_slurm
+    # 08-11_20-47-23_CO3D_NeMo_cross_entropy_bank_loss_gradient_slurm
+
+    cols_renames = {
+        'name': "Run",
+        'test/pascal3d_test/pose/acc_pi6': "Acc. Pi/6. [%]",
+        'test/pascal3d_test/pose/acc_pi18': "Acc. Pi/18. [%]",
+        'test/pascal3d_test/pose/err_median': "Median [deg.]",
+        'test/pascal3d_test/pose/err_mean': "Mean [deg.]",
+        'test/co3d_5s_test/pose/acc_pi6': "Acc. Pi/6. [%]",
+        'test/co3d_5s_test/pose/acc_pi18': "Acc. Pi/18. [%]",
+        'test/co3d_5s_test/pose/err_median': "Median [deg.]",
+        'test/co3d_5s_test/pose/err_mean': "Mean [deg.]",
+        'test/co3d_50s_test/pose/acc_pi6': "Acc. Pi/6. [%]",
+        'test/co3d_50s_test/pose/acc_pi18': "Acc. Pi/18. [%]",
+        'test/co3d_50s_test/pose/err_median': "Median [deg.]",
+        'test/co3d_50s_test/pose/err_mean': "Mean [deg.]",
+    }
+
+    cols_scales = {
+        'test/pascal3d_test/pose/acc_pi6': 100.,
+        'test/pascal3d_test/pose/acc_pi18': 100.,
+        'test/co3d_5s_test/pose/acc_pi6': 100.,
+        'test/co3d_5s_test/pose/acc_pi18': 100.,
+        'test/co3d_50s_test/pose/acc_pi6': 100.,
+        'test/co3d_50s_test/pose/acc_pi18': 100.,
+    }
+
+    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
     # metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
     name_partial = None
     # configs = ['method.value.multiview.type', 'method.value.multiview.batch_size']
-    age_in_hours = 300
+    age_in_hours = 100
     configs = []
 
     my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
-    my_df.to_csv('output.csv', index=False, header=False, float_format='%.3f')
+
+    for col in cols_scales.keys():
+        if col in my_df:
+            my_df[col] = my_df[col] * cols_scales[col]
+
+    my_df = my_df.rename(columns=cols_renames)
+
+    # logger.info(tabulate(my_df, headers='keys', tablefmt='tsv',  floatfmt=".3f")) # 'github', 'tsv'
+    logger.info('\n' + my_df.to_csv(sep='\t', index=False, float_format="%.3f"))
+    # my_df.to_csv('output.csv', index=False, header=False, float_format='%.3f')
+
+
 
 
 @app.command()
