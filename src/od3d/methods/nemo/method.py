@@ -339,40 +339,27 @@ class NeMo(OD3D_Method):
         bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
 
 
-        sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
+        if self.config.train.bank_feats_update == 'loss_gradient':
+            sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
+        elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
+            sim = torch.einsum('nc,vc->nv', net_feats, torch.nn.functional.normalize(bank_feats, dim=1))
+        elif self.config.train.bank_feats_update == 'moving_average':
+            sim = torch.einsum('nc,vc->nv', net_feats, bank_feats.detach())
+            bank_feats_new = self.config.train.alpha * bank_feats[batch_vts_ids].detach() + (1. - self.config.train.alpha) * net_feats.detach()
+            batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
+            bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
+            bank_feats[batch_vts_ids_unique].data = bank_feats_new
+        else:
+            logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
+            sim = None
+
         sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=mask_vts2d_vsbl.device), mask_vts2d_vsbl.sum(dim=1).cumsum(dim=0)], dim=0)
         sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
         results_batch['sim'] = sim_batchwise
 
-        # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
+        # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
         # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
-
-        if self.config.train.loss == 'cross_entropy':
-            loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
-        elif self.config.train.loss == 'nll_softmax':
-            loss = self.criterion(self.softmax(sim / self.config.train.T), batch_vts_ids)
-        elif self.config.train.loss == 'nll_clip':
-            loss = self.criterion(torch.log(torch.clamp(sim, 0., 1.)), batch_vts_ids)
-        elif self.config.train.loss == 'nll_affine_to_prob':
-            loss = self.criterion(torch.log((sim + 1.) / 2.), batch_vts_ids)
-        elif self.config.train.loss == 'l2':
-            pass
-            """
-            loss_pos = self.criterion(net_feats, bank_feats[batch_vts_ids])
-            batch_vts_neg_mask = torch.ones(size=(batch_vts_ids.shape[0], bank_feats.shape[0], bank_feats.shape[1]), dtype=torch.bool, device=bank_feats.device)
-            batch_vts_pos_mask = torch.ones(size=(batch_vts_ids.shape[0], bank_feats.shape[0], bank_feats.shape[1]),
-                                            dtype=torch.bool, device=bank_feats.device)
-
-            batch_vts_neg_mask[torch.arange(batch_vts_ids.shape[0]), batch_vts_ids] = False
-            batch_vts_neg_mask = False batch_vts_ids
-            loss_neg = -self.criterion(net_feats, bank_feats[batch_vts_ids])
-            loss = loss_neg + loss_pos
-            """
-            loss = 0.
-        elif self.config.train.loss == 'l2_squared':
-            loss_pos = (self.criterion(net_feats, bank_feats)**2)
-            loss_neg = -(self.criterion(net_feats, bank_feats)**2)
-            loss = loss_neg + loss_pos
+        loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
 
         loss.backward()
         logger.info(f'loss {loss.item()}')

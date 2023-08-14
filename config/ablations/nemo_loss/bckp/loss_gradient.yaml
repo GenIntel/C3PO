@@ -1,6 +1,6 @@
 # @package _global_
 
-ablation_name: cross_entropy_bank_loss_gradient
+ablation_name: loss_gradient
 
 method:
   nemo:
