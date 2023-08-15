@@ -7,7 +7,7 @@ ablation_name: split_train_co3d_3s_val_5s
 method:
     nemo:
         train:
-            epochs: 20
+            epochs: 50
 
 train: True
 test: True

@@ -191,7 +191,7 @@ class NeMo(OD3D_Method):
         return self.logging_dir.joinpath('nemo.ckpt')
 
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
-        score_metric_name = 'pose/acc_pi6'
+        score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
 

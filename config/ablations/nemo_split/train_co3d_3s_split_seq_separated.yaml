@@ -11,7 +11,7 @@ val_datasets:
 method:
     nemo:
         train:
-            epochs: 20
+            epochs: 50
             split: sequences_separated # 'random' 'sequences_separated' 'seqences_shared'
 
 train: True
