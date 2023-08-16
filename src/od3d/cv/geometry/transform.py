@@ -232,6 +232,13 @@ def proj3d2d_origin(proj4x4):
     pts3d = torch.zeros(size=proj4x4.shape[:-2] + torch.Size([3,]), device=device, dtype=dtype)
     return proj3d2d(pts3d=pts3d, proj4x4=proj4x4)
 
+
+def add_homog_dim(pts, dim):
+    device = pts.device
+    dtype = pts.dtype
+    ones1d = torch.ones(size=list(pts.shape[:dim]) + [1] + list(pts.shape[dim+1:])).to(device=device, dtype=dtype)
+    return torch.cat([pts, ones1d], dim=dim)
+
 def proj3d2d(pts3d, proj4x4):
     device = pts3d.device
     dtype = pts3d.dtype

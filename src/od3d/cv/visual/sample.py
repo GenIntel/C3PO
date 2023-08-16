@@ -1,4 +1,6 @@
 import torch
+import logging
+logger = logging.getLogger(__name__)
 
 def sample_pxl2d_pts(x, pxl2d, padding_mode='zeros'):
     """
@@ -58,13 +60,19 @@ def sample_pxl2d_pts(x, pxl2d, padding_mode='zeros'):
     x_sampled = x_sampled.to(dtype=dtype)
     return x_sampled
 
-def sample_pxl2d_grid(img, pxl2d):
+def sample_pxl2d_grid(x, pxl2d, padding_mode='zeros'):
     """
     Args:
-        img (torch.Tensor): CxHxW / BxCxHxW
-        pxl2d (torch.Tensor): 2xH'xW' / Bx2xH'xW'
+        x (torch.Tensor): CxHxW / BxCxHxW
+        pxl2d (torch.Tensor): H'xW'x2 / BxH'xW'x2
 
     Returns:
         img_sampled (torch.Tensor): CxH'xW' / BxCxH'xW'
     """
-    pass
+
+    if pxl2d.dim() == 3:
+        return sample_pxl2d_pts(x, pxl2d.reshape(-1, 2)).reshape(*pxl2d.shape[:2], -1).permute(2, 0, 1)
+    elif pxl2d.dim() == 4:
+        return sample_pxl2d_pts(x, pxl2d.reshape(pxl2d.shape[0], -1, 2)).reshape(*pxl2d.shape[:3], -1).permute(0, 3, 1, 2)
+    else:
+        logger.error(f'Unexpected pxl2d dimensions {pxl2d.dim()}.')

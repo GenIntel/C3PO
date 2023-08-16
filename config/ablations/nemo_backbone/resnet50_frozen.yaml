@@ -1,14 +1,8 @@
 # @package _global_
-ablation_name: resnet50_frozen
+defaults:
+  - override /methods/model@method.nemo.model: resnet50_frozen
 
-method:
-    nemo:
-      train:
-        val: True
-      model:
-        backbone:
-          class_name: ResNet
-          freeze: True
+ablation_name: resnet50_frozen
 
 train: True
 test: True

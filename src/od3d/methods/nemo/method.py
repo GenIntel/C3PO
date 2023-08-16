@@ -45,6 +45,10 @@ class VISUAL_MODALITIES(str, ExtEnum):
     SIM_PXL = 'sim_pxl'
     SAMPLES = 'samples'
 
+class SIM_FEATS_MESH_WITH_IMAGE(str, ExtEnum):
+    VERTS2D = 'verts2d'
+    RENDERED = 'rendered'
+
 class NeMo(OD3D_Method):
     def setup(self):
         pass
@@ -300,9 +304,9 @@ class NeMo(OD3D_Method):
         # logger.info(f'batch.label {batch.label}')
         # B x x N x 2
         vts2d, vts2d_mask = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
-                                                     cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                     imgs_sizes=batch.size, mesh_ids=batch.label,
-                                                     down_sample_rate=self.down_sample_rate)
+                                                cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                imgs_sizes=batch.size, mesh_ids=batch.label,
+                                                down_sample_rate=self.down_sample_rate)
 
         N = vts2d.shape[1]
         # B x F+N x C
@@ -454,12 +458,14 @@ class NeMo(OD3D_Method):
                                                                                        categories_ids=pred_class_ids,
                                                                                        feats2d_net_mask=feats2d_net_mask)
             #  OPTION A: Use 2d gradient of rendered features
-            sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
-                                                     feats2d_net_mask=feats2d_net_mask,
-                                                     cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
-                                                     cam_intr4x4=b_cams_multiview_intr4x4,
-                                                     categories_ids=pred_class_ids,
-                                                     broadcast_batch_and_cams=True)
+            sim = self.get_sim_feats2d_net_with_cams(
+                feats2d_net=feats2d_net,
+                feats2d_net_mask=feats2d_net_mask,
+                cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
+                cam_intr4x4=b_cams_multiview_intr4x4,
+                categories_ids=pred_class_ids,
+                broadcast_batch_and_cams=True
+            )
 
             if return_samples_with_sim:
                 results['samples_cam_tform4x4_obj'] = b_cams_multiview_tform4x4_obj
@@ -499,7 +505,8 @@ class NeMo(OD3D_Method):
                                                                   cam_tform4x4_obj=cam_tform4x4_obj,
                                                                   cam_intr4x4=batch.cam_intr4x4,
                                                                   categories_ids=pred_class_ids, return_sim_pxl=True,
-                                                                  broadcast_batch_and_cams=False)
+                                                                  broadcast_batch_and_cams=False,
+                                                                  pre_rendered=False)
                 mesh_cam_loss = -sim
 
                 if self.config.inference.live:
@@ -711,7 +718,9 @@ class NeMo(OD3D_Method):
                                                                       cam_intr4x4=batch.cam_intr4x4,
                                                                       cam_tform4x4_obj=batch_pred_cam_tform4x4,
                                                                       categories_ids=batch_pred_label, return_sim_pxl=True,
-                                                                      broadcast_batch_and_cams=False)
+                                                                      broadcast_batch_and_cams=False,
+                                                                      sim_feats_mesh_with_image=SIM_FEATS_MESH_WITH_IMAGE.RENDERED,
+                                                                      pre_rendered=False)
 
                     sim_pxl = resize(sim_pxl, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
                     for b in range(len(batch)):
@@ -726,7 +735,7 @@ class NeMo(OD3D_Method):
                     logger.info('create pred verts ncds...')
                     batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
                     batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
-                    pred_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=batch_pred_cam_tform4x4, categories_ids=batch_pred_label, size=batch.size, down_sample_rate=config_visualize.down_sample_rate)
+                    pred_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=batch_pred_cam_tform4x4, categories_ids=batch_pred_label, size=batch.size, down_sample_rate=config_visualize.down_sample_rate, pre_rendered=False)
                     if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities:
                         for b in range(len(batch)):
                             img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
@@ -740,7 +749,7 @@ class NeMo(OD3D_Method):
                     gt_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4,
                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                   categories_ids=batch.label, size=batch.size,
-                                                  down_sample_rate=config_visualize.down_sample_rate)
+                                                  down_sample_rate=config_visualize.down_sample_rate, pre_rendered=False)
                     if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities:
                         for b in range(len(batch)):
                             img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
@@ -791,8 +800,20 @@ class NeMo(OD3D_Method):
 
         return sim_nearest_texture_verts3d
 
-    def get_ncds_with_cam(self, cam_intr4x4: torch.Tensor, cam_tform4x4_obj: torch.Tensor, size: torch.Tensor, categories_ids: torch.Tensor, down_sample_rate=1., broadcast_batch_and_cams=False):
-        return self.meshes.render_feats(cams_tform4x4_obj=cam_tform4x4_obj,
+    def get_ncds_with_cam(self, cam_intr4x4: torch.Tensor, cam_tform4x4_obj: torch.Tensor, size: torch.Tensor, categories_ids: torch.Tensor, down_sample_rate=1., broadcast_batch_and_cams=False, pre_rendered: bool= None):
+        if pre_rendered is None:
+            pre_rendered = self.config.inference.pre_rendered
+
+        if pre_rendered:
+            return self.meshes.get_pre_rendered_feats(cams_tform4x4_obj=cam_tform4x4_obj,
+                                                      cams_intr4x4=cam_intr4x4,
+                                                      imgs_sizes=size, meshes_ids=categories_ids,
+                                                      modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
+                                                      down_sample_rate=down_sample_rate,
+                                                      broadcast_batch_and_cams=broadcast_batch_and_cams
+                                                      )
+        else:
+            return self.meshes.render_feats(cams_tform4x4_obj=cam_tform4x4_obj,
                                         cams_intr4x4=cam_intr4x4,
                                         imgs_sizes=size, meshes_ids=categories_ids,
                                         modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
@@ -800,31 +821,38 @@ class NeMo(OD3D_Method):
                                         broadcast_batch_and_cams=broadcast_batch_and_cams)
 
     def get_sim_feats2d_net_with_cams(self, feats2d_net, cam_tform4x4_obj, cam_intr4x4, categories_ids, return_sim_pxl=False,
-                                      broadcast_batch_and_cams=False, feats2d_net_mask=None):
-        size = torch.Tensor([feats2d_net.shape[2] * self.down_sample_rate, feats2d_net.shape[3] * self.down_sample_rate])
-        mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_tform4x4_obj,
-                                                         cams_intr4x4=cam_intr4x4,
-                                                         imgs_sizes=size, meshes_ids=categories_ids,
-                                                         down_sample_rate=self.down_sample_rate,
-                                                         broadcast_batch_and_cams=broadcast_batch_and_cams)
+                                      broadcast_batch_and_cams=False, feats2d_net_mask=None, sim_feats_mesh_with_image: SIM_FEATS_MESH_WITH_IMAGE=None, pre_rendered: bool=None):
+        if sim_feats_mesh_with_image is None:
+            sim_feats_mesh_with_image = self.config.inference.sim_feats_mesh_with_image
+        if pre_rendered is None:
+            pre_rendered = self.config.inference.pre_rendered
+        size = torch.Tensor([feats2d_net.shape[2] * self.down_sample_rate, feats2d_net.shape[3] * self.down_sample_rate]).to(device=feats2d_net.device)
+        if sim_feats_mesh_with_image == SIM_FEATS_MESH_WITH_IMAGE.RENDERED:
+            if pre_rendered:
+                mesh_feats2d_rendered = self.meshes.get_pre_rendered_feats(cams_tform4x4_obj=cam_tform4x4_obj,
+                                                                           cams_intr4x4=cam_intr4x4,
+                                                                           imgs_sizes=size, meshes_ids=categories_ids,
+                                                                           modality=MESH_RENDER_MODALITIES.FEATS,
+                                                                           down_sample_rate=self.down_sample_rate,
+                                                                           broadcast_batch_and_cams=broadcast_batch_and_cams
+                                                                           )
+            else:
+                mesh_feats2d_rendered = self.meshes.render_feats(cams_tform4x4_obj=cam_tform4x4_obj,
+                                                                 cams_intr4x4=cam_intr4x4,
+                                                                 imgs_sizes=size, meshes_ids=categories_ids,
+                                                                 down_sample_rate=self.down_sample_rate,
+                                                                 broadcast_batch_and_cams=broadcast_batch_and_cams)
 
-        return self.get_sim_feats2d_net_and_rendered(feats2d_net=feats2d_net, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=return_sim_pxl, feats2d_net_mask=feats2d_net_mask)
+            return self.get_sim_feats2d_net_and_rendered(feats2d_net=feats2d_net, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=return_sim_pxl, feats2d_net_mask=feats2d_net_mask)
 
-    def get_sim_feats2d_net_with_samples(self, config_sample: DictConfig, cam_intr4x4: torch.Tensor,
-                                         cam_tform4x4_obj: torch.Tensor, feats2d_net: torch.Tensor,
-                                         categories_ids: torch.Tensor, return_sim_pxl=False, feats2d_net_mask=None):
-        b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=config_sample,
-                                                                                   cam_intr4x4=cam_intr4x4,
-                                                                                   cam_tform4x4_obj=cam_tform4x4_obj,
-                                                                                   feats2d_net=feats2d_net,
-                                                                                   categories_ids=categories_ids,
-                                                                                   feats2d_net_mask=feats2d_net_mask)
-        return self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
-                                                  cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
-                                                  cam_intr4x4=b_cams_multiview_intr4x4,
-                                                  categories_ids=categories_ids, return_sim_pxl=return_sim_pxl,
-                                                  broadcast_batch_and_cams=True,
-                                                  feats2d_net_mask=feats2d_net_mask)
+        elif sim_feats_mesh_with_image == SIM_FEATS_MESH_WITH_IMAGE.VERTS2D:
+            verts2d_mesh, verts2d_mesh_mask = self.meshes.verts2d(cams_intr4x4=cam_intr4x4,
+                                                                  cams_tform4x4_obj=cam_tform4x4_obj,
+                                                                  imgs_sizes=size, mesh_ids=categories_ids,
+                                                                  down_sample_rate=self.down_sample_rate,
+                                                                  broadcast_batch_and_cams=broadcast_batch_and_cams)
+            return self.get_sim_feats2d_net_and_verts(categories_ids=categories_ids, feats2d_net=feats2d_net, verts2d_mesh=verts2d_mesh, verts2d_mesh_mask=verts2d_mesh_mask, return_sim_pxl=return_sim_pxl, feats2d_net_mask=feats2d_net_mask)
+
 
     def get_nearest_corresp2d3d(self, feats2d_net, meshes_ids, feats2d_net_mask: torch.Tensor=None):
         nearest_verts3d, sim_texture, sim_clutter = self.get_nearest_verts3d_to_feats2d_net(feats2d_net, meshes_ids, return_sim_texture_and_clutter=True)
@@ -836,7 +864,104 @@ class NeMo(OD3D_Method):
 
         return nearest_verts3d, nearest_verts2d, prob_corresp2d3d
 
+    def get_sim_feats2d_net_and_verts(self, categories_ids, feats2d_net, verts2d_mesh, verts2d_mesh_mask, return_sim_pxl=False, feats2d_net_mask=None):
+        """
+        Args:
+            categories_ids (torch.Tensor): B, ids of categories=meshes to which the similarty should be calculated
+            feats2d_net (torch.Tensor): BxCxHxW
+            verts2d_mesh (torch.Tensor): Bx(T)xVx2
+            verts2d_mesh_mask (torch.Tensor): Bx(T)xV
+            return_sim_pxl (bool): Indicates whether pixelwise similarity should be returned or not.
+            feats2d_net_mask (torch.Tensor): BxCxHxW
+
+        Returns:
+            sim (torch.Tensor): BxV, or Bx1 if rendered features is 4-dimensional.
+            sim_pxl (torch.Tensor, optional): BxTxHxW, or Bx1xHxW if rendered features is 4-dimensional.
+
+        """
+        B, C, H, W = feats2d_net.shape
+        V = verts2d_mesh.shape[-2]
+
+        verts2d_mesh_ids = self.meshes.get_verts_and_noise_ids_stacked(categories_ids, count_noise_ids=0)  # B x V
+        feats2d_mesh = self.meshes.feats[verts2d_mesh_ids]  # B x V x C
+
+        if verts2d_mesh.dim() == 4:
+            T = verts2d_mesh.shape[1]
+            feats2d_net_sampled = sample_pxl2d_pts(feats2d_net, pxl2d=verts2d_mesh.reshape(B, -1, 2)).reshape(B, -1, V, C)
+            if feats2d_net_mask is not None:
+                feats2d_net_mask_sampled = sample_pxl2d_pts(feats2d_net_mask, pxl2d=verts2d_mesh.reshape(B, -1, 2)).reshape(B, -1, V)
+        elif verts2d_mesh.dim() == 3:
+            # B x T x V x C
+            T = 1
+            feats2d_net_sampled = sample_pxl2d_pts(feats2d_net, pxl2d=verts2d_mesh)[:, None]
+            if feats2d_net_mask is not None:
+                # B x T x V
+                feats2d_net_mask_sampled = sample_pxl2d_pts(feats2d_net_mask, pxl2d=verts2d_mesh).reshape(B, -1, V)
+
+        else:
+            T = 1
+            feats2d_net_mask_sampled = None
+            feats2d_net_sampled = None
+            logger.error(f'Unexpected dimension of verts2d_mesh {verts2d_mesh.shape}')
+        # [verts2d_mesh_mask]
+        sim_clutter = torch.einsum('btvc,nc->bntv', feats2d_net_sampled, self.clutter_feats.detach()).max(dim=1, keepdim=False)[0]
+        sim_texture_multiple_cams = torch.einsum('btvc,bvc->btv', feats2d_net_sampled, feats2d_mesh)
+        sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
+
+        if verts2d_mesh_mask.dim() == 3:
+            sim_pxl_mask = verts2d_mesh_mask
+        elif verts2d_mesh_mask.dim() == 2:
+            sim_pxl_mask = verts2d_mesh_mask[:, None]
+        else:
+            sim_pxl_mask = None
+            logger.error(f'Unexpected dimension of verts2d_mesh_mask {verts2d_mesh_mask.shape}')
+
+        if feats2d_net_mask is not None:
+            sim_pxl_mask = sim_pxl_mask * feats2d_net_mask_sampled
+
+        sim_pxl *= sim_pxl_mask
+        sim = sim_pxl.flatten(2).sum(dim=-1) / (sim_pxl_mask.flatten(2).sum(dim=-1) + 1e-10)
+
+        sim_pxl2d = torch.zeros(size=(B, T, H, W), dtype=feats2d_net.dtype, device=feats2d_net.device)
+        #torch.gather(input=sim_pxl2d, dim=-1, index=verts2d_mesh[:, :, :, 0][..., None, :].long())
+        #sim_pxl2d_x =
+        #sim_pxl2d_y = verts2d_mesh.reshape(-1, V, 2)[:, :, 1].long()
+
+        #sim_pxl2d[]
+        #sim_pxl2d_sampled = sample_pxl2d_pts(sim_pxl2d.reshape(-1, 1, H, W), pxl2d=verts2d_mesh.reshape(-1, V, 2)).reshape(B, T, V)
+        #sim_pxl2d_sampled[:, :] = sim_pxl
+        sim_pxl = sim_pxl2d
+
+        if return_sim_pxl:
+            return sim, sim_pxl
+        else:
+            return sim
+
+    @staticmethod
+    def batched_index_select(input, dim, index):
+        for ii in range(1, len(input.shape)):
+            if ii != dim:
+                index = index.unsqueeze(ii)
+        expanse = list(input.shape)
+        expanse[0] = -1
+        expanse[dim] = -1
+        index = index.expand(expanse)
+        return torch.gather(input, dim, index)
+
     def get_sim_feats2d_net_and_rendered(self, feats2d_net, feats2d_rendered, return_sim_pxl=False, feats2d_net_mask=None):
+        """
+
+        Args:
+            feats2d_net (torch.Tensor): BxCxHxW
+            feats2d_rendered (torch.Tensor): Bx(T)xCxHxW
+            return_sim_pxl (bool): Indicates whether pixelwise similarity should be returned or not.
+            feats2d_net_mask (torch.Tensor): Bx1xHxW
+
+        Returns:
+            sim (torch.Tensor): BxT, or Bx1 if rendered features is 4-dimensional.
+            sim_pxl (torch.Tensor, optional): BxTxHxW, or Bx1xHxW if rendered features is 4-dimensional.
+        """
+
         sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[
             0]
         # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)

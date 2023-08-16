@@ -1,6 +1,0 @@
-# @package _global_
-ablation_name: ResNetExt_b24
-method:
-    nemo:
-        backbone:
-            class_name: ResNetExt # ResNetExt DINOv2

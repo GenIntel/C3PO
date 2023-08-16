@@ -13,6 +13,8 @@ from od3d.cv.io import load_ply
 from enum import Enum
 from typing import List
 logger = logging.getLogger(__name__)
+from dataclasses import dataclass
+
 
 class MESH_RENDER_MODALITIES(str, Enum):
     DEPTH = 'depth'
@@ -80,12 +82,23 @@ class Meshes(torch.nn.Module):
             self.feats_from_faces = None
 
         self.init_pt3d()
-
+        self.pre_rendered_feats = None
+        self.pre_rendered_modalities = {}
     def init_pt3d(self):
         self.pt3dmeshes = PT3DMeshes(
             verts=[self.get_verts_with_mesh_id(i) for i in range(self.meshes_count)],
             faces=[self.get_faces_with_mesh_id(i) for i in range(self.meshes_count)]
         )
+
+    @dataclass
+    class PreRendered():
+        cams_tform4x4_obj: torch.Tensor
+        cams_intr4x4: torch.Tensor
+        imgs_sizes: torch.Tensor
+        broadcast_batch_and_cams: bool
+        meshes_ids: torch.Tensor
+        down_sample_rate: float
+        rendering: torch.Tensor
 
     @staticmethod
     def load_from_files(fpaths_meshes: List[Path], device='cpu'):
@@ -322,30 +335,78 @@ class Meshes(torch.nn.Module):
         fig.show()
         input('bla')
 
-    def get_pre_rendered_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, broadcast_batch_and_cams=False, down_sample_rate=1.):
-        assert self.pre_rendered_feats_cams_tform4x4_obj == cams_tform4x4_obj
-        assert self.pre_rendered_feats_cams_intr4x4 == cams_intr4x4
-        assert self.pre_rendered_feats_imgs_sizes == imgs_sizes
-        assert self.pre_rendered_feats_meshes_ids == meshes_ids
-        assert self.pre_rendered_feats_broadcast_batch_and_cams == broadcast_batch_and_cams
-        assert self.pre_rendered_feats_down_sample_rate == down_sample_rate
 
-        if self.pre_rendered_feats is None:
-            self.pre_rendered_feats_cams_tform4x4_obj = cams_tform4x4_obj
-            self.pre_rendered_feats_cams_intr4x4 = cams_intr4x4
-            self.pre_rendered_feats_imgs_sizes = imgs_sizes
-            self.pre_rendered_feats_meshes_ids = meshes_ids
-            self.pre_rendered_feats_broadcast_batch_and_cams = broadcast_batch_and_cams
-            self.pre_rendered_feats_down_sample_rate = down_sample_rate
-            self.pre_rendered_feats = self.render_feats(
-                cams_tform4x4_obj=self.pre_rendered_feats_cams_tform4x4_obj,
-                cams_intr4x4=self.pre_rendered_feats_cams_intr4x4, imgs_sizes=self.pre_rendered_feats_imgs_sizes,
-                meshes_ids=self.pre_rendered_feats_meshes_ids, modality=MESH_RENDER_MODALITIES.FEATS,
-                broadcast_batch_and_cams=self.pre_rendered_feats_broadcast_batch_and_cams,
-                down_sample_rate=self.pre_rendered_feats_down_sample_rate)
 
-        return self.pre_rendered_feats
+    def get_pre_rendered_feats(self, modality: MESH_RENDER_MODALITIES, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, broadcast_batch_and_cams=False, down_sample_rate=1. ):
 
+
+        if modality not in self.pre_rendered_modalities.keys():
+            cxy = 250.
+            fxy = 500.
+            # M x T x 4 x 4
+            pre_rendered_cams_tform4x4_obj = cams_tform4x4_obj[:1, :].clone().expand(self.meshes_count, *cams_tform4x4_obj[0].shape)
+            pre_rendered_cams_tform4x4_obj[:, :, :3, 3] = 0.
+            pre_rendered_meshes_size = self.get_verts_stacked_with_mesh_ids().flatten(1).max(dim=-1)[0]
+            pre_rendered_meshes_dist = (pre_rendered_meshes_size * fxy) / (500. * 0.7 - cxy) # u = (x / z) * fx + cx  -> z = (fx * x) / (u - cx)
+            pre_rendered_cams_tform4x4_obj[:, :, 2, 3] = pre_rendered_meshes_dist
+
+            # 1 x 1 x 4 x 4
+            pre_rendered_cams_intr4x4 = cams_intr4x4[:1, :1].clone().expand(self.meshes_count, 1, *cams_intr4x4[0, 0].shape)
+            pre_rendered_cams_intr4x4[:, :, 0, 0] = fxy
+            pre_rendered_cams_intr4x4[:, :, 1, 1] = fxy
+            pre_rendered_cams_intr4x4[:, :, :2, 2] = cxy
+
+            pre_rendered_meshes_ids = torch.arange(self.meshes_count).to(device=meshes_ids.device)
+            rendering = self.render_feats(
+                cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,
+                cams_intr4x4=pre_rendered_cams_intr4x4, imgs_sizes=imgs_sizes,
+                meshes_ids=pre_rendered_meshes_ids, modality=modality,
+                broadcast_batch_and_cams=broadcast_batch_and_cams,
+                down_sample_rate=down_sample_rate)
+
+            self.pre_rendered_modalities[modality] = Meshes.PreRendered(
+                cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,
+                cams_intr4x4=pre_rendered_cams_intr4x4,
+                imgs_sizes=imgs_sizes,
+                broadcast_batch_and_cams=broadcast_batch_and_cams,
+                meshes_ids=pre_rendered_meshes_ids,
+                down_sample_rate=down_sample_rate,
+                rendering=rendering
+            )
+
+        else:
+            assert (self.pre_rendered_modalities[modality].cams_tform4x4_obj[meshes_ids, :, :3, :3] == cams_tform4x4_obj[:, :, :3, :3]).all()
+            assert (self.pre_rendered_modalities[modality].imgs_sizes == imgs_sizes).all()
+            assert self.pre_rendered_modalities[modality].broadcast_batch_and_cams == broadcast_batch_and_cams
+            assert self.pre_rendered_modalities[modality].down_sample_rate == down_sample_rate
+
+        pre_rendered_feats = self.pre_rendered_modalities[modality].rendering[meshes_ids]
+        pre_rendered_cam_intr4x4 = self.pre_rendered_modalities[modality].cams_intr4x4[meshes_ids]
+        pre_rendered_cam_tform4x4_obj = self.pre_rendered_modalities[modality].cams_tform4x4_obj[meshes_ids]
+        from od3d.cv.geometry.transform import tform4x4, tform4x4_broadcast, inv_tform4x4, transf3d, add_homog_dim, transf3d_broadcast, reproj2d3d_broadcast
+        from od3d.cv.visual.sample import sample_pxl2d_grid
+        from od3d.cv.geometry.grid import get_pxl2d_like, get_pxl2d
+        #pre_rendered_cam_tform4x4_obj = tform4x4_broadcast(pre_rendered_cam_intr4x4, pre_rendered_cam_tform4x4_obj)
+        #cams_proj4x4_obj = tform4x4(cams_intr4x4, cams_tform4x4_obj)
+
+        B, T, C, H, W = pre_rendered_feats.shape
+
+        #pre_rendered_proj4x4_cams = tform4x4(pre_rendered_cam_tform4x4_obj, torch.pinverse(cams_proj4x4_obj))
+
+        #pre_rendered_proj4x4_cams = tform4x4(pre_rendered_cam_tform4x4_obj, torch.pinverse(cams_proj4x4_obj))
+        #pre_rendered_proj4x4_cams = tform4x4_broadcast(pre_rendered_cam_intr4x4, torch.pinverse(cams_intr4x4))
+        #scale = pre_rendered_cam_tform4x4_obj[:, :, 2, 3] / cams_tform4x4_obj[:, :, 2, 3]
+        #pre_rendered_proj4x4_cams[:, :, :2] *= scale[:, :, None, None]
+        #cams_proj4x4_pre_rendered = tform4x4_broadcast(cams_intr4x4, inv_tform4x4(pre_rendered_cam_intr4x4))
+
+        pxl2d_cams = get_pxl2d(H=H, W=W, dtype=pre_rendered_feats.dtype, device=pre_rendered_feats.device, B=None) * self.pre_rendered_modalities[modality].down_sample_rate
+        pxl2d_cams = pxl2d_cams.expand(*pre_rendered_feats.shape[:2],  *pxl2d_cams.shape )
+        pts3d_homog_cams = transf3d_broadcast(pts3d=add_homog_dim(pxl2d_cams, dim=4), transf4x4=cams_intr4x4.pinverse()[:, :, None, None,]) * cams_tform4x4_obj[:, :, 2, 3, None, None, None,]
+        pts3d_pre_rendered = transf3d_broadcast(pts3d=pts3d_homog_cams, transf4x4=tform4x4(pre_rendered_cam_tform4x4_obj, inv_tform4x4(cams_tform4x4_obj))[:, :, None, None,])
+        pxl2d_pre_rendered = proj3d2d_broadcast(pts3d=pts3d_pre_rendered, proj4x4=pre_rendered_cam_intr4x4) / self.pre_rendered_modalities[modality].down_sample_rate
+        cams_features = sample_pxl2d_grid(pre_rendered_feats.reshape(-1, C, H, W), pxl2d=pxl2d_pre_rendered.reshape(-1, H, W, 2)).reshape(B, T, C, H, W)
+
+        return cams_features
 
     def get_pre_rendered_masks(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, broadcast_batch_and_cams=False, down_sample_rate=1.):
         assert self.pre_rendered_masks_verts_vsbl_cams_tform4x4_obj == cams_tform4x4_obj
@@ -361,13 +422,13 @@ class Meshes(torch.nn.Module):
             self.pre_rendered_masks_verts_vsbl_imgs_sizes = imgs_sizes
             self.pre_rendered_feats_meshes_ids = meshes_ids
             self.pre_rendered_feats_broadcast_batch_and_cams = broadcast_batch_and_cams
-            self.pre_rendered_feats_down_sample_rate = down_sample_rate
+            self.pre_rendered_down_sample_rate = down_sample_rate
             self.pre_rendered_feats = self.render_feats(
                 cams_tform4x4_obj=self.pre_rendered_feats_cams_tform4x4_obj,
                 cams_intr4x4=self.pre_rendered_feats_cams_intr4x4, imgs_sizes=self.pre_rendered_feats_imgs_sizes,
                 meshes_ids=self.pre_rendered_feats_meshes_ids, modality=MESH_RENDER_MODALITIES.MASK_VERTS_VSBL,
                 broadcast_batch_and_cams=self.pre_rendered_feats_broadcast_batch_and_cams,
-                down_sample_rate=self.pre_rendered_feats_down_sample_rate)
+                down_sample_rate=self.pre_rendered_down_sample_rate)
 
         return self.pre_rendered_feats
 

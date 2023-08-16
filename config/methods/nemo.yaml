@@ -1,6 +1,7 @@
 defaults:
   - optimizer@train.optimizer: adam
   - scheduler@train.scheduler: multistep
+  - model@model: dinov2_frozen
 
 name: nemo
 class_name: NeMo
@@ -13,23 +14,6 @@ classes: ${train_datasets.labeled.categories}
 
 transforms:
     - class_name: nemo.datasets.pascal3d.Normalize
-
-model:
-  backbone:
-    class_name: DINOv2
-    weights: 'default' # 'default' 'none'
-    freeze: True
-    layers_returned: [ 0 ] # always start with depest layer...
-  head:
-    class_name: ResNet
-    block_type: 'bottleneck' # 'bottleneck', 'basic'
-    conv_blocks:
-      out_dims: [ 512, 512, 128 ]
-      strides: [ 1, 1, 1 ]
-      pre_upsampling: [1., 1., 2.]
-    fully_connected:
-      out_dim: # None means that there is no linear layer
-    normalize: True
 
 train:
   use_mask_object: True
@@ -103,6 +87,8 @@ test:
       live: False
 
 inference:
+    pre_rendered: True
+    sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
     live: False
     use_mask_object: True
     sample:

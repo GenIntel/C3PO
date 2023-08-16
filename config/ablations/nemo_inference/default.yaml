@@ -1,0 +1,9 @@
+# @package _global_
+ablation_name: inference_pre_rendered
+
+method:
+    nemo:
+      checkpoint: ${platform.path_exps}/08-14_18-14-10_CO3D_NeMo_split_train_co3d_3s_val_seqs_separated_slurm/nemo.ckpt
+      inference:
+        pre_rendered: True
+        sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
