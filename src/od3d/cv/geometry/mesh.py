@@ -339,7 +339,8 @@ class Meshes(torch.nn.Module):
         fig.show()
         input('bla')
 
-
+    def del_pre_rendered(self):
+        self.pre_rendered_modalities.clear()
 
     def get_pre_rendered_feats(self, modality: MESH_RENDER_MODALITIES, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, broadcast_batch_and_cams=False, down_sample_rate=1. ):
 

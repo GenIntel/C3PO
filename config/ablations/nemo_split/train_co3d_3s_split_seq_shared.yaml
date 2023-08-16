@@ -1,5 +1,6 @@
 # @package _global_
 defaults:
+  - /ablations/nemo_split@: default
   - /datasets@val_datasets.co3d: co3d_5s_val  #  co3d_55s_train, pascal3d_train
   - override /datasets@train_datasets.labeled: co3d_3s_train #  co3d_55s_train, pascal3d_train
 
@@ -12,7 +13,6 @@ val_datasets:
 method:
     nemo:
         train:
-            epochs: 50
             split: seqences_shared # 'random' 'sequences_separated' 'seqences_shared'
 
 train: True

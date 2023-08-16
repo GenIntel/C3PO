@@ -260,6 +260,7 @@ class NeMo(OD3D_Method):
 
     def train_epoch(self, dataset: OD3D_Dataset) -> OD3D_Results:
         self.net.train()
+        self.meshes.del_pre_rendered()
         self.meshes.feats.requires_grad = True
         dataset.transform = self.transform_train
         dataloader_train = torch.utils.data.DataLoader(dataset=dataset,

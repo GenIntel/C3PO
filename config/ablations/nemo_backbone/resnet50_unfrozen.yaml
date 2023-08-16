@@ -1,5 +1,6 @@
 # @package _global_
 defaults:
+  - /ablations/nemo_backbone@: default
   - override /methods/model@method.nemo.model: resnet50_unfrozen
 
 ablation_name: resnet50_unfrozen

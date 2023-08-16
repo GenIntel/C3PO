@@ -100,14 +100,17 @@ def table():
         'test/pascal3d_test/pose/acc_pi18': "Acc. Pi/18. [%]",
         'test/pascal3d_test/pose/err_median': "Median [deg.]",
         'test/pascal3d_test/pose/err_mean': "Mean [deg.]",
+        'test/pascal3d_test/time_pose': 'Inference Duration [s]',
         'test/co3d_5s_test/pose/acc_pi6': "Acc. Pi/6. [%]",
         'test/co3d_5s_test/pose/acc_pi18': "Acc. Pi/18. [%]",
         'test/co3d_5s_test/pose/err_median': "Median [deg.]",
         'test/co3d_5s_test/pose/err_mean': "Mean [deg.]",
+        'test/co3d_5s_test/time_pose': 'Duration [s]',
         'test/co3d_50s_test/pose/acc_pi6': "Acc. Pi/6. [%]",
         'test/co3d_50s_test/pose/acc_pi18': "Acc. Pi/18. [%]",
         'test/co3d_50s_test/pose/err_median': "Median [deg.]",
         'test/co3d_50s_test/pose/err_mean': "Mean [deg.]",
+        'test/co3d_50s_test/time_pose': 'Inference Duration [s]',
     }
 
     cols_scales = {
@@ -119,12 +122,12 @@ def table():
         'test/co3d_50s_test/pose/acc_pi18': 100.,
     }
 
-    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
     #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
-    # metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
-    name_partial = None
+    metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
+    name_partial = 'render' # None, 'inference', 'split', 'render'
     # configs = ['method.value.multiview.type', 'method.value.multiview.batch_size']
-    age_in_hours = 100
+    age_in_hours = 250
     configs = []
 
     my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
@@ -136,7 +139,10 @@ def table():
     my_df = my_df.rename(columns=cols_renames)
 
     # logger.info(tabulate(my_df, headers='keys', tablefmt='tsv',  floatfmt=".3f")) # 'github', 'tsv'
-    logger.info('\n' + my_df.to_csv(sep='\t', index=False, float_format="%.3f"))
+    # logger.info('\n' + my_df.to_csv(sep='\t', index=False, float_format="%.3f"))
+    logger.info('\n' + my_df.to_csv(sep=',', index=False, float_format="%.3f"))
+
+
     # my_df.to_csv('output.csv', index=False, header=False, float_format='%.3f')
 
 

@@ -1,8 +1,0 @@
-# @package _global_
-defaults:
-  - override /methods/model@method.nemo.model: dinov2_frozen
-
-ablation_name: dinov2_frozen
-
-train: True
-test: True
