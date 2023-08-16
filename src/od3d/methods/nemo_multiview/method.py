@@ -185,7 +185,7 @@ class NeMo_MultiView(NeMo):
                                                      cam_intr4x4=b_cams_multiview_intr4x4,
                                                      categories_ids=pred_class_ids,
                                                      broadcast_batch_and_cams=True,
-                                                     feats2d_net_mask=feats2d_net_mask)
+                                                     feats2d_net_mask=feats2d_net_mask, pre_rendered=False)
 
             sim = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
 
@@ -229,7 +229,7 @@ class NeMo_MultiView(NeMo):
                                                                   cam_intr4x4=batch.cam_intr4x4,
                                                                   categories_ids=pred_class_ids, return_sim_pxl=True,
                                                                   broadcast_batch_and_cams=False,
-                                                                  feats2d_net_mask=feats2d_net_mask)
+                                                                  feats2d_net_mask=feats2d_net_mask, pre_rendered=False)
                 mesh_cam_loss = -sim
 
                 if self.config.inference.live:

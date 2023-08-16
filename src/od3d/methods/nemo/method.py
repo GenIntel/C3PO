@@ -37,6 +37,13 @@ import math
 
 from typing import Dict
 from od3d.data.ext_enum import ExtEnum
+
+import matplotlib.pyplot as plt
+
+plt.switch_backend('Agg')
+from od3d.cv.visual.show import get_img_from_plot
+from od3d.cv.visual.draw import draw_text_in_rgb
+
 class VISUAL_MODALITIES(str, ExtEnum):
     PRED_VERTS_NCDS_IN_RGB = 'pred_verts_ncds_in_rgb'
     GT_VERTS_NCDS_IN_RGB = 'gt_verts_ncds_in_rgb'
@@ -657,9 +664,7 @@ class NeMo(OD3D_Method):
 
                     ncds = self.get_ncds_with_cam(cam_tform4x4_obj=s_cam_tform4x4_obj,
                                                   cam_intr4x4=s_cam_intr4x4, size=batch.size,
-                                                  categories_ids=batch.label, down_sample_rate=config_visualize.down_sample_rate, broadcast_batch_and_cams=True)
-
-
+                                                  categories_ids=batch.label, down_sample_rate=config_visualize.down_sample_rate, broadcast_batch_and_cams=True, pre_rendered=False)
 
 
                     for b in range(len(batch)):
@@ -681,15 +686,14 @@ class NeMo(OD3D_Method):
 
                         if config_visualize.samples_scores:
                             logger.info('create plot samples scores...')
-                            import matplotlib.pyplot as plt
+
                             plt.ioff()
                             fig, ax = plt.subplots()
                             ax.plot(imgs_sim.detach().cpu().numpy(), label='sim')  # density=False would make counts
                             #ax.set_ylim(0., 1.)
                             #ax.ylabel('sim')
                             #ax.xlabel('samples')
-                            from od3d.cv.visual.show import get_img_from_plot
-                            from od3d.cv.visual.draw import draw_text_in_rgb
+
                             img = get_img_from_plot(ax=ax, fig=fig)
                             plt.close(fig)
                             img = resize(img, H_out=imgs.shape[-2], W_out=imgs.shape[-2])
