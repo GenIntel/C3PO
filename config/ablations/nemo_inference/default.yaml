@@ -7,3 +7,6 @@ method:
       inference:
         pre_rendered: True
         sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
+
+train: False
+test: True

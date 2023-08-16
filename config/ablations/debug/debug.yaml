@@ -29,20 +29,21 @@ method:
       visualize:
         live: False
         sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
+        pre_rendered: True
 
     test:
       dataloader:
         num_workers: 0
-        batch_size: 1
+        batch_size: 4
         pin_memory: True
 
     train:
-      val: False
+      val: True
       dataloader:
         num_workers: 0
-        batch_size: 1
+        batch_size: 4
         pin_memory: True
 
 
-train: False
+train: True
 test: True

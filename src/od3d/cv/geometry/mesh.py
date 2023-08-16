@@ -14,6 +14,10 @@ from enum import Enum
 from typing import List
 logger = logging.getLogger(__name__)
 from dataclasses import dataclass
+from od3d.cv.geometry.transform import tform4x4, tform4x4_broadcast, inv_tform4x4, transf3d, add_homog_dim, \
+    transf3d_broadcast, reproj2d3d_broadcast
+from od3d.cv.visual.sample import sample_pxl2d_grid
+from od3d.cv.geometry.grid import get_pxl2d_like, get_pxl2d
 
 
 class MESH_RENDER_MODALITIES(str, Enum):
@@ -383,27 +387,14 @@ class Meshes(torch.nn.Module):
         pre_rendered_feats = self.pre_rendered_modalities[modality].rendering[meshes_ids]
         pre_rendered_cam_intr4x4 = self.pre_rendered_modalities[modality].cams_intr4x4[meshes_ids]
         pre_rendered_cam_tform4x4_obj = self.pre_rendered_modalities[modality].cams_tform4x4_obj[meshes_ids]
-        from od3d.cv.geometry.transform import tform4x4, tform4x4_broadcast, inv_tform4x4, transf3d, add_homog_dim, transf3d_broadcast, reproj2d3d_broadcast
-        from od3d.cv.visual.sample import sample_pxl2d_grid
-        from od3d.cv.geometry.grid import get_pxl2d_like, get_pxl2d
-        #pre_rendered_cam_tform4x4_obj = tform4x4_broadcast(pre_rendered_cam_intr4x4, pre_rendered_cam_tform4x4_obj)
-        #cams_proj4x4_obj = tform4x4(cams_intr4x4, cams_tform4x4_obj)
 
         B, T, C, H, W = pre_rendered_feats.shape
-
-        #pre_rendered_proj4x4_cams = tform4x4(pre_rendered_cam_tform4x4_obj, torch.pinverse(cams_proj4x4_obj))
-
-        #pre_rendered_proj4x4_cams = tform4x4(pre_rendered_cam_tform4x4_obj, torch.pinverse(cams_proj4x4_obj))
-        #pre_rendered_proj4x4_cams = tform4x4_broadcast(pre_rendered_cam_intr4x4, torch.pinverse(cams_intr4x4))
-        #scale = pre_rendered_cam_tform4x4_obj[:, :, 2, 3] / cams_tform4x4_obj[:, :, 2, 3]
-        #pre_rendered_proj4x4_cams[:, :, :2] *= scale[:, :, None, None]
-        #cams_proj4x4_pre_rendered = tform4x4_broadcast(cams_intr4x4, inv_tform4x4(pre_rendered_cam_intr4x4))
 
         pxl2d_cams = get_pxl2d(H=H, W=W, dtype=pre_rendered_feats.dtype, device=pre_rendered_feats.device, B=None) * self.pre_rendered_modalities[modality].down_sample_rate
         pxl2d_cams = pxl2d_cams.expand(*pre_rendered_feats.shape[:2],  *pxl2d_cams.shape )
         pts3d_homog_cams = transf3d_broadcast(pts3d=add_homog_dim(pxl2d_cams, dim=4), transf4x4=cams_intr4x4.pinverse()[:, :, None, None,]) * cams_tform4x4_obj[:, :, 2, 3, None, None, None,]
         pts3d_pre_rendered = transf3d_broadcast(pts3d=pts3d_homog_cams, transf4x4=tform4x4(pre_rendered_cam_tform4x4_obj, inv_tform4x4(cams_tform4x4_obj))[:, :, None, None,])
-        pxl2d_pre_rendered = proj3d2d_broadcast(pts3d=pts3d_pre_rendered, proj4x4=pre_rendered_cam_intr4x4) / self.pre_rendered_modalities[modality].down_sample_rate
+        pxl2d_pre_rendered = proj3d2d_broadcast(pts3d=pts3d_pre_rendered, proj4x4=pre_rendered_cam_intr4x4[:, :, None, None]) / self.pre_rendered_modalities[modality].down_sample_rate
         cams_features = sample_pxl2d_grid(pre_rendered_feats.reshape(-1, C, H, W), pxl2d=pxl2d_pre_rendered.reshape(-1, H, W, 2)).reshape(B, T, C, H, W)
 
         return cams_features
