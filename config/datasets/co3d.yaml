@@ -24,11 +24,6 @@ block_negative_depth: False
 path_raw: ${platform.path_datasets}/CO3D
 path_preprocess: ${platform.path_datasets}/CO3D_Preprocess
 
-rpath_dtd_raw: DTD
-rpath_dtd_cache: DTD_cache
-path_dtd_raw: ${platform.path_datasets}/${.rpath_dtd_raw}
-path_dtd_cache: ${platform.path_datasets}/${.rpath_dtd_cache}
-
 setup: False
 setup_remove_previous: False
 setup_override: False
