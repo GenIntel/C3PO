@@ -37,6 +37,7 @@ class OD3D_FRAME_MODALITIES(str, Enum):
 
 @dataclass
 class OD3D_FrameMetaBBoxMixin():
+    # x0, y0, x1, y1
     l_bbox: List[float]
     @property
     def bbox(self):

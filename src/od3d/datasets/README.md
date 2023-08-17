@@ -26,7 +26,6 @@ class EXAMPLE(OD3D_Dataset):
         modalities: List[OD3D_FRAME_MODALITIES],
         path_raw: Path,
         path_preprocess: Path,
-        path_cuboids: Path,
         categories: List[EXAMPLE_CATEGORIES] = None,
         dict_nested_frames: Dict[...] = None,
         transform=None,
@@ -51,7 +50,7 @@ class EXAMPLE(OD3D_Dataset):
         frame_meta = EXAMPLEFrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, 
                                                                       name_unique=self.list_frames_unique[item])
         return OD3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
-                          path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
+                          meta=frame_meta, modalities=self.modalities,
                           categories=self.categories)
     
     @staticmethod

@@ -210,8 +210,6 @@ class Pascal3DFrame(OD3D_Frame):
     def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
 
-        # , dt_shape_nemo=None, classes: list = None
-
     @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
@@ -272,7 +270,3 @@ class Pascal3DFrame(OD3D_Frame):
         # cam_tform4x4_obj[2, 2:3] = -cam_tform4x4_obj[2, 2:3]
         return cam_tform4x4_obj
 
-
-class Pascal3DFrames(OD3D_Frames):
-    def __init__(self, frames: List[Pascal3DFrame], modalities: List[OD3D_FRAME_MODALITIES], dtype, device):
-        super().__init__(frames=frames, modalities=modalities, dtype=dtype, device=device)

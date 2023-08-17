@@ -12,7 +12,7 @@ from tqdm import tqdm
 from od3d.cv.geometry.mesh import Meshes
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.io import save_ply
-from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta, Pascal3DFrames
+from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
 from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS, PASCAL3D_SCALE_NORMALIZE_TO_REAL
 from typing import Dict
 import inspect
