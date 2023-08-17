@@ -138,4 +138,5 @@ wandb/
 ts.txt
 
 # credentials
-config/credentials/
+config/credentials/default.yaml
+config/platform/local.yaml
