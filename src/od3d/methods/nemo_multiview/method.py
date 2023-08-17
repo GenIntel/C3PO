@@ -52,7 +52,7 @@ class NeMo_MultiView(NeMo):
         super().__init__(config=config, logging_dir=logging_dir)
 
 
-    def test(self, dataset: CO3D, config_inference: DictConfig = None, pose_iterative_refine=True):
+    def test(self, dataset: CO3D, config_inference: DictConfig = None):
         logger.info(f'test dataset {dataset.name}')
         if config_inference is None:
             config_inference = self.config.inference
@@ -204,7 +204,7 @@ class NeMo_MultiView(NeMo):
             #cam_tform4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(
             #    dim1=-2, dim2=-1).permute(2, 0, 1)
 
-        if self.config.inference.pose_iterative_refine:
+        if self.config.inference.refine.enabled:
             obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=(1, 6)).to(device=obj_tform4x4_cuboid_front.device),
                                                 requires_grad=True)
 
@@ -218,8 +218,7 @@ class NeMo_MultiView(NeMo):
             obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
 
             for epoch in range(self.config.inference.optimizer.epochs):
-                if self.config.inference.sample.method == 'uniform':
-                    obj_tform6_tmp.data[:, :3] = 0.
+                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
                 obj_tform6_tmp.data[:, :] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))

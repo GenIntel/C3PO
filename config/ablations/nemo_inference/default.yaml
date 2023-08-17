@@ -10,6 +10,9 @@ method:
       inference:
         pre_rendered: True
         sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
+        refine:
+          enabled: True
+          dims_detached: [0, 1, 2] # # 0-5 0,1,2 (transl) ,3, 4, 5
 
 train: False
 test: True

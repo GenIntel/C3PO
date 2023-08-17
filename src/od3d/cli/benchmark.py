@@ -64,7 +64,7 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
             if len(configs) > 0:
                 json_config = json.loads(run.json_config)
             for config in configs:
-                rows.append(get_nested_value(json_config, key=config))
+                row.append(get_nested_value(json_config, key=config))
             for metric in metrics:
                 row.append(run_summary[metric])
 
@@ -82,17 +82,6 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
 
     #logger.info(tabulate(rows, headers=cols, tablefmt='github',  floatfmt=".3f")) # 'github', 'tsv'
     #logger.info(tabulate(rows, headers=cols, tablefmt='html',  floatfmt=".3f")) # 'github', 'tsv'
-
-    return df
-@app.command()
-def table():
-    logging.basicConfig(level=logging.INFO)
-    import wandb
-    config = od3d.io.load_hierarchical_config()
-
-    # 08-14_10-02-12_CO3D_NeMo_use_mask_rgb_and_object_slurm
-    # 08-14_09-05-31_CO3D_NeMo_moving_average_slurm
-    # 08-11_20-47-23_CO3D_NeMo_cross_entropy_bank_loss_gradient_slurm
 
     cols_renames = {
         'name': "Run",
@@ -122,21 +111,35 @@ def table():
         'test/co3d_50s_test/pose/acc_pi18': 100.,
     }
 
-    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    for col in cols_scales.keys():
+        if col in df:
+            df[col] = df[col] * cols_scales[col]
+    df = df.rename(columns=cols_renames)
+
+
+    return df
+@app.command()
+def table():
+    logging.basicConfig(level=logging.INFO)
+    #import wandb
+    # config = od3d.io.load_hierarchical_config()
+
+    # 08-14_10-02-12_CO3D_NeMo_use_mask_rgb_and_object_slurm
+    # 08-14_09-05-31_CO3D_NeMo_moving_average_slurm
+    # 08-11_20-47-23_CO3D_NeMo_cross_entropy_bank_loss_gradient_slurm
+
+
+
+    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
     #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
-    metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
-    name_partial = 'render' # None, 'inference', 'split', 'render'
+    #metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
+    name_partial = 'split' # None, 'inference', 'split', 'render'
     # configs = ['method.value.multiview.type', 'method.value.multiview.batch_size']
     age_in_hours = 250
     configs = []
 
     my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
 
-    for col in cols_scales.keys():
-        if col in my_df:
-            my_df[col] = my_df[col] * cols_scales[col]
-
-    my_df = my_df.rename(columns=cols_renames)
 
     # logger.info(tabulate(my_df, headers='keys', tablefmt='tsv',  floatfmt=".3f")) # 'github', 'tsv'
     # logger.info('\n' + my_df.to_csv(sep='\t', index=False, float_format="%.3f"))
@@ -151,24 +154,23 @@ def table():
 @app.command()
 def table_multiview():
     logging.basicConfig(level=logging.INFO)
-    import wandb
-    config = od3d.io.load_hierarchical_config()
+    # config = od3d.io.load_hierarchical_config()
 
     #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
     #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
     metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
     name_partial = 'multiview'
     configs = ['method.value.multiview.type', 'method.value.multiview.batch_size']
-    age_in_hours = 300
+    age_in_hours = 2
 
     my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
 
     import seaborn as sns
     import matplotlib.pyplot as plt
 
-    metrics_new_names = ['Acc. PI/6 [%]', 'Acc. PI/18 [%]', 'Error Median [deg]', 'Error Mean [deg]']
-    my_df[metrics[0]] *= 100
-    my_df[metrics[1]] *= 100
+    metrics_new_names = ['Acc. Pi/6. [%]', 'Acc. Pi/18. [%]', 'Median [deg.]', 'Mean [deg.]']
+    #my_df[metrics[0]] *= 100
+    #my_df[metrics[1]] *= 100
 
     my_df = my_df.groupby(['method.value.multiview.type', 'method.value.multiview.batch_size']).head(1)
     my_df = my_df.rename(columns={'method.value.multiview.type': 'type', 'method.value.multiview.batch_size': 'multiview #frames', metrics[0]: metrics_new_names[0], metrics[1]: metrics_new_names[1], metrics[2]: metrics_new_names[2], metrics[3]: metrics_new_names[3]})
