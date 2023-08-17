@@ -166,9 +166,9 @@ class NeMo(OD3D_Method):
         verts_count_max = meshes_old.verts_counts_max
         mem_verts_feats_count = len(fpaths_meshes_old) * verts_count_max
         checkpoint = torch.load(path_checkpoint, map_location="cuda:0")
-        self.net.net = torch.nn.DataParallel(self.net.net).cuda()
-        self.net.net.load_state_dict(checkpoint["state"], strict=False)
-        self.net.net = self.net.net.module
+        self.net.backbone.net = torch.nn.DataParallel(self.net.backbone.net).cuda()
+        self.net.backbone.net.load_state_dict(checkpoint["state"], strict=False)
+        self.net.backbone.net = self.net.backbone.net.module
         self.clutter_feats = checkpoint["memory"][mem_verts_feats_count:].clone().detach().cpu()
         # self.clutter_feats = self.clutter_feats.mean(dim=0, keepdim=True)
         self.clutter_feats = torch.nn.Parameter(self.clutter_feats.to(device=self.device), requires_grad=True)

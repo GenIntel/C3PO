@@ -60,7 +60,6 @@ class Pascal3D(OD3D_Dataset):
                         dict_nested_frames=dict_nested_frames, transform=self.transform, index_shift=self.index_shift,
                         path_cuboids=self.path_cuboids)
 
-
     @staticmethod
     def setup(config):
         path_pascal3d_raw = Path(config.path_raw)

@@ -79,7 +79,10 @@ class ResNet(OD3D_Head):
         self.conv_blocks_out_dims = config.conv_blocks.out_dims
         self.conv_blocks_count = len(self.conv_blocks_out_dims)
         self.conv_blocks_strides = config.conv_blocks.strides
-        self.conv_blocks_in_dims = [self.in_upsampled_dim] + [config.conv_blocks.out_dims[i] for i in range(self.conv_blocks_count - 1)]
+        if self.conv_blocks_count > 0:
+            self.conv_blocks_in_dims = [self.in_upsampled_dim] + [config.conv_blocks.out_dims[i] for i in range(self.conv_blocks_count - 1)]
+        else:
+            self.conv_blocks_in_dims = []
         self.conv_blocks_pre_upsampling = config.conv_blocks.pre_upsampling
         assert len(self.conv_blocks_in_dims) == len(self.conv_blocks_out_dims)
         assert len(self.conv_blocks_out_dims) == len(self.conv_blocks_strides)

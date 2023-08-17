@@ -1,4 +1,7 @@
 # @package _global_
+defaults:
+  - override /methods/model@method.nemo.model: resnet50_old
+
 ablation_name: old_checkpoint_uniform_sampling
 method:
     nemo:

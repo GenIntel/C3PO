@@ -4,8 +4,8 @@ import torch.nn.functional as F
 import torchvision.models as models
 
 from od3d.models.unet import unet_res50
-from od3d.models.backbones.resnext.upsampling_layer import DoubleConv
-from od3d.models.backbones.resnext.upsampling_layer import Up
+from od3d.models.backbones.resnet_old.upsampling_layer import DoubleConv
+from od3d.models.backbones.resnet_old.upsampling_layer import Up
 
 vgg_layers = {"pool4": 24, "pool5": 31}
 net_stride = {
