@@ -432,7 +432,7 @@ class NeMo(OD3D_Method):
             time_pred_net_feats2d = time.time()
             # logger.info(
             #    f"predicted net feats2d, took {(time_pred_net_feats2d - time_loaded):.3f}")
-            results['time_feats2d'] = torch.Tensor([time_pred_net_feats2d - time_loaded,])
+            results['time_feats2d'] = torch.Tensor([time_pred_net_feats2d - time_loaded,]) / B
 
             meshes_scores = []
             for mesh_id in range(len(self.meshes)):
@@ -457,7 +457,7 @@ class NeMo(OD3D_Method):
             time_pred_class = time.time()
             # logger.info(f"predicted class: {self.config.classes[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
 
-            results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,])
+            results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,]) / B
 
             b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
                                                                                        cam_intr4x4=batch.cam_intr4x4,
@@ -532,11 +532,11 @@ class NeMo(OD3D_Method):
 
             cam_tform4x4_obj = tform4x4(cam_tform4x4_obj.detach(), se3_exp_map(obj_tform6_tmp.detach()))
 
-            results['time_pose_iterative'] = torch.Tensor([time.time() - time_before_pose_iterative,])
+            results['time_pose_iterative'] = torch.Tensor([time.time() - time_before_pose_iterative,]) / B
 
         cam_tform4x4_obj = cam_tform4x4_obj.clone().detach()
 
-        results['time_pose'] = torch.Tensor([time.time() - time_pred_class,])
+        results['time_pose'] = torch.Tensor([time.time() - time_pred_class,]) / B
 
         diff_rot3x3 = rot3x3(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_tform4x4_obj[:, :3, :3])
 
