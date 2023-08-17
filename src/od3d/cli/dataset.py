@@ -70,9 +70,32 @@ def preprocess_meta(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     config.dataset.preprocess_meta_override = override
     OD3D_Dataset.subclasses[config.dataset.class_name].preprocess_meta(config.dataset)
 
-
 @app.command()
 def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
+          platform_source: str = typer.Option('local', '-s', '--source'),
+          platform_target: str = typer.Option('slurm', '-t', '--target'),):
+    logging.basicConfig(level=logging.INFO)
+    rsync_raw(dataset=dataset, platform_source=platform_source, platform_target=platform_target)
+    rsync_preprocess(dataset=dataset, platform_source=platform_source, platform_target=platform_target)
+
+@app.command()
+def rsync_raw(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
+          platform_source: str = typer.Option('local', '-s', '--source'),
+          platform_target: str = typer.Option('slurm', '-t', '--target'),):
+    logging.basicConfig(level=logging.INFO)
+    config_source = od3d.io.load_hierarchical_config(platform=platform_source, overrides=["+datasets@dataset=" + dataset])
+    config_target = od3d.io.load_hierarchical_config(platform=platform_target, overrides=["+datasets@dataset=" + dataset])
+
+    paths_source = Path(config_source.dataset.path_raw)
+    paths_target = Path(config_target.dataset.path_raw)
+
+    source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
+    target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
+
+    od3d.io.run_cmd(cmd=f'rsync -avrzP --delete {source_link}{paths_source} {target_link}{paths_target.parent}', live=True, logger=logger)
+
+@app.command()
+def rsync_preprocess(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
           platform_source: str = typer.Option('local', '-s', '--source'),
           platform_target: str = typer.Option('slurm', '-t', '--target'),):
     logging.basicConfig(level=logging.INFO)
@@ -80,12 +103,12 @@ def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
     config_target = od3d.io.load_hierarchical_config(platform=platform_target, overrides=["+datasets@dataset=" + dataset])
 
     paths_source = Path(config_source.dataset.path_preprocess)
-    paths_target = Path(config_target.dataset.path_preprocess) # .parent
+    paths_target = Path(config_target.dataset.path_preprocess)
 
     source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
     target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
 
-    subdirs = list([path.name for path in paths_source.iterdir() if path.name not in ['labelstudio']]) # 'meta'
+    subdirs = list([path.name for path in paths_source.iterdir() if path.name not in ['labelstudio']])
     logger.info(subdirs)
     for subdir in subdirs:
         od3d.io.run_cmd(cmd=f'rsync -avrzP --delete {source_link}{paths_source.joinpath(subdir)} {target_link}{paths_target.joinpath(subdir).parent}', live=True, logger=logger)

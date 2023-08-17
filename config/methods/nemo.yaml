@@ -113,7 +113,7 @@ inference:
             steps: 3
     refine:
       enabled: True
-      dims_detached: [0, 1, 2] # # 0-5 0,1,2 (transl) ,3, 4, 5
+      dims_detached: [0, 1, 2] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
     optimizer:
         beta0: 0.4
         beta1: 0.6
