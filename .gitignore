@@ -140,3 +140,4 @@ ts.txt
 # credentials
 config/credentials/default.yaml
 config/platform/local.yaml
+config/platform/slurm.yaml
