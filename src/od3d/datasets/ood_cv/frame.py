@@ -50,8 +50,8 @@ class OOD_CV_FrameMeta(Pascal3DFrameMeta):
             logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
             return None
 
-        if 'focal' not in object['viewpoint'].dtype.names or object['viewpoint']['focal'][0][0][0][0] == 0:
-            object['viewpoint']['focal'][0][0][0][0] = 3000
+        #if 'focal' not in object['viewpoint'].dtype.names or object['viewpoint']['focal'][0][0][0][0] == 0:
+        #    object['viewpoint']['focal'][0][0][0][0] = 3000
 
         if object['viewpoint']['px'][0][0][0][0] < 0:
             incomplete_reason = f"negative px {object['viewpoint']['px'][0][0][0][0]}"

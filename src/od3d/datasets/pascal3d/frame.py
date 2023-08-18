@@ -116,8 +116,8 @@ class Pascal3DFrameMeta(OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_F
             logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
             return None
 
-        if 'focal' not in object['viewpoint'].dtype.names or object['viewpoint']['focal'][0][0][0][0] == 0:
-            object['viewpoint']['focal'][0][0][0][0] = 3000
+        #if 'focal' not in object['viewpoint'].dtype.names or object['viewpoint']['focal'][0][0][0][0] == 0:
+        #    object['viewpoint']['focal'][0][0][0][0] = 3000
 
         if object['viewpoint']['px'][0][0][0][0] < 0:
             incomplete_reason = f"negative px {object['viewpoint']['px'][0][0][0][0]}"
@@ -149,6 +149,8 @@ class Pascal3DFrameMeta(OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_F
             cam_intr4x4 \
             = Pascal3DFrameMeta.load_category_mesh_bbox_kpts2d_cam_from_object_annotation_raw(object=object,
                                                                                               rpath_meshes=rpath_meshes)
+
+        # logger.info(cam_intr4x4)
 
         if cam_intr4x4[0, 0] == 0. or cam_intr4x4[1, 1] == 0.:
             incomplete_reason = "focal = 0"
