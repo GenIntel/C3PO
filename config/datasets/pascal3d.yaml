@@ -21,7 +21,6 @@ path_preprocess: ${platform.path_datasets}/PASCAL3D_Preprocess
 rpath_meshes: ${.rpath_pascal3d_raw}/CAD
 path_meshes: ${platform.path_datasets}/${.rpath_meshes}
 
-
 path_cuboids: '${.path_preprocess}/cuboids'
 fpaths_cuboids:
     aeroplane: ${..path_cuboids}/aeroplane.ply
