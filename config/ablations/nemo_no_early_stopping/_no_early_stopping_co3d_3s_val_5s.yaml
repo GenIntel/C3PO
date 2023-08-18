@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
   - /ablations/nemo_no_early_stopping@: default
+  - override /datasets@train_datasets.labeled: co3d #  co3d_55s_train, pascal3d_train
 
 ablation_name: no_early_stopping_co3d_3s_val_5s
 

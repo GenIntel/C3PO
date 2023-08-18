@@ -63,6 +63,12 @@ image_sizes:
     train: [512, 512]
     tvmonitor: [512, 512]
 
+# skipped due to zero distance
+#   car:
+#       n03770679_15832
+#       n03770679_9715
+#       n04037443_21947
+#       n04037443_4668
 
 categories:
 #    - aeroplane
