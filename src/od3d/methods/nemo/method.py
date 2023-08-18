@@ -222,7 +222,7 @@ class NeMo(OD3D_Method):
                     if dataset_val_key == 'main':
                         score_latest = results_val[score_metric_name]
 
-                if score_latest > score_ckpt_val:
+                if not self.config.train.early_stopping or score_latest > score_ckpt_val:
                     score_ckpt_val = score_latest
                     self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 

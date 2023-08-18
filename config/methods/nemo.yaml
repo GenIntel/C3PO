@@ -16,6 +16,7 @@ transforms:
     - class_name: nemo.datasets.pascal3d.Normalize
 
 train:
+  early_stopping: True
   use_mask_object: True
   loss: cross_entropy # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
   bank_feats_update: loss_gradient # loss_gradient, normalize_loss_gradient, moving_average, loss

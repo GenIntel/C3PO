@@ -38,7 +38,8 @@ dependencies = [
     "typer",
     "hydra-core",
     "plotly",
-    "scikit-learn"
+    "scikit-learn",
+    "pygit2",
 ]
 
 dynamic = ["version"]

@@ -95,7 +95,8 @@ else
 fi
 
 cd {cfg.platform.path_od3d}
-git pull {cfg.platform.url_od3d}
+git pull {cfg.platform.url_od3d} {cfg.branch}
+git checkout {cfg.branch}
 
 # Install OD3D in venv
 VENV_NAME=venv310
@@ -198,7 +199,8 @@ else
 fi
 
 cd {cfg.platform.path_od3d}
-git pull {cfg.platform.url_od3d}
+git pull {cfg.platform.url_od3d} {cfg.branch}
+git checkout {cfg.branch}
 
 # Install OD3D in venv
 VENV_NAME=venv310

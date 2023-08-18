@@ -14,6 +14,7 @@ import time
 
 import datetime
 import pandas as pd
+from pygit2 import Repository
 
 from tabulate import tabulate
 
@@ -232,9 +233,13 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 
     print(f"{len(methods_cfgs)} configs with single method.")
 
+    current_branch = Repository('.').head.shorthand  # 'master'
 
     for method_cfg in methods_cfgs:
         with open_dict(method_cfg):
+            if method_cfg.get('branch', None) is None:
+                method_cfg.branch = current_branch
+
             ablation_name = method_cfg.get("ablation_name", None)
             if ablation_name is not None:
                 method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{ablation_name}_{method_cfg.platform.link}'
