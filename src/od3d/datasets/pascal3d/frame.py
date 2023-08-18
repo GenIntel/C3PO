@@ -41,54 +41,36 @@ class Pascal3DFrameMeta(OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_F
     def get_name_unique_from_category_subset_name(category, subset, name):
         return f'{subset}/{category}/{name}'
 
-
     @staticmethod
-    def load_from_raw(frame_name: str, subset: str, category: str, path_raw: Path, rpath_meshes: Path):
-        frame_rfpath = f"{category}_imagenet/{frame_name}"
-        rfpath_annotation = Path("Annotations").joinpath(f"{frame_rfpath}.mat")
-        rfpath_rgb = Path("Images").joinpath(f"{frame_rfpath}.JPEG")
+    def load_category_mesh_bbox_kpts2d_cam_from_object_annotation_raw(object, rpath_meshes):
 
-        annotation = scipy.io.loadmat(path_raw.joinpath(rfpath_annotation))
-        name = annotation['record']['filename'][0][0][0].split('.')[0]
-
-        objects = annotation['record']['objects'][0][0][0]
-        # assert len(objects) == 1
-        if len(objects) != 1:
-            # complete = False
-            incomplete_reason = f"num objects = {len(objects)}"
-            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
-            return None
-
-        object = objects[0]
         category = object['class'][0]
 
         mesh_index = object['cad_index'][0][0] - 1
         # label = classes.index(meta.category)
         bbox = torch.from_numpy(object['bbox'][0])
         kpts_names = list(object['anchors'][0][0].dtype.names)
-        kpts2d_annot = np.stack([object['anchors'][0][0][n]['location'][0][0][0] if object['anchors'][0][0][n]['status'] == 1 else np.array([0, 0]) for n in kpts_names])
+        kpts2d_annot = np.stack([object['anchors'][0][0][n]['location'][0][0][0] if object['anchors'][0][0][n][
+                                                                                        'status'] == 1 else np.array(
+            [0, 0]) for n in kpts_names])
         kpts2d_annot = torch.from_numpy(kpts2d_annot)
         kpts2d_annot_vsbl = np.array([True if object['anchors'][0][0][n]['status'] == 1 else False for n in kpts_names])
         kpts2d_annot_vsbl = torch.from_numpy(kpts2d_annot_vsbl)
-        W = int(annotation['record'][0][0]['size']['width'][0][0][0][0])
-        H = int(annotation['record'][0][0]['size']['height'][0][0][0][0]) # self.rgb.shape[1:]
-        size = torch.Tensor([H, W])
+
         viewpoint = object['viewpoint']
         azimuth = viewpoint['azimuth'][0][0][0][0] * math.pi / 180
         elevation = viewpoint['elevation'][0][0][0][0] * math.pi / 180
         distance = viewpoint['distance'][0][0][0][0]
         focal = viewpoint['focal'][0][0][0][0]
 
-        if focal == 0:
-            complete = False
-            incomplete_reason = "focal = 0"
-            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+
         theta = viewpoint['theta'][0][0][0][0] * math.pi / 180
         principal = np.array([viewpoint['px'][0][0][0][0],
                               viewpoint['py'][0][0][0][0]])
         viewport = viewpoint['viewport'][0][0][0][0]
 
-        cam_tform4x4_obj = Pascal3DFrame.calc_cam_tform_obj(azimuth=azimuth, elevation=elevation, theta=theta, distance=distance)
+        cam_tform4x4_obj = Pascal3DFrame.calc_cam_tform_obj(azimuth=azimuth, elevation=elevation, theta=theta,
+                                                            distance=distance)
         # cam_tform4x4_obj = torch.from_numpy(cam_tform4x4_obj)
 
         cam_intr3x3 = np.array([[1. * viewport * focal, 0, principal[0]],
@@ -99,17 +81,97 @@ class Pascal3DFrameMeta(OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_F
         cam_intr4x4 = torch.from_numpy(cam_intr4x4).to(dtype=cam_tform4x4_obj.dtype)
 
         rfpath_mesh = rpath_meshes.joinpath(category, f"{(mesh_index + 1):02d}.off")
+        return category, mesh_index, rfpath_mesh, bbox, kpts_names, kpts2d_annot, kpts2d_annot_vsbl, cam_tform4x4_obj, cam_intr4x4
 
+    @staticmethod
+    def load_kpts3d_from_raw(path_raw, rpath_meshes, category, mesh_index, kpts_names):
         fpath_mesh_kpoints3d = path_raw.joinpath(rpath_meshes, f"{category}.mat")
         annotation_mesh3d = scipy.io.loadmat(fpath_mesh_kpoints3d)
-        kpts3d = np.stack([annotation_mesh3d[category][n][0][mesh_index][0] if len(annotation_mesh3d[category][n][0][mesh_index]) > 0 else np.array([np.inf, np.inf, np.inf]) for n in kpts_names])
+        kpts3d = np.stack([annotation_mesh3d[category][n][0][mesh_index][0] if len(
+            annotation_mesh3d[category][n][0][mesh_index]) > 0 else np.array([np.inf, np.inf, np.inf]) for n in kpts_names])
         kpts3d = torch.from_numpy(kpts3d)
+        return kpts3d
+    @staticmethod
+    def load_from_raw_annotation(annotation, subset: str, category: str, path_raw: Path, rpath_meshes: Path, rfpath_rgb: Path):
+        name = annotation['record']['filename'][0][0][0].split('.')[0]
+
+        objects = annotation['record']['objects'][0][0][0]
+
+        objects = list(filter(lambda obj: hasattr(obj, 'dtype') and obj.dtype.names is not None and 'viewpoint' in obj.dtype.names and hasattr(obj['viewpoint'], 'dtype') and obj['viewpoint'].dtype.names is not None , objects))
+        # assert len(objects) == 1
+        if len(objects) < 1:
+            incomplete_reason = f"num objects = {len(objects)}"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
+
+        object = objects[0]
+
+        if not hasattr(object, 'dtype') or object.dtype.names is None or 'viewpoint' not in object.dtype.names: #['focal'][0][0][0][0] == 0:
+            incomplete_reason = "viewpoint missing"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
+
+        if not hasattr(object['viewpoint'], 'dtype') or object['viewpoint'].dtype.names is None: #['focal'][0][0][0][0] == 0:
+            incomplete_reason = "viewpoint missing"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
+
+        if 'focal' not in object['viewpoint'].dtype.names or object['viewpoint']['focal'][0][0][0][0] == 0:
+            object['viewpoint']['focal'][0][0][0][0] = 3000
+
+        if object['viewpoint']['px'][0][0][0][0] < 0:
+            incomplete_reason = f"negative px {object['viewpoint']['px'][0][0][0][0]}"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
+            #object['viewpoint']['px'][0][0][0][0] = -object['viewpoint']['px'][0][0][0][0]
+
+        if object['viewpoint']['py'][0][0][0][0] < 0:
+            incomplete_reason = f"negative py {object['viewpoint']['py'][0][0][0][0]}"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
+            #object['viewpoint']['py'][0][0][0][0] = -object['viewpoint']['py'][0][0][0][0]
+
+        if object['viewpoint']['distance'][0][0][0][0] < 0.01:
+            incomplete_reason = f"distance negative {object['viewpoint']['distance'][0][0][0][0]}"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
+
+        if not hasattr(object['anchors'][0][0], 'dtype') or object['anchors'][0][0].dtype.names is None:
+            incomplete_reason = "kpts names missing"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
+
+        W = int(annotation['record'][0][0]['size']['width'][0][0][0][0])
+        H = int(annotation['record'][0][0]['size']['height'][0][0][0][0])  # self.rgb.shape[1:]
+        size = torch.Tensor([H, W])
+
+        category, mesh_index, rfpath_mesh, bbox, kpts_names, kpts2d_annot, kpts2d_annot_vsbl, cam_tform4x4_obj, \
+            cam_intr4x4 \
+            = Pascal3DFrameMeta.load_category_mesh_bbox_kpts2d_cam_from_object_annotation_raw(object=object,
+                                                                                              rpath_meshes=rpath_meshes)
+
+        if cam_intr4x4[0, 0] == 0. or cam_intr4x4[1, 1] == 0.:
+            incomplete_reason = "focal = 0"
+            logger.warning(f"Skip frame {name}, due to {incomplete_reason}.")
+            return None
+
+        kpts3d = Pascal3DFrameMeta.load_kpts3d_from_raw(path_raw, rpath_meshes, category, mesh_index, kpts_names)
 
         return Pascal3DFrameMeta(subset=subset, name=name, rfpath_rgb=rfpath_rgb, rfpath_mesh=rfpath_mesh,
                                  l_bbox=bbox.tolist(), kpts_names=kpts_names, l_kpts2d_annot=kpts2d_annot.tolist(),
                                  l_kpts2d_annot_vsbl=kpts2d_annot_vsbl.tolist(), l_size=size.tolist(),
                                  l_cam_tform4x4_obj=cam_tform4x4_obj.tolist(), l_cam_intr4x4=cam_intr4x4.tolist(),
                                  l_kpts3d=kpts3d.tolist(), category=category)
+    @staticmethod
+    def load_from_raw(frame_name: str, subset: str, category: str, path_raw: Path, rpath_meshes: Path):
+        frame_rfpath = f"{category}_imagenet/{frame_name}"
+        rfpath_annotation = Path("Annotations").joinpath(f"{frame_rfpath}.mat")
+        rfpath_rgb = Path("Images").joinpath(f"{frame_rfpath}.JPEG")
+
+        annotation = scipy.io.loadmat(path_raw.joinpath(rfpath_annotation))
+        return Pascal3DFrameMeta.load_from_raw_annotation(annotation=annotation, rfpath_rgb=rfpath_rgb,
+                                                          rpath_meshes=rpath_meshes, category=category, subset=subset,
+                                                          path_raw=path_raw)
 
     """
     @staticmethod
@@ -209,6 +271,7 @@ class Pascal3DFrameMeta(OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_F
 class Pascal3DFrame(OD3D_Frame):
     def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
+        self.path_meshes = path_meshes
 
     @property
     def cam_tform4x4_obj(self):
@@ -250,6 +313,11 @@ class Pascal3DFrame(OD3D_Frame):
         if self._kpts3d is None:
             self._kpts3d = self.meta.kpts3d * PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
         return self._kpts3d
+
+
+    @property
+    def fpath_mesh(self):
+        return self.path_meshes.parent.joinpath(self.meta.rfpath_mesh)
 
     @property
     def mesh(self):

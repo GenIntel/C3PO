@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from od3d.data.ext_enum import ExtEnum
 
-class PASCAL3D_SUBSETS(str, ExtEnum):
+class PASCAL3D_OCC_SUBSETS(str, ExtEnum):
     LVL1 = "lvl1"
     LVL2 = "lvl2"
     LVL3 = "lvl3"
@@ -85,7 +85,7 @@ class Pascal3D_Occ(OD3D_Dataset):
     def preprocess_meta(config: DictConfig):
         subsets = config.get("subsets", None)
         if subsets is None:
-            subsets = PASCAL3D_SUBSETS.list()
+            subsets = PASCAL3D_OCC_SUBSETS.list()
         categories = config.get("categories", None)
         if categories is None:
             categories = PASCAL3D_CATEGORIES.list()
