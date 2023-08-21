@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  #- override /methods/model@method.nemo.model: resnet50_frozen
+  - override /datasets@train_datasets.labeled: co3d_3s_train #  co3d_55s_train, pascal3d_train
+
+ablation_name: early_stopping_co3d_3s_val_5s
+
+method:
+    nemo:
+        train:
+          epochs: 500
+          early_stopping: True
+
+train: True
+test: True
