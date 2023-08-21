@@ -27,6 +27,7 @@ from od3d.benchmark.results import OD3D_Results
 from dataclasses import dataclass
 from typing import Dict
 import random
+from od3d.cv.visual.resize import resize
 
 from tqdm import tqdm
 
@@ -163,15 +164,18 @@ class NeMo_Incremental(NeMo):
         batch.cam_intr4x4[:, 1, 2] = batch.size[0] / 2.
         """
 
-
         time_loaded = time.time()
         with torch.no_grad():
-            net_feats2d = self.net(batch.rgb)
+            feats2d_net = self.net(batch.rgb)
+            feats2d_net_mask = resize(batch.mask_rgb, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+            if self.config.inference.use_mask_object:
+                feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
+                                                                  W_out=feats2d_net.shape[3])
 
             time_pred_net_feats2d = time.time()
             # logger.info(
             #    f"predicted net feats2d, took {(time_pred_net_feats2d - time_loaded):.3f}")
-            results['time_feats2d'] = torch.Tensor([time_pred_net_feats2d - time_loaded,])
+            results['time_feats2d'] = torch.Tensor([time_pred_net_feats2d - time_loaded,]) / B
 
             meshes_scores = []
             for mesh_id in range(len(self.meshes)):
@@ -179,8 +183,8 @@ class NeMo_Incremental(NeMo):
                 bank_feats = torch.cat([self.meshes.get_feats_with_mesh_id(mesh_id), self.clutter_feats.detach()],
                                        dim=0)
                 # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
-                out_shape = net_feats2d.shape[:1] + torch.Size([1]) + net_feats2d.shape[2:]
-                inner_feats2d_net_bank_vts_max_vals = torch.einsum('bchw,kc->bkhw', net_feats2d, bank_feats).max(dim=1,
+                out_shape = feats2d_net.shape[:1] + torch.Size([1]) + feats2d_net.shape[2:]
+                inner_feats2d_net_bank_vts_max_vals = torch.einsum('bchw,kc->bkhw', feats2d_net, bank_feats).max(dim=1,
                                                                                                                  keepdim=True).values
                 # inner_feats2d_net_bank_vts_max_vals, inner_feats2d_net_bank_vts_max_ids = inner_feats2d.max(dim=1)
                 # show_img(self.meshes.get_verts_with_mesh_id[mesh_id][inner_feats2d_net_bank_vts_max_ids[0, 0]].permute(2, 0, 1), normalize=True)
@@ -196,24 +200,26 @@ class NeMo_Incremental(NeMo):
             time_pred_class = time.time()
             # logger.info(f"predicted class: {self.config.classes[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
 
-            results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,])
+            results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,]) / B
 
             cams_multiview_tform4x4_obj, cams_multiview_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
                                                                                    cam_intr4x4=batch.cam_intr4x4[:1],
                                                                                    cam_tform4x4_obj=batch.cam_tform4x4_obj[:1],
-                                                                                   feats2d_net=net_feats2d[:1],
-                                                                                   categories_ids=pred_class_ids[:1])
+                                                                                   feats2d_net=feats2d_net[:1],
+                                                                                   categories_ids=pred_class_ids[:1],
+                                                                                   feats2d_net_mask=feats2d_net_mask[:1])
             # multiview adaption
             objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(batch.cam_tform4x4_obj[:1])[:, None], cams_multiview_tform4x4_obj)
             b_cams_multiview_tform4x4_obj = tform4x4_broadcast(batch.cam_tform4x4_obj[:, None], objs_multiview_tform4x4_cuboid_front)
             b_cams_multiview_intr4x4 = cams_multiview_intr4x4.expand(*b_cams_multiview_tform4x4_obj.shape)
 
             #  OPTION A: Use 2d gradient of rendered features
-            sim = self.get_sim_feats2d_net_with_cams(feats2d_net=net_feats2d,
+            sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                      cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
                                                      cam_intr4x4=b_cams_multiview_intr4x4,
                                                      categories_ids=pred_class_ids,
-                                                     broadcast_batch_and_cams=True)
+                                                     broadcast_batch_and_cams=True,
+                                                     feats2d_net_mask=feats2d_net_mask, pre_rendered=False)
 
             sim = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
 
@@ -232,7 +238,7 @@ class NeMo_Incremental(NeMo):
             #cam_tform4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(
             #    dim1=-2, dim2=-1).permute(2, 0, 1)
 
-        if self.config.inference.pose_iterative_refine:
+        if self.config.inference.refine.enabled:
             obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=(1, 6)).to(device=obj_tform4x4_cuboid_front.device),
                                                 requires_grad=True)
 
@@ -246,17 +252,17 @@ class NeMo_Incremental(NeMo):
             obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
 
             for epoch in range(self.config.inference.optimizer.epochs):
-                if self.config.inference.sample.method == 'uniform':
-                    obj_tform6_tmp.data[:, :3] = 0.
+                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
                 obj_tform6_tmp.data[:, :] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
 
-                sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=net_feats2d,
+                sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                                   cam_tform4x4_obj=tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front),
                                                                   cam_intr4x4=batch.cam_intr4x4,
                                                                   categories_ids=pred_class_ids, return_sim_pxl=True,
-                                                                  broadcast_batch_and_cams=False)
+                                                                  broadcast_batch_and_cams=False,
+                                                                  feats2d_net_mask=feats2d_net_mask, pre_rendered=False)
                 mesh_cam_loss = -sim
 
                 if self.config.inference.live:
@@ -275,12 +281,12 @@ class NeMo_Incremental(NeMo):
 
             obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
 
-            results['time_pose_iterative'] = torch.Tensor([time.time() - time_before_pose_iterative,])
+            results['time_pose_iterative'] = torch.Tensor([time.time() - time_before_pose_iterative,]) / B
 
         obj_tform4x4_cuboid_front = obj_tform4x4_cuboid_front.clone().detach()
         cam_tform4x4_obj = tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front)
 
-        results['time_pose'] = torch.Tensor([time.time() - time_pred_class,])
+        results['time_pose'] = torch.Tensor([time.time() - time_pred_class,]) / B
 
         diff_rot3x3 = rot3x3(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_tform4x4_obj[:, :3, :3])
 
