@@ -1,0 +1,19 @@
+# @package _global_
+ablation_name: no_multiview_bs8_1s_2nd
+method:
+    nemo:
+      checkpoint: ${platform.path_exps}/08-18_13-30-51_CO3D_NeMo_no_early_stopping_co3d_1s_val_5s_2nd_slurm/nemo.ckpt
+      multiview:
+        type: single # single multiview multiview-mean-se3
+        batch_size: 8
+
+#      inference:
+#        live: False
+#        sample:
+#          method: epnp3d2d # epnp3d2d uniform
+#          epnp3d2d:
+#            count_cams: 100
+#            count_pts: 4
+
+train: False
+test: True
