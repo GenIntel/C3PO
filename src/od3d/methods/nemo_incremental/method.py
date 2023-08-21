@@ -56,13 +56,15 @@ class NeMo_Incremental(NeMo):
     def update_pseudo_labels(self, dataset_train: CO3D):
         self.net.eval()
         self.meshes.feats.requires_grad = False
-        update_sequences_random = self.train_sequences_pseudo_labeled + random.choices(self.train_sequences_unlabeled, k=self.config.train.incremental.sequences_new_pseudo_labeled_count)
+
+        train_sequences_pseudo_labeled_proposed = random.choices(self.train_sequences_unlabeled, k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed)
+        update_sequences_random = self.train_sequences_pseudo_labeled + train_sequences_pseudo_labeled_proposed
         dict_category_sequences = {'car': update_sequences_random}
         dataset_update = dataset_train.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
-                                                               frames_count_max_per_sequence=self.config.train.incremental.pseudo_label_multiview_count)
+                                                               frames_count_max_per_sequence=self.config.train.incremental.pseudo_labels_update.multiview_count)
         dataset_update.transform = self.transform_test
 
-        dataloader = torch.utils.data.DataLoader(dataset=dataset_update, batch_size=self.config.train.incremental.pseudo_label_multiview_count, #self.config.test.dataloader.batch_size,
+        dataloader = torch.utils.data.DataLoader(dataset=dataset_update, batch_size=self.config.train.incremental.pseudo_labels_update.multiview_count, #self.config.test.dataloader.batch_size,
                                                  shuffle=False,
                                                  collate_fn=dataset_update.collate_fn,
                                                  num_workers=self.config.test.dataloader.num_workers,
@@ -76,7 +78,7 @@ class NeMo_Incremental(NeMo):
             results += results_batch
             sim = results_batch["sim"].mean()
             obj_tform4x4_cuboid_front = results_batch["obj_tform4x4_cuboid_front"]
-            if sim > self.config.train.incremental.pseudo_label_threshold:
+            if sim > self.config.train.incremental.pseudo_labels_update.sim_threshold:
                 self.train_sequences_pseudo_labels[batch.sequence_name[0]] = SequencePseudoLabel(obj_tform4x4_cuboid_front=obj_tform4x4_cuboid_front, sim=sim)
                 if batch.sequence_name[0] not in self.train_sequences_pseudo_labeled:
                     self.train_sequences_pseudo_labeled.append(batch.sequence_name[0])
@@ -84,6 +86,13 @@ class NeMo_Incremental(NeMo):
                 if batch.sequence_name[0] in self.train_sequences_pseudo_labeled:
                     del self.train_sequences_pseudo_labels[batch.sequence_name[0]]
                     self.train_sequences_pseudo_labeled.remove(batch.sequence_name[0])
+
+        train_sequences_pseudo_labeled_proposed = [seq for seq in train_sequences_pseudo_labeled_proposed if seq in self.train_sequences_pseudo_labeled]
+        train_sequences_pseudo_labeled_proposed = sorted(train_sequences_pseudo_labeled_proposed, key=lambda seq: self.train_sequences_pseudo_labels[seq].sim, reverse=True)
+        for seq in train_sequences_pseudo_labeled_proposed[self.config.train.incremental.pseudo_labels_update.count_new_labels_selected_max:]:
+            del self.train_sequences_pseudo_labels[seq]
+            self.train_sequences_pseudo_labeled.remove(seq)
+
         results_visual = self.get_results_visual(results_epoch=results, dataset=dataset_update,
                                                  config_visualize=self.config.test.visualize)
         results = results.mean()
@@ -127,6 +136,11 @@ class NeMo_Incremental(NeMo):
                     score_ckpt_val = score_latest
                     self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 
+            if self.config.train.incremental.enabled and epoch % self.config.train.incremental.pseudo_labels_update.epochs_to_next_update:
+                self.update_pseudo_labels(dataset_train=dataset_train_sub)
+
+
+
             self.train_sequences_random = self.train_sequences_labeled + self.train_sequences_pseudo_labeled
             dict_category_sequences = {'car': self.train_sequences_random}
             train_dataset_sub_sub = dataset_train_sub.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
@@ -134,9 +148,6 @@ class NeMo_Incremental(NeMo):
 
             results_epoch = self.train_epoch(dataset=train_dataset_sub_sub)
             results_epoch.log_with_prefix('train')
-
-            if self.config.train.incremental.enabled:
-                self.update_pseudo_labels(dataset_train=dataset_train_sub)
 
         self.load_checkpoint(path_checkpoint=self.path_checkpoint)
 

@@ -151,6 +151,54 @@ def table():
     # my_df.to_csv('output.csv', index=False, header=False, float_format='%.3f')
 
 
+@app.command()
+def table_multiview_sequences():
+    logging.basicConfig(level=logging.INFO)
+    # config = od3d.io.load_hierarchical_config()
+
+    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
+    metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
+    name_partial = 'multiview'
+    configs = ['method.value.multiview.type', 'method.value.multiview.batch_size', 'method.value.inference.refine.dims_detached']
+    age_in_hours = 6
+
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
+
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    metrics_new_names = ['Acc. Pi/6. [%]', 'Acc. Pi/18. [%]', 'Median [deg.]', 'Mean [deg.]']
+    #my_df[metrics[0]] *= 100
+    #my_df[metrics[1]] *= 100
+
+    #my_df['seqs'] = my_df["Run"].str.split('s_').str[0:1]
+    map_seqs = {
+        '_1st_slurm': '1',
+        '_2nd_slurm': '1',
+        '_3rd_slurm': '1',
+        's8_2_slurm': '2',
+        's8_3_slurm': '3',
+    }
+    my_df.loc[my_df['method.value.inference.refine.dims_detached'].map(len) == 0, 'method.value.multiview.type'] = 'multiview+translation'
+    my_df['seqs'] = my_df["Run"].str.split('s_').str[0:2].str.join('_').str[-10:].replace(map_seqs)
+    my_df = my_df.loc[my_df['seqs'] != '_bs8_slurm']
+    #my_df = my_df.groupby(['method.value.multiview.type', 'seqs']).head(1)
+    my_df = my_df.rename(columns={'seqs': 'train seqs.', 'method.value.multiview.type': 'inference type', 'method.value.multiview.batch_size': 'multiview #frames', metrics[0]: metrics_new_names[0], metrics[1]: metrics_new_names[1], metrics[2]: metrics_new_names[2], metrics[3]: metrics_new_names[3]})
+    my_df = my_df.sort_values(by=['train seqs.', 'inference type'])
+
+    for i, metric in enumerate(metrics_new_names):
+        mv_plot = sns.catplot(
+            x="train seqs.",  # x variable name
+            y=metric,  # y variable name
+            hue="inference type",  # group variable name
+            data=my_df,  # dataframe to plot
+            kind="bar",
+        )
+        #fig = mv_plot.get_figure()
+        plt.savefig(f"multiview_{metrics[i].replace('/', '_')}.png")
+
+    my_df.to_csv('output.csv', index=False, header=False)
 
 
 @app.command()
