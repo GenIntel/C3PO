@@ -136,7 +136,7 @@ class NeMo_Incremental(NeMo):
                     score_ckpt_val = score_latest
                     self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 
-            if self.config.train.incremental.enabled and epoch % self.config.train.incremental.pseudo_labels_update.epochs_to_next_update:
+            if self.config.train.incremental.enabled and epoch % self.config.train.incremental.pseudo_labels_update.epochs_to_next_update == 0:
                 self.update_pseudo_labels(dataset_train=dataset_train_sub)
 
 
@@ -263,7 +263,8 @@ class NeMo_Incremental(NeMo):
             obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
 
             for epoch in range(self.config.inference.optimizer.epochs):
-                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
+                # commenting this line means to enable translation optimization.
+                # obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
                 obj_tform6_tmp.data[:, :] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
