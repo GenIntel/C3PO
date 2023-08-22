@@ -60,8 +60,8 @@ class NeMo_Incremental(NeMo):
         self.train_sequences_pseudo_labeled = []
         self.train_sequences_pseudo_labels: Dict[str, SequencePseudoLabel] = {}
 
-        train_sequences_pseudo_labeled_proposed = random.choices(self.train_sequences_unlabeled, k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed)
-        update_sequences_random = self.train_sequences_pseudo_labeled + train_sequences_pseudo_labeled_proposed
+        train_sequences_pseudo_labeled_proposed = random.sample(self.train_sequences_unlabeled, k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed)
+        update_sequences_random = list(set(self.train_sequences_pseudo_labeled + train_sequences_pseudo_labeled_proposed))
         dict_category_sequences = {'car': update_sequences_random}
         dataset_update = dataset_train.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
                                                                frames_count_max_per_sequence=self.config.train.incremental.pseudo_labels_update.multiview_count)
