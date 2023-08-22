@@ -57,6 +57,9 @@ class NeMo_Incremental(NeMo):
         self.net.eval()
         self.meshes.feats.requires_grad = False
 
+        self.train_sequences_pseudo_labeled = []
+        self.train_sequences_pseudo_labels: Dict[str, SequencePseudoLabel] = {}
+
         train_sequences_pseudo_labeled_proposed = random.choices(self.train_sequences_unlabeled, k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed)
         update_sequences_random = self.train_sequences_pseudo_labeled + train_sequences_pseudo_labeled_proposed
         dict_category_sequences = {'car': update_sequences_random}
@@ -138,8 +141,6 @@ class NeMo_Incremental(NeMo):
 
             if self.config.train.incremental.enabled and epoch % self.config.train.incremental.pseudo_labels_update.epochs_to_next_update == 0:
                 self.update_pseudo_labels(dataset_train=dataset_train_sub)
-
-
 
             self.train_sequences_random = self.train_sequences_labeled + self.train_sequences_pseudo_labeled
             dict_category_sequences = {'car': self.train_sequences_random}
