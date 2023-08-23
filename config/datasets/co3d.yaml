@@ -15,8 +15,8 @@ modalities:
     - 'sequence_name'
     - 'sequence'
 
-cuboid_source: 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl'
-cam_tform_obj_source: 'kpts2d_orient_and_pcl'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame'
+cuboid_source: 'limits3d' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d'
+cam_tform_obj_source: 'limits3d'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', limits3d
 
 frames_count_max_per_sequence:
 block_negative_depth: False
@@ -24,28 +24,98 @@ block_negative_depth: False
 path_raw: ${platform.path_datasets}/CO3D
 path_preprocess: ${platform.path_datasets}/CO3D_Preprocess
 
-setup: False
-setup_remove_previous: False
-setup_override: False
+setup:
+  enabled: False
+  override: False
+  remove_previous: False
 
+extract_meta:
+  enabled: False
+  override: False
+  remove_previous: False
 
-preprocess_meta: False
-preprocess_meta_override: True
-preprocess_meta_remove_previous: False
+preprocess:
+  pcl:
+    enabled: False
+    override: False
+    remove_previous: False
+  cuboid_limits3d:
+    enabled: True
+    override: False
+    remove_previous: False
+  cuboid:
+    enabled: False
+    override: False
+    remove_previous: False
+  cuboid_avg:
+    enabled: False
+    override: False
+    remove_previous: False
 
-preprocess: False
-preprocess_override: False
-preprocess_pcls: True
-preprocess_cuboids: True
-preprocess_cuboid_avg: True
+#sequences_require_pcl: False # False
+#sequences_sort_pcl_score: False # False
+#sequences_count_max_per_category: None # None
 
-
-sequences_require_pcl: False
-# sequences_count_max_per_category:
+dict_nested_frames_banned:
+  bicycle:
+    '377_43836_87236'
 
 dict_nested_frames:
+  #car:
+  #  '116_13655_29006':
+#  car:
+#    '185_19982_37678':
+#    '206_21799_45886':
+#    '194_20939_43630':
+#    '194_20900_41097':
+#    '116_13655_29006':
+#    '206_21810_45890':
+#    '106_12650_23736':
+#    '206_21805_45881':
+#    '216_22836_48452':
+#    '216_22808_47498':
+#  toyplane:
+#    '398_50528_99129':
+#    '341_35560_65483':
+#    '255_27516_55384':
+#    '422_58698_113949':
+#    '255_27511_55370':
+#    '372_40893_81107':
+#    '375_42711_85720':
+#    '375_42646_85487':
+#    '111_13148_23780':
+#    '426_59638_115345':
+#  bicycle:
+#    '404_53464_104258':
+#    '392_47830_94973':
+#    '426_59751_116222':
+#    '392_47564_94578':
+#    '410_55803_108469':
+#    '393_48296_95654':
+#    '404_53745_104804':
+#    '392_47555_94569':
+#    '396_49677_97864':
+#    '387_46776_93106':
+#  motorcycle:
+#    '415_57065_109871':
+#    '425_59369_114937':
+#    '425_59359_115027':
+#    '427_59906_115672':
+#    '411_56044_108398':
+#    '349_36520_66801':
+#    '421_58558_113203':
+#    '411_56037_108372':
+#    '408_55512_106884':
+#    '365_39208_76369':
+  #car:
+  #toyplane:
+  #bicycle:
+  #motorcycle:
+
+# ban bicycle: 377_43836_87236
 #  wineglass:
-  car:
+#  car:
+
 #    '185_19982_37678':
 #    '206_21799_45886':
 #    '194_20939_43630':
@@ -120,7 +190,7 @@ categories:
 #  - baseballbat
 #  - baseballglove
 #  - bench
-#  - bicycle
+  - bicycle
 #  - book
 #  - bottle
 #  - bowl
@@ -142,7 +212,7 @@ categories:
 #  - kite
 #  - laptop
 #  - microwave
-#  - motorcycle
+  - motorcycle
 #  - mouse
 #  - orange
 #  - parkingmeter
@@ -157,7 +227,7 @@ categories:
 #  - toaster
 #  - toilet
 #  - toybus
-#  - toyplane
+  - toyplane
 #  - toytrain
 #  - toytruck
 #  - tv

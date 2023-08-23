@@ -42,33 +42,46 @@ def setup(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
           remove_previous: bool = typer.Option(False, '-r', '--remove-previous')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
-    config.dataset.setup_remove_previous = remove_previous
-    config.dataset.setup_override = override
+
+    if remove_previous is not None:
+        config.dataset.setup.remove_previous = remove_previous
+    if override is not None:
+        config.dataset.setup.override = override
+
     OD3D_Dataset.subclasses[config.dataset.class_name].setup(config.dataset)
+
 
 @app.command()
 def preprocess(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
-          platform: str = typer.Option('local', '-p', '--platform'),
-          override: bool = typer.Option(False, '-o', '--override')):
+               platform: str = typer.Option('local', '-p', '--platform'),
+               override: bool = typer.Option(None, '-o', '--override'),
+               remove_previous: bool = typer.Option(None, '-r', '--remove-previous')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
-    config.dataset.setup = False
-    config.dataset.preprocess_meta = False
-    config.dataset.preprocess = True
-    config.dataset.preprocess_override = override
+
+    if remove_previous is not None:
+        for key in config.dataset.preprocess.keys():
+            config.dataset.preprocess[key].remove_previous = remove_previous
+    if override is not None:
+        for key in config.dataset.preprocess.keys():
+            config.dataset.preprocess[key].override = override
+
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
 
 @app.command()
-def preprocess_meta(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
-          platform: str = typer.Option('local', '-p', '--platform'),
-          override: bool = typer.Option(False, '-o', '--override'),
-          remove_previous: bool = typer.Option(False, '-r', '--remove-previous')):
+def extract_meta(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
+                 platform: str = typer.Option('local', '-p', '--platform'),
+                 override: bool = typer.Option(None, '-o', '--override'),
+                 remove_previous: bool = typer.Option(None, '-r', '--remove-previous')):
     logging.basicConfig(level=logging.INFO)
 
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
-    config.dataset.preprocess_meta_remove_previous = remove_previous
-    config.dataset.preprocess_meta_override = override
-    OD3D_Dataset.subclasses[config.dataset.class_name].preprocess_meta(config.dataset)
+    if remove_previous is not None:
+        config.dataset.extract_meta.remove_previous = remove_previous
+    if override is not None:
+        config.dataset.extract_meta.override = override
+
+    OD3D_Dataset.subclasses[config.dataset.class_name].extract_meta(config.dataset)
 
 @app.command()
 def rsync(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),

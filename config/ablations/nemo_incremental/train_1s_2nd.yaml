@@ -20,7 +20,7 @@ train_datasets:
         '216_22795_47233':
     #    '425_59326_114632':
 
-ablation_name: train_1s_2nd
+ablation_name: train_1s_2nd_forget_old_labels
 method:
     nemo:
       checkpoint: ${platform.path_exps}/08-18_13-30-51_CO3D_NeMo_no_early_stopping_co3d_1s_val_5s_2nd_slurm/nemo.ckpt

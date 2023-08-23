@@ -343,6 +343,79 @@ class Meshes(torch.nn.Module):
         self.pre_rendered_modalities.clear()
         torch.cuda.empty_cache()
 
+    def visualize(self, pcl=None):
+        from od3d.cv.visual.show import show_imgs
+        import numpy as np
+
+        device = self.verts.device
+        cxy = 250.
+        fxy = 500.
+        down_sample_rate = 2.
+        imgs_sizes = torch.LongTensor([512, 512]).to(device=device)
+
+        azim = torch.linspace(start=eval('-np.pi / 2'), end=eval('np.pi / 2'),
+                              steps=5).to(
+            device=device)  # 12
+        elev = torch.linspace(start=eval('np.pi / 4'), end=eval('np.pi / 4'),
+                              steps=1).to(
+            device=device)  # start=-torch.pi / 6, end=torch.pi / 3, steps=4
+        theta = torch.linspace(start=eval('0.'), end=eval('0.'),
+                               steps=1).to(
+            device=device)  # -torch.pi / 6, end=torch.pi / 6, steps=3
+
+
+
+        # dist = torch.linspace(start=eval(config_sample.uniform.dist.min), end=eval(config_sample.uniform.dist.max), steps=config_sample.uniform.dist.steps).to(
+        #    device=self.device)
+        dist = torch.linspace(start=1., end=1., steps=1).to(device=device)
+
+        azim_shape = azim.shape
+        elev_shape = elev.shape
+        theta_shape = theta.shape
+        dist_shape = dist.shape
+        in_shape = azim_shape + elev_shape + theta_shape + dist_shape
+        azim = azim[:, None, None, None].expand(in_shape).reshape(-1)
+        elev = elev[None, :, None, None].expand(in_shape).reshape(-1)
+        theta = theta[None, None, :, None].expand(in_shape).reshape(-1)
+        dist = dist[None, None, None, :].expand(in_shape).reshape(-1)
+        from od3d.cv.geometry.transform import transf4x4_from_spherical
+        cams_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+
+        T = cams_tform4x4_obj.shape[0]
+        # M x T x 4 x 4
+        pre_rendered_cams_tform4x4_obj = cams_tform4x4_obj[None, :].clone().expand(self.meshes_count, T,
+                                                                                 *cams_tform4x4_obj[0].shape)
+        pre_rendered_cams_tform4x4_obj[:, :, :3, 3] = 0.
+        pre_rendered_meshes_size = self.get_verts_stacked_with_mesh_ids().flatten(1).max(dim=-1)[0]
+        pre_rendered_meshes_dist = (pre_rendered_meshes_size * fxy) / (
+                    500. * 0.8 - cxy)  # u = (x / z) * fx + cx  -> z = (fx * x) / (u - cx)
+        pre_rendered_cams_tform4x4_obj[:, :, 2, 3] = pre_rendered_meshes_dist
+
+        # 1 x 1 x 4 x 4
+        pre_rendered_cams_intr4x4 = torch.eye(4)[None, None].to(device=device).expand(self.meshes_count, 1, 4, 4)
+        pre_rendered_cams_intr4x4[:, :, 0, 0] = fxy
+        pre_rendered_cams_intr4x4[:, :, 1, 1] = fxy
+        pre_rendered_cams_intr4x4[:, :, :2, 2] = cxy
+
+        pre_rendered_meshes_ids = torch.arange(self.meshes_count).to(device=device)
+        rendering = self.render_feats(
+            cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,
+            cams_intr4x4=pre_rendered_cams_intr4x4, imgs_sizes=imgs_sizes,
+            meshes_ids=pre_rendered_meshes_ids, modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
+            broadcast_batch_and_cams=True,
+            down_sample_rate=down_sample_rate)
+
+        if pcl is not None:
+            pxl2d_pre_rendered = proj3d2d_broadcast(pts3d=pcl[:, None, None], proj4x4=tform4x4_broadcast(pre_rendered_cams_intr4x4, pre_rendered_cams_tform4x4_obj)) / down_sample_rate
+            from od3d.cv.visual.mask import mask_from_pxl2d
+            pxl2d_mask = mask_from_pxl2d(pxl2d=pxl2d_pre_rendered, dim_pxl=3, dim_pts=0, H=int(imgs_sizes[0] // down_sample_rate), W=int(imgs_sizes[1] // down_sample_rate))
+            rendering[pxl2d_mask[:, :, None, :, :].repeat(1, 1, 3, 1, 1)] = 1.
+            #rendering[:, :, :, ]
+            #sample_pxl2d_grid(rendering.reshape(-1, C, H, W),
+            #                  pxl2d=pxl2d_pre_rendered.reshape(-1, H, W, 2)).reshape(B, T, C, H, W)
+        return show_imgs(rendering)
+
+
     def get_pre_rendered_feats(self, modality: MESH_RENDER_MODALITIES, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, broadcast_batch_and_cams=False, down_sample_rate=1. ):
 
 

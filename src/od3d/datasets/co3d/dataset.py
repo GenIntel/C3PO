@@ -30,24 +30,6 @@ ALLOW_LIST_FRAME_TYPES = [CO3D_FRAME_TYPES.DEV_KNOWN, CO3D_FRAME_TYPES.DEV_UNSEE
 
 class CO3D(OD3D_Dataset):
 
-    @staticmethod
-    def create_from_config(config: DictConfig, transform=None):
-        if config.get("setup", False):
-            CO3D.setup(config=config)
-        if config.get("preprocess_meta", False):
-            CO3D.preprocess_meta(config=config)
-
-        import inspect
-        keys = inspect.getfullargspec(CO3D.__init__)[0][1:]
-        co3d = CO3D(**dict((key, config.get(key)) for key in keys if config.get(key, None) is not None), transform=transform)
-
-        if config.get("preprocess", False):
-            co3d.preprocess(override=config.get("preprocess_override", False),
-                            preprocess_pcls=config.get("preprocess_pcls", True),
-                            preprocess_cuboids=config.get("preprocess_cuboids", True),
-                            preprocess_cuboid_avg=config.get("preprocess_cuboid_avg", True))
-
-        return co3d
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[CO3D_CATEGORIES]=None,
                  dict_nested_frames: Dict[str, Dict[str, List[str]]]=None,
@@ -130,68 +112,6 @@ class CO3D(OD3D_Dataset):
         self.cam_tform_obj_source = cam_tform_obj_source
         self.cuboid_source = cuboid_source
 
-        """
-        self.device = "cpu"
-        self.dtype = torch.float32
-        self.categories = categories if categories is not None else CO3D_CATEGORIES.list()
-        
-        
-
-        logger.info(f"found {len(self.categories)} categories")
-
-        # get sequences
-        if dict_category_sequence_name_frames_names is None:
-            dict_category_sequences_names = CO3D_SequenceMeta.get_map_category_sequences_names(path_meta=self.path_meta,
-                                                                                               categories=
-                                                                                               self.categories)
-        else:
-            dict_category_sequences_names = {category: list(dict_sequence_name_frames_names.keys()) for
-                                                  category, dict_sequence_name_frames_names in
-                                                  dict_category_sequence_name_frames_names.items()}
-
-        # filter sequences
-        self.dict_category_sequences_names = self.filter_sequences(map_category_sequences_names=
-                                                              dict_category_sequences_names,
-                                                              require_pcl=sequences_require_pcl,
-                                                              sort_pcl_score=sequences_sort_pcl_score,
-                                                              require_pcl_score=sequences_require_pcl_score,
-                                                              count_max_per_category=sequences_count_max_per_category)
-
-        logger.info(f'sequences filtered {dict_category_sequences_names}')
-        # get frames
-        dict_category_sequence_name_frames_names = \
-            CO3D_FrameMeta.get_dict_category_sequence_name_frames_names(categories=self.categories,
-                                                                        path_meta=self.path_meta,
-                                                                        dict_category_sequences_names=
-                                                                           self.dict_category_sequences_names,
-                                                                        dict_category_sequence_name_frames_names=
-                                                                        dict_category_sequence_name_frames_names,
-                                                                        count_max_per_sequence=
-                                                                           frames_count_max_per_sequence)
-
-        # filter frames
-        self.dict_category_sequence_name_frames_names = self.filter_frames(dict_category_sequence_name_frames_names,
-                                                                           block_negative_depth=
-                                                                           frames_block_negative_depth)
-
-
-        self.sequences_count = sum([len(sequences_names) for category, sequences_names in self.dict_category_sequences_names.items()])
-        logger.info(f"found {self.sequences_count} sequences")
-
-        self.list_categories_sequences_names_frames_names = self.dict_category_sequence_name_frames_names_to_list(self.dict_category_sequence_name_frames_names)
-        self.frames_count = len(self.list_categories_sequences_names_frames_names)
-
-        if subset_fraction is not None and subset_fraction != 1.:
-            item_ids_subset = self.get_subset_item_ids(subset_fraction=subset_fraction)
-            self.list_categories_sequences_names_frames_names = [self.list_categories_sequences_names_frames_names[id]
-                                                                 for id in item_ids_subset]
-            self.frames_count = len(self.list_categories_sequences_names_frames_names)
-            self.dict_category_sequence_name_frames_names = \
-                self.list_categories_sequences_names_frames_names_to_dict(
-                    self.list_categories_sequences_names_frames_names
-                )
-        logger.info(f"found {self.frames_count} frames.")
-        """
 
     def get_subset_by_sequences(self, dict_category_sequences: Dict[str, List[str]], frames_count_max_per_sequence=None):
         dict_nested_frames = {}
@@ -271,7 +191,7 @@ class CO3D(OD3D_Dataset):
 
     def get_item(self, item):
         frame_meta = CO3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
-        return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta, meta=frame_meta, modalities=self.modalities, categories=self.categories)
+        return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta, meta=frame_meta, modalities=self.modalities, categories=self.categories, cam_tform_obj_source=self.cam_tform_obj_source, cuboid_source=self.cuboid_source)
 
 
     """
@@ -355,62 +275,16 @@ class CO3D(OD3D_Dataset):
                 dict_nested_sequences[category] = [sequence.name for sequence in sequences]
         return dict_nested_sequences
 
-    """
-    def filter_frames(self, dict_nested_frames: Dict[str, Dict[str, List[str]]],
-                      block_negative_depth=False, frames_count_max_per_sequence=None):
-        if frames_count_max_per_sequence is not None:
-            dict_nested_frames_filtered = {}
-            for category, dict_sequence_name_frames_names in dict_nested_frames.items():
-                list_frames_names_unique = CO3D_FrameMeta.unroll_nested_frames(dict_sequence_name_frames_names)
-                dict_sequence_name_frames_names_filterd = random.choices(CO3D_FrameMeta.rollup_flattened_frames(list_frames_names_unique=list_frames_names_unique), k=frames_count_max_per_category)
-                dict_nested_frames_filtered[category] = dict_sequence_name_frames_names_filterd
-            dict_nested_frames = dict_nested_frames_filtered
-        if block_negative_depth:
-            for category, dict_sequence_name_frames_names in dict_nested_frames.items():
-                for sequence_name, frames_names in dict_sequence_name_frames_names.items():
-                    frames: List[CO3D_Frame] = [
-                        self.get_frame_by_category_sequence_and_frame_name(category=category,
-                                                                           sequence_name=sequence_name,
-                                                                           frame_name=frame_name)
-                        for frame_name in frames_names]
-                    frames = list(filter(lambda frame: frame.cam_tform4x4_obj[2, 3] >= 0.01, frames))
-                    dict_nested_frames[category][sequence_name] = [frame.name for frame in frames]
-        return dict_nested_frames
-    """
-
-    """
-    def dict_category_sequence_name_frames_names_to_list(self, dict_category_sequence_name_frames_names):
-        list_categories_sequences_names_frames_names: List[Tuple[str, str, str]] = []
-        for category, map_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
-            for sequence_name, frames_names in map_sequence_name_frames_names.items():
-                for frame_name in frames_names:
-                    list_categories_sequences_names_frames_names.append((category, sequence_name, frame_name))
-        return list_categories_sequences_names_frames_names
-    """
-
-    """
-    def list_categories_sequences_names_frames_names_to_dict(self, list_categories_sequences_names_frames_names):
-        dict_category_sequence_name_frames_names = {}
-        for frame_name_unique in list_categories_sequences_names_frames_names:
-            category, sequence_name, frame_name = frame_name_unique.split('/')
-            if category not in dict_category_sequence_name_frames_names.keys():
-                dict_category_sequence_name_frames_names[category] = {}
-            if sequence_name not in dict_category_sequence_name_frames_names[category].keys():
-                dict_category_sequence_name_frames_names[category][sequence_name] = []
-            dict_category_sequence_name_frames_names[category][sequence_name].append(frame_name)
-        return dict_category_sequence_name_frames_names
-    """
-
     @staticmethod
     def setup(config: DictConfig):
 
         # logger.info(OmegaConf.to_yaml(config))
         path_raw = Path(config.path_raw)
-        if path_raw.exists() and config.setup_remove_previous:
+        if path_raw.exists() and config.setup.remove_previous:
             logger.info(f"Removing previous CO3D")
             shutil.rmtree(path_raw)
 
-        if path_raw.exists() and not config.setup_override:
+        if path_raw.exists() and not config.setup.override:
             logger.info(f"Found CO3D dataset at {path_raw}")
         else:
             path_co3d_repo = path_raw.joinpath('co3d')
@@ -422,13 +296,14 @@ class CO3D(OD3D_Dataset):
             # --n_download_workers 1 --n_extract_workers 1
 
     @staticmethod
-    def preprocess_meta(config: DictConfig):
+    def extract_meta(config: DictConfig):
         path = Path(config.path_raw)
         path_meta = CO3D.get_path_meta(config=config)
 
         dict_nested_frames = config.get('dict_nested_frames', None)
-        preprocess_meta_override = config.get('preprocess_meta_override', False)
-        preprocess_meta_remove_previous = config.get('preprocess_meta_remove_previous', False)
+        dict_nested_frames_banned = config.get('dict_nested_frames_banned', None)
+        preprocess_meta_override = config.get('extract_meta', False).get('override', False)
+        preprocess_meta_remove_previous = config.get('extract_meta', False).get('remove_previous', False)
 
         categories = list(dict_nested_frames.keys()) if dict_nested_frames is not None else CO3D_CATEGORIES.list()
         sequences_count_max_per_class = config.get("sequences_count_max_per_class", None)
@@ -439,6 +314,8 @@ class CO3D(OD3D_Dataset):
 
         for category in categories:
             sequences_names = list(dict_nested_frames[category].keys()) if dict_nested_frames is not None and dict_nested_frames[category] is not None else None
+            if dict_nested_frames_banned is not None and dict_nested_frames_banned[category] is not None:
+                sequences_names = list(filter(lambda seq: seq not in dict_nested_frames_banned[category].keys(), sequences_names))
             logger.info(f'preprocess meta for class {category}')
             sequence_annotations = load_dataclass_jgzip(
                 f"{path}/{category}/sequence_annotations.jgz", List[SequenceAnnotation]
@@ -496,18 +373,39 @@ class CO3D(OD3D_Dataset):
 
 
 
-    def preprocess(self, preprocess_pcls=True, preprocess_cuboids=True, preprocess_cuboid_avg=True, override=False):
+    def preprocess(self, config_preprocess: DictConfig):
         logger.info("preprocess")
-        if preprocess_pcls:
-            self.preprocess_pcls(override=override)
-        if preprocess_cuboids:
-            self.preprocess_cuboids(override=override)
-        if preprocess_cuboid_avg:
-            self.preprocess_cuboid_avg(override=override)
+        for key in config_preprocess.keys():
+            if key == 'pcl' and config_preprocess.pcl.get('enabled', False):
+                override = config_preprocess.pcl.get('override', False)
+                remove_previous = config_preprocess.pcl.get('remove_previous', False)
+                self.preprocess_pcls(override=override, remove_previous=remove_previous)
+            elif key == 'cuboid' and config_preprocess.cuboid.get('enabled', False):
+                override = config_preprocess.cuboid.get('override', False)
+                remove_previous = config_preprocess.cuboid.get('remove_previous', False)
+                self.preprocess_cuboids(override=override, remove_previous=remove_previous)
+            elif key == 'cuboid_avg' and config_preprocess.cuboid_avg.get('enabled', False):
+                override = config_preprocess.cuboid_avg.get('override', False)
+                remove_previous = config_preprocess.cuboid_avg.get('remove_previous', False)
+                self.preprocess_cuboid_avg(override=override, remove_previous=remove_previous)
+            elif key == 'cuboid_limits3d' and config_preprocess.cuboid_limits3d.get('enabled', False):
+                override = config_preprocess.cuboid_limits3d.get('override', False)
+                remove_previous = config_preprocess.cuboid_limits3d.get('remove_previous', False)
+                self.preprocess_cuboid_limits3d(override=override, remove_previous=remove_previous)
+
         # CO3D.preprocess_cam_tform4x4_obj_canonic(config=config)
         # CO3D.preprocess_front_names(config=config)
 
-    def preprocess_pcls(self, override=False):
+    def preprocess_cuboid_limits3d(self, override=False, remove_previous=False):
+        logger.info("preprocess cuboid_limits3d...")
+
+        for category, sequences_names in self.dict_category_sequences_names.items():
+            for sequence_name in sequences_names:
+                logger.info(f"preprocess cuboid_limits3d, sequence {sequence_name}")
+                sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
+                sequence.preprocess_cuboid_limits3d(override=override)
+
+    def preprocess_pcls(self, override=False, remove_previous=False):
         logger.info("preprocess pcls...")
 
         for category, sequences_names in self.dict_category_sequences_names.items():
@@ -516,7 +414,7 @@ class CO3D(OD3D_Dataset):
                 sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
                 sequence.preprocess_pcl_clean(override=override)
 
-    def preprocess_cuboids(self, override=False):
+    def preprocess_cuboids(self, override=False, remove_previous=False):
         logger.info("preprocess cuboids...")
 
         for category, sequences_names in self.dict_category_sequences_names.items():
@@ -525,7 +423,7 @@ class CO3D(OD3D_Dataset):
                 sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
                 sequence.preprocess_cuboid(override=override)
 
-    def preprocess_cuboid_avg(self, override=False):
+    def preprocess_cuboid_avg(self, override=False, remove_previous=False):
         logger.info("preprocess cuboids avg...")
         for category in self.categories:
             fpath = Path(self.path_preprocess).joinpath('cuboids', 'avg', self.name, f'{category}.ply')
@@ -551,7 +449,7 @@ class CO3D(OD3D_Dataset):
                 pcls.append(pcls[0])
                 pcls[0] = pcls[pcl_max_pts_id]
 
-                cuboid_pts3d = torch.cat(pcls, dim = 0)
+                cuboid_pts3d = torch.cat(pcls, dim=0)
 
                 cuboids_limits = torch.stack(
                     [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)],

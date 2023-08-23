@@ -76,3 +76,4 @@ def sample_pxl2d_grid(x, pxl2d, padding_mode='zeros'):
         return sample_pxl2d_pts(x, pxl2d.reshape(pxl2d.shape[0], -1, 2)).reshape(*pxl2d.shape[:3], -1).permute(0, 3, 1, 2)
     else:
         logger.error(f'Unexpected pxl2d dimensions {pxl2d.dim()}.')
+

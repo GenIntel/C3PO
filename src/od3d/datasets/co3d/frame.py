@@ -276,6 +276,9 @@ class CO3D_Frame(OD3D_Frame):
             elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL:
                 self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
                                                   inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
+            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LIMITS3D:
+                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
+                                                  inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
 
         return self._cam_tform4x4_obj
 

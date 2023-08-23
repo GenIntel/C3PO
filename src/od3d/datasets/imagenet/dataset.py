@@ -62,7 +62,7 @@ class ImageNet(OD3D_Dataset):
     def setup(config: DictConfig):
         # logger.info(OmegaConf.to_yaml(config))
         path_raw = Path(config.path_raw)
-        if path_raw.exists() and config.setup_remove_previous:
+        if path_raw.exists() and config.setup.remove_previous:
             logger.info(f"Removing previous ImageNet")
             shutil.rmtree(path_raw)
 
@@ -75,7 +75,7 @@ class ImageNet(OD3D_Dataset):
         od3d.io.unzip(path_raw.joinpath("imagenet-object-localization-challenge.zip"), dst=path_raw)
 
     @staticmethod
-    def preprocess_meta(config: DictConfig):
+    def extract_meta(config: DictConfig):
         path_meta = OD3D_Dataset.get_path_meta(config=config)
         path_raw = OD3D_Dataset.get_path_raw(config=config)
 
@@ -97,7 +97,7 @@ class ImageNet(OD3D_Dataset):
             else:
                 annots = sorted(od3d.io.read_str_from_file(path_raw.joinpath('LOC_val_solution.csv')).split('\n')[1:])
             path_meta_subset = OD3D_FrameMeta.get_path_metas(path_meta=path_meta).joinpath(subset)
-            if not path_meta_subset.exists() or config.get("preprocess_meta_override", False):
+            if not path_meta_subset.exists() or config.get("extract_meta", False).get("override", False):
                 fnames_lines = od3d.io.read_str_from_file(path_raw.joinpath('ILSVRC', 'ImageSets', 'CLS-LOC', f'{subset}.txt')).split('\n')
                 fnames_lines = sorted(fnames_lines, key=lambda fname_line: fname_line.split(',')[0]) # .split('_')[1]
                 for i in tqdm(range(len(fnames_lines))):

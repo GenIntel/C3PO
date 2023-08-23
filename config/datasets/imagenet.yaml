@@ -10,11 +10,17 @@ modalities:
 path_raw: ${platform.path_datasets}/ImageNet
 path_preprocess: ${platform.path_datasets}/ImageNet_Preprocess
 
-setup_remove_previous: False
-setup_override: False
 
-preprocess_meta_remove_previous: False
-preprocess_meta_override: False
+setup:
+  enabled: False
+  override: False
+  remove_previous: False
+
+extract_meta:
+  enabled: False
+  override: False
+  remove_previous: False
+
 
 credentials:
   kaggle: ${credentials.kaggle}

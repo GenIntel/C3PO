@@ -82,7 +82,7 @@ class COCO(OD3D_Dataset):
 
         # logger.info(OmegaConf.to_yaml(config))
         path_raw = Path(config.path_raw)
-        if path_raw.exists() and config.setup_remove_previous:
+        if path_raw.exists() and config.setup.remove_previous:
             logger.info(f"Removing previous COCO")
             shutil.rmtree(path_raw)
 
@@ -92,7 +92,7 @@ class COCO(OD3D_Dataset):
         # 'unlabeled2017'
         for subset in subsets_images:
             path_subset = path_raw.joinpath(subset)
-            if path_subset.exists() and not config.setup_override:
+            if path_subset.exists() and not config.setup.override:
                 logger.info(f"Found subset of COCO at {path_subset}")
             else:
                 path_raw.mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,7 @@ class COCO(OD3D_Dataset):
         # 'unlabeled2017'
         for subset in subsets_annotations:
             path_subset = path_raw.joinpath(subset)
-            if path_subset.exists() and not config.setup_override:
+            if path_subset.exists() and not config.setup.override:
                 logger.info(f"Found subset of COCO at {path_subset}")
             else:
                 path_raw.mkdir(parents=True, exist_ok=True)
@@ -116,7 +116,7 @@ class COCO(OD3D_Dataset):
             # run_cmd(f'gsutil -m rsync gs://images.cocodataset.org/{subset} {subset}', logger=logger, live=True)
 
     @staticmethod
-    def preprocess_meta(config: DictConfig):
+    def extract_meta(config: DictConfig):
 
         path_raw = Path(config.path_raw)
         path_meta = COCO.get_path_meta(config=config)

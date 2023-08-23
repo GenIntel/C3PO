@@ -14,10 +14,10 @@ train:
     enabled: True
     sequences_labeled_count:
     pseudo_labels_update:
-      epochs_to_next_update: 5
+      epochs_to_next_update: 1
       count_new_labels_proposed: 3
       count_new_labels_selected_max: 1
-      multiview_count: 8
+      multiview_count: 4
       sim_threshold: 0.1 # 0.6
 
 

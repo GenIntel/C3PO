@@ -36,18 +36,26 @@ fpaths_cuboids:
     train: ${..path_cuboids}/train.ply
     tvmonitor: ${..path_cuboids}/tvmonitor.ply
 
-setup: False
-setup_remove_previous: False
-setup_override: False
+setup:
+  enabled: False
+  override: False
+  remove_previous: False
 
-preprocess_meta: False
-preprocess_meta_override: False
-preprocess_meta_remove_previous: False
+extract_meta:
+  enabled: False
+  override: False
+  remove_previous: False
 
-preprocess: False
-preprocess_override: False
-preprocess_cuboids: True
-preprocess_masks: True
+preprocess:
+  cuboid:
+    enabled: True
+    override: False
+    remove_previous: False
+  mask:
+    enabled: True
+    override: False
+    remove_previous: False
+
 
 image_sizes:
     aeroplane: [512, 512]
