@@ -392,22 +392,24 @@ class Meshes(torch.nn.Module):
         cams_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
 
         T = cams_tform4x4_obj.shape[0]
+        M = len(self)
         # M x T x 4 x 4
-        pre_rendered_cams_tform4x4_obj = cams_tform4x4_obj[None, :].clone().expand(self.meshes_count, T,
-                                                                                 *cams_tform4x4_obj[0].shape)
+        pre_rendered_cams_tform4x4_obj = cams_tform4x4_obj[None, :].expand(M, T,
+                                                                                 *cams_tform4x4_obj[0].shape).clone()
         pre_rendered_cams_tform4x4_obj[:, :, :3, 3] = 0.
         pre_rendered_meshes_size = self.get_verts_stacked_with_mesh_ids().flatten(1).max(dim=-1)[0]
         pre_rendered_meshes_dist = (pre_rendered_meshes_size * fxy) / (
                     500. * 0.8 - cxy)  # u = (x / z) * fx + cx  -> z = (fx * x) / (u - cx)
+        pre_rendered_meshes_dist = pre_rendered_meshes_dist[:, None].expand(M, T)
         pre_rendered_cams_tform4x4_obj[:, :, 2, 3] = pre_rendered_meshes_dist
 
         # 1 x 1 x 4 x 4
-        pre_rendered_cams_intr4x4 = torch.eye(4)[None, None].to(device=device).expand(self.meshes_count, 1, 4, 4)
+        pre_rendered_cams_intr4x4 = torch.eye(4)[None, None].to(device=device).expand(M, 1, 4, 4)
         pre_rendered_cams_intr4x4[:, :, 0, 0] = fxy
         pre_rendered_cams_intr4x4[:, :, 1, 1] = fxy
         pre_rendered_cams_intr4x4[:, :, :2, 2] = cxy
 
-        pre_rendered_meshes_ids = torch.arange(self.meshes_count).to(device=device)
+        pre_rendered_meshes_ids = torch.arange(M).to(device=device)
         rendering = self.render_feats(
             cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,
             cams_intr4x4=pre_rendered_cams_intr4x4, imgs_sizes=imgs_sizes,
@@ -432,20 +434,23 @@ class Meshes(torch.nn.Module):
         if modality not in self.pre_rendered_modalities.keys():
             cxy = 250.
             fxy = 500.
+            T = cams_tform4x4_obj.shape[1]
+            M = len(self)
             # M x T x 4 x 4
-            pre_rendered_cams_tform4x4_obj = cams_tform4x4_obj[:1, :].clone().expand(self.meshes_count, *cams_tform4x4_obj[0].shape)
+            pre_rendered_cams_tform4x4_obj = cams_tform4x4_obj[:1, :].expand(M, *cams_tform4x4_obj[0].shape).clone()
             pre_rendered_cams_tform4x4_obj[:, :, :3, 3] = 0.
             pre_rendered_meshes_size = self.get_verts_stacked_with_mesh_ids().flatten(1).max(dim=-1)[0]
             pre_rendered_meshes_dist = (pre_rendered_meshes_size * fxy) / (500. * 0.7 - cxy) # u = (x / z) * fx + cx  -> z = (fx * x) / (u - cx)
+            pre_rendered_meshes_dist = pre_rendered_meshes_dist[:, None].expand(M, T)
             pre_rendered_cams_tform4x4_obj[:, :, 2, 3] = pre_rendered_meshes_dist
 
             # 1 x 1 x 4 x 4
-            pre_rendered_cams_intr4x4 = cams_intr4x4[:1, :1].clone().expand(self.meshes_count, 1, *cams_intr4x4[0, 0].shape)
+            pre_rendered_cams_intr4x4 = cams_intr4x4[:1, :1].clone().expand(M, 1, *cams_intr4x4[0, 0].shape)
             pre_rendered_cams_intr4x4[:, :, 0, 0] = fxy
             pre_rendered_cams_intr4x4[:, :, 1, 1] = fxy
             pre_rendered_cams_intr4x4[:, :, :2, 2] = cxy
 
-            pre_rendered_meshes_ids = torch.arange(self.meshes_count).to(device=meshes_ids.device)
+            pre_rendered_meshes_ids = torch.arange(M).to(device=meshes_ids.device)
             rendering = self.render_feats(
                 cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,
                 cams_intr4x4=pre_rendered_cams_intr4x4, imgs_sizes=imgs_sizes,
