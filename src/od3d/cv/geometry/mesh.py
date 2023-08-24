@@ -88,6 +88,16 @@ class Meshes(torch.nn.Module):
         self.init_pt3d()
         self.pre_rendered_feats = None
         self.pre_rendered_modalities = {}
+
+    def get_limits(self):
+        meshes_limits = []
+        for i in range(len(self)):
+            mesh_verts = self.get_verts_with_mesh_id(mesh_id=i)
+            mesh_limits = torch.stack([mesh_verts.min(dim=0)[0], mesh_verts.max(dim=0)[0]])
+            meshes_limits.append(mesh_limits)
+        meshes_limits = torch.stack(meshes_limits, dim=0)
+        return meshes_limits
+
     def init_pt3d(self):
         self.pt3dmeshes = PT3DMeshes(
             verts=[self.get_verts_with_mesh_id(i) for i in range(self.meshes_count)],

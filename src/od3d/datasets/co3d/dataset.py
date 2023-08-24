@@ -424,24 +424,29 @@ class CO3D(OD3D_Dataset):
                 from od3d.cv.geometry.downsample import voxel_downsampling
                 from od3d.cv.geometry.transform import transf3d_broadcast
                 from od3d.cv.geometry.primitives import Cuboids
+
+                cuboids_limits =  []
                 pcls = []
                 for sequence_name in self.dict_category_sequences_names[category]:
 
                     sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
-                    pcls.append(transf3d_broadcast(voxel_downsampling(sequence.pcl_clean, K=cuboid_pts3d_max_count).to(device=device),
-                                                   transf4x4=sequence.cuboid_front_tform4x4_obj.to(device=device)))
-                    # batch[0].sequence_name
-                    # dataset.visualize(i)
-                pcl_max_pts_id = torch.Tensor([pcl.shape[0] for pcl in pcls]).max(dim=0)[1]
-                pcls.append(pcls[0])
-                pcls[0] = pcls[pcl_max_pts_id]
+                    cuboids_limits.append(sequence.cuboid.get_limits())
 
-                cuboid_pts3d = torch.cat(pcls, dim=0)
+                    #pcls.append(transf3d_broadcast(voxel_downsampling(sequence.pcl_clean, K=cuboid_pts3d_max_count).to(device=device),
+                    #                               transf4x4=sequence.cuboid_front_tform4x4_obj.to(device=device)))
+                #pcl_max_pts_id = torch.Tensor([pcl.shape[0] for pcl in pcls]).max(dim=0)[1]
+                #pcls.append(pcls[0])
+                #pcls[0] = pcls[pcl_max_pts_id]
 
-                cuboids_limits = torch.stack(
-                    [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)],
-                    dim=-2)[None,]
-                cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
+                #cuboid_pts3d = torch.cat(pcls, dim=0)
+                #cuboids_limits = torch.stack(
+                #    [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)],
+                #    dim=-2)[None,]
+
+                cuboids_limits = torch.cat(cuboids_limits, dim=0)
+
+                cuboids_limits = torch.stack([cuboids_limits[:, 0].quantile(dim=0, q=percentile_noise), cuboids_limits[:, 1].quantile(dim=0, q=1. - percentile_noise)], dim=0)
+                cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits[None,], verts_count=cuboid_pts3d_max_count)
 
                 fpath.parent.mkdir(parents=True, exist_ok=True)
                 save_ply(fpath, verts=cuboids.verts, faces=cuboids.faces)

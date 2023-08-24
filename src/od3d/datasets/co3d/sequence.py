@@ -406,13 +406,14 @@ class CO3D_Sequence():
                 tmp_tform6_cuboid = torch.zeros(6).to(device=pts3d_clean.device)
 
                 for i in range(200):
+                    tmp_tform6_cuboid.data[3:] = 0.
 
                     cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid.detach()),
                                                    cuboid_tform4x4_obj.detach())
 
                     tmp_tform6_cuboid = torch.nn.Parameter(torch.zeros(6).to(device=pts3d_clean.device),
                                                            requires_grad=True)
-                    optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.00001)
+                    optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.001)
 
                     cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid), cuboid_tform4x4_obj)
 
@@ -446,6 +447,9 @@ class CO3D_Sequence():
 
                 cuboid_pts3d_limits = torch.stack([cuboid_pts3d_limits[0, 0], cuboid_pts3d_limits[3, 0], cuboid_pts3d_limits[1, 1], cuboid_pts3d_limits[4, 1], cuboid_pts3d_limits[2, 2], cuboid_pts3d_limits[5, 2]]).reshape(3, 2).T.reshape(1, 2, 3)
                 # cuboid_pts3d_limits = cuboid_pts3d_limits.flip(dims=[1,])
+
+                logger.info(cuboid_pts3d_limits)
+
                 cuboids = Cuboids.create_dense_from_limits(limits=cuboid_pts3d_limits, verts_count=cuboid_pts3d_max_count)
 
 

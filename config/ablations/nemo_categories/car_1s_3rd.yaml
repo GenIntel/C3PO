@@ -75,7 +75,3 @@ test_datasets:
 #        '408_55512_106884':
 #        '365_39208_76369':
 
-method:
-    nemo:
-        train:
-          early_stopping: False

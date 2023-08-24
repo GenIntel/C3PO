@@ -40,12 +40,12 @@ preprocess:
     override: False
     remove_previous: False
   cuboid:
-    enabled: True
-    override: True
-    remove_previous: False
-  cuboid_avg:
     enabled: False
     override: False
+    remove_previous: False
+  cuboid_avg:
+    enabled: True
+    override: True
     remove_previous: False
 
 #sequences_require_pcl: False # False

@@ -6,6 +6,16 @@ defaults:
 
 ablation_name: default
 
+
+train_datasets:
+  labeled:
+    path_cuboids: ${.path_preprocess}/cuboids/avg/co3d_10s # ${.name}
+    fpaths_cuboids:
+      car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      bicycle: ${..path_cuboids}/bicycle.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      motorcycle: ${..path_cuboids}/motorcycle.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      toyplane: ${..path_cuboids}/toyplane.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+
 method:
     nemo:
         train:

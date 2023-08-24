@@ -1,11 +1,18 @@
 defaults:
   - co3d
 
-name: co3d_5s_test
+name: co3d_10s
 
-frames_count_max_per_sequence: 1
+frames_count_max_per_sequence: 2
 
 subset_fraction: 1.
+
+categories:
+  - car
+  - bicycle
+  - motorcycle
+  - toyplane
+
 
 dict_nested_frames:
   car:
@@ -52,6 +59,7 @@ dict_nested_frames:
     '411_56037_108372':
     '408_55512_106884':
     '365_39208_76369':
+
 
 
 #    '106_12650_23736':
