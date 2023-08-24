@@ -1,6 +1,6 @@
 # path_meshes: ${test_dataset.path_co3d_preprocess}/cuboids
 #fpaths_meshes: ${train_dataset.fpaths_cuboids}
-fpaths_meshes: ${test_datasets.co3d.fpaths_cuboids}
+fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
 
     #car: ${..path_meshes}/106_12650_23736/cuboid_max_1000.ply
 

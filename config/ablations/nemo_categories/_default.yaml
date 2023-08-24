@@ -16,11 +16,24 @@ train_datasets:
       motorcycle: ${..path_cuboids}/motorcycle.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
       toyplane: ${..path_cuboids}/toyplane.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
 
+val_datasets:
+  main:
+    subset_fraction: 0.1
+
+
 method:
-    nemo:
-        train:
-          epochs: 50
-          early_stopping: False
+  nemo:
+    #fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
+    train:
+      epochs: 50
+      early_stopping: False
+
+
+#path_cuboids: ${.path_preprocess}/cuboids/avg/co3d_50s_train # ${.name}
+#fpaths_cuboids:
+#    car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+
+
 
 train: True
 test: True

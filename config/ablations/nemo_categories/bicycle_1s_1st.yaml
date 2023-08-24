@@ -1,8 +1,10 @@
 # @package _global_
 defaults:
-  - /ablations/nemo_no_early_stopping@: _default
+  - /ablations/nemo_categories@: _default
 
 ablation_name: bicycle_1s_1st
+
+
 
 train_datasets:
   labeled:

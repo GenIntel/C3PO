@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - /ablations/nemo_no_early_stopping@: _default
+  - /ablations/nemo_categories@: _default
 
 ablation_name: car_1s_1st
 
