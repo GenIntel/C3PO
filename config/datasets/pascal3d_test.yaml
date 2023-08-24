@@ -5,6 +5,5 @@ name: pascal3d_test
 
 dict_nested_frames:
   val:
-    car:
 
 subset_fraction: 1. #0.05
