@@ -11,6 +11,7 @@ max_group: 512
 down_sample_rate: 8
 
 classes: ${train_datasets.labeled.categories}
+fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
 
 transforms:
     - class_name: nemo.datasets.pascal3d.Normalize

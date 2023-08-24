@@ -40,8 +40,8 @@ preprocess:
     override: False
     remove_previous: False
   cuboid:
-    enabled: True
-    override: True
+    enabled: False
+    override: False
     remove_previous: False
   cuboid_avg:
     enabled: False
@@ -54,7 +54,7 @@ preprocess:
 
 dict_nested_frames_banned:
   bicycle:
-    '377_43836_87236'
+    '377_43836_87236': # two bicycles with inverse directions
 
 dict_nested_frames:
 #  car:

@@ -56,7 +56,10 @@ class CO3D(OD3D_Dataset):
         if dict_nested_frames is not None:
             dict_nested_sequences = {}
             for category, dict_sequence_frames in dict_nested_frames.items():
+                if category not in self.categories:
+                    continue
                 dict_nested_sequences[category] = []
+
                 if dict_sequence_frames is not None:
                     for sequence, frames in dict_sequence_frames.items():
                         dict_nested_sequences[category].append(sequence)
@@ -83,22 +86,23 @@ class CO3D(OD3D_Dataset):
                                                                                require_pcl_score=sequences_require_pcl_score,
                                                                                count_max_per_category=sequences_count_max_per_category)
 
-        logger.info(f'sequences filtered {dict_category_sequences_names}')
+        logger.info(f'sequences filtered {self.dict_category_sequences_names}')
 
         logger.info('completing nested frames..., can take up to 500 seconds... ')
         dict_nested_frames = CO3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta,
                                                                   dict_nested_metas=dict_nested_frames)
         logger.info("filtering frames...")
-        if dict_nested_frames is not None:
-            dict_nested_frames_filtered = {}
-            for category, dict_sequence_frames in dict_nested_frames.items():
-                dict_nested_frames_filtered[category] = {}
-                for sequence, frames in dict_sequence_frames.items():
+
+        # filter frames to exist in sequences:
+        dict_nested_frames_filtered = {}
+        for category, dict_sequence_frames in dict_nested_frames.items():
+            dict_nested_frames_filtered[category] = {}
+            for sequence, frames in dict_sequence_frames.items():
+                if category in self.dict_category_sequences_names.keys() and sequence in self.dict_category_sequences_names[category]:
                     dict_nested_frames_filtered[category][sequence] = frames
             dict_nested_frames = dict_nested_frames_filtered
 
-
-
+        # filter frames
         dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames,
                                                             frames_count_max_per_sequence=frames_count_max_per_sequence)
 
@@ -256,10 +260,10 @@ class CO3D(OD3D_Dataset):
                              meta=sequence_meta, modalities=self.modalities, categories=self.categories,
                               cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source)
 
-
-
     def filter_dict_nested_sequences(self, dict_nested_sequences: Dict[str, List[str]], require_pcl, sort_pcl_score, require_pcl_score, count_max_per_category):
         for i, category in tqdm(enumerate(dict_nested_sequences.keys())):
+            if category not in self.categories:
+                continue
             if require_pcl or count_max_per_category is not None:
                 sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
                              in dict_nested_sequences[category]]
@@ -314,7 +318,7 @@ class CO3D(OD3D_Dataset):
 
         for category in categories:
             sequences_names = list(dict_nested_frames[category].keys()) if dict_nested_frames is not None and dict_nested_frames[category] is not None else None
-            if dict_nested_frames_banned is not None and dict_nested_frames_banned[category] is not None:
+            if dict_nested_frames_banned is not None and category in dict_nested_frames_banned.keys() and dict_nested_frames_banned[category] is not None:
                 sequences_names = list(filter(lambda seq: seq not in dict_nested_frames_banned[category].keys(), sequences_names))
             logger.info(f'preprocess meta for class {category}')
             sequence_annotations = load_dataclass_jgzip(

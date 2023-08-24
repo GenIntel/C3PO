@@ -2,7 +2,7 @@
 defaults:
   - /ablations/nemo_categories@: _default
 
-ablation_name: bicycle_1s_2nd
+ablation_name: bicycle_1s_3rd
 
 train_datasets:
   labeled:

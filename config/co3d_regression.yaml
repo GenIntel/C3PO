@@ -9,6 +9,7 @@ defaults:
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
+  - datasets/categories@categories: car
 
 metrics:
   - metricA
@@ -16,3 +17,15 @@ metrics:
 
 train: True
 test: True
+
+val_datasets:
+  main:
+    categories: ${categories}
+  pascal3d:
+    categories: ${categories}
+
+test_datasets:
+  co3d:
+    categories: ${categories}
+  pascal3d:
+    categories: ${categories}

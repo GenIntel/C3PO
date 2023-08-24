@@ -4,8 +4,6 @@ defaults:
 
 ablation_name: bicycle_1s_1st
 
-
-
 train_datasets:
   labeled:
     categories:
