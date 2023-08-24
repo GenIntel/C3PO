@@ -354,6 +354,10 @@ class CO3D_Sequence():
 
     def preprocess_cuboid(self, override=False):
         fpath_cuboid = self.fpath_cuboid
+
+        if self.cuboid_source == CUBOID_SOURCES.LIMITS3D:
+            self.preprocess_cuboid_limits3d(override=override)
+
         if override or not fpath_cuboid.exists():
             fpath_cuboid.parent.mkdir(parents=True, exist_ok=True)
 

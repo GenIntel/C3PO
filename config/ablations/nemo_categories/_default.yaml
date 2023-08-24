@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - override /datasets@train_datasets.labeled: co3d
+  - override /datasets@test_datasets.co3d: co3d
+  - override /datasets@val_datasets.main: co3d
+
+ablation_name: default
+
+method:
+    nemo:
+        train:
+          epochs: 50
+          early_stopping: False
+
+train: True
+test: True

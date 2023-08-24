@@ -388,22 +388,9 @@ class CO3D(OD3D_Dataset):
                 override = config_preprocess.cuboid_avg.get('override', False)
                 remove_previous = config_preprocess.cuboid_avg.get('remove_previous', False)
                 self.preprocess_cuboid_avg(override=override, remove_previous=remove_previous)
-            elif key == 'cuboid_limits3d' and config_preprocess.cuboid_limits3d.get('enabled', False):
-                override = config_preprocess.cuboid_limits3d.get('override', False)
-                remove_previous = config_preprocess.cuboid_limits3d.get('remove_previous', False)
-                self.preprocess_cuboid_limits3d(override=override, remove_previous=remove_previous)
 
         # CO3D.preprocess_cam_tform4x4_obj_canonic(config=config)
         # CO3D.preprocess_front_names(config=config)
-
-    def preprocess_cuboid_limits3d(self, override=False, remove_previous=False):
-        logger.info("preprocess cuboid_limits3d...")
-
-        for category, sequences_names in self.dict_category_sequences_names.items():
-            for sequence_name in sequences_names:
-                logger.info(f"preprocess cuboid_limits3d, sequence {sequence_name}")
-                sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
-                sequence.preprocess_cuboid_limits3d(override=override)
 
     def preprocess_pcls(self, override=False, remove_previous=False):
         logger.info("preprocess pcls...")

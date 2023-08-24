@@ -39,13 +39,9 @@ preprocess:
     enabled: False
     override: False
     remove_previous: False
-  cuboid_limits3d:
-    enabled: True
-    override: False
-    remove_previous: False
   cuboid:
-    enabled: False
-    override: False
+    enabled: True
+    override: True
     remove_previous: False
   cuboid_avg:
     enabled: False
@@ -61,8 +57,6 @@ dict_nested_frames_banned:
     '377_43836_87236'
 
 dict_nested_frames:
-  #car:
-  #  '116_13655_29006':
 #  car:
 #    '185_19982_37678':
 #    '206_21799_45886':
@@ -182,7 +176,7 @@ fpaths_cuboids:
     car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
 
 categories:
-  - car
+#  - car
 #  - apple
 #  - backpack
 #  - ball
@@ -190,7 +184,7 @@ categories:
 #  - baseballbat
 #  - baseballglove
 #  - bench
-  - bicycle
+#  - bicycle
 #  - book
 #  - bottle
 #  - bowl
@@ -212,7 +206,7 @@ categories:
 #  - kite
 #  - laptop
 #  - microwave
-  - motorcycle
+#  - motorcycle
 #  - mouse
 #  - orange
 #  - parkingmeter
@@ -227,7 +221,7 @@ categories:
 #  - toaster
 #  - toilet
 #  - toybus
-  - toyplane
+#  - toyplane
 #  - toytrain
 #  - toytruck
 #  - tv
