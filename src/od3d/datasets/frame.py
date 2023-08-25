@@ -197,8 +197,8 @@ class OD3D_Meta(ABC):
         for key, value in dict_nested_metas.items():
             new_key = f"{parent_key}{separator}{key}" if parent_key else key
             if value is None:
-                dir_fpaths = [fpath for fpath in list(
-                    cls.get_path_metas(path_meta=path_meta).joinpath(new_key).iterdir())]
+                dir_fpaths = [fpath for fpath in sorted(list(
+                    cls.get_path_metas(path_meta=path_meta).joinpath(new_key).iterdir()), key=lambda f: int(f.stem))]
                 if dir_fpaths[0].is_dir():
                     dict_nested_frames_completed[key] = \
                         cls.complete_nested_metas(path_meta=path_meta, parent_key=new_key,
