@@ -410,12 +410,15 @@ class Meshes(torch.nn.Module):
         pre_rendered_cams_intr4x4[:, :, :2, 2] = cxy
 
         pre_rendered_meshes_ids = torch.arange(M).to(device=device)
-        rendering = self.render_feats(
-            cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,
-            cams_intr4x4=pre_rendered_cams_intr4x4, imgs_sizes=imgs_sizes,
-            meshes_ids=pre_rendered_meshes_ids, modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
+        rendering = []
+        for m in range(M):
+            rendering.append(self.render_feats(
+            cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj[m:m+1],
+            cams_intr4x4=pre_rendered_cams_intr4x4[m:m+1], imgs_sizes=imgs_sizes,
+            meshes_ids=pre_rendered_meshes_ids[m:m+1], modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
             broadcast_batch_and_cams=True,
-            down_sample_rate=down_sample_rate)
+            down_sample_rate=down_sample_rate))
+        rendering = torch.stack(rendering, dim=0)
 
         if pcl is not None:
             pxl2d_pre_rendered = proj3d2d_broadcast(pts3d=pcl[:, None, None], proj4x4=tform4x4_broadcast(pre_rendered_cams_intr4x4, pre_rendered_cams_tform4x4_obj)) / down_sample_rate
@@ -451,12 +454,16 @@ class Meshes(torch.nn.Module):
             pre_rendered_cams_intr4x4[:, :, :2, 2] = cxy
 
             pre_rendered_meshes_ids = torch.arange(M).to(device=meshes_ids.device)
-            rendering = self.render_feats(
-                cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,
-                cams_intr4x4=pre_rendered_cams_intr4x4, imgs_sizes=imgs_sizes,
-                meshes_ids=pre_rendered_meshes_ids, modality=modality,
-                broadcast_batch_and_cams=broadcast_batch_and_cams,
-                down_sample_rate=down_sample_rate)
+
+            rendering = []
+            for m in range(M):
+                rendering.append(self.render_feats(
+                    cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj[m:m+1],
+                    cams_intr4x4=pre_rendered_cams_intr4x4[m:m+1], imgs_sizes=imgs_sizes,
+                    meshes_ids=pre_rendered_meshes_ids[m:m+1], modality=modality,
+                    broadcast_batch_and_cams=broadcast_batch_and_cams,
+                    down_sample_rate=down_sample_rate))
+            rendering = torch.stack(rendering, dim=0)
 
             self.pre_rendered_modalities[modality] = Meshes.PreRendered(
                 cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,

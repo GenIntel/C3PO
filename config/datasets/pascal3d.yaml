@@ -23,18 +23,18 @@ path_meshes: ${platform.path_datasets}/${.rpath_meshes}
 
 path_cuboids: '${.path_preprocess}/cuboids'
 fpaths_cuboids:
-    aeroplane: ${..path_cuboids}/aeroplane.ply
+    airplane: ${..path_cuboids}/aeroplane.ply
     bicycle: ${..path_cuboids}/bicycle.ply
     boat: ${..path_cuboids}/boat.ply
     bottle: ${..path_cuboids}/bottle.ply
     bus: ${..path_cuboids}/bus.ply
     car: ${..path_cuboids}/car.ply
     chair: ${..path_cuboids}/chair.ply
-    diningtable: ${..path_cuboids}/diningtable.ply
-    motorbike: ${..path_cuboids}/motorbike.ply
-    sofa: ${..path_cuboids}/sofa.ply
+    dining_table: ${..path_cuboids}/diningtable.ply
+    motorcycle: ${..path_cuboids}/motorbike.ply
+    couch: ${..path_cuboids}/sofa.ply
     train: ${..path_cuboids}/train.ply
-    tvmonitor: ${..path_cuboids}/tvmonitor.ply
+    tv: ${..path_cuboids}/tvmonitor.ply
 
 setup:
   enabled: False
@@ -48,11 +48,11 @@ extract_meta:
 
 preprocess:
   cuboid:
-    enabled: True
+    enabled: False
     override: False
     remove_previous: False
   mask:
-    enabled: True
+    enabled: False
     override: False
     remove_previous: False
 

@@ -6,7 +6,6 @@ defaults:
 
 ablation_name: default
 
-
 train_datasets:
   labeled:
     path_cuboids: ${.path_preprocess}/cuboids/avg/co3d_10s # ${.name}
