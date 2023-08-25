@@ -16,10 +16,17 @@ import numpy as np
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
 
+class OD3D_PREPROCESS_MODALITIES(str, Enum):
+    FRONT_FRAME = 'front_frame'
+    CUBOID = 'cuboid'
+    CUBOID_AVG = 'cuboid_avg'
+    PCL = 'pcl'
+    MASK = 'mask'
+
 class OD3D_DATASET_SPLITS(str, ExtEnum):
     SEQUENCES_SEPARATED = 'sequences_separated'
     RANDOM = 'random'
-    SEQUENCES_SHARED = 'seqences_shared'
+    SEQUENCES_SHARED = 'sequences_shared'
 
 
 class OD3D_Dataset(Dataset):
@@ -27,16 +34,16 @@ class OD3D_Dataset(Dataset):
 
     @classmethod
     def create_from_config(cls, config: DictConfig, transform=None):
-        if config.get("setup", False):
+        if config.get("setup", False).get("enabled", False):
             cls.setup(config=config)
-        if config.get("preprocess_meta", False):
-            cls.preprocess_meta(config=config)
+        if config.get("extract_meta", False).get("enabled", False):
+            cls.extract_meta(config=config)
 
         keys = inspect.getfullargspec(cls.__init__)[0][1:]
         od3d_dataset = cls(**dict((key, config.get(key)) for key in keys if config.get(key, None) is not None), transform=transform)
 
         if config.get("preprocess", False):
-            od3d_dataset.preprocess(override=config.get("preprocess_override", False))
+            od3d_dataset.preprocess(config_preprocess=config.preprocess)
 
         return od3d_dataset
 
@@ -197,9 +204,9 @@ class OD3D_Dataset(Dataset):
         raise NotImplementedError
 
     @staticmethod
-    def preprocess_meta(config: DictConfig):
+    def extract_meta(config: DictConfig):
         raise NotImplementedError
-    def preprocess(self, override: False):
+    def preprocess(self, config_preprocess: DictConfig):
         raise NotImplementedError
 
     def visualize(self, item: int):

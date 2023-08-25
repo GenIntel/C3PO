@@ -43,7 +43,7 @@ class OmniObject3D(OD3D_Dataset):
     def setup(config: DictConfig):
         # logger.info(OmegaConf.to_yaml(config))
         path_raw = Path(config.path_raw)
-        if path_raw.exists() and config.setup_remove_previous:
+        if path_raw.exists() and config.setup.remove_previous:
             logger.info(f"Removing previous OmniObject3D")
             shutil.rmtree(path_raw)
 

@@ -13,6 +13,7 @@ from enum import Enum
 from abc import ABC, abstractmethod
 from od3d.cv.geometry.mesh import Mesh
 from od3d.data.ext_dicts import unroll_nested_dict, rollup_flattened_dict
+import re
 
 class OD3D_FRAME_MODALITIES(str, Enum):
     NAME = 'name'
@@ -187,6 +188,9 @@ class OD3D_Meta(ABC):
     def get_path_metas(cls, path_meta: Path):
         return path_meta.joinpath(cls.get_rfpath_metas())
 
+    @staticmethod
+    def atoi(text):
+        return int(text) if text.isdigit() else text
 
     @classmethod
     def complete_nested_metas(cls, path_meta: Path, dict_nested_metas: Union[Dict, DictConfig, None], parent_key='', separator='/'):
@@ -205,7 +209,8 @@ class OD3D_Meta(ABC):
                                                   dict_nested_metas={f'{dir_fpath.stem}': None
                                                                       for dir_fpath in dir_fpaths})
                 else:
-                    dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in dir_fpaths]
+
+                    dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in sorted(dir_fpaths, key=lambda f: [OD3D_Meta.atoi(val) for val in re.split(r'(\d+)', f.stem)])]
 
             elif isinstance(value,  Union[Dict, DictConfig]):
                 dict_nested_frames_completed[key] = cls.complete_nested_metas(path_meta=path_meta,

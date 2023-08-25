@@ -47,7 +47,7 @@ class ObjectNet3D(OD3D_Dataset):
     def setup(config: DictConfig):
         # logger.info(OmegaConf.to_yaml(config))
         path_raw = Path(config.path_raw)
-        if path_raw.exists() and config.setup_remove_previous:
+        if path_raw.exists() and config.setup.remove_previous:
             logger.info(f"Removing previous ObjectNet3D")
             shutil.rmtree(path_raw)
 
@@ -63,7 +63,7 @@ class ObjectNet3D(OD3D_Dataset):
             fpath=path_raw.joinpath(f'{name}.zip')
             path_dir = path_raw.joinpath(name)
 
-            if path_dir.exists() and not config.setup_override:
+            if path_dir.exists() and not config.setup.override:
                 logger.info(f"Found {name} of ObjectNet3D at {path_dir}")
             else:
                 od3d.io.download(url=url, fpath=fpath)
@@ -71,7 +71,7 @@ class ObjectNet3D(OD3D_Dataset):
                 od3d.io.move_dir(src=path_raw.joinpath('tmp', 'ObjectNet3D'), dst=path_raw)
 
     @staticmethod
-    def preprocess_meta(config: DictConfig):
+    def extract_meta(config: DictConfig):
         path = Path(config.path_raw)
         path_meta = ObjectNet3D.get_path_meta(config=config)
         path_raw = Path(config.path_raw)
@@ -82,7 +82,7 @@ class ObjectNet3D(OD3D_Dataset):
         subsets = ['test'] #  ['train', 'test', 'val']
         for subset in subsets:
             path_frames_subset = ObjectNet3D_FrameMeta.get_path_frames_meta_with_subset(path_meta=path_meta, subset=subset)
-            if not path_frames_subset.exists() or config.preprocess_meta_override:
+            if not path_frames_subset.exists() or config.extract_meta.override:
                 fpath_image_set_subset = path_raw.joinpath('Image_sets', subset + '.txt')
                 frames_str = od3d.io.read_str_from_file(fpath=fpath_image_set_subset)
                 logger.info(f'preprocess subset {subset}')

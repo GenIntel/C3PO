@@ -16,7 +16,7 @@ def get_timestamp_as_string():
 def get_timestamp_from_string(string):
     now = datetime.now()
     year = now.strftime("%Y")
-    timestamp = datetime.strptime('_'.join( f'{year}-{string}'.split('_')[:2]), "%Y-%m-%d_%H-%M-%S")
+    timestamp = datetime.strptime('_'.join(f'{year}-{string}'.split('_')[:2]), "%Y-%m-%d_%H-%M-%S")
     return timestamp
 
 class OD3D_Benchmark:

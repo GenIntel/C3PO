@@ -23,31 +23,38 @@ path_meshes: ${platform.path_datasets}/${.rpath_meshes}
 
 path_cuboids: '${.path_preprocess}/cuboids'
 fpaths_cuboids:
-    aeroplane: ${..path_cuboids}/aeroplane.ply
+    airplane: ${..path_cuboids}/aeroplane.ply
     bicycle: ${..path_cuboids}/bicycle.ply
     boat: ${..path_cuboids}/boat.ply
     bottle: ${..path_cuboids}/bottle.ply
     bus: ${..path_cuboids}/bus.ply
     car: ${..path_cuboids}/car.ply
     chair: ${..path_cuboids}/chair.ply
-    diningtable: ${..path_cuboids}/diningtable.ply
-    motorbike: ${..path_cuboids}/motorbike.ply
-    sofa: ${..path_cuboids}/sofa.ply
+    dining_table: ${..path_cuboids}/diningtable.ply
+    motorcycle: ${..path_cuboids}/motorbike.ply
+    couch: ${..path_cuboids}/sofa.ply
     train: ${..path_cuboids}/train.ply
-    tvmonitor: ${..path_cuboids}/tvmonitor.ply
+    tv: ${..path_cuboids}/tvmonitor.ply
 
-setup: False
-setup_remove_previous: False
-setup_override: False
+setup:
+  enabled: False
+  override: False
+  remove_previous: False
 
-preprocess_meta: False
-preprocess_meta_override: False
-preprocess_meta_remove_previous: False
+extract_meta:
+  enabled: False
+  override: False
+  remove_previous: False
 
-preprocess: False
-preprocess_override: False
-preprocess_cuboids: True
-preprocess_masks: True
+preprocess:
+  cuboid:
+    enabled: False
+    override: False
+    remove_previous: False
+  mask:
+    enabled: False
+    override: False
+    remove_previous: False
 
 image_sizes:
     aeroplane: [512, 512]
@@ -76,7 +83,7 @@ categories:
 #    - boat
 #    - bottle
 #    - bus
-    - car
+#     - car
 #    - chair
 #    - diningtable
 #    - motorbike

@@ -1,11 +1,14 @@
 defaults:
   - logger: wandb
-  - methods@method.nemo: nemo_cls
-  - methods/nemo@method.nemo: pascal3d
-  - datasets@train_dataset: pascal3d_train
-  - datasets@test_dataset: pascal3d_test
+  - methods@method.nemo: nemo
+  - methods/dataset@method.nemo: pascal3d
+  - datasets@train_datasets.labeled: pascal3d_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+  - datasets@val_datasets.main: pascal3d_val
+  - datasets@test_datasets.pascal3d: pascal3d_test
+  - datasets@texture_dataset: dtd
   - platform@platform_local: local
   - platform: local
+  - datasets/categories@categories: pascal3d
 
 metrics:
   - metricA
@@ -14,10 +17,14 @@ metrics:
 train: True
 test: True
 
-#training:
-#    random_seed: 0
-#    scale_iterations_per_epoch: 1.0
+train_datasets:
+  labeled:
+    categories: ${categories}
 
-#inference:
-#    random_seed: 0
-#    visualize_num_samples: 0
+val_datasets:
+  main:
+    categories: ${categories}
+
+test_datasets:
+  pascal3d:
+    categories: ${categories}

@@ -172,7 +172,7 @@ def imgs_to_img(rgbs):
 
 def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=None):
     rgb = imgs_to_img(rgbs)
-    show_img(rgb, duration, vwriter, fpath, height, width)
+    return show_img(rgb, duration, vwriter, fpath, height, width)
 
 def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None, normalize=False):
     # img: 3xHxW
@@ -208,7 +208,7 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
         cv2.imwrite(str(fpath), img)
     else:
         cv2.imshow("img", img)
-        cv2.waitKey(duration)
+        return cv2.waitKey(duration)
 
 
 def get_img_from_plot(ax, fig):

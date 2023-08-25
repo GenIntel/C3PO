@@ -69,7 +69,7 @@ class DTD(OD3D_Dataset):
     def setup(config: DictConfig):
         path_raw = Path(config.path_raw)
 
-        if path_raw.exists() and config.setup_remove_previous:
+        if path_raw.exists() and config.setup.remove_previous:
             logger.info(f"Removing previous EXAMPLE")
             shutil.rmtree(path_raw)
 
@@ -85,7 +85,7 @@ class DTD(OD3D_Dataset):
 
 
     @staticmethod
-    def preprocess_meta(config: DictConfig):
+    def extract_meta(config: DictConfig):
         path_raw = Path(config.path_raw)
         dict_nested_frames = config.get("dict_nested_frames")
         if dict_nested_frames is not None:

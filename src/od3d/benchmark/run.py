@@ -95,6 +95,7 @@ else
 fi
 
 cd {cfg.platform.path_od3d}
+git fetch 
 git pull {cfg.platform.url_od3d} {cfg.branch}
 git checkout {cfg.branch}
 
@@ -199,6 +200,7 @@ else
 fi
 
 cd {cfg.platform.path_od3d}
+git fetch 
 git pull {cfg.platform.url_od3d} {cfg.branch}
 git checkout {cfg.branch}
 

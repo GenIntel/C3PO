@@ -18,7 +18,7 @@ from omegaconf import DictConfig, OmegaConf
 from co3d.dataset.data_types import (
     load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
 )
-from od3d.cv.geometry.transform import se3_exp_map, tform4x4
+from od3d.cv.geometry.transform import se3_exp_map, tform4x4, transf4x4_from_rot3x3_and_transl3
 from od3d.cv.geometry.transform import rot3x3
 
 from od3d.cv.geometry.mesh import Meshes
@@ -213,8 +213,63 @@ class CO3D_Sequence():
         return self.meta.name
 
     @property
+    def name_unique(self):
+        return self.meta.name_unique
+
+    @property
     def category(self):
         return self.meta.category
+
+    @property
+    def fpath_cuboid_limits3d(self):
+        return self.path_preprocess.joinpath("labels", "cuboid_limits3d", f"{self.name_unique}.pt")
+
+    def preprocess_cuboid_limits3d(self, override=False):
+        import open3d as o3d
+        import numpy as np
+
+        if override or not self.fpath_cuboid_limits3d.exists():
+            pcl = self.pcl_clean
+
+            if self.fpath_cuboid.exists() and self.fpath_cuboid_front_tform4x4_obj.exists():
+                logger.info(f'press "s"  to skip this lable')
+                k = self.cuboid.visualize(pcl=transf3d_broadcast(pts3d=pcl, transf4x4=self.cuboid_front_tform4x4_obj))
+                if k == ord('s'):
+                    return
+
+            # Create an Open3D PointCloud object
+            #pcd = o3d.geometry.PointCloud()
+
+            # Set the point cloud data
+            #pcd.points = o3d.utility.Vector3dVector(pcl.numpy())
+
+            logger.info("")
+            logger.info(
+                "1) Please pick left, right, back, front, top, bottom [shift + left click]"
+            )
+            logger.info("   Press [shift + right click] to undo point picking")
+            logger.info("2) Afther picking points, press q for close the window")
+            vis = o3d.visualization.VisualizerWithEditing()
+            vis.create_window()
+            #vis.add_geometry(pcd)
+            pcd = o3d.io.read_point_cloud(str(self.fpath_pcl))
+            vis.add_geometry(pcd)
+            vis.run()  # user picks points
+            vis.destroy_window()
+            logger.info("")
+            limits3d_ids = vis.get_picked_points()
+            limits3d = torch.from_numpy(np.asarray(pcd.points)).to(dtype=torch.float32)[limits3d_ids]
+            self.fpath_cuboid_limits3d.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(limits3d, self.fpath_cuboid_limits3d)
+
+
+    @property
+    def cuboid_limits3d(self):
+        if not self.fpath_cuboid_limits3d.exists():
+            self.preprocess_cuboid_limits3d()
+        cuboid_limits3d = torch.load(self.fpath_cuboid_limits3d).to(dtype=torch.float32)
+        return cuboid_limits3d
+
 
     def preprocess_front_name(self, override=False):
         fpath_front_name = self.fpath_front_name
@@ -299,6 +354,10 @@ class CO3D_Sequence():
 
     def preprocess_cuboid(self, override=False):
         fpath_cuboid = self.fpath_cuboid
+
+        if self.cuboid_source == CUBOID_SOURCES.LIMITS3D:
+            self.preprocess_cuboid_limits3d(override=override)
+
         if override or not fpath_cuboid.exists():
             fpath_cuboid.parent.mkdir(parents=True, exist_ok=True)
 
@@ -307,108 +366,194 @@ class CO3D_Sequence():
 
             pts3d_clean = self.pcl_clean
 
-            pca_tform_obj = get_pca_tform_world(pts3d_clean)
-            pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_obj)
+            if self.cuboid_source == CUBOID_SOURCES.LIMITS3D:
+                import open3d as o3d
+                from od3d.cv.visual.draw import get_colors
+                from od3d.cv.geometry.transform import rot3d, rot3d_broadcast
 
-            cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0], pca_pts3d_clean.max(dim=-2)[0]], dim=-2)[
-                None,]
+                # Load the point cloud from a file (replace 'path_to_point_cloud.ply' with the actual path)
+                #point_cloud = o3d.io.read_point_cloud(
+                #    '/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/pcls/car/106_12650_23736/pcl_clean.ply')
+                def visualize_points(l_pts3d: List):
+                    colors = get_colors(K=len(l_pts3d))
 
-            cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
-            icp_tform_pca = inv_tform4x4(icp(cuboids.verts, pca_pts3d_clean))
-            icp_tform_obj = tform4x4(icp_tform_pca, pca_tform_obj)
+                    logger.info("")
+                    logger.info(
+                        "1) Please pick left, right, back, front, top, bottom [shift + left click]"
+                    )
+                    logger.info("   Press [shift + right click] to undo point picking")
+                    logger.info("2) Afther picking points, press q for close the window")
+                    vis = o3d.visualization.Visualizer()
+                    vis.create_window()
+                    for i, pts3d in enumerate(l_pts3d):
+                        # Create an Open3D PointCloud object
+                        pcd = o3d.geometry.PointCloud()
+                        # Set the point cloud data
+                        pcd.points = o3d.utility.Vector3dVector(pts3d.numpy())
+                        pcd.paint_uniform_color(colors[i].numpy())
+                        vis.add_geometry(pcd)
+                    vis.run()  # user picks points
 
-            # from od3d.cv.visual.show import show_pcl
-            # obj_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=icp_tform_obj.inverse())
-            # show_pcl([pts3d_clean, obj_verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
+                limits3d = self.cuboid_limits3d
+                obj_axis3d = torch.nn.functional.normalize(limits3d[:6].reshape(3, 2, 3)[:, 0] - limits3d[:6].reshape(3, 2, 3)[:, 1], dim=-1)
+                U, S, V = torch.linalg.svd(obj_axis3d)
+                cuboid_rot3x3_obj = rot3x3(U, rot3x3(torch.diag(S.sign()), V))
+                obj_center3d = limits3d[:6].mean(dim=0)
+                cuboid_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(rot3x3=cuboid_rot3x3_obj, transl3=-rot3d_broadcast(pts3d=obj_center3d, rot3x3=cuboid_rot3x3_obj))
 
-            icp_tform_obj = self.align_cuboid_tform_obj(icp_tform_obj)
+                # visualize_points([transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj), transf3d_broadcast(pts3d=limits3d, transf4x4=cuboid_tform4x4_obj)])
 
-            # from od3d.cv.visual.show import show_pcl
-            # obj_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=icp_tform_obj.inverse())
-            # show_pcl([pts3d_clean, obj_verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
+                tmp_tform6_cuboid = torch.zeros(6).to(device=pts3d_clean.device)
 
-            tmp_tform6_cuboid = torch.zeros(6).to(device=pts3d_clean.device)
-            cuboid_tform4x4_obj = icp_tform_obj  # torch.eye(4).to(device=pts3d_clean.device)
+                for i in range(200):
+                    tmp_tform6_cuboid.data[3:] = 0.
+
+                    cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid.detach()),
+                                                   cuboid_tform4x4_obj.detach())
+
+                    tmp_tform6_cuboid = torch.nn.Parameter(torch.zeros(6).to(device=pts3d_clean.device),
+                                                           requires_grad=True)
+                    optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.001)
+
+                    cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid), cuboid_tform4x4_obj)
+
+                    cuboid_pts3d = transf3d_broadcast(pts3d=limits3d, transf4x4=cuboid_tform4x4_obj)
+
+                    _, cuboid_pts3d_ids_min = cuboid_pts3d.min(dim=0)
+                    _, cuboid_pts3d_ids_max = cuboid_pts3d.max(dim=0)
+                    cuboid_pts3d_limits = cuboid_pts3d[torch.cat([cuboid_pts3d_ids_min, cuboid_pts3d_ids_max], dim=0)]
+
+                    # using maximum ensures centering.
+                    cuboids_vol = (max(abs(cuboid_pts3d_limits[3, 0]), abs(cuboid_pts3d_limits[0, 0])) * 2) * \
+                                      (max(abs(cuboid_pts3d_limits[4, 1]), abs(cuboid_pts3d_limits[1, 1])) * 2) * \
+                                      (max(abs(cuboid_pts3d_limits[5, 2]), abs(cuboid_pts3d_limits[2, 2])) * 2)
+
+                    loss = torch.norm(cuboids_vol, p=2)
+
+                    loss.backward()
+                    logger.info(f'Volume {loss}')
+                    optimizer.step()
+
+                cuboid_tform4x4_obj = cuboid_tform4x4_obj.detach()
+
+                if not self.fpath_cuboid_front_tform4x4_obj.parent.exists():
+                    self.fpath_cuboid_front_tform4x4_obj.parent.mkdir(parents=True, exist_ok=True)
+                torch.save(cuboid_tform4x4_obj, f=str(self.fpath_cuboid_front_tform4x4_obj))
+
+                cuboid_pts3d = transf3d_broadcast(pts3d=limits3d, transf4x4=cuboid_tform4x4_obj)
+                _, cuboid_pts3d_ids_min = cuboid_pts3d.min(dim=0)
+                _, cuboid_pts3d_ids_max = cuboid_pts3d.max(dim=0)
+                cuboid_pts3d_limits = cuboid_pts3d[torch.cat([cuboid_pts3d_ids_min, cuboid_pts3d_ids_max], dim=0)]
+
+                cuboid_pts3d_limits = torch.stack([cuboid_pts3d_limits[0, 0], cuboid_pts3d_limits[3, 0], cuboid_pts3d_limits[1, 1], cuboid_pts3d_limits[4, 1], cuboid_pts3d_limits[2, 2], cuboid_pts3d_limits[5, 2]]).reshape(3, 2).T.reshape(1, 2, 3)
+                # cuboid_pts3d_limits = cuboid_pts3d_limits.flip(dims=[1,])
+
+                logger.info(cuboid_pts3d_limits)
+
+                cuboids = Cuboids.create_dense_from_limits(limits=cuboid_pts3d_limits, verts_count=cuboid_pts3d_max_count)
 
 
-            """
-            cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj)
-            #cuboids_limits = torch.stack([cuboid_pts3d.min(dim=-2)[0], cuboid_pts3d.max(dim=-2)[0]], dim=-2)[None,]
-            cuboids_limits = torch.stack(
-                [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)], dim=-2)[None,]
-            cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
-            icp_tform_cuboid = icp(cuboids.verts, cuboid_pts3d).inverse()
-            cuboid_tform4x4_obj = tform4x4(icp_tform_cuboid, cuboid_tform4x4_obj)
-            """
+                # visualize_points([transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj), transf3d_broadcast(pts3d=limits3d, transf4x4=cuboid_tform4x4_obj), cuboids.verts])
 
-            for i in range(100):
-                if self.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
-                   tmp_tform6_cuboid.data[3:] = 0.
-                cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid.detach()), cuboid_tform4x4_obj.detach())
+                save_ply(fpath_cuboid, verts=cuboids.verts, faces=cuboids.faces)
 
-                tmp_tform6_cuboid = torch.nn.Parameter(torch.zeros(6).to(device=pts3d_clean.device),
-                                                       requires_grad=True)
-                optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.001)
 
-                cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid), cuboid_tform4x4_obj)
+            else:
+                pca_tform_obj = get_pca_tform_world(pts3d_clean)
+                pca_pts3d_clean = transf3d_broadcast(pts3d_clean, pca_tform_obj)
+
+                cuboids_limits = torch.stack([pca_pts3d_clean.min(dim=-2)[0], pca_pts3d_clean.max(dim=-2)[0]], dim=-2)[
+                    None,]
+
+                cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
+                icp_tform_pca = inv_tform4x4(icp(cuboids.verts, pca_pts3d_clean))
+                icp_tform_obj = tform4x4(icp_tform_pca, pca_tform_obj)
+
+                # from od3d.cv.visual.show import show_pcl
+                # obj_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=icp_tform_obj.inverse())
+                # show_pcl([pts3d_clean, obj_verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
+
+                icp_tform_obj = self.align_cuboid_tform_obj(icp_tform_obj)
+
+                # from od3d.cv.visual.show import show_pcl
+                # obj_verts = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=icp_tform_obj.inverse())
+                # show_pcl([pts3d_clean, obj_verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
+
+                tmp_tform6_cuboid = torch.zeros(6).to(device=pts3d_clean.device)
+                cuboid_tform4x4_obj = icp_tform_obj  # torch.eye(4).to(device=pts3d_clean.device)
+
+                for i in range(100):
+                    if self.cuboid_source == CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL:
+                       tmp_tform6_cuboid.data[3:] = 0.
+                    cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid.detach()), cuboid_tform4x4_obj.detach())
+
+                    tmp_tform6_cuboid = torch.nn.Parameter(torch.zeros(6).to(device=pts3d_clean.device),
+                                                           requires_grad=True)
+                    optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.001)
+
+                    cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid), cuboid_tform4x4_obj)
+
+                    cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj)
+                    _, icp_pts3d_ids_min = cuboid_pts3d.min(dim=0)
+                    _, icp_pts3d_ids_max = cuboid_pts3d.max(dim=0)
+                    cuboid_pts3d_limits = cuboid_pts3d[torch.cat([icp_pts3d_ids_min, icp_pts3d_ids_max], dim=0)]
+                    #cuboid_pts3d_limits = torch.cat([cuboid_pts3d.quantile(dim=0, q=percentile_noise), cuboid_pts3d.quantile(dim=0, q=1. - percentile_noise)], dim=0)
+                    # icp_cuboids_vol = (cuboid_pts3d_limits[3, 0] - cuboid_pts3d_limits[0, 0]) * (cuboid_pts3d_limits[4, 1] - cuboid_pts3d_limits[1, 1]) * (cuboid_pts3d_limits[5, 2] - cuboid_pts3d_limits[2, 2])
+                    # using maximum ensures centering.
+                    icp_cuboids_vol = (max(abs(cuboid_pts3d_limits[3, 0]), abs(cuboid_pts3d_limits[0, 0])) * 2) * \
+                                      (max(abs(cuboid_pts3d_limits[4, 1]), abs(cuboid_pts3d_limits[1, 1])) * 2) * \
+                                      (max(abs(cuboid_pts3d_limits[5, 2]), abs(cuboid_pts3d_limits[2, 2])) * 2)
+
+                    loss = torch.norm(icp_cuboids_vol, p=2)
+                    # loss = cuboid_pts3d_limits.norm(dim=-1).prod() + (cuboid_pts3d_limits[0:3] - cuboid_pts3d_limits[3:6]).norm()
+                    loss.backward()
+                    logger.info(f'Volume {loss}')
+                    optimizer.step()
 
                 cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj)
-                _, icp_pts3d_ids_min = cuboid_pts3d.min(dim=0)
-                _, icp_pts3d_ids_max = cuboid_pts3d.max(dim=0)
-                cuboid_pts3d_limits = cuboid_pts3d[torch.cat([icp_pts3d_ids_min, icp_pts3d_ids_max], dim=0)]
-                #cuboid_pts3d_limits = torch.cat([cuboid_pts3d.quantile(dim=0, q=percentile_noise), cuboid_pts3d.quantile(dim=0, q=1. - percentile_noise)], dim=0)
-                # icp_cuboids_vol = (cuboid_pts3d_limits[3, 0] - cuboid_pts3d_limits[0, 0]) * (cuboid_pts3d_limits[4, 1] - cuboid_pts3d_limits[1, 1]) * (cuboid_pts3d_limits[5, 2] - cuboid_pts3d_limits[2, 2])
-                # using maximum ensures centering.
-                icp_cuboids_vol = (max(abs(cuboid_pts3d_limits[3, 0]), abs(cuboid_pts3d_limits[0, 0])) * 2) * \
-                                  (max(abs(cuboid_pts3d_limits[4, 1]), abs(cuboid_pts3d_limits[1, 1])) * 2) * \
-                                  (max(abs(cuboid_pts3d_limits[5, 2]), abs(cuboid_pts3d_limits[2, 2])) * 2)
+                cuboids_limits = torch.stack(
+                    [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)], dim=-2)[None,]
+                cuboid_center_tform4x4_cuboid = torch.eye(4, device=cuboid_tform4x4_obj.device)
+                cuboid_center_tform4x4_cuboid[:3, 3] = - (cuboids_limits[0, 1] + cuboids_limits[0, 0]) / 2.
+                cuboid_tform4x4_obj = tform4x4(cuboid_center_tform4x4_cuboid, cuboid_tform4x4_obj)
 
-                loss = torch.norm(icp_cuboids_vol, p=2)
-                # loss = cuboid_pts3d_limits.norm(dim=-1).prod() + (cuboid_pts3d_limits[0:3] - cuboid_pts3d_limits[3:6]).norm()
-                loss.backward()
-                logger.info(f'Volume {loss}')
-                optimizer.step()
+                cuboid_front_tform_obj = cuboid_tform4x4_obj.detach()
 
-            cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_tform4x4_obj)
-            cuboids_limits = torch.stack(
-                [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)], dim=-2)[None,]
-            cuboid_center_tform4x4_cuboid = torch.eye(4, device=cuboid_tform4x4_obj.device)
-            cuboid_center_tform4x4_cuboid[:3, 3] = - (cuboids_limits[0, 1] + cuboids_limits[0, 0]) / 2.
-            cuboid_tform4x4_obj = tform4x4(cuboid_center_tform4x4_cuboid, cuboid_tform4x4_obj)
+                if not self.fpath_cuboid_front_tform4x4_obj.parent.exists():
+                    self.fpath_cuboid_front_tform4x4_obj.parent.mkdir(parents=True, exist_ok=True)
+                torch.save(cuboid_front_tform_obj, f=str(self.fpath_cuboid_front_tform4x4_obj))
 
-            cuboid_front_tform_obj = cuboid_tform4x4_obj.detach()
+                # obj_tform_cuboid_front = cuboid_front_tform_obj.inverse()
 
-            if not self.fpath_cuboid_front_tform4x4_obj.parent.exists():
-                self.fpath_cuboid_front_tform4x4_obj.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(cuboid_front_tform_obj, f=str(self.fpath_cuboid_front_tform4x4_obj))
+                cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_front_tform_obj)
+                #cuboids_limits = torch.stack([cuboid_pts3d.min(dim=-2)[0], cuboid_pts3d.max(dim=-2)[0]], dim=-2)[None,]
+                cuboids_limits = torch.stack(
+                    [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)], dim=-2)[None,]
 
-            # obj_tform_cuboid_front = cuboid_front_tform_obj.inverse()
+                cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
 
-            cuboid_pts3d = transf3d_broadcast(pts3d=pts3d_clean, transf4x4=cuboid_front_tform_obj)
-            #cuboids_limits = torch.stack([cuboid_pts3d.min(dim=-2)[0], cuboid_pts3d.max(dim=-2)[0]], dim=-2)[None,]
-            cuboids_limits = torch.stack(
-                [cuboid_pts3d.quantile(dim=-2, q=percentile_noise), cuboid_pts3d.quantile(dim=-2, q=1. - percentile_noise)], dim=-2)[None,]
+                #from od3d.cv.visual.show import show_pcl
+                #show_pcl([cuboid_pts3d, cuboids.verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
 
-            cuboids = Cuboids.create_dense_from_limits(limits=cuboids_limits, verts_count=cuboid_pts3d_max_count)
+                # from od3d.cv.geometry.primitives import CoordinateFrame
+                # from od3d.cv.geometry.transform import transf4x4_from_spherical, transf4x4_from_pos_and_theta
+                # cframe = CoordinateFrame(origin=obj_tform_cuboid_front[:3, 3], axes=obj_tform_cuboid_front[:3, :3])
 
-            #from od3d.cv.visual.show import show_pcl
-            #show_pcl([cuboid_pts3d, cuboids.verts]) #, cframe.pts3d_axis[0], cframe.pts3d_axis[1], cframe.pts3d_axis[2]])
-
-            # from od3d.cv.geometry.primitives import CoordinateFrame
-            # from od3d.cv.geometry.transform import transf4x4_from_spherical, transf4x4_from_pos_and_theta
-            # cframe = CoordinateFrame(origin=obj_tform_cuboid_front[:3, 3], axes=obj_tform_cuboid_front[:3, :3])
-
-            save_ply(fpath_cuboid, verts=cuboids.verts, faces=cuboids.faces)
+                save_ply(fpath_cuboid, verts=cuboids.verts, faces=cuboids.faces)
 
 
 
     @property
     def pcl(self):
         if self._pcl is None:
-            fpath_pcl = self.path_raw.joinpath(self.meta.rfpath_pcl)
+            fpath_pcl = self.fpath_pcl
             verts, _ = load_ply(str(fpath_pcl))
             self._pcl = verts
         return self._pcl
+
+    @property
+    def fpath_pcl(self):
+        return self.path_raw.joinpath(self.meta.rfpath_pcl)
 
     @property
     def cuboid_labeled(self):
@@ -495,10 +640,11 @@ class CO3D_Sequence():
             pts3d_max_count = 20000
             pts3d_prob_thresh = 0.6
 
-            dataset = CO3D(name='co3d', modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK],
+            dataset = CO3D(name='co3d', modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK, OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ, OD3D_FRAME_MODALITIES.CAM_INTR4X4],
                            path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                            categories=[CO3D_CATEGORIES(self.category).value], dict_nested_frames={self.category: {self.name: None}},
                            cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D.value)
+
             dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
                                                      collate_fn=dataset.collate_fn,
                                                      num_workers=0)

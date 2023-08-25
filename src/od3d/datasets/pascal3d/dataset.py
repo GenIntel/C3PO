@@ -13,28 +13,14 @@ from od3d.cv.geometry.mesh import Meshes
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.io import save_ply
 from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
-from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS, PASCAL3D_SCALE_NORMALIZE_TO_REAL
+from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS, PASCAL3D_SCALE_NORMALIZE_TO_REAL, MAP_CATEGORIES_OD3D_TO_PASCAL3D
 from typing import Dict
 import inspect
 
 class Pascal3D(OD3D_Dataset):
 
-    @staticmethod
-    def create_from_config(config: DictConfig, transform=None):
-        if config.get("setup", False):
-            Pascal3D.setup(config=config)
-        if config.get("preprocess_meta", False):
-            Pascal3D.preprocess_meta(config=config)
-
-        keys = inspect.getfullargspec(Pascal3D.__init__)[0][1:]
-        pascal3d = Pascal3D(**dict((key, config.get(key)) for key in keys if config.get(key, None) is not None), transform=transform)
-
-        if config.get("preprocess", False):
-            pascal3d.preprocess(override=config.get("preprocess_override", False),
-                                preprocess_masks=config.get("preprocess_masks", True),
-                                preprocess_cuboids=config.get("preprocess_cuboids", True))
-
-        return pascal3d
+    CATEGORIES = PASCAL3D_CATEGORIES
+    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
 
     def __init__(
         self,
@@ -49,7 +35,11 @@ class Pascal3D(OD3D_Dataset):
         subset_fraction=1.,
         index_shift=0,
     ):
-        categories = categories if categories is not None else PASCAL3D_CATEGORIES.list()
+        if categories is not None:
+            categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES.list() else category for category in categories]
+        else:
+            categories = self.CATEGORIES.list()
+
         super().__init__(categories=categories, name=name, modalities=modalities, path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction, index_shift=index_shift, dict_nested_frames=dict_nested_frames)
 
         self.path_cuboids = Path(path_cuboids)
@@ -64,7 +54,7 @@ class Pascal3D(OD3D_Dataset):
     def setup(config):
         path_pascal3d_raw = Path(config.path_raw)
 
-        if path_pascal3d_raw.exists() and config.setup_remove_previous:
+        if path_pascal3d_raw.exists() and config.setup.remove_previous:
             logger.info(f"Removing previous Pascal3D+")
             shutil.rmtree(path_pascal3d_raw)
 
@@ -95,7 +85,7 @@ class Pascal3D(OD3D_Dataset):
 
     #### PREPROCESS META
     @staticmethod
-    def preprocess_meta(config: DictConfig):
+    def extract_meta(config: DictConfig):
         subsets = config.get("subsets", None)
         if subsets is None:
             subsets = PASCAL3D_SUBSETS.list()
@@ -107,7 +97,7 @@ class Pascal3D(OD3D_Dataset):
         path_meta = Pascal3D.get_path_meta(config=config)
         rpath_meshes = Pascal3D.get_rpath_meshes()
 
-        if config.preprocess_meta_remove_previous:
+        if config.extract_meta.remove_previous:
             if path_meta.exists():
                 shutil.rmtree(path_meta)
 
@@ -131,7 +121,7 @@ class Pascal3D(OD3D_Dataset):
         for i in tqdm(range(len(frames_names))):
             fpath = path_meta.joinpath(Pascal3DFrameMeta.get_rfpath_from_name_unique(name_unique=Pascal3DFrameMeta.get_name_unique_from_category_subset_name(subset=frames_subsets[i],
                                                                                                                                                              category=frames_categories[i], name=frames_names[i])))
-            if not fpath.exists() or config.preprocess_meta_override:
+            if not fpath.exists() or config.extract_meta.override:
 
                 frame_meta = Pascal3DFrameMeta.load_from_raw(frame_name=frames_names[i], subset=frames_subsets[i],
                                                              category=frames_categories[i],
@@ -148,12 +138,19 @@ class Pascal3D(OD3D_Dataset):
         return path_raw.joinpath(Pascal3D.get_rpath_meshes())
 
     ##### PREPROCESS
-    def preprocess(self, preprocess_cuboids=True, preprocess_masks=True, override=False):
-        if preprocess_cuboids:
-            self.preprocess_cuboids(override=override)
-        if preprocess_masks:
-            self.preprocess_masks(override=override)
-    def preprocess_cuboids(self, override=False):
+    def preprocess(self, config_preprocess: DictConfig):
+        logger.info("preprocess")
+        for key in config_preprocess.keys():
+            if key == 'cuboid' and config_preprocess.cuboid.get('enabled', False):
+                override = config_preprocess.cuboid.get('override', False)
+                remove_previous = config_preprocess.cuboid.get('remove_previous', False)
+                self.preprocess_cuboids(override=override, remove_previous=remove_previous)
+            elif key == 'mask' and config_preprocess.mask.get('enabled', False):
+                override = config_preprocess.mask.get('override', False)
+                remove_previous = config_preprocess.mask.get('remove_previous', False)
+                self.preprocess_masks(override=override, remove_previous=remove_previous)
+
+    def preprocess_cuboids(self, override=False, remove_previous=False):
         logger.info('preprocess cuboids...')
         perc_axis_coverage = 0.99
         verts_count = 1000
@@ -186,7 +183,7 @@ class Pascal3D(OD3D_Dataset):
                 fpath.parent.mkdir(parents=True, exist_ok=True)
                 save_ply(fpath, verts=meshes.verts, faces=meshes.faces)
 
-    def preprocess_masks(self, override=False):
+    def preprocess_masks(self, override=False, remove_previous=False):
         logger.info('preprocess masks...')
         for frame_id in tqdm(range(len(self))):
             frame = self.get_item(frame_id)

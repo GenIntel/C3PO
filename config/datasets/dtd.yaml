@@ -8,11 +8,17 @@ modalities:
 path_raw: ${platform.path_datasets}/DTD
 path_preprocess: ${platform.path_datasets}/DTD_Preprocess
 
-setup_remove_previous: False
-setup_override: False
 
-preprocess_meta_remove_previous: False
-preprocess_meta_override: False
+setup:
+  enabled: False
+  override: False
+  remove_previous: False
+
+extract_meta:
+  enabled: False
+  override: False
+  remove_previous: False
+
 
 dict_nested_frames:
   val:

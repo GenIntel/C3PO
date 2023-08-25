@@ -5,7 +5,7 @@ from omegaconf import DictConfig
 from pathlib import Path
 from od3d.datasets.pascal3d import Pascal3D
 
-from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES
+from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_PASCAL3D
 from od3d.datasets.frame import OD3D_FRAME_MODALITIES
 from typing import Dict, List
 import shutil
@@ -25,6 +25,8 @@ class PASCAL3D_OCC_SUBSETS(str, ExtEnum):
 
 
 class Pascal3D_Occ(OD3D_Dataset):
+    CATEGORIES = PASCAL3D_CATEGORIES
+    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
 
     def __init__(
             self,
@@ -39,7 +41,10 @@ class Pascal3D_Occ(OD3D_Dataset):
             subset_fraction=1.,
             index_shift=0,
     ):
-        categories = categories if categories is not None else PASCAL3D_CATEGORIES.list()
+        if categories is not None:
+            categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES.list() else category for category in categories]
+        else:
+            categories = self.CATEGORIES.list()
         super().__init__(categories=categories, name=name,
                          modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform,
@@ -65,7 +70,7 @@ class Pascal3D_Occ(OD3D_Dataset):
         path_raw = Path(config.path_raw)
 
 
-        if path_raw.exists() and config.setup_remove_previous:
+        if path_raw.exists() and config.setup.remove_previous:
             logger.info(f"Removing previous Pascal3D_Occ")
             shutil.rmtree(path_raw)
 
@@ -82,7 +87,7 @@ class Pascal3D_Occ(OD3D_Dataset):
 
     #### PREPROCESS META
     @staticmethod
-    def preprocess_meta(config: DictConfig):
+    def extract_meta(config: DictConfig):
         subsets = config.get("subsets", None)
         if subsets is None:
             subsets = PASCAL3D_OCC_SUBSETS.list()
@@ -95,7 +100,7 @@ class Pascal3D_Occ(OD3D_Dataset):
         path_pascal3d_raw = Path(config.path_pascal3d_raw)
         rpath_meshes = Pascal3D.get_rpath_meshes()
 
-        if config.preprocess_meta_remove_previous:
+        if config.extract_meta.remove_previous:
             if path_meta.exists():
                 shutil.rmtree(path_meta)
 
@@ -122,7 +127,7 @@ class Pascal3D_Occ(OD3D_Dataset):
         for i in tqdm(range(len(frames_names))):
             fpath = path_meta.joinpath(Pascal3D_OccFrameMeta.get_rfpath_from_name_unique(name_unique=Pascal3DFrameMeta.get_name_unique_from_category_subset_name(subset=frames_subsets[i],
                                                                                                                                                                  category=frames_categories[i], name=frames_names[i])))
-            if not fpath.exists() or config.preprocess_meta_override:
+            if not fpath.exists() or config.extract_meta.override:
 
                 pascal3d_frame_meta = Pascal3DFrameMeta.load_from_raw(frame_name=frames_names[i], subset='val',
                                                                       category=frames_categories[i],

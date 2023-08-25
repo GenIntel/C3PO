@@ -1,7 +1,0 @@
-includes: config/datasets/pascal3d.yaml
-
-name: pascal3d_inmodal
-class_name: Pascal3DPlus
-
-segmentation_masks:
-    - inmodal

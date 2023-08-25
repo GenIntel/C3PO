@@ -199,6 +199,11 @@ def rot3d(pts3d, rot3x3):
     pts3d_rot = torch.bmm(rot3x3.reshape(-1, 3, 3), pts3d.reshape(-1, 3, 1)).reshape(pts3d_shape_in)
     return pts3d_rot
 
+def rot3d_broadcast(pts3d, rot3x3):
+    shape_first_dims = torch.broadcast_shapes(pts3d.shape[:-1], rot3x3.shape[:-2])
+    return rot3d(pts3d.expand(*shape_first_dims, 3), rot3x3.expand(*shape_first_dims, 3, 3))
+
+
 def proj3d2d_broadcast(pts3d, proj4x4):
     shape_first_dims = torch.broadcast_shapes(pts3d.shape[:-1], proj4x4.shape[:-2])
     return proj3d2d(pts3d.expand(*shape_first_dims, 3), proj4x4.expand(*shape_first_dims, 4, 4))
