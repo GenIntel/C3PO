@@ -3,14 +3,12 @@ defaults:
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: pascal3d
   - datasets@train_datasets.labeled: pascal3d_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
-  - datasets@val_datasets.main:
-  - datasets@val_datasets.pascal3d: pascal3d_val
-  - datasets@test_datasets.co3d: # co3d_10s_test, co3d_test
+  - datasets@val_datasets.main: pascal3d_val
   - datasets@test_datasets.pascal3d: pascal3d_test
-  - datasets/categories@test_datasets.pascal3d.categories: all
   - datasets@texture_dataset: dtd
   - platform@platform_local: local
   - platform: local
+  - datasets/categories@categories: pascal3d
 
 metrics:
   - metricA
@@ -19,22 +17,14 @@ metrics:
 train: True
 test: True
 
+train_datasets:
+  labeled:
+    categories: ${categories}
+
 val_datasets:
   main:
     categories: ${categories}
-  pascal3d:
-    categories: ${categories}
 
 test_datasets:
-  co3d:
-    categories: ${categories}
   pascal3d:
     categories: ${categories}
-
-#training:
-#    random_seed: 0
-#    scale_iterations_per_epoch: 1.0
-
-#inference:
-#    random_seed: 0
-#    visualize_num_samples: 0

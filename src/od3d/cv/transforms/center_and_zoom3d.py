@@ -9,12 +9,12 @@ from omegaconf import DictConfig
 from od3d.datasets.dtd import DTD
 import torchvision
 class CenterZoom3D():
-
-    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, config: DictConfig = None):
-        self.center3d = torch.Tensor(center3d) if center3d is not None else None
+    # resize types: fit to
+    def __init__(self, H, W, scale=None, center_rel_shift_xy=[0., 0.], apply_txtr=False, config: DictConfig = None):
+        self.center_rel_shift_xy = torch.Tensor(center_rel_shift_xy) if center_rel_shift_xy is not None else None
         self.H = H
         self.W = W
-        self.dist = dist
+        self.scale = scale
         self.apply_txtr = apply_txtr
         if self.apply_txtr:
             self.dtd = DTD.create_from_config(config=config, transform=torchvision.transforms.Compose([]))
@@ -26,35 +26,43 @@ class CenterZoom3D():
         if frame.cam_tform4x4_obj[2, 3] <= 0.:
             logger.warning(f"dist <= 0")
 
-        if self.center3d is not None:
-            center = proj3d2d(self.center3d, proj4x4=frame.cam_proj4x4_obj)
-            if center.isnan().any():
-                center = frame.size.flip(dims=[0]) / 2
-        else:
-            center = frame.size.flip(dims=[0]) / 2
+        if self.center_rel_shift_xy is not None:
+            center2d = proj3d2d(torch.Tensor([0., 0., 0.]), proj4x4=frame.cam_proj4x4_obj)
+            if center2d.isnan().any():
+                center2d = frame.size.flip(dims=[0]) / 2
 
-        if self.dist is not None:
-            scale = frame.cam_tform4x4_obj[2, 3] / self.dist
+        else:
+            center2d = frame.size.flip(dims=[0]) / 2
+
+        # this automatic scales to fit the cropped image
+        centered_frame_H = int(max(abs(frame.H - center2d[1]), abs(center2d[1])) * 2)
+        centered_frame_W = int(max(abs(frame.W - center2d[0]), abs(center2d[0])) * 2)
+        scale = min(self.H / centered_frame_H, self.W / centered_frame_W)
+
+        if self.scale is not None:
+            # scale = frame.cam_tform4x4_obj[2, 3] / self.dist
+            scale *= self.scale
             if scale < 0.01:
                 logger.warning(f'Scale is < 0.01. Setting scale to 1.')
                 scale = 1.
-        else:
-            centered_frame_H = int(max(abs(frame.H - center[1]), abs(center[1])) * 2)
-            centered_frame_W = int(max(abs(frame.W - center[0]), abs(center[0])) * 2)
-            scale = min(self.H / centered_frame_H, self.W / centered_frame_W)
 
-        frame.mask_rgb, _ = crop(frame.mask_rgb, center=center, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
+        center2d_shifted = center2d.clone()
+        if self.center_rel_shift_xy is not None:
+            center2d_shifted[0] += frame.W * self.center_rel_shift_xy[0]
+            center2d_shifted[1] += frame.H * self.center_rel_shift_xy[1]
+
+        frame.mask_rgb, _ = crop(frame.mask_rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
         if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
-            frame.mask, _ = crop(img=frame.mask, center=center, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
+            frame.mask, _ = crop(img=frame.mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
 
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
         if self.apply_txtr:
-            frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
+            frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale,
                                                   ctx=self.dtd.get_random_item().rgb)
         else:
-            frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center, H_out=self.H, W_out=self.W, scale=scale,
+            frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale,
                                                  ctx=None)
 
         frame.size[0:1] = self.H
@@ -89,15 +97,15 @@ class CenterZoom3D():
 
 
 class RandomCenterZoom3D():
-    def __init__(self, H, W, dist, center3d=[0., 0., 0.], apply_txtr=False, config:DictConfig = None, dist_min=None, dist_max=None, center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.]):
-        self.centerzoom3d = CenterZoom3D(H=H, W=W, dist=dist, center3d=center3d, apply_txtr=apply_txtr, config=config)
-        self.center3d_min = torch.Tensor(center3d_min)
-        self.center3d_max = torch.Tensor(center3d_max)
-        self.dist_min = dist_min
-        self.dist_max = dist_max
+    def __init__(self, H, W, apply_txtr=False, config:DictConfig = None, scale_min=None, scale_max=None, center_rel_shift_xy_min=[0., 0.], center_rel_shift_xy_max=[0., 0.]):
+        self.centerzoom3d = CenterZoom3D(H=H, W=W, scale=None, apply_txtr=apply_txtr, config=config)
+        self.center_rel_shift_xy_min = torch.Tensor(center_rel_shift_xy_min)
+        self.center_rel_shift_xy_max = torch.Tensor(center_rel_shift_xy_max)
+        self.scale_min = scale_min
+        self.scale_max = scale_max
 
     def __call__(self, frame):
-        if self.dist_min is not None and self.dist_max is not None:
-            self.centerzoom3d.dist = self.dist_min + torch.rand(1)[0] * (self.dist_max - self.dist_min)
-        self.centerzoom3d.center3d = self.center3d_min + torch.rand(3) * (self.center3d_max - self.center3d_min)
+        if self.scale_min is not None and self.scale_max is not None:
+            self.centerzoom3d.scale = self.scale_min + torch.rand(1)[0] * (self.scale_max - self.scale_min)
+        self.centerzoom3d.center_rel_shift_xy = self.center_rel_shift_xy_min + torch.rand(2) * (self.center_rel_shift_xy_max - self.center_rel_shift_xy_min)
         return self.centerzoom3d(frame)

@@ -78,13 +78,13 @@ image_sizes:
 #       n04037443_21947
 #       n04037443_4668
 
-categories:
+# categories:
 #    - aeroplane
 #    - bicycle
 #    - boat
 #    - bottle
 #    - bus
-    - car
+#     - car
 #    - chair
 #    - diningtable
 #    - motorbike

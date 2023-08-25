@@ -111,7 +111,7 @@ def rsync_raw(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
 def rsync_preprocess(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
           platform_source: str = typer.Option('local', '-s', '--source'),
           platform_target: str = typer.Option('slurm', '-t', '--target'),
-          rsync_meta: bool = typer.Option(False, '-m' '--meta')):
+          rsync_meta: bool = typer.Option(False, '-m', '--meta')):
     logging.basicConfig(level=logging.INFO)
     config_source = od3d.io.load_hierarchical_config(platform=platform_source, overrides=["+datasets@dataset=" + dataset])
     config_target = od3d.io.load_hierarchical_config(platform=platform_target, overrides=["+datasets@dataset=" + dataset])
