@@ -2,7 +2,10 @@
 defaults:
   - /ablations/nemo_categories@: _default
 
-ablation_name: car_1s_1st
+ablation_name: car_1s_2nd
+
+categories:
+  - car
 
 train_datasets:
   labeled:
@@ -10,7 +13,7 @@ train_datasets:
       - car
     dict_nested_frames:
       car:
-        '185_19982_37678':
+        '206_21799_45886':
 
 val_datasets:
   main:
@@ -18,7 +21,7 @@ val_datasets:
       - car
     dict_nested_frames:
       car:
-        '206_21799_45886':
+        '185_19982_37678':
         '194_20939_43630':
         '194_20900_41097':
         '116_13655_29006':
@@ -81,4 +84,3 @@ test_datasets:
 #        '411_56037_108372':
 #        '408_55512_106884':
 #        '365_39208_76369':
-

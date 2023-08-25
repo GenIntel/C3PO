@@ -4,18 +4,17 @@ defaults:
 
 ablation_name: bicycle_1s_3rd
 
+categories:
+  - bicycle
+
 train_datasets:
   labeled:
-    categories:
-      - bicycle
     dict_nested_frames:
       bicycle:
         '426_59751_116222':
 
 val_datasets:
   main:
-    categories:
-      - bicycle
     dict_nested_frames:
       bicycle:
         '404_53464_104258':
@@ -25,8 +24,6 @@ val_datasets:
 
 test_datasets:
   co3d:
-    categories:
-      - bicycle
     dict_nested_frames:
       bicycle:
         '393_48296_95654':

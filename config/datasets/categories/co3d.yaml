@@ -42,11 +42,13 @@
 - teddybear
 - toaster
 - toilet
-- toybus
-- toyplane
-- toytrain
-- toytruck
+- bus
+- airplane
+- train
+- truck
 - tv
 - umbrella
 - vase
-- wineglass
+- wine_glass
+
+# these are the universal OD3D names

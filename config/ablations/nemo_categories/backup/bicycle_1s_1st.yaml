@@ -2,31 +2,28 @@
 defaults:
   - /ablations/nemo_categories@: _default
 
-ablation_name: bicycle_1s_2nd
+ablation_name: bicycle_1s_1st
+
+categories:
+  - bicycle
 
 train_datasets:
   labeled:
-    categories:
-      - bicycle
-    dict_nested_frames:
-      bicycle:
-        '392_47830_94973':
-
-val_datasets:
-  main:
-    categories:
-      - bicycle
     dict_nested_frames:
       bicycle:
         '404_53464_104258':
+
+val_datasets:
+  main:
+    dict_nested_frames:
+      bicycle:
+        '392_47830_94973':
         '426_59751_116222':
         '392_47564_94578':
         '410_55803_108469':
 
 test_datasets:
   co3d:
-    categories:
-      - bicycle
     dict_nested_frames:
       bicycle:
         '393_48296_95654':
@@ -88,4 +85,5 @@ test_datasets:
 #        '411_56037_108372':
 #        '408_55512_106884':
 #        '365_39208_76369':
+
 

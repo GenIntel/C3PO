@@ -5,7 +5,7 @@ from omegaconf import DictConfig
 from pathlib import Path
 from od3d.datasets.pascal3d import Pascal3D
 
-from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES
+from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_PASCAL3D
 from od3d.datasets.pascal3d.frame import Pascal3DFrameMeta
 from od3d.datasets.frame import OD3D_FRAME_MODALITIES
 from typing import Dict, List
@@ -41,6 +41,8 @@ class OOD_CV_CATEGORIES(str, ExtEnum):
 
 
 class OOD_CV(OD3D_Dataset):
+    CATEGORIES = PASCAL3D_CATEGORIES
+    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
 
     def __init__(
             self,
@@ -55,7 +57,10 @@ class OOD_CV(OD3D_Dataset):
             subset_fraction=1.,
             index_shift=0,
     ):
-        categories = categories if categories is not None else PASCAL3D_CATEGORIES.list()
+        if categories is not None:
+            categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES else category for category in categories]
+        else:
+            categories = self.CATEGORIES.list()
         super().__init__(categories=categories, name=name,
                          modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform,

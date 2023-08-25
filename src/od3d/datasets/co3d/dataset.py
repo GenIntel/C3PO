@@ -22,13 +22,16 @@ from tqdm import tqdm
 import torch.utils.data
 from od3d.cv.io import load_ply, save_ply
 
-from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CATEGORIES
+from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_CO3D
 
 ALLOW_LIST_FRAME_TYPES = [CO3D_FRAME_TYPES.DEV_KNOWN, CO3D_FRAME_TYPES.DEV_UNSEEN,
                          CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
                          CO3D_FRAME_TYPES.TEST_KNOWN]
 
 class CO3D(OD3D_Dataset):
+
+    CATEGORIES = CO3D_CATEGORIES
+    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_CO3D
 
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[CO3D_CATEGORIES]=None,
@@ -43,7 +46,11 @@ class CO3D(OD3D_Dataset):
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  transform=None, index_shift=0, subset_fraction=1.):
 
-        categories = categories if categories is not None else CO3D_CATEGORIES.list()
+        if categories is not None:
+            categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES else category for category in categories]
+        else:
+            categories = self.CATEGORIES.list()
+
         self.categories = categories
         self.path_raw = Path(path_raw)
         self.path_preprocess = Path(path_preprocess)

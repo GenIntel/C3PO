@@ -48,14 +48,13 @@ extract_meta:
 
 preprocess:
   cuboid:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
   mask:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
-
 
 image_sizes:
     aeroplane: [512, 512]
@@ -78,7 +77,7 @@ image_sizes:
 #       n04037443_21947
 #       n04037443_4668
 
-# categories:
+categories:
 #    - aeroplane
 #    - bicycle
 #    - boat
