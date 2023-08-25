@@ -47,7 +47,7 @@ class CO3D(OD3D_Dataset):
                  transform=None, index_shift=0, subset_fraction=1.):
 
         if categories is not None:
-            categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES else category for category in categories]
+            categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES.list() else category for category in categories]
         else:
             categories = self.CATEGORIES.list()
 
