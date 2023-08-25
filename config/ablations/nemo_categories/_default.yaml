@@ -13,7 +13,7 @@ train_datasets:
       car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
       bicycle: ${..path_cuboids}/bicycle.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
       motorcycle: ${..path_cuboids}/motorcycle.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
-      toyplane: ${..path_cuboids}/toyplane.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      airplane: ${..path_cuboids}/toyplane.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
 
 val_datasets:
   main:
