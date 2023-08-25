@@ -418,7 +418,7 @@ class Meshes(torch.nn.Module):
             meshes_ids=pre_rendered_meshes_ids[m:m+1], modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
             broadcast_batch_and_cams=True,
             down_sample_rate=down_sample_rate))
-        rendering = torch.stack(rendering, dim=0)
+        rendering = torch.cat(rendering, dim=0)
 
         if pcl is not None:
             pxl2d_pre_rendered = proj3d2d_broadcast(pts3d=pcl[:, None, None], proj4x4=tform4x4_broadcast(pre_rendered_cams_intr4x4, pre_rendered_cams_tform4x4_obj)) / down_sample_rate
@@ -463,7 +463,7 @@ class Meshes(torch.nn.Module):
                     meshes_ids=pre_rendered_meshes_ids[m:m+1], modality=modality,
                     broadcast_batch_and_cams=broadcast_batch_and_cams,
                     down_sample_rate=down_sample_rate))
-            rendering = torch.stack(rendering, dim=0)
+            rendering = torch.cat(rendering, dim=0)
 
             self.pre_rendered_modalities[modality] = Meshes.PreRendered(
                 cams_tform4x4_obj=pre_rendered_cams_tform4x4_obj,
