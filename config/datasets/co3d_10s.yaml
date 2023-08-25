@@ -3,7 +3,7 @@ defaults:
 
 name: co3d_10s
 
-frames_count_max_per_sequence: 2
+# frames_count_max_per_sequence: 2
 
 subset_fraction: 1.
 
