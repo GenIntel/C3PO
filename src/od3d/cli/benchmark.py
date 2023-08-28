@@ -24,6 +24,8 @@ def get_nested_value(data, key):
     for k in keys:
         if k in value:
             value = value[k]
+        elif 'value' in value and k in value['value']:
+            value = value['value'][k]
         else:
             return None  # Key not found
     return value
@@ -101,6 +103,11 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
         'test/co3d_50s_test/pose/err_median': "Median [deg.]",
         'test/co3d_50s_test/pose/err_mean': "Mean [deg.]",
         'test/co3d_50s_test/time_pose': 'Inference Duration [s]',
+        'test/co3d/pose/acc_pi6': "Acc. Pi/6. [%]",
+        'test/co3d/pose/acc_pi18': "Acc. Pi/18. [%]",
+        'test/co3d/pose/err_median': "Median [deg.]",
+        'test/co3d/pose/err_mean': "Mean [deg.]",
+        'test/co3d/time_pose': 'Inference Duration [s]',
     }
 
     cols_scales = {
@@ -110,6 +117,8 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
         'test/co3d_5s_test/pose/acc_pi18': 100.,
         'test/co3d_50s_test/pose/acc_pi6': 100.,
         'test/co3d_50s_test/pose/acc_pi18': 100.,
+        'test/co3d/pose/acc_pi6': 100.,
+        'test/co3d/pose/acc_pi18': 100.,
     }
 
     for col in cols_scales.keys():
@@ -149,6 +158,67 @@ def table():
 
 
     # my_df.to_csv('output.csv', index=False, header=False, float_format='%.3f')
+
+@app.command()
+def table_multiple_categories():
+    logging.basicConfig(level=logging.INFO)
+    # config = od3d.io.load_hierarchical_config()
+
+    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
+    #metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
+    metrics = ['test/co3d/pose/acc_pi6', 'test/co3d/pose/acc_pi18',
+               'test/co3d/pose/err_median', 'test/co3d/pose/err_mean']
+
+    name_partial = '_1s_' # 'multiview'
+    configs = ['train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'method.value.inference.refine.dims_detached']
+    age_in_hours = 24 * 4
+
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
+
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    my_df['train_datasets.labeled.categories'] = my_df['train_datasets.labeled.categories'].str[0]
+    my_df = my_df.groupby(['train_datasets.labeled.categories']).head(3)
+
+    metrics_new_names = ['Acc. Pi/6. [%]', 'Acc. Pi/18. [%]', 'Median [deg.]', 'Mean [deg.]']
+    #my_df[metrics[0]] *= 100
+    #my_df[metrics[1]] *= 100
+
+    map_columns = {
+        'train_datasets.labeled.categories': 'category',
+        metrics[0]: metrics_new_names[0],
+        metrics[1]: metrics_new_names[1],
+        metrics[2]: metrics_new_names[2],
+        metrics[3]: metrics_new_names[3]
+    }
+
+    my_df = my_df.rename(columns=map_columns)
+    my_df = my_df.sort_values(by=['category'])
+    import numpy as np
+
+    for i, metric in enumerate(metrics_new_names):
+        my_df = my_df.sort_values(by=['category', metric])
+
+        yerr = np.stack([my_df.groupby('category')[metric].min().to_numpy(), my_df.groupby('category')[metric].max().to_numpy()])
+
+        mv_plot = sns.barplot(data=my_df, x="category", y=metric, errorbar=('ci', 100))
+
+        #mv_plot = sns.catplot(
+        #    x="train seqs.",  # x variable name
+        #    y=metric,  # y variable name
+        #    hue="inference type",  # group variable name
+        #    data=my_df,  # dataframe to plot
+        #    kind="bar",
+        #)
+
+        plt.savefig(f"single_{metrics[i].replace('/', '_')}.png")
+        plt.clf()
+
+
+
+    my_df.to_csv('output.csv', index=False, header=False)
 
 
 @app.command()
