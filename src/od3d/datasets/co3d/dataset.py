@@ -254,9 +254,10 @@ class CO3D(OD3D_Dataset):
         # get sequences
         dict_nested_sequences = CO3D_SequenceMeta.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_sequences)
 
-
+        # filter dict_nested_sequences
         for i, category in tqdm(enumerate(dict_nested_sequences.keys())):
             if category not in self.categories:
+                dict_nested_sequences[category] = []
                 continue
             if require_pcl or count_max_per_category is not None:
                 sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name

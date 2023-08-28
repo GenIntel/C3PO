@@ -463,7 +463,7 @@ class NeMo(OD3D_Method):
                                                                                        cam_intr4x4=batch.cam_intr4x4,
                                                                                        cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                                                        feats2d_net=feats2d_net,
-                                                                                       categories_ids=pred_class_ids,
+                                                                                       categories_ids=batch.label,
                                                                                        feats2d_net_mask=feats2d_net_mask)
             #  OPTION A: Use 2d gradient of rendered features
             sim = self.get_sim_feats2d_net_with_cams(
@@ -471,7 +471,7 @@ class NeMo(OD3D_Method):
                 feats2d_net_mask=feats2d_net_mask,
                 cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
                 cam_intr4x4=b_cams_multiview_intr4x4,
-                categories_ids=pred_class_ids,
+                categories_ids=batch.label,
                 broadcast_batch_and_cams=True
             )
 
@@ -511,7 +511,7 @@ class NeMo(OD3D_Method):
                                                                   feats2d_net_mask=feats2d_net_mask,
                                                                   cam_tform4x4_obj=cam_tform4x4_obj,
                                                                   cam_intr4x4=batch.cam_intr4x4,
-                                                                  categories_ids=pred_class_ids, return_sim_pxl=True,
+                                                                  categories_ids=batch.label, return_sim_pxl=True,
                                                                   broadcast_batch_and_cams=False,
                                                                   pre_rendered=False)
                 mesh_cam_loss = -sim
@@ -521,7 +521,7 @@ class NeMo(OD3D_Method):
                         blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=cam_tform4x4_obj[0:0 + 1],
                                                                           cams_intr4x4=batch.cam_intr4x4[0:0 + 1],
                                                                           imgs_sizes=batch.size,
-                                                                          meshes_ids=pred_class_ids[0:0 + 1],
+                                                                          meshes_ids=batch.label[0:0 + 1],
                                                                           modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
                             0]).to(dtype=batch.rgb.dtype)), duration=1)
 
