@@ -1,0 +1,47 @@
+# @package _global_
+defaults:
+  - override /datasets@train_datasets.labeled: co3d
+  - override /datasets@train_datasets.unlabeled: co3d
+  - override /datasets@test_datasets.co3d: co3d
+  - override /datasets@val_datasets.main: co3d
+
+ablation_name: default
+
+train_datasets:
+  labeled:
+    path_cuboids: ${.path_preprocess}/cuboids/avg/co3d_10s # ${.name}
+    fpaths_cuboids:
+      car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      bicycle: ${..path_cuboids}/bicycle.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      motorcycle: ${..path_cuboids}/motorcycle.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      airplane: ${..path_cuboids}/toyplane.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+
+
+val_datasets:
+  pascal3d:
+    skip: True
+  main:
+    subset_fraction: 0.1
+
+test_datasets:
+  pascal3d:
+    skip: True
+
+method:
+  nemo:
+    #fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
+    train:
+      epochs: 50
+      early_stopping: False
+
+    #multiview:
+    #  type: multiview # single multiview multiview-mean-se3
+    #  batch_size: 6
+
+
+#path_cuboids: ${.path_preprocess}/cuboids/avg/co3d_50s_train # ${.name}
+#fpaths_cuboids:
+#    car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+
+train: True
+test: True

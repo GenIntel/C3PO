@@ -2,6 +2,7 @@
 # checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
 
 train:
+    epochs: 50
     dataloader:
         num_workers: 4
         batch_size: 12
