@@ -13,16 +13,12 @@ categories:
 
 train_datasets:
   labeled:
-    categories:
-      - car
     dict_nested_frames:
       car:
         '206_21799_45886':
 
 val_datasets:
   main:
-    categories:
-      - car
     dict_nested_frames:
       car:
         '185_19982_37678':
@@ -75,8 +71,6 @@ val_datasets:
 
 test_datasets:
   co3d:
-    categories:
-      - car
     dict_nested_frames:
       car:
         '206_21810_45890':
