@@ -170,7 +170,7 @@ def table_multiple_categories():
     metrics = ['test/co3d/pose/acc_pi6', 'test/co3d/pose/acc_pi18',
                'test/co3d/pose/err_median', 'test/co3d/pose/err_mean']
 
-    name_partial = '_1s_' # 'multiview'
+    name_partial = '_mv6_' # _1s_ 'multiview'
     configs = ['train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'method.value.inference.refine.dims_detached']
     age_in_hours = 24 * 4
 

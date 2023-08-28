@@ -60,7 +60,8 @@ class NeMo_MultiView(NeMo):
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
         dataset.transform = self.transform_test
-        dict_category_sequences = {'car': list(dataset.dict_nested_frames['car'].keys())}
+
+        dict_category_sequences = {category: list(sequence_dict.keys()) for category, sequence_dict in dataset.dict_nested_frames.items()}
         dataset_sub = dataset.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
                                                       frames_count_max_per_sequence=self.config.multiview.batch_size)
 
