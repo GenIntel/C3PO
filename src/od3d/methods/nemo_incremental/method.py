@@ -38,7 +38,6 @@ from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
-from od3d.data.ext_dicts import unroll_nested_dict, rollup_flattened_dict
 
 @dataclass
 class SequencePseudoLabel():
@@ -103,7 +102,7 @@ class NeMo_Incremental(NeMo):
         results = results.mean()
         results += results_visual
 
-        results['count'] = len(unroll_nested_dict(self.train_dict_category_sequences_pseudo_labeled))
+        results['count'] = len(OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_pseudo_labeled))
         logger.info(f'using {results["count"]} sequences.')
 
         results.log_with_prefix(prefix=f'pseudo_labels/{dataset_update.name}')
