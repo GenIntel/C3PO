@@ -43,7 +43,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
             if 'label_names' in self.keys():
                 label_names = self['label_names']
             else:
-                label_names = [str(i) for i in range(max(set(self['label_gt'] + self['label_pred'])))]
+                label_names = [str(i) for i in range(max(set(self['label_gt'] + self['label_pred']))+1)]
             res['label/acc'] = (self['label_gt'] == self['label_pred']).to(dtype=float).mean(dim=0)
             res['label/confusion'] = wandb.plot.confusion_matrix(probs=None,
                                                                  y_true=self['label_gt'].numpy(), preds=self['label_pred'].numpy(),
