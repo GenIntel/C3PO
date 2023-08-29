@@ -1,6 +1,5 @@
 import time
 from typing import List
-
 import od3d.io
 from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
@@ -14,6 +13,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
 from od3d.cv.geometry.transform import se3_exp_map
 from od3d.cv.visual.show import imgs_to_img
 from od3d.cv.geometry.mesh import Meshes
@@ -303,9 +303,7 @@ class NeMo(OD3D_Method):
     def train_batch(self, batch) -> OD3D_Results:
         results_batch = OD3D_Results()
 
-
         batch.to(device=self.device)
-
 
         batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
