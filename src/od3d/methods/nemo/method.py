@@ -389,6 +389,7 @@ class NeMo(OD3D_Method):
         results_batch['loss'] = loss[None,]
         results_batch['item_id'] = batch.item_id
         results_batch['name_unique'] = batch.name_unique
+        results_batch['cam_tform4x4_obj'] = batch.cam_tform4x4_obj
 
         return results_batch
 
@@ -626,6 +627,9 @@ class NeMo(OD3D_Method):
                 batch.to(device=self.device)
                 B = len(batch)
                 batch_result_ids = torch.LongTensor([dict_name_unique_to_result_id[batch.name_unique[b]] for b in range(B)]).to(device=self.device)
+                if 'cam_tform4x4_obj' in results_epoch.keys():
+                    batch.cam_tform4x4_obj = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
+
                 batch_sel_names = [dict_name_unique_to_sel_name[batch.name_unique[b]] for b in range(B)]
                 batch_names = [batch.name_unique[b] for b in range(B)]
                 batch_sel_scores = []
