@@ -30,7 +30,7 @@ def get_nested_value(data, key):
             return None  # Key not found
     return value
 
-def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
+def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None, name_partial_ban=None):
     logging.basicConfig(level=logging.INFO)
     import wandb
     config = od3d.io.load_hierarchical_config()
@@ -53,6 +53,10 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
 
     if name_partial is not None:
         runs = list(filter(lambda run: name_partial in run.name, runs))
+
+    if name_partial_ban is not None:
+        for n in name_partial_ban:
+            runs = list(filter(lambda run: n not in run.name, runs))
 
     if metrics is not None:
         runs = list(filter(lambda run: all([metric in list(run.summary.keys()) for metric in metrics]), runs))
@@ -170,11 +174,12 @@ def table_multiple_categories():
     metrics = ['test/co3d/pose/acc_pi6', 'test/co3d/pose/acc_pi18',
                'test/co3d/pose/err_median', 'test/co3d/pose/err_mean']
 
-    name_partial = '_mv6_' # _1s_ 'multiview'
+    name_partial = '_1s_' # _1s_ 'multiview' _mv6_
+    name_partial_ban = ['MultiView', 'Incremental']
     configs = ['train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'method.value.inference.refine.dims_detached']
     age_in_hours = 24 * 4
 
-    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
 
     import seaborn as sns
     import matplotlib.pyplot as plt
