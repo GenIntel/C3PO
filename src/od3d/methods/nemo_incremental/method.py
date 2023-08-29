@@ -155,7 +155,7 @@ class NeMo_Incremental(NeMo):
 
             self.train_dict_category_sequences_epoch = {**self.train_dict_category_sequences_labeled, **self.train_dict_category_sequences_pseudo_labeled}
             train_dataset_sub_sub = dataset_train_sub.get_subset_by_sequences(dict_category_sequences=self.train_dict_category_sequences_epoch,
-                                                                              frames_count_max_per_sequence=None)
+                                                                              frames_count_max_per_sequence=self.config.train.incremental.frames_count_max_per_sequence)
 
             results_epoch = self.train_epoch(dataset=train_dataset_sub_sub)
             results_epoch.log_with_prefix('train')
