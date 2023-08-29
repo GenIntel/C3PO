@@ -1,12 +1,12 @@
 # @package _global_
 defaults:
-  - /ablations/nemo_incremental@: _default
+  - _default
 
-ablation_name: incr_car_1s_2nd
+ablation_name: incr_car_1s_1st
 
 method:
   nemo:
-    checkpoint: ${platform.path_exps}/08-25_10-49-47_CO3D_NeMo_car_1s_2nd_slurm/nemo.ckpt
+    checkpoint: ${platform.path_exps}/08-25_10-49-52_CO3D_NeMo_car_1s_1st_slurm/nemo.ckpt
 
 categories:
   - car
@@ -15,16 +15,7 @@ train_datasets:
   labeled:
     dict_nested_frames:
       car:
-        '206_21799_45886':
-
-val_datasets:
-  main:
-    dict_nested_frames:
-      car:
         '185_19982_37678':
-        '194_20939_43630':
-        '194_20900_41097':
-        '116_13655_29006':
   unlabeled:
     dict_nested_frames:
       car:
@@ -68,6 +59,15 @@ val_datasets:
         '216_22833_48435':
         '206_21824_46375':
         '340_35306_64677':
+
+val_datasets:
+  main:
+    dict_nested_frames:
+      car:
+        '206_21799_45886':
+        '194_20939_43630':
+        '194_20900_41097':
+        '116_13655_29006':
 
 test_datasets:
   co3d:

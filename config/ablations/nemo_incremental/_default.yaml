@@ -16,16 +16,15 @@ train_datasets:
       motorcycle: ${..path_cuboids}/motorcycle.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
       airplane: ${..path_cuboids}/toyplane.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
 
-
 val_datasets:
   pascal3d:
-    skip: True
+    skip: False
   main:
     subset_fraction: 0.1
 
 test_datasets:
   pascal3d:
-    skip: True
+    skip: False
 
 method:
   nemo:
@@ -45,3 +44,5 @@ method:
 
 train: True
 test: True
+
+

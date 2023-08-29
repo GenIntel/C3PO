@@ -14,9 +14,9 @@ metrics:
   - metricA
   - metricB
 
-method:
-  nemo:
-    checkpoint: ${platform.path_exps}/08-28_09-14-15_Pascal3D_NeMo_slurm/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
+#method:
+#  nemo:
+#    checkpoint: ${platform.path_exps}/08-28_09-14-15_Pascal3D_NeMo_slurm/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
 
 train: True
 test: True

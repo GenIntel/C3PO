@@ -6,7 +6,7 @@ ablation_name: mv6_bicycle_1s_2nd
 
 method:
   nemo:
-    checkpoint: ${platform.path_exps}/08-25_10-49-41_CO3D_NeMo_bicycle_1s_2nd_slurm/nemo.ckpt
+    checkpoint: ${platform.path_exps}/08-28_15-21-07_CO3D_NeMo_bicycle_1s_2nd_slurm/nemo.ckpt
 
 categories:
   - bicycle
