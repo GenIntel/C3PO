@@ -2,10 +2,11 @@
 # checkpoint_old: ${platform.path_exps}/NeMo-Classification/classification_saved_model_199.pth
 
 train:
-    epochs: 50
+    # val: False
+    epochs: 50 # wufei: 800
     dataloader:
         num_workers: 4
-        batch_size: 12
+        batch_size: 108 # wufei: 108
         pin_memory: True
     transform:
       random_color: True

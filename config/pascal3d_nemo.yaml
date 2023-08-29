@@ -16,19 +16,26 @@ metrics:
 
 method:
   nemo:
-    checkpoint: ${platform.path_exps}/08-25_17-08-51_Pascal3D_NeMo_slurm/nemo.ckpt
+    checkpoint: ${platform.path_exps}/08-28_09-14-15_Pascal3D_NeMo_slurm/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
 
 train: True
 test: True
 
 train_datasets:
   labeled:
+    #subset_fraction: 0.1
     categories: ${categories}
 
 val_datasets:
   main:
+    #subset_fraction: 0.001
     categories: ${categories}
 
 test_datasets:
   pascal3d:
+    #subset_fraction: 0.01
     categories: ${categories}
+    #dict_nested_frames:
+    #   val:
+    #      bus:
+    #        - "n04146614_2398"
