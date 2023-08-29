@@ -375,6 +375,8 @@ class NeMo(OD3D_Method):
 
         sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=vts2d_mask.device), vts2d_mask.sum(dim=1).cumsum(dim=0)], dim=0)
         sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
+        # in case there are 0 vertices inside one image
+        sim_batchwise[sim_batchwise.isnan()] = 0.
         results_batch['sim'] = sim_batchwise
 
         # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
@@ -385,7 +387,6 @@ class NeMo(OD3D_Method):
         logger.info(f'loss {loss.item()}')
 
         results_batch['loss'] = loss[None,]
-
         results_batch['item_id'] = batch.item_id
         results_batch['name_unique'] = batch.name_unique
 
