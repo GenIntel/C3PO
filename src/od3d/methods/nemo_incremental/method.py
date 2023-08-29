@@ -38,6 +38,8 @@ from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
+from od3d.datasets.frame import OD3D_Meta
+
 
 @dataclass
 class SequencePseudoLabel():
@@ -60,7 +62,6 @@ class NeMo_Incremental(NeMo):
         self.train_dict_category_sequences_pseudo_labeled = []
         train_dict_category_sequences_pseudo_labels: Dict[str, Dict[str, SequencePseudoLabel]] = {}
         train_dict_category_sequences_pseudo_labeled: Dict[str, List[str]] = {}
-        from od3d.datasets.frame import OD3D_Meta
         train_dict_category_sequences_pseudo_labeled_proposed = OD3D_Meta.rollup_flattened_frames(random.sample(OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_unlabeled), k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed))
 
         dataset_update = dataset_train.get_subset_by_sequences(dict_category_sequences=train_dict_category_sequences_pseudo_labeled_proposed,
@@ -152,7 +153,7 @@ class NeMo_Incremental(NeMo):
             if self.config.train.incremental.enabled and epoch % self.config.train.incremental.pseudo_labels_update.epochs_to_next_update == 0:
                 self.update_pseudo_labels(dataset_train=datasets_train['unlabeled'])
 
-            self.train_dict_category_sequences_epoch = {**self.train_dict_category_sequences_labeled, **self.train_dict_category_sequences_pseudo_labeled}
+            self.train_dict_category_sequences_epoch = OD3D_Meta.rollup_flattened_frames(OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_labeled) + OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_pseudo_labeled))
             train_dataset_sub_sub = dataset_train_sub.get_subset_by_sequences(dict_category_sequences=self.train_dict_category_sequences_epoch,
                                                                               frames_count_max_per_sequence=self.config.train.incremental.frames_count_max_per_sequence)
 
