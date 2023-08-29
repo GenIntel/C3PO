@@ -42,9 +42,15 @@ class CenterZoom3D():
         if self.scale is not None:
             # scale = frame.cam_tform4x4_obj[2, 3] / self.dist
             scale *= self.scale
-            if scale < 0.01:
-                logger.warning(f'Scale is < 0.01. Setting scale to 1.')
-                scale = 1.
+
+        # logger.info(f'scale = {scale}')
+        if scale < 0.01:
+            logger.warning(f'Scale is < 0.01. Setting scale to 1.')
+            scale = 1.
+
+        if scale > 100.:
+            logger.warning(f'Scale is > 100. Setting scale to 1.')
+            scale = 1.
 
         center2d_shifted = center2d.clone()
         if self.center_rel_shift_xy is not None:
