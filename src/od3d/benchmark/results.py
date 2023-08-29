@@ -9,7 +9,7 @@ import math
 class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
     def __init__(self, device: torch.device='cpu', init_dict: Dict[str, Union[torch.Tensor, List]]=None):
         super().__init__()
-        self.mean_blocklist = ['label_gt', 'label_pred', 'rot_diff_rad', 'name_unique', 'item_id']
+        self.mean_blocklist = ['label_gt', 'label_pred', 'rot_diff_rad', 'name_unique', 'item_id', 'label_names']
         self.log_blocklist = ['name_unique', 'item_id']
         self.device = device
 
@@ -40,7 +40,14 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                 res[key] = val.mean(dim=0)
 
         if 'label_gt' in self.keys() and 'label_pred' in self.keys():
+            if 'label_names' in self.keys():
+                label_names = self['label_names']
+            else:
+                label_names = [str(i) for i in range(max(set(self['label_gt'] + self['label_pred'])))]
             res['label/acc'] = (self['label_gt'] == self['label_pred']).to(dtype=float).mean(dim=0)
+            res['label/confusion'] = wandb.plot.confusion_matrix(probs=None,
+                                                                 y_true=self['label_gt'].numpy(), preds=self['label_pred'].numpy(),
+                                                                 class_names=label_names)
 
         if 'rot_diff_rad' in self.keys():
             res['pose/acc_pi6'] = (self['rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
