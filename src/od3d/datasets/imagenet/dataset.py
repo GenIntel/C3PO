@@ -34,7 +34,7 @@ class ImageNetFrameMeta(OD3D_FrameMetaSubsetMixin, OD3D_FrameMetaRGBMixin, OD3D_
 class ImageNet(OD3D_Dataset):
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List=None,
-                 dict_nested_frames: Dict=None,
+                 dict_nested_frames: Dict=None, dict_nested_frames_ban: Dict=None,
                  transform=None, index_shift=0, subset_fraction=1.):
         # crane twice:
         #   134 : BIRD
@@ -49,7 +49,7 @@ class ImageNet(OD3D_Dataset):
         from od3d.datasets.co3d.enum import CO3D_CATEGORIES
         categories = categories if categories is not None else  [] # TODO: OBJECTNET3D_CATEOGORIES.list()
 
-        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, name=name, modalities=modalities, path_raw=path_raw,
+        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
 

@@ -211,15 +211,21 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
         return cv2.waitKey(duration)
 
 
-def get_img_from_plot(ax, fig):
+def get_img_from_plot(ax, fig, axis_off=True):
     import numpy as np
 
     # Image from plot
-    ax.axis('off')
-    fig.tight_layout(pad=0)
+    if axis_off:
+        ax.axis('off')
+        # To remove the huge white borders
+        ax.margins(0)
+        fig.tight_layout(pad=0)
+    else:
+        fig.tight_layout(pad=1)
+        ax.margins(1)
 
-    # To remove the huge white borders
-    ax.margins(0)
+
+
 
     fig.canvas.draw()
     image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)

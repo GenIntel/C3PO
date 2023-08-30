@@ -231,11 +231,11 @@ class CO3D_Sequence():
         if override or not self.fpath_cuboid_limits3d.exists():
             pcl = self.pcl_clean
 
-            if self.fpath_cuboid.exists() and self.fpath_cuboid_front_tform4x4_obj.exists():
-                logger.info(f'press "s"  to skip this lable')
-                k = self.cuboid.visualize(pcl=transf3d_broadcast(pts3d=pcl, transf4x4=self.cuboid_front_tform4x4_obj))
-                if k == ord('s'):
-                    return
+            #if self.fpath_cuboid.exists() and self.fpath_cuboid_front_tform4x4_obj.exists():
+            #    logger.info(f'press "s"  to skip this lable')
+            #    k = self.cuboid.visualize(pcl=transf3d_broadcast(pts3d=pcl, transf4x4=self.cuboid_front_tform4x4_obj))
+            #    if k == ord('s'):
+            #        return
 
             # Create an Open3D PointCloud object
             #pcd = o3d.geometry.PointCloud()
@@ -253,11 +253,40 @@ class CO3D_Sequence():
             vis.create_window()
             #vis.add_geometry(pcd)
             pcd = o3d.io.read_point_cloud(str(self.fpath_pcl))
-            vis.add_geometry(pcd)
+
+            # vis.add_geometry(pcd)
+
+            if self.fpath_cuboid.exists() and self.fpath_cuboid_front_tform4x4_obj.exists():
+                verts3d = self.cuboid.get_verts_with_mesh_id(mesh_id=0)
+                ncds = self.cuboid.get_verts_ncds_with_mesh_id(mesh_id=0)
+                cuboid_pcd = o3d.geometry.PointCloud()
+                # from od3d.cv.geometry.transform import inv_tform4x4
+                cuboid_pcd.points = o3d.utility.Vector3dVector(transf3d_broadcast(pts3d=verts3d, transf4x4=inv_tform4x4(self.cuboid_front_tform4x4_obj)).numpy())
+                cuboid_pcd.colors = o3d.utility.Vector3dVector(ncds.numpy())
+                vis.add_geometry(pcd + cuboid_pcd)
+
+                #logger.info(f'press "s"  to skip this lable')
+                #k = self.cuboid.visualize(pcl=transf3d_broadcast(pts3d=pcl, transf4x4=self.cuboid_front_tform4x4_obj))
+                #if k == ord('s'):
+                #    return
+            else:
+                vis.add_geometry(pcd)
+
+
             vis.run()  # user picks points
             vis.destroy_window()
             logger.info("")
             limits3d_ids = vis.get_picked_points()
+
+            if len(limits3d_ids) < 6:
+                logger.warning("No labels saved due to less than 6 points selected.")
+                return
+
+            if (torch.Tensor(limits3d_ids) > len(pcd.points)).any():
+                logger.warning("No labels saved due to point on prev. cuboid selected")
+                return
+
+
             limits3d = torch.from_numpy(np.asarray(pcd.points)).to(dtype=torch.float32)[limits3d_ids]
             self.fpath_cuboid_limits3d.parent.mkdir(parents=True, exist_ok=True)
             torch.save(limits3d, self.fpath_cuboid_limits3d)
@@ -367,6 +396,9 @@ class CO3D_Sequence():
             pts3d_clean = self.pcl_clean
 
             if self.cuboid_source == CUBOID_SOURCES.LIMITS3D:
+                if not self.fpath_cuboid_limits3d.exists():
+                    logger.warning("No cuboid saved due to no limits3d available")
+                    return
                 import open3d as o3d
                 from od3d.cv.visual.draw import get_colors
                 from od3d.cv.geometry.transform import rot3d, rot3d_broadcast
@@ -700,6 +732,10 @@ class CO3D_Sequence():
                 self.preprocess_pcl_clean()
             self._pcl_clean, _ = load_ply(fpath_pcl_clean)
         return self._pcl_clean
+
+    @property
+    def com(self):
+        return self.pcl_clean.mean(dim=0)
 
     @property
     def cuboid(self):
