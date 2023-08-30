@@ -196,7 +196,9 @@ class OD3D_Meta(ABC):
     def complete_nested_metas(cls, path_meta: Path, dict_nested_metas: Union[Dict, DictConfig, None], parent_key='', separator='/', dict_nested_metas_ban: Union[Dict, DictConfig, None]=None):
         if dict_nested_metas is None:
             dict_nested_metas = {'': None}
-            dict_nested_metas_ban = {'': dict_nested_metas_ban}
+            if dict_nested_metas_ban is not None:
+                dict_nested_metas_ban = {'': dict_nested_metas_ban}
+
         dict_nested_frames_completed = {}
 
         for key, value in dict_nested_metas.items():
