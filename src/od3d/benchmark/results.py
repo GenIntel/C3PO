@@ -73,7 +73,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
 
         # fp: false positive rates. tp: true positive rates
         thresholds_every=1
-        fp, tp, thresholds = metrics.roc_curve(ground_truth, predictions)
+        fp, tp, thresholds = metrics.roc_curve(ground_truth, predictions, drop_intermediate=False)
         roc_auc = metrics.auc(fp, tp)
 
         plt.ioff()
