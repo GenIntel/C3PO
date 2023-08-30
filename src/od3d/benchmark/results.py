@@ -59,8 +59,8 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
 
         if 'rot_diff_rad' in self.keys():
             if 'sim' in self.keys():
-                res['pose/roc/pi6'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).numpy().astype(np.int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/6 ROC: TPR vs FPR")
-                res['pose/roc/pi18'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).numpy().astype(np.int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/18 ROC: TPR vs FPR")
+                res['pose/roc/pi6'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/6 ROC: TPR vs FPR")
+                res['pose/roc/pi18'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/18 ROC: TPR vs FPR")
 
             res['pose/acc_pi6'] = (self['rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
             res['pose/acc_pi18'] = (self['rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
