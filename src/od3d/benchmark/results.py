@@ -72,7 +72,6 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
     def get_roc(self, ground_truth, predictions, title): #labels, predictions, positive_label, thresholds_every=10, title=''):
 
         # fp: false positive rates. tp: true positive rates
-        thresholds_every=1
         fp, tp, thresholds = metrics.roc_curve(ground_truth, predictions, drop_intermediate=False)
         roc_auc = metrics.auc(fp, tp)
 
@@ -99,6 +98,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         # plot some thresholds
         thresholdsLength = len(thresholds)
         colorMap = plt.get_cmap('jet', thresholdsLength)
+        thresholds_every = int(thresholdsLength // 10) + 1
         for i in range(0, thresholdsLength, thresholds_every):
             if np.isfinite(fp[i]) and np.isfinite(tp[i]):
                 threshold_value_with_max_four_decimals = str(thresholds[i])[:5]
