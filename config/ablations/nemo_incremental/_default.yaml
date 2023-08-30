@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /datasets@train_datasets.labeled: co3d
-  - override /datasets@train_datasets.unlabeled: co3d
+  - override /datasets@train_datasets.unlabeled: co3d_40s_unlabeled
   - override /datasets@test_datasets.co3d: co3d
   - override /datasets@val_datasets.main: co3d
 
@@ -28,14 +28,22 @@ test_datasets:
 
 method:
   nemo:
-    #fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
     train:
-      epochs: 50
       early_stopping: False
-
-    #multiview:
-    #  type: multiview # single multiview multiview-mean-se3
-    #  batch_size: 6
+      val: True
+      split: sequences_separated # 'random' 'sequences_separated' 'seqences_shared'
+      epochs_to_next_test: 4
+      epochs: 100
+      incremental:
+        enabled: True
+        sequences_labeled_count:
+        frames_count_max_per_sequence: 20
+        pseudo_labels_update:
+          epochs_to_next_update: 1
+          count_new_labels_proposed: 10
+          count_new_labels_selected_max: 1
+          multiview_count: 6
+          sim_threshold: 0.1 # 0.6
 
 
 #path_cuboids: ${.path_preprocess}/cuboids/avg/co3d_50s_train # ${.name}

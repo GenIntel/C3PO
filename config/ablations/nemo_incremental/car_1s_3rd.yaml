@@ -1,0 +1,5 @@
+# @package _global_
+defaults:
+  - /ablations/nemo_incremental@: _car_1s_3rd
+
+ablation_name: incr_car_1s_3rd

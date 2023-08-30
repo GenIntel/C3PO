@@ -11,8 +11,8 @@ subset_fraction: 1.
 #sequences_sort_pcl_score: True # False
 #sequences_count_max_per_category: 50 # None
 
-cuboid_source: 'co3d' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d'
-cam_tform_obj_source: 'co3d'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', limits3d
+#cuboid_source: 'co3d' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d'
+#cam_tform_obj_source: 'co3d'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', limits3d
 
 categories:
   - car
@@ -67,11 +67,11 @@ dict_nested_frames:
     '250_26778_55253':
     '194_20895_41086':
     '216_22838_48455':
-    '206_21796_45540':
     '421_58408_112554':
     '216_22833_48435':
     '206_21824_46375':
     '340_35306_64677':
+    '427_59912_115725':
   toyplane:
     #'398_50528_99129':
     #'341_35560_65483':

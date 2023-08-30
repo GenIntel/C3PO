@@ -2,11 +2,11 @@
 defaults:
   - _default
 
-ablation_name: incr_car_1s_1st
+ablation_name: incr_car_1s_3rd
 
 method:
   nemo:
-    checkpoint: ${platform.path_exps}/08-25_10-49-52_CO3D_NeMo_car_1s_1st_slurm/nemo.ckpt
+    checkpoint: ${platform.path_exps}/08-25_10-49-35_CO3D_NeMo_car_1s_3rd_slurm/nemo.ckpt
 
 categories:
   - car
@@ -15,14 +15,14 @@ train_datasets:
   labeled:
     dict_nested_frames:
       car:
-        '185_19982_37678':
+        '194_20939_43630':
 
 val_datasets:
   main:
     dict_nested_frames:
       car:
+        '185_19982_37678':
         '206_21799_45886':
-        '194_20939_43630':
         '194_20900_41097':
         '116_13655_29006':
 

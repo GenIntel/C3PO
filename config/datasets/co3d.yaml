@@ -52,12 +52,14 @@ preprocess:
 #sequences_sort_pcl_score: False # False
 #sequences_count_max_per_category: None # None
 
-dict_nested_frames_banned:
+dict_nested_frames_ban:
+  car:
+    '206_21796_45540': # toy car
   bicycle:
     '377_43836_87236': # two bicycles with inverse directions
 
 dict_nested_frames:
-#  car:
+  car:
 #    '185_19982_37678':
 #    '206_21799_45886':
 #    '194_20939_43630':
