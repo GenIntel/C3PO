@@ -11,6 +11,9 @@ from pytorch3d.vis.plotly_vis import plot_scene, AxisArgs
 from pytorch3d.renderer.cameras import PerspectiveCameras
 from od3d.cv.geometry.transform import transf3d_broadcast
 from od3d.cv.visual.draw import get_colors
+from pathlib import Path
+from typing import List
+import torchvision
 
 def pt3d_camera_from_tform4x4_intr4x4_imgs_size(cam_tform4x4_obj: torch.Tensor, cam_intr4x4: torch.Tensor, img_size: torch.Tensor):
     if cam_tform4x4_obj.dim() == 2:
@@ -170,6 +173,13 @@ def imgs_to_img(rgbs):
 
     return rgb
 
+
+def fpaths_to_rgb(fpaths: List[Path], H: int, W: int):
+
+    rgbs = torch.stack([resize(torchvision.io.read_image(path=str(fpath)), H_out=H, W_out=W) for fpath in fpaths], dim=0)
+    rgb = imgs_to_img(rgbs)
+    return rgb
+
 def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=None):
     rgb = imgs_to_img(rgbs)
     return show_img(rgb, duration, vwriter, fpath, height, width)
@@ -203,8 +213,7 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
         vwriter.write(img)
 
     if fpath is not None:
-        if not os.path.exists(os.path.dirname(fpath)):
-            os.makedirs(os.path.dirname(fpath))
+        Path(fpath).parent.mkdir(exist_ok=True, parents=True)
         cv2.imwrite(str(fpath), img)
     else:
         cv2.imshow("img", img)
@@ -223,9 +232,6 @@ def get_img_from_plot(ax, fig, axis_off=True):
     else:
         fig.tight_layout(pad=1)
         ax.margins(1)
-
-
-
 
     fig.canvas.draw()
     image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
