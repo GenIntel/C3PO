@@ -59,8 +59,11 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
 
         if 'rot_diff_rad' in self.keys():
             if 'sim' in self.keys():
-                res['pose/roc/pi6'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/6 ROC: TPR vs FPR")
-                res['pose/roc/pi18'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/18 ROC: TPR vs FPR")
+                res['pose/pr/pi6'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/6: Precision vs. Recall")
+                res['pose/pr/pi18'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/18: Precision vs. Recall")
+
+                #res['pose/roc/pi6'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/6 ROC: TPR vs. FPR")
+                #res['pose/roc/pi18'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title="PI/18 ROC: TPR vs. FPR")
 
             res['pose/acc_pi6'] = (self['rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
             res['pose/acc_pi18'] = (self['rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
@@ -68,6 +71,12 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
             res['pose/err_mean'] = 180 / math.pi * self['rot_diff_rad'].mean()
 
         return OD3D_Results(init_dict=res)
+
+    def get_pr(self, ground_truth, predictions, title):
+        display = metrics.PrecisionRecallDisplay.from_predictions(
+            ground_truth, predictions, name=title
+        )
+        return display.figure_
 
     def get_roc(self, ground_truth, predictions, title): #labels, predictions, positive_label, thresholds_every=10, title=''):
 
