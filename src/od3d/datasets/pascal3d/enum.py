@@ -37,7 +37,7 @@ MAP_CATEGORIES_OD3D_TO_PASCAL3D = {
 # note: changing these parameters, requires to recompute cuboids.
 PASCAL3D_SCALE_NORMALIZE_TO_REAL = {
     'aeroplane': 1.,
-    'bicycle': 0.22, # 0.18m / 0.81 ~= 0.22
+    'bicycle': 2.22, # 1.8m / 0.81 ~= 2.22
     'boat': 1.,
     'bottle': 1.,
     'bus': 1.,
