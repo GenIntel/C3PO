@@ -327,7 +327,7 @@ class NeMo(OD3D_Method):
             torch.meshgrid(torch.arange(W, device=self.device), torch.arange(H, device=self.device),
                            indexing='xy'), dim=0)  # HxW
         prob_noise = (1. - 1. * resize(feats2d_net_mask, scale_factor=1. / self.down_sample_rate)).flatten(1)
-        prob_noise[prob_noise.sum(dim=-1) == 0.] = 1.
+        prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
         noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise)].permute(1, 2, 0)
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
         vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
