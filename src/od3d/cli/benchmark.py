@@ -154,11 +154,11 @@ def table():
 
 
 
-    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean', 'test/pascal3d_test/time_pose']
-    metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean', 'test/co3d_5s_test/time_pose']
+    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean', 'test/pascal3d_test/time_pose']
+    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean', 'test/co3d_5s_test/time_pose']
 
     #metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean', 'test/co3d_50s_test/time_pose']
-    name_partial = 'no_early' # None, 'inference', 'split', 'render'
+    name_partial = '_car_1s_' # None, 'inference', 'split', 'render'
     # configs = ['method.value.multiview.type', 'method.value.multiview.batch_size']
     age_in_hours = 250
     configs = []
@@ -172,6 +172,61 @@ def table():
 
 
     # my_df.to_csv('output.csv', index=False, header=False, float_format='%.3f')
+
+@app.command()
+def table_multiple_sequences():
+    logging.basicConfig(level=logging.INFO)
+
+    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
+    #metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
+    #metrics = ['test/co3d/pose/acc_pi6', 'test/co3d/pose/acc_pi18',
+    #           'test/co3d/pose/err_median', 'test/co3d/pose/err_mean']
+
+    name_partial = '_car_1s_' # _1s_ 'multiview' _mv6_
+    name_partial_ban = ['45s']
+    configs = ['method.class_name', 'train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'train_datasets.labeled.dict_nested_frames']
+    age_in_hours = 24 * 10
+
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
+
+    my_df['sequence_nth'] = my_df["Run"].str.split('_1s_').str[1:2].str.join('_').str[:3]
+    my_df['type'] = my_df["Run"].str[14:].str.split('_1s_').str[0] + my_df["Run"].str.split('_1s_').str[1:2].str.join('_').str[3:]
+    my_df['type'] = my_df['type'].str.replace('_slurm', '')
+    my_df['type'] = my_df['type'].str.replace('_incr', '')
+    my_df['type'] = my_df['type'].str.replace('Incremental', 'Incr.')
+
+    my_df['type'] = my_df['type'].str.replace('_', '\n')
+    metrics_new_names = ['Acc. Pi/6. [%]', 'Acc. Pi/18. [%]', 'Median [deg.]', 'Mean [deg.]']
+    #my_df[metrics[0]] *= 100
+    #my_df[metrics[1]] *= 100
+
+    map_columns = {
+        metrics[0]: metrics_new_names[0],
+        metrics[1]: metrics_new_names[1],
+        metrics[2]: metrics_new_names[2],
+        metrics[3]: metrics_new_names[3]
+    }
+
+    my_df = my_df.rename(columns=map_columns)
+    my_df = my_df.sort_values(by=['type', 'sequence_nth'])
+    my_df = my_df.reset_index(drop=True)
+
+    for i, metric in enumerate(metrics_new_names):
+        #my_df = my_df.sort_values(by=['category', metric])
+        mv_plot = sns.barplot(data=my_df, x="type", y=metric, errorbar=('ci', 100))
+        #
+        # mv_plot = sns.catplot(
+        #     x="type",  # x variable name
+        #     y=metric,  # y variable name
+        #     hue="method",  # group variable name
+        #     data=my_df,  # dataframe to plot
+        #     kind="bar",
+        #     errorbar=('ci', 100)
+        # )
+
+        plt.savefig(f"seqs_type_{metrics[i].replace('/', '_')}.png", bbox_inches='tight')
+        plt.clf()
 
 @app.command()
 def table_multiple_categories_multiview_incremental():

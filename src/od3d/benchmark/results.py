@@ -22,7 +22,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         self.device = device
 
         if init_dict is not None:
-           self.__add__(other=init_dict)
+            self.__add__(other=init_dict)
 
     def __add__(self, other: Dict[str, torch.Tensor]):
         for key, val in other.items():
@@ -73,12 +73,18 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         return OD3D_Results(init_dict=res)
 
     def get_pr(self, ground_truth, predictions, title):
+
+
+        precision, recall, thresholds = metrics.precision_recall_curve(ground_truth, predictions)
+
+        if len(thresholds) == 0:
+            return self.get_empty_figure(title=title)
+
         display = metrics.PrecisionRecallDisplay.from_predictions(
             ground_truth, predictions, name=title,
         )
         display.figure_.set_figwidth(4)
         display.figure_.set_figheight(4)
-        precision, recall, thresholds = metrics.precision_recall_curve(ground_truth, predictions)
 
         thresholdsLength = len(thresholds)
         colorMap = plt.get_cmap('jet', thresholdsLength)
@@ -97,11 +103,25 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         display.ax_.set_ylim([-0.1, 1.1])
         display.ax_.axis('on')
 
-        from od3d.cv.visual.show import get_img_from_plot
-        from od3d.cv.io import image_as_wandb_image
-        img = get_img_from_plot(ax=display.ax_, fig=display.figure_, axis_off=False)
-        return image_as_wandb_image(img, caption=title)
-        #return display.figure_
+        #from od3d.cv.visual.show import get_img_from_plot
+        #from od3d.cv.io import image_as_wandb_image
+        #img = get_img_from_plot(ax=display.ax_, fig=display.figure_, axis_off=False)
+        #return image_as_wandb_image(img, caption=title)
+        return display.figure_
+
+
+    def get_empty_figure(self, title):
+        plt.ioff()
+        # Create a Figure object
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.plot([0, 1], [0, 1], color='navy', linestyle='--', label=title)
+        ax.legend()
+        ax.axis("square")
+        ax.set_xlim([-0.1, 1.1])
+        ax.set_ylim([-0.1, 1.1])
+
+        return fig
+
 
     def get_roc(self, ground_truth, predictions, title):
         """
@@ -111,6 +131,11 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
             Returns:
                 figure (matplotlib figure)
         """
+        fp, tp, thresholds = metrics.roc_curve(ground_truth, predictions, drop_intermediate=False)
+
+        if len(thresholds) == 0:
+            return self.get_empty_figure(title=title)
+
         display = RocCurveDisplay.from_predictions(
             ground_truth,
             predictions,
@@ -120,7 +145,6 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         display.figure_.set_figwidth(4)
         display.figure_.set_figheight(4)
 
-        fp, tp, thresholds = metrics.roc_curve(ground_truth, predictions, drop_intermediate=False)
 
         thresholdsLength = len(thresholds)
         colorMap = plt.get_cmap('jet', thresholdsLength)
@@ -141,11 +165,11 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         display.ax_.axis('on')
 
 
-        from od3d.cv.visual.show import get_img_from_plot
-        from od3d.cv.io import image_as_wandb_image
-        img = get_img_from_plot(ax=display.ax_, fig=display.figure_, axis_off=False)
-        return image_as_wandb_image(img, caption=title)
-        #return display.figure_
+        #from od3d.cv.visual.show import get_img_from_plot
+        #from od3d.cv.io import image_as_wandb_image
+        #img = get_img_from_plot(ax=display.ax_, fig=display.figure_, axis_off=False)
+        #return image_as_wandb_image(img, caption=title)
+        return display.figure_
 
     # def get_roc(self, ground_truth, predictions, title): #labels, predictions, positive_label, thresholds_every=10, title=''):
     #
