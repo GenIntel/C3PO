@@ -80,6 +80,10 @@ class NeMo_Incremental(NeMo):
             batch.to(device=self.device)
 
             if self.config.train.incremental.pseudo_labels_update.use_ground_truth:
+                if batch.category[0] not in train_dict_category_sequences_pseudo_labels.keys():
+                    train_dict_category_sequences_pseudo_labels[batch.category[0]] = {}
+                if batch.category[0] not in train_dict_category_sequences_pseudo_labeled.keys():
+                    train_dict_category_sequences_pseudo_labeled[batch.category[0]] = []
                 obj_tform4x4_cuboid_front = torch.eye(4).to(device=self.device)
                 sim = 1.
                 train_dict_category_sequences_pseudo_labels[batch.category[0]][
