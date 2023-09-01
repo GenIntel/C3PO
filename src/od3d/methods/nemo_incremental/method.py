@@ -78,17 +78,26 @@ class NeMo_Incremental(NeMo):
         for i, batch in tqdm(enumerate(iter(dataloader))):
 
             batch.to(device=self.device)
-            results_batch = self.inference_batch_multiview(batch=batch)
-            results += results_batch
-            sim = results_batch["sim"].mean()
-            obj_tform4x4_cuboid_front = results_batch["obj_tform4x4_cuboid_front"]
-            if sim > self.config.train.incremental.pseudo_labels_update.sim_threshold:
-                if batch.category[0] not in train_dict_category_sequences_pseudo_labels.keys():
-                    train_dict_category_sequences_pseudo_labels[batch.category[0]] = {}
-                if batch.category[0] not in train_dict_category_sequences_pseudo_labeled.keys():
-                    train_dict_category_sequences_pseudo_labeled[batch.category[0]] = []
-                train_dict_category_sequences_pseudo_labels[batch.category[0]][batch.sequence_name[0]] = SequencePseudoLabel(obj_tform4x4_cuboid_front=obj_tform4x4_cuboid_front, sim=sim)
+
+            if self.config.train.incremental.pseudo_labels_update.use_ground_truth:
+                obj_tform4x4_cuboid_front = torch.eye(4).to(device=self.device)
+                sim = 1.
+                train_dict_category_sequences_pseudo_labels[batch.category[0]][
+                    batch.sequence_name[0]] = SequencePseudoLabel(obj_tform4x4_cuboid_front=obj_tform4x4_cuboid_front,
+                                                                  sim=sim)
                 train_dict_category_sequences_pseudo_labeled[batch.category[0]].append(batch.sequence_name[0])
+            else:
+                results_batch = self.inference_batch_multiview(batch=batch)
+                results += results_batch
+                sim = results_batch["sim"].mean()
+                obj_tform4x4_cuboid_front = results_batch["obj_tform4x4_cuboid_front"]
+                if sim > self.config.train.incremental.pseudo_labels_update.sim_threshold:
+                    if batch.category[0] not in train_dict_category_sequences_pseudo_labels.keys():
+                        train_dict_category_sequences_pseudo_labels[batch.category[0]] = {}
+                    if batch.category[0] not in train_dict_category_sequences_pseudo_labeled.keys():
+                        train_dict_category_sequences_pseudo_labeled[batch.category[0]] = []
+                    train_dict_category_sequences_pseudo_labels[batch.category[0]][batch.sequence_name[0]] = SequencePseudoLabel(obj_tform4x4_cuboid_front=obj_tform4x4_cuboid_front, sim=sim)
+                    train_dict_category_sequences_pseudo_labeled[batch.category[0]].append(batch.sequence_name[0])
 
         train_dict_category_sequences_pseudo_labeled = OD3D_Meta.unroll_nested_metas(train_dict_category_sequences_pseudo_labeled)
 
