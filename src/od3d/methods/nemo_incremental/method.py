@@ -292,7 +292,8 @@ class NeMo_Incremental(NeMo):
 
             for epoch in range(self.config.inference.optimizer.epochs):
                 # commenting this line means to enable translation optimization.
-                # obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
+                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
+
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
                 obj_tform6_tmp.data[:, :] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
