@@ -94,6 +94,13 @@ else
     git clone {cfg.platform.url_od3d} {cfg.platform.path_od3d}
 fi
 
+while [[ -e "{cfg.platform.path_od3d}/installing.txt" ]]; do
+    sleep 3  
+    echo "waiting for installing.txt file to disappear."
+done
+
+touch "{cfg.platform.path_od3d}/installing.txt"
+
 cd {cfg.platform.path_od3d}
 git fetch 
 git checkout {cfg.branch}
@@ -112,6 +119,8 @@ else
 fi
 
 {install_od3d_cmds_str}
+
+rm "{cfg.platform.path_od3d}/installing.txt"
 
 od3d debug hello-world
 
@@ -199,6 +208,13 @@ else
     git clone {cfg.platform.url_od3d} {cfg.platform.path_od3d}
 fi
 
+while [[ -e "{cfg.platform.path_od3d}/installing.txt" ]]; do
+    sleep 3  
+    echo "waiting for installing.txt file to disappear."
+done
+
+touch "{cfg.platform.path_od3d}/installing.txt"
+
 cd {cfg.platform.path_od3d}
 git fetch 
 git checkout {cfg.branch}
@@ -217,6 +233,8 @@ else
 fi
 
 {install_od3d_cmds_str}
+
+rm "{cfg.platform.path_od3d}/installing.txt"
 
 od3d debug hello-world
 
