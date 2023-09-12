@@ -546,7 +546,7 @@ class NeMo(OD3D_Method):
         except ValueError:
             logger.warning(
                 f'Cannot calculate deviation in rotation angle due to rot3x3 trace being too small, setting deviation to 0.')
-            diff_rot_angle_rad = 0.
+            diff_rot_angle_rad = torch.zeros_like(diff_rot3x3[:, 0, 0])
         results['rot_diff_rad'] = diff_rot_angle_rad
         results['label_gt'] = batch.label
         results['label_pred'] = pred_class_ids
