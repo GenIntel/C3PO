@@ -62,7 +62,11 @@ class NeMo_Incremental(NeMo):
         self.train_dict_category_sequences_pseudo_labeled = []
         train_dict_category_sequences_pseudo_labels: Dict[str, Dict[str, SequencePseudoLabel]] = {}
         train_dict_category_sequences_pseudo_labeled: Dict[str, List[str]] = {}
-        train_dict_category_sequences_pseudo_labeled_proposed = OD3D_Meta.rollup_flattened_frames(random.sample(OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_unlabeled), k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed))
+        train_dict_category_sequences_unlabeled_unrolled = OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_unlabeled)
+        if self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed >= len(train_dict_category_sequences_unlabeled_unrolled):
+            train_dict_category_sequences_pseudo_labeled_proposed = train_dict_category_sequences_unlabeled_unrolled
+        else:
+            train_dict_category_sequences_pseudo_labeled_proposed = OD3D_Meta.rollup_flattened_frames(random.sample(train_dict_category_sequences_unlabeled_unrolled, k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed))
 
         dataset_update = dataset_train.get_subset_by_sequences(dict_category_sequences=train_dict_category_sequences_pseudo_labeled_proposed,
                                                                frames_count_max_per_sequence=self.config.train.incremental.pseudo_labels_update.multiview_count)
