@@ -16,6 +16,7 @@ train:
     sequences_labeled_count:
     frames_count_max_per_sequence: 20
     pseudo_labels_update:
+      use_ground_truth: False
       epochs_to_next_update: 1
       count_new_labels_proposed: 10
       count_new_labels_selected_max: 3

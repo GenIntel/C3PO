@@ -55,11 +55,32 @@ preprocess:
 dict_nested_frames_ban:
   car:
     '206_21796_45540': # toy car
+    '429_60346_116890': # problem: 1: cam inside mesh, 2: too close
+    '194_20894_41084': # problem: mask front vehicle zero (behind vehicle non zero)
+    '194_20898_41093': # problem: mask front vehicle zero (behind vehicle non zero)
+    '216_22827_48422': # problem: bad relative pose estimation
+    '216_22841_48461': # problem: bad relative pose estimation
+    '351_37072_67647': # problem: toy car
+    '216_22833_48435': # problem: bad relative pose estimation
+    '340_35306_64677': # problem: bad relative pose estimation (plus change of sequence?)
+
+    '206_21799_45886':  # problem: bad relative pose estimation
+#    '429_60401_117239': # problem: closeup
+#    '194_20899_41094':  # relabel?
+#    '216_22795_47233':  # relabel?
+#    '425_59326_114632':
+#    '194_20897_41083':
+#    '216_22800_47486':
+#    '216_22801_47487':
+#    '216_22831_48446':
+#    '216_22796_47484':
+#    '216_22803_47496':
+#    '216_22797_47235':
   bicycle:
     '377_43836_87236': # two bicycles with inverse directions
 
 dict_nested_frames:
-  car:
+#  car:
 #    '185_19982_37678':
 #    '206_21799_45886':
 #    '194_20939_43630':

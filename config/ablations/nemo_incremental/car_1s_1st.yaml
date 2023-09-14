@@ -2,4 +2,4 @@
 defaults:
   - /ablations/nemo_incremental@: _car_1s_1st
 
-ablation_name: incr_car_1s_1st
+ablation_name: incr_car_1s_1st_thresh_p6_s3_f50_e10

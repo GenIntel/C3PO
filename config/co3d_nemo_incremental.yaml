@@ -13,8 +13,6 @@ defaults:
   - platform: local
   - datasets/categories@categories: car
 
-
-
 metrics:
   - metricA
   - metricB
@@ -28,8 +26,6 @@ train_datasets:
     categories: ${categories}
   unlabeled:
     categories: ${categories}
-    cuboid_source: 'co3d'
-    cam_tform_obj_source: 'co3d'
 
 val_datasets:
   main:

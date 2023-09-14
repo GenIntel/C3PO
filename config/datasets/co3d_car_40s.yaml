@@ -3,13 +3,13 @@ defaults:
 
 name: co3d_40s
 
-# frames_count_max_per_sequence: 2
+# frames_count_max_per_sequence: 6
 
 subset_fraction: 1.
 
-sequences_require_pcl: True # False
-sequences_sort_pcl_score: True # False
-sequences_count_max_per_category: 50 # None
+#sequences_require_pcl: True # False
+#sequences_sort_pcl_score: True # False
+#sequences_count_max_per_category: 50 # None
 
 #cuboid_source: 'co3d' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d'
 #cam_tform_obj_source: 'co3d'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', limits3d
@@ -42,11 +42,11 @@ dict_nested_frames:
     '413_56494_109076':
     '216_22797_47235':
     '417_57855_111864':
-    '194_20894_41084':
-    '421_58460_112802':
-    '216_22800_47486':
-    '185_19999_39425':
-    '216_22811_47499':
+    '194_20894_41084':# 216_22797_47235 # 216_22827_48422
+    '421_58460_112802': # 216_22841_48461
+    '216_22800_47486': # 351_37072_67647
+    '185_19999_39425': # /216_22833_48435
+    '216_22811_47499': # 340_35306_64677
     '216_22827_48422':
     '216_22803_47496':
     '351_37059_67904':

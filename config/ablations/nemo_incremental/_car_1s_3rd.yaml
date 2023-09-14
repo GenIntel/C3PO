@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - _default
+  - _thresh_p6_s3_f50_e10
 
 ablation_name: incr_car_1s_3rd
 
