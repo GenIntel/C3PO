@@ -2,20 +2,34 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo_incremental
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.labeled: co3d_3s_train # this is the default train dataset
-  - datasets@train_datasets.unlabeled: co3d_47s_train #
-  - datasets@val_datasets.main: co3d_5s_val # this is used for model selection, if no main is specified, a split on the train dataset is given
+  - datasets@train_datasets.labeled: co3d # this is the default train dataset
+  - datasets@train_datasets.unlabeled: co3d #
+  - datasets@val_datasets.main: co3d # this is used for model selection, if no main is specified, a split on the train dataset is given
   - datasets@val_datasets.pascal3d: pascal3d_val
-  - datasets@test_datasets.co3d: co3d_5s_test
+  - datasets@test_datasets.co3d: co3d_5s
   - datasets@test_datasets.pascal3d: pascal3d_test
   - datasets@texture_dataset: dtd
   - platform@platform_local: local
   - platform: local
   - datasets/categories@categories: car
 
+
+
 metrics:
   - metricA
   - metricB
+
+method:
+  nemo:
+    classes: ${categories}
+
+train_datasets:
+  labeled:
+    categories: ${categories}
+  unlabeled:
+    categories: ${categories}
+    cuboid_source: 'co3d'
+    cam_tform_obj_source: 'co3d'
 
 val_datasets:
   main:

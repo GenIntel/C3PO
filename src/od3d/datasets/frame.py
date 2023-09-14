@@ -193,9 +193,12 @@ class OD3D_Meta(ABC):
         return int(text) if text.isdigit() else text
 
     @classmethod
-    def complete_nested_metas(cls, path_meta: Path, dict_nested_metas: Union[Dict, DictConfig, None], parent_key='', separator='/'):
+    def complete_nested_metas(cls, path_meta: Path, dict_nested_metas: Union[Dict, DictConfig, None], parent_key='', separator='/', dict_nested_metas_ban: Union[Dict, DictConfig, None]=None):
         if dict_nested_metas is None:
             dict_nested_metas = {'': None}
+            if dict_nested_metas_ban is not None:
+                dict_nested_metas_ban = {'': dict_nested_metas_ban}
+
         dict_nested_frames_completed = {}
 
         for key, value in dict_nested_metas.items():
@@ -204,20 +207,45 @@ class OD3D_Meta(ABC):
                 dir_fpaths = [fpath for fpath in list(
                     cls.get_path_metas(path_meta=path_meta).joinpath(new_key).iterdir())]
                 if dir_fpaths[0].is_dir():
-                    dict_nested_frames_completed[key] = \
-                        cls.complete_nested_metas(path_meta=path_meta, parent_key=new_key,
-                                                  dict_nested_metas={f'{dir_fpath.stem}': None
-                                                                      for dir_fpath in dir_fpaths})
+                    if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
+                        dict_nested_frames_completed[key] = \
+                            cls.complete_nested_metas(path_meta=path_meta, parent_key=new_key,
+                                                      dict_nested_metas={f'{dir_fpath.stem}': None
+                                                                          for dir_fpath in dir_fpaths})
+                    elif dict_nested_metas_ban[key] is not None:
+                        dict_nested_frames_completed[key] = \
+                            cls.complete_nested_metas(path_meta=path_meta, parent_key=new_key,
+                                                      dict_nested_metas={f'{dir_fpath.stem}': None
+                                                                         for dir_fpath in dir_fpaths},
+                                                      dict_nested_metas_ban=dict_nested_metas_ban[key])
+                    else:
+                        pass
                 else:
-
-                    dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in sorted(dir_fpaths, key=lambda f: [OD3D_Meta.atoi(val) for val in re.split(r'(\d+)', f.stem)])]
-
+                    if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
+                        dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in sorted(dir_fpaths, key=lambda f: [OD3D_Meta.atoi(val) for val in re.split(r'(\d+)', f.stem)])]
+                    elif dict_nested_metas_ban[key] is not None:
+                        dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in sorted(dir_fpaths, key=lambda f: [OD3D_Meta.atoi(val) for val in re.split(r'(\d+)', f.stem)]) if dir_fpath.stem not in dict_nested_metas_ban[key]]
+                    else:
+                        pass
             elif isinstance(value,  Union[Dict, DictConfig]):
-                dict_nested_frames_completed[key] = cls.complete_nested_metas(path_meta=path_meta,
-                                                                              parent_key=new_key,
-                                                                              dict_nested_metas=value)
+                if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
+                    dict_nested_frames_completed[key] = cls.complete_nested_metas(path_meta=path_meta,
+                                                                                  parent_key=new_key,
+                                                                                  dict_nested_metas=value)
+                elif dict_nested_metas_ban[key] is not None:
+                    dict_nested_frames_completed[key] = cls.complete_nested_metas(path_meta=path_meta,
+                                                                                  parent_key=new_key,
+                                                                                  dict_nested_metas=value,
+                                                                                  dict_nested_metas_ban=dict_nested_metas_ban[key])
+                else:
+                    pass
             else:
-                dict_nested_frames_completed[key] = value
+                if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
+                    dict_nested_frames_completed[key] = value
+                elif dict_nested_metas_ban[key] is not None:
+                    dict_nested_frames_completed[key] = [val for val in value if val not in dict_nested_metas_ban[key]]
+                else:
+                    pass
 
         if len(dict_nested_frames_completed.keys()) == 1 and '' in dict_nested_frames_completed.keys():
             dict_nested_frames_completed = dict_nested_frames_completed['']

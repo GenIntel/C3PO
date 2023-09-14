@@ -268,8 +268,10 @@ class CO3D_Frame(OD3D_Frame):
     @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
-            if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D:
+            if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D or not self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
                 self._cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
+                #if not self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
+                #    logger.warning(f'No {self.cam_tform_obj_source} label for {self.sequence.name_unique}')
             elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL:
                 self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
                                                   inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))

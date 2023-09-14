@@ -31,6 +31,7 @@ class Pascal3D(OD3D_Dataset):
         path_cuboids: Path,
         categories: List[PASCAL3D_CATEGORIES] = None,
         dict_nested_frames: Dict[str, Dict[str, List[str]]] = None,
+        dict_nested_frames_ban: Dict[str, Dict[str, List[str]]] = None,
         transform=None,
         subset_fraction=1.,
         index_shift=0,
@@ -40,7 +41,7 @@ class Pascal3D(OD3D_Dataset):
         else:
             categories = self.CATEGORIES.list()
 
-        super().__init__(categories=categories, name=name, modalities=modalities, path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction, index_shift=index_shift, dict_nested_frames=dict_nested_frames)
+        super().__init__(categories=categories, name=name, modalities=modalities, path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction, index_shift=index_shift, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban)
 
         self.path_cuboids = Path(path_cuboids)
 

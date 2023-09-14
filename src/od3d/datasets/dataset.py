@@ -52,7 +52,7 @@ class OD3D_Dataset(Dataset):
         cls.subclasses[cls.__name__] = cls
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1.,
-                 dict_nested_frames: Dict=None):
+                 dict_nested_frames: Dict=None, dict_nested_frames_ban: Dict=None):
 
         logger.info(f'init dataset {name}...')
 
@@ -77,7 +77,7 @@ class OD3D_Dataset(Dataset):
 
         logger.info('completing nested frames..., can take up to 500 seconds...')
         dict_nested_frames = OD3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta,
-                                                                  dict_nested_metas=dict_nested_frames)
+                                                                  dict_nested_metas=dict_nested_frames, dict_nested_metas_ban=dict_nested_frames_ban)
 
 
         dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames)

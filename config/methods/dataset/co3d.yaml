@@ -19,6 +19,7 @@
 # checkpoint: /misc/lmbraid19/sommerl/exps/06-22_11-10-13_CO3D_NeMo_local/nemo.ckpt
 
 train:
+    epochs: 5
     dataloader:
         num_workers: 4
         batch_size: 12

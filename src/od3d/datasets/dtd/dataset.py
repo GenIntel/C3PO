@@ -41,10 +41,10 @@ class DTD_FrameMeta(OD3D_FrameMetaSubsetMixin, OD3D_FrameMetaSizeMixin, OD3D_Fra
 class DTD(OD3D_Dataset):
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1.,
-                 dict_nested_frames: Dict=None):
+                 dict_nested_frames: Dict=None, dict_nested_frames_ban: Dict=None):
         super().__init__(name=name, modalities=modalities, path_raw=path_raw, path_preprocess=path_preprocess,
                  categories=categories, transform=transform, index_shift=index_shift, subset_fraction=subset_fraction,
-                 dict_nested_frames=dict_nested_frames)
+                 dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban)
 
     #def __len__(self):
     #    return len(self.rfpaths)

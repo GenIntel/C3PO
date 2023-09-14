@@ -1,3 +1,5 @@
+import pandas
+import torchvision.io
 import typer
 import od3d.io
 from omegaconf import OmegaConf
@@ -17,6 +19,14 @@ import pandas as pd
 from pygit2 import Repository
 
 from tabulate import tabulate
+import re
+from od3d.datasets.frame import OD3D_Meta
+import od3d.io
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+
 
 def get_nested_value(data, key):
     keys = key.split('.')  # Split the string key into a list of keys
@@ -30,7 +40,7 @@ def get_nested_value(data, key):
             return None  # Key not found
     return value
 
-def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
+def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None, name_partial_ban=None):
     logging.basicConfig(level=logging.INFO)
     import wandb
     config = od3d.io.load_hierarchical_config()
@@ -53,6 +63,10 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None):
 
     if name_partial is not None:
         runs = list(filter(lambda run: name_partial in run.name, runs))
+
+    if name_partial_ban is not None:
+        for n in name_partial_ban:
+            runs = list(filter(lambda run: n not in run.name, runs))
 
     if metrics is not None:
         runs = list(filter(lambda run: all([metric in list(run.summary.keys()) for metric in metrics]), runs))
@@ -140,11 +154,11 @@ def table():
 
 
 
-    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean', 'test/pascal3d_test/time_pose']
-    metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean', 'test/co3d_5s_test/time_pose']
+    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean', 'test/pascal3d_test/time_pose']
+    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean', 'test/co3d_5s_test/time_pose']
 
     #metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean', 'test/co3d_50s_test/time_pose']
-    name_partial = 'no_early' # None, 'inference', 'split', 'render'
+    name_partial = '_car_1s_' # None, 'inference', 'split', 'render'
     # configs = ['method.value.multiview.type', 'method.value.multiview.batch_size']
     age_in_hours = 250
     configs = []
@@ -160,6 +174,152 @@ def table():
     # my_df.to_csv('output.csv', index=False, header=False, float_format='%.3f')
 
 @app.command()
+def table_multiple_sequences():
+    logging.basicConfig(level=logging.INFO)
+
+    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
+    #metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
+    #metrics = ['test/co3d/pose/acc_pi6', 'test/co3d/pose/acc_pi18',
+    #           'test/co3d/pose/err_median', 'test/co3d/pose/err_mean']
+
+    name_partial = '_car_1s_' # _1s_ 'multiview' _mv6_
+    name_partial_ban = ['45s']
+    configs = ['method.class_name', 'train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'train_datasets.labeled.dict_nested_frames']
+    age_in_hours = 24 * 10
+
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
+
+    my_df['sequence_nth'] = my_df["Run"].str.split('_1s_').str[1:2].str.join('_').str[:3]
+    my_df['type'] = my_df["Run"].str[14:].str.split('_1s_').str[0] + my_df["Run"].str.split('_1s_').str[1:2].str.join('_').str[3:]
+    my_df['type'] = my_df['type'].str.replace('_slurm', '')
+    my_df['type'] = my_df['type'].str.replace('_incr', '')
+    my_df['type'] = my_df['type'].str.replace('Incremental', 'Incr.')
+
+    my_df['type'] = my_df['type'].str.replace('_', '\n')
+    metrics_new_names = ['Acc. Pi/6. [%]', 'Acc. Pi/18. [%]', 'Median [deg.]', 'Mean [deg.]']
+    #my_df[metrics[0]] *= 100
+    #my_df[metrics[1]] *= 100
+
+    map_columns = {
+        metrics[0]: metrics_new_names[0],
+        metrics[1]: metrics_new_names[1],
+        metrics[2]: metrics_new_names[2],
+        metrics[3]: metrics_new_names[3]
+    }
+
+    my_df = my_df.rename(columns=map_columns)
+    my_df = my_df.sort_values(by=['type', 'sequence_nth'])
+    my_df = my_df.reset_index(drop=True)
+
+    for i, metric in enumerate(metrics_new_names):
+        #my_df = my_df.sort_values(by=['category', metric])
+        mv_plot = sns.barplot(data=my_df, x="type", y=metric, errorbar=('ci', 100))
+        #
+        # mv_plot = sns.catplot(
+        #     x="type",  # x variable name
+        #     y=metric,  # y variable name
+        #     hue="method",  # group variable name
+        #     data=my_df,  # dataframe to plot
+        #     kind="bar",
+        #     errorbar=('ci', 100)
+        # )
+
+        plt.savefig(f"seqs_type_{metrics[i].replace('/', '_')}.png", bbox_inches='tight')
+        plt.clf()
+
+@app.command()
+def table_multiple_categories_multiview_incremental():
+
+    logging.basicConfig(level=logging.INFO)
+
+    #metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean']
+    #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean']
+    #metrics = ['test/co3d_50s_test/pose/acc_pi6', 'test/co3d_50s_test/pose/acc_pi18', 'test/co3d_50s_test/pose/err_median', 'test/co3d_50s_test/pose/err_mean']
+    metrics = ['test/co3d/pose/acc_pi6', 'test/co3d/pose/acc_pi18',
+               'test/co3d/pose/err_median', 'test/co3d/pose/err_mean']
+
+    name_partial = '_1s_' # _1s_ 'multiview' _mv6_
+    name_partial_ban = ['45s']
+    configs = ['method.class_name', 'train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'train_datasets.labeled.dict_nested_frames']
+    age_in_hours = 24 * 10
+
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
+
+    my_df['sequence_nth'] = my_df["Run"].str.split('_1s_').str[1:2].str.join('_').str[:3]
+    my_df['train_datasets.labeled.categories'] = my_df['train_datasets.labeled.categories'].str[0]
+    my_df = my_df.groupby(['train_datasets.labeled.categories', 'method.class_name']).head(3)
+
+    # NeMo, NeMo_MultiView, NeMo_Incremental
+
+    metrics_new_names = ['Acc. Pi/6. [%]', 'Acc. Pi/18. [%]', 'Median [deg.]', 'Mean [deg.]']
+    #my_df[metrics[0]] *= 100
+    #my_df[metrics[1]] *= 100
+
+    map_columns = {
+        'train_datasets.labeled.categories': 'category',
+        'method.class_name': 'method',
+        metrics[0]: metrics_new_names[0],
+        metrics[1]: metrics_new_names[1],
+        metrics[2]: metrics_new_names[2],
+        metrics[3]: metrics_new_names[3]
+    }
+
+    my_df = my_df.rename(columns=map_columns)
+    my_df = my_df.sort_values(by=['category', 'method', 'sequence_nth'])
+    my_df = my_df.reset_index(drop=True)
+
+    for i, metric in enumerate(metrics_new_names):
+        #my_df = my_df.sort_values(by=['category', metric])
+
+        mv_plot = sns.catplot(
+            x="category",  # x variable name
+            y=metric,  # y variable name
+            hue="method",  # group variable name
+            data=my_df,  # dataframe to plot
+            kind="bar",
+            errorbar=('ci', 100)
+        )
+
+        plt.savefig(f"method_cats_{metrics[i].replace('/', '_')}.png")
+        plt.clf()
+
+
+
+    my_df.to_csv('output.csv', index=False, header=False)
+
+def save_category_sequence_images_as_one(df: pandas.DataFrame):
+    # df has to contain 'train_datasets.labeled.dict_nested_frames', 'category', 'sequence_nth'
+    config = od3d.io.load_hierarchical_config()
+
+    def get_first_non_none_value(dictionary):
+        if dictionary is None:
+            return None
+        for key, value in dictionary.items():
+            if value is not None:
+                return f'{key}/{list(value.keys())[0]}'
+        return None
+
+    sequences_name = [get_first_non_none_value(config) for config in df['train_datasets.labeled.dict_nested_frames']]
+    sequences_path_imgs = [Path(config.platform_local.path_datasets).joinpath('CO3D', sequence_name, 'images') if sequence_name is not None else None for sequence_name in sequences_name]
+    sequences_fpath_first_imgs = [sorted(list(sequence_path_imgs.iterdir()), key=lambda f: [OD3D_Meta.atoi(val) for val in re.split(r'(\d+)', f.stem)]) if sequence_path_imgs is not None else None for sequence_path_imgs in sequences_path_imgs]
+    #sequences_fpath_first_img = [sequence_fpath_first_imgs[0] for sequence_fpath_first_imgs in sequences_fpath_first_imgs]
+    df['sequence'] = sequences_name
+    df['sequences_fpath_first_imgs'] = sequences_fpath_first_imgs
+
+    df_category_sequence_unique = df.groupby(['category', 'sequence_nth']).head(1)
+    df_category_sequence_unique = df_category_sequence_unique.reset_index(drop=True)
+    from od3d.cv.visual.show import fpaths_to_rgb, show_img, imgs_to_img
+    from od3d.cv.visual.draw import draw_text_in_rgb
+    import torch
+    category_sequence_rgbs = []
+    for i, sequence_fpath_first_imgs in enumerate(df_category_sequence_unique['sequences_fpath_first_imgs']):
+        ids = np.linspace(0, len(sequence_fpath_first_imgs)-1, 3, dtype=int)
+        category_sequence_rgbs.append(draw_text_in_rgb(fpaths_to_rgb(fpaths=[sequence_fpath_first_imgs[id] for id in ids], H=512, W=512), text=f"\n\n\n{df_category_sequence_unique['category'][i]} {df_category_sequence_unique['sequence_nth'][i]}"))
+        # , fpath=f"{df_category_sequence_unique['category'][i]}_{df_category_sequence_unique['sequence_nth'][i]}.png"
+    show_img(imgs_to_img(torch.stack(category_sequence_rgbs, dim=0)[:, None]), fpath='category_sequences.png')
+
+@app.command()
 def table_multiple_categories():
     logging.basicConfig(level=logging.INFO)
     # config = od3d.io.load_hierarchical_config()
@@ -170,11 +330,12 @@ def table_multiple_categories():
     metrics = ['test/co3d/pose/acc_pi6', 'test/co3d/pose/acc_pi18',
                'test/co3d/pose/err_median', 'test/co3d/pose/err_mean']
 
-    name_partial = '_mv6_' # _1s_ 'multiview'
-    configs = ['train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'method.value.inference.refine.dims_detached']
+    name_partial = '_1s_' # _1s_ 'multiview' _mv6_
+    name_partial_ban = ['MultiView', 'Incremental']
+    configs = ['train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size']
     age_in_hours = 24 * 4
 
-    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
 
     import seaborn as sns
     import matplotlib.pyplot as plt
