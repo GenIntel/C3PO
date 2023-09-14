@@ -2,7 +2,7 @@
 defaults:
   - override /methods/model@method.nemo.model: resnet50_old
 
-test_datasets:
+#test_datasets:
 #    co3d:
 #      skip: True
 #      frames_count_max_per_sequence: 1 # 8

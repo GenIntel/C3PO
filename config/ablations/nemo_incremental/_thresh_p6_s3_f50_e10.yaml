@@ -38,16 +38,16 @@ method:
       val: True
       split: sequences_separated # 'random' 'sequences_separated' 'seqences_shared'
       epochs_to_next_test: 1
-      epochs: 5
+      epochs: 10
       incremental:
         enabled: True
         sequences_labeled_count:
-        frames_count_max_per_sequence: # 6
+        frames_count_max_per_sequence: 50 # 6
         pseudo_labels_update:
           use_ground_truth: False
-          epochs_to_next_update: 5
-          count_new_labels_proposed: 40
-          count_new_labels_selected_max: 40
+          epochs_to_next_update: 1
+          count_new_labels_proposed: 6
+          count_new_labels_selected_max: 3
           multiview_count: 6
           sim_threshold: 0.1 #0.1 # 0.6
 

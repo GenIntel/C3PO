@@ -3,10 +3,10 @@
 
 train:
     # val: False
-    epochs: 50 # wufei: 800
+    epochs: 200 # artur: 200  wufei: 800
     dataloader:
         num_workers: 4
-        batch_size: 108 # wufei: 108
+        batch_size: 12 # artur: 24/32 wufei: 108
         pin_memory: True
     transform:
       random_color: True
@@ -17,7 +17,6 @@ train:
         H: 512
 
 test:
-
     dataloader:
         num_workers: 4
         batch_size: 4
