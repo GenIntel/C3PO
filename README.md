@@ -50,6 +50,25 @@ To stop a job running on slurm use
 
 `od3d bench stop-slurm -j <job-name>`.
 
+### Coordinate Frames
+
+The semantic axes of a camera are
+   - x: right 
+   - y: bottom 
+   - z: front
+
+The semantic axes of an object are
+   - x: left
+   - y: back
+   - z: top
+
+This leads to the `cam_tform4x4_obj` for a camera looking straight at the front of an object of:  
+[    [1,  0,  0,     0],  
+   [0,  0, -1,     0],   
+   [0, -1,  0, +dist],  
+   [0,  0,  0,     0],
+]
+
 ## Roadmap
 
 

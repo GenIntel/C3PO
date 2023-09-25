@@ -113,6 +113,12 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4
     def get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta: Path, category: str, sequence_name: str, name: str):
         return path_meta.joinpath(CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=name))
 
+    @staticmethod
+    def get_frames_names_of_category_sequence(path_meta: Path, category: str, sequence_name: str):
+        dict_nested_frames = CO3D_FrameMeta.complete_nested_metas(path_meta=path_meta, dict_nested_metas={category: {sequence_name: None}})
+        frames_names = dict_nested_frames[category][sequence_name]
+        return frames_names
+
     """
     @staticmethod
     def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
@@ -266,6 +272,18 @@ class CO3D_Frame(OD3D_Frame):
         return self._depth
 
     @property
+    def fpath_mesh(self):
+        return self.sequence.fpath_mesh
+
+    @property
+    def mesh(self):
+        return self.sequence.mesh
+
+    @property
+    def fpath_cam_tform4x4_obj_droid_slam(self):
+        return self.path_preprocess.joinpath('cam_tform4x4_obj', str(self.cam_tform_obj_source), self.category, self.name)
+
+    @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
             if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D or not self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
@@ -281,7 +299,9 @@ class CO3D_Frame(OD3D_Frame):
             elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LIMITS3D:
                 self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
                                                   inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-
+            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM:
+                self._cam_tform4x4_obj = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+                # tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj), inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
         return self._cam_tform4x4_obj
 
 

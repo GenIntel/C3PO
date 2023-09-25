@@ -1,3 +1,4 @@
+import open3d.geometry
 from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES
 from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 from od3d.datasets.frame import OD3D_SequenceMeta
@@ -52,7 +53,6 @@ class CO3D_SequenceMeta(OD3D_SequenceMeta):
     rfpath_pcl: Path
     viewpoint_quality_score: float
 
-
     @property
     def name_unique(self):
         return f'{self.category}/{self.name}'
@@ -88,6 +88,7 @@ class CO3D_SequenceMeta(OD3D_SequenceMeta):
         return CO3D_SequenceMeta(name=name, category=category, rfpath_pcl=rfpath_pcl,
                                  pcl_pts_count=pcl_pts_count, pcl_quality_score=pcl_quality_score,
                                  viewpoint_quality_score=viewpoint_quality_score)
+
 
     """
     @staticmethod
@@ -204,6 +205,7 @@ class CO3D_Sequence():
         self.category_id = categories.index(self.category)
         self._pcl = None
         self._pcl_clean = None
+        self._mesh = None
         self._front_name = None
         self._cuboid_front_tform4x4_obj = None
         self._cuboid = None
@@ -417,6 +419,7 @@ class CO3D_Sequence():
                     logger.info("2) Afther picking points, press q for close the window")
                     vis = o3d.visualization.Visualizer()
                     vis.create_window()
+
                     for i, pts3d in enumerate(l_pts3d):
                         # Create an Open3D PointCloud object
                         pcd = o3d.geometry.PointCloud()
@@ -632,6 +635,10 @@ class CO3D_Sequence():
     def cam_first_tform4x4_obj(self):
         return torch.Tensor(self.first_frame.meta.l_cam_tform4x4_obj)
 
+
+    def get_frame_by_index(self, index: int):
+        return self.get_frame_by_name(self.frames_names[index])
+
     def get_frame_by_name(self, frame_name: str):
         frame_meta = CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_meta,
                                                                rfpath=CO3D_FrameMeta.
@@ -648,12 +655,17 @@ class CO3D_Sequence():
         return self.get_frame_by_name(frame_name=self.front_name)
 
     @property
+    def frames_names(self):
+        frames_names = CO3D_FrameMeta.get_frames_names_of_category_sequence(path_meta=self.path_meta, category=self.category, sequence_name=self.name)
+        return frames_names
+
+    @property
     def first_frame(self):
-        first_frame_fpath = sorted(CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=self.path_meta,
-                                                                                              category=self.category,
-                                                                                              sequence=self.name).iterdir(),
-                                   key=lambda p: int(p.stem))[0]
-        return self.get_frame_by_name(frame_name=first_frame_fpath.stem)
+        #first_frame_fpath = sorted(CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=self.path_meta,
+        #                                                                                      category=self.category,
+        #                                                                                      sequence=self.name).iterdir(),
+        #                           key=lambda p: int(p.stem))[0]
+        return self.get_frame_by_index(index=0)
 
     @property
     def cuboid_front_tform4x4_obj(self):
@@ -732,6 +744,257 @@ class CO3D_Sequence():
                 self.preprocess_pcl_clean()
             self._pcl_clean, _ = load_ply(fpath_pcl_clean)
         return self._pcl_clean
+
+    def preprocess_mesh(self):
+        # N x 3
+        pts3d, _ = load_ply(self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'pcl.ply'))
+        # F x 4 x 4
+        cams_tform4x4_obj = torch.load(self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'traj_est.pt'))
+        import numpy as np
+
+        #a = torch.from_numpy(np.load(str(self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'poses.npy'))))
+        cam_intrinsics_pts3d = torch.from_numpy(np.load(str(self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'intrinsics.npy'))))
+        scale = self.first_frame.cam_intr4x4[0, 0] / cam_intrinsics_pts3d[0, 0]
+        #pts3d *= scale
+
+        geometries = []
+
+        if torch.cuda.is_available():
+            device = 'cuda:0'
+        else:
+            device = 'cpu'
+
+        pts3d = pts3d.to(device=device)
+        cams_tform4x4_obj = cams_tform4x4_obj.to(device=device)
+
+        scene_particles = 2000
+        particle_quantile_dist = 0.05
+
+        pts3d = random_sampling(pts3d_cls=pts3d, pts3d_max_count=scene_particles)
+        #pts3d = voxel_downsampling(pts3d_cls=pts3d, K=scene_particles)
+
+        #pts3d = pts3d[torch.randperm(pts3d.shape[0])[:scene_particles]]
+        pts3d_range = max(pts3d.max(dim=0)[0] - pts3d.min(dim=0)[0]).item()
+        scene_size = pts3d_range
+        particle_size = torch.cdist(pts3d, pts3d).quantile(q=particle_quantile_dist)
+
+
+        obj_cams_rays6d = torch.cat([inv_tform4x4(cams_tform4x4_obj)[:, :3, 3], cams_tform4x4_obj[:, 2, :3]], dim=-1).to(device=device)
+        obj_cams_rays_start = obj_cams_rays6d[:, :3]
+        obj_cams_rays_dir = obj_cams_rays6d[:, 3:]
+        obj_cams_rays_end = obj_cams_rays_start + obj_cams_rays_dir * scene_size
+
+        # https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+        S = (torch.eye(3).to(device=device)[None, ] - obj_cams_rays_dir[:, None, :] * obj_cams_rays_dir[:, :, None]).sum(dim=0)
+        C = torch.einsum('BXY,BY->BX', (torch.eye(3).to(device=device)[None, ] - (obj_cams_rays_dir[:, None, :] * obj_cams_rays_dir[:, :, None])), obj_cams_rays_start).sum(dim=0)
+        center3d = torch.linalg.solve(A=S, B=C)
+
+        center3d_tform4x4_obj = torch.eye(4).to(device=device)
+        center3d_tform4x4_obj[:3, 3] = -center3d
+
+        #cams_tform4x4_obj[:, :3, 3] = cams_tform4x4_obj[:, :3, 3] - center3d[None,]
+        #center3d[:] = 0.
+        from od3d.cv.geometry.transform import tform4x4_broadcast
+        cams_tform4x4_obj = tform4x4_broadcast(cams_tform4x4_obj, inv_tform4x4(center3d_tform4x4_obj))
+        pts3d = transf3d_broadcast(pts3d, transf4x4=center3d_tform4x4_obj)
+        center3d = transf3d_broadcast(center3d, transf4x4=center3d_tform4x4_obj)
+
+
+        cam_intr4x4 = self.first_frame.cam_intr4x4
+
+        #pts3d_3 = pts3d[:3]
+        #pts3d_3 = [cams_tform4x4_obj[0, :3, 3], cams_tform4x4_obj[50, :3, 3], cams_tform4x4_obj[100, :3, 3]]
+        #axis1 = pts3d_3[1] - pts3d_3[0]
+        #axis2 = pts3d_3[2] - pts3d_3[0]
+        #plane3d = torch.cross(axis1, axis2)
+        #plane3d = plane3d / (plane3d.norm()) * 5.  # + 5.
+
+        N = pts3d.shape[0]
+        # 1. proposals
+
+        # 1.1 sampling
+        ransac_prop = 1000
+        ransac_pts_per_proposal = 3
+        probs = torch.ones(size=(ransac_prop, N,)).to(device=device)
+        pts3d_ids = torch.multinomial(probs, num_samples=ransac_pts_per_proposal)
+        ransac_pts3d = pts3d[pts3d_ids.flatten()].reshape(ransac_prop, ransac_pts_per_proposal, 3)
+
+        # 1.2 fitting
+        proposed_planes_axis_1 = ransac_pts3d[:, 1] - ransac_pts3d[:, 0]
+        proposed_planes_axis_2 = ransac_pts3d[:, 2] - ransac_pts3d[:, 0]
+        proposed_planes_axis_z = torch.cross(proposed_planes_axis_1, proposed_planes_axis_2)
+        proposed_planes_axis_z = proposed_planes_axis_z / proposed_planes_axis_z.norm(dim=-1, keepdim=True)
+        proposed_planes_signed_dist = torch.einsum('pc,pc->p', ransac_pts3d[:, 0], proposed_planes_axis_z)
+
+        # 2. selection
+        # 2.1 score
+        mask_plane_thresh = particle_size / 5.
+
+        signed_dists_pts3d_to_proposed_planes = torch.einsum('nc,pc->pn', pts3d, proposed_planes_axis_z) - proposed_planes_signed_dist[:, None]
+        signed_dists_pos_perc = (signed_dists_pts3d_to_proposed_planes > mask_plane_thresh).sum(dim=-1) / N
+        signed_dists_thresh_perc = (signed_dists_pts3d_to_proposed_planes.abs() < mask_plane_thresh).sum(dim=-1) / N
+        score = signed_dists_pos_perc + signed_dists_thresh_perc * 1.5
+        plane_max_score_id = score.argmax()
+        plane4d = torch.cat([proposed_planes_axis_z[plane_max_score_id], proposed_planes_signed_dist[plane_max_score_id:plane_max_score_id+1]], dim=0)
+
+        plane3d_tform4x4_obj = torch.eye(4).to(device=device)
+        top_axis = plane4d[:3] / plane4d[:3].norm()
+        x = top_axis[0]
+        y = top_axis[1]
+        z = top_axis[2]
+        if x != 0 or y !=0:
+            left_axis = torch.Tensor([-y, x, 0.]).to(device=device)
+            left_axis = left_axis / left_axis.norm()
+            back_axis = torch.Tensor([-x * z, -y * z, x * x + y * y]).to(device=device)
+            back_axis = back_axis / back_axis.norm()
+        else:
+            left_axis = torch.Tensor([1., 0., 0.], device=device)
+            back_axis = torch.Tensor([0., 1., 0.], device=device)
+        plane3d_tform4x4_obj[0, :3] = left_axis
+        plane3d_tform4x4_obj[1, :3] = back_axis
+        plane3d_tform4x4_obj[2, :3] = top_axis
+        plane3d_tform4x4_obj[2, 3] = -plane4d[3]
+        obj_tform4x4_plane = inv_tform4x4(plane3d_tform4x4_obj)
+
+        plane_z = -plane3d_tform4x4_obj[2, 3]
+        plane3d_tform4x4_obj[:3, 3] = 0.
+        cams_tform4x4_obj = tform4x4_broadcast(cams_tform4x4_obj, inv_tform4x4(plane3d_tform4x4_obj))
+        pts3d = transf3d_broadcast(pts3d, transf4x4=plane3d_tform4x4_obj)
+        center3d = transf3d_broadcast(center3d, transf4x4=plane3d_tform4x4_obj)
+
+        height = scene_size / 5.
+        radius = scene_size * 0.5
+        # plane3d_open3d = open3d.geometry.TriangleMesh.create_box(width=width, height=height, depth=depth).translate((-width / 2., -height / 2., -depth / 2.))
+        R = open3d.geometry.TriangleMesh.get_rotation_matrix_from_xyz((np.pi, 0., 0.))
+
+        # note: height becomes larger with lower resolution
+        plane3d_open3d = open3d.geometry.TriangleMesh.create_cone(radius=radius, height=height, resolution=100, split=1, create_uv_map=False).rotate(R=R, center=(0, 0, 0)) # .translate((0., 0., -depth / 2.))
+        plane3d_open3d.translate((0., 0., plane_z.item()))
+        plane3d_open3d.paint_uniform_color([0.2, 0.2, 0.4])
+
+        mat_box = open3d.visualization.rendering.MaterialRecord()
+        mat_box.shader = 'defaultLitTransparency'
+        #mat_box.shader = 'defaultLitSSR'
+        mat_box.base_color = [0.467, 0.467, 0.467, 0.02]
+        mat_box.base_roughness = 0.0
+        mat_box.base_reflectance = 0.0
+        mat_box.base_clearcoat = 1.0
+        mat_box.thickness = 1.0
+        mat_box.transmission = 1.0
+        mat_box.absorption_distance = 10
+        mat_box.absorption_color = [0.5, 0.5, 0.5]
+
+        #mat_box.base_color = np.array([1, 1, 1, .5])
+        # open3d.visualization.draw_geometries(geoms_to_draw)
+
+        center3d_open3d = open3d.geometry.TriangleMesh.create_sphere(radius=scene_size / 50.).translate(center3d.detach().cpu().numpy())
+        geometries.append({'name': f'center', 'geometry': center3d_open3d})
+
+        geometries.append({'name': 'plane3d', 'geometry': plane3d_open3d, 'material': mat_box})
+
+        #plane_tform4x4_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=plane3d_tform4x4_obj)
+        mask_pts3d_on_plane = pts3d[:, 2] - plane_z < + mask_plane_thresh
+        # starting with 10 percentage of points
+        mask_center_thresh = (pts3d[~mask_pts3d_on_plane] - center3d).norm(dim=-1).quantile(0.1)
+        mask_pts3d_on_center = (pts3d[~mask_pts3d_on_plane] - center3d).norm(dim=-1) < mask_center_thresh
+        pts3d_not_on_plane = pts3d[~mask_pts3d_on_plane]
+
+        mask_pts3d_obj = mask_pts3d_on_center.clone()
+        dists_pts3d_not_on_plane_plane = pts3d[~mask_pts3d_on_plane, 2] - plane_z
+        dists_pts3d_not_on_plane_obj_dists = (pts3d_not_on_plane[mask_pts3d_obj][:, None] - pts3d_not_on_plane[None, :]).norm(dim=-1).min(dim=0)[0]
+
+        while ((dists_pts3d_not_on_plane_obj_dists < particle_size) * (dists_pts3d_not_on_plane_obj_dists < dists_pts3d_not_on_plane_plane)).sum() > mask_pts3d_obj.sum():
+            logger.info(mask_pts3d_obj.sum())
+            mask_pts3d_obj += (dists_pts3d_not_on_plane_obj_dists < particle_size) * (dists_pts3d_not_on_plane_obj_dists < dists_pts3d_not_on_plane_plane)
+            #dists_pts3d_not_on_plane_obj_dists = \
+            #(pts3d_not_on_plane[mask_pts3d_obj][:, None] - pts3d_not_on_plane[None, :]).norm(dim=-1).min(dim=0)[0]
+            dists_pts3d_not_on_plane_obj_dists = torch.cdist(pts3d_not_on_plane[mask_pts3d_obj], pts3d_not_on_plane).min(dim=0)[0]
+
+        pts3d_obj = pts3d_not_on_plane[mask_pts3d_obj]
+
+        o3d_pcl = open3d.geometry.PointCloud()
+        # from od3d.cv.geometry.transform import inv_tform4x4
+        #open3d.visualization.draw_geometries([o3d_pcl], point_show_normal=True)
+        o3d_pcl.points = open3d.utility.Vector3dVector(pts3d_obj[:].detach().cpu().numpy())
+        o3d_pcl.normals = open3d.utility.Vector3dVector(np.zeros((1, 3)))  # invalidate existing normals
+        #o3d_pcl.estimate_normals()
+        geometries.append({'name': 'pcl', 'geometry': o3d_pcl})
+
+        alpha = mask_center_thresh
+        #mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(o3d_pcl, depth=9)
+        mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+        mesh.compute_vertex_normals()
+        geometries.append({'name': 'mesh', 'geometry': mesh})
+
+        for i, cam_tform4x4_obj in enumerate(cams_tform4x4_obj):
+            width = int(cam_intr4x4[0, 2] * 2)
+            height = int(cam_intr4x4[1, 2] * 2)
+
+            cam = open3d.geometry.LineSet.create_camera_visualization(view_width_px=width, view_height_px=height,
+                                                                      intrinsic=cam_intr4x4[:3, :3].detach().numpy(),
+                                                                      extrinsic=cam_tform4x4_obj.detach().cpu().numpy(),
+                                                                      scale=0.01)
+            geometries.append({'name': f'cam{i}', 'geometry': cam})
+
+            ray_range = scene_size
+            ray = open3d.geometry.TriangleMesh.create_arrow(cylinder_radius=1.0*particle_size, cone_radius=1.5*particle_size, cylinder_height=ray_range, cone_height=4.0*particle_size)
+            ray.transform(inv_tform4x4(cam_tform4x4_obj).detach().cpu().numpy())
+
+            #cam_start_sphere = open3d.geometry.TriangleMesh.create_sphere(radius=particle_size)
+            #cam_start_sphere.translate(obj_cams_rays_start[i].detach().cpu().numpy())
+            #cam_end_sphere = open3d.geometry.TriangleMesh.create_sphere(radius=particle_size)
+            #cam_end_sphere.translate(obj_cams_rays_end[i].detach().cpu().numpy())
+            #geometries.append({'name': f'ray{i}_start', 'geometry': cam_start_sphere})
+            #geometries.append({'name': f'ray{i}_end', 'geometry': cam_end_sphere})
+
+        geometries.append({'name': f'obj', 'geometry': o3d_pcl})
+
+
+        o3d_pcl_on_plane = open3d.geometry.PointCloud()
+        o3d_pcl_on_plane.points = open3d.utility.Vector3dVector(pts3d[mask_pts3d_on_plane].detach().cpu().numpy())
+        o3d_pcl_on_plane.paint_uniform_color((0.1, 0.1, 0.5))
+        geometries.append({'name': 'pcl_on_plane', 'geometry': o3d_pcl_on_plane})
+
+        o3d_pcl_on_center = open3d.geometry.PointCloud()
+        o3d_pcl_on_center.points = open3d.utility.Vector3dVector(pts3d[~mask_pts3d_on_plane][mask_pts3d_on_center].detach().cpu().numpy())
+        o3d_pcl_on_center.paint_uniform_color((0.1, 0.5, 0.1))
+        geometries.append({'name': 'pcl_on_center', 'geometry': o3d_pcl_on_center})
+
+        o3d_pcl_noise = open3d.geometry.PointCloud()
+        o3d_pcl_noise.points = open3d.utility.Vector3dVector(pts3d[~mask_pts3d_on_plane][~mask_pts3d_obj].detach().cpu().numpy())
+        o3d_pcl_noise.paint_uniform_color((0.5, 0.1, 0.1))
+        geometries.append({'name': 'pcl_noise', 'geometry': o3d_pcl_noise})
+
+        # open3d.visualization.draw(geometries)
+
+        save_ply(f=self.fpath_mesh, verts=torch.from_numpy(np.asarray(mesh.vertices)), faces=torch.LongTensor(np.asarray(mesh.triangles)))
+
+        for i, cam_tform4x4_obj in enumerate(cams_tform4x4_obj):
+            frame = self.get_frame_by_index(i)
+            frame.fpath_cam_tform4x4_obj_droid_slam.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(obj=cam_tform4x4_obj.detach().cpu(), f=frame.fpath_cam_tform4x4_obj_droid_slam)
+
+    @property
+    def fpath_mesh(self):
+        return self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'mesh.ply')
+
+    @property
+    def mesh(self):
+        if self._mesh is None:
+            fpath_mesh = self.fpath_mesh
+            #if not fpath_mesh.exists():
+
+            self.preprocess_mesh()
+
+            # self._mesh = load_ply(fpath_mesh)
+            from od3d.cv.geometry.mesh import Mesh, Meshes
+            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh)
+
+        return self._mesh
+
+    @mesh.setter
+    def mesh(self, value: torch.Tensor):
+            self._mesh = value
 
     @property
     def com(self):

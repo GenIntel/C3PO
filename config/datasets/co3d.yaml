@@ -14,9 +14,10 @@ modalities:
     - 'mask'
     - 'sequence_name'
     - 'sequence'
+    - 'mesh'
 
-cuboid_source: 'limits3d' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d'
-cam_tform_obj_source: 'limits3d'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', limits3d
+cuboid_source: 'droid_slam' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
+cam_tform_obj_source: 'droid_slam'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', 'limits3d', 'droid_slam'
 
 frames_count_max_per_sequence:
 block_negative_depth: False

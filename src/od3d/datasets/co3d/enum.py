@@ -9,11 +9,13 @@ class CAM_TFORM_OBJ_SOURCES(str, ExtEnum):
     FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
     KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
     LIMITS3D = 'limits3d'
+    DROID_SLAM = 'droid_slam'
 
 class CUBOID_SOURCES(str, ExtEnum):
     FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
     KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
     LIMITS3D = 'limits3d'
+    DROID_SLAM = 'droid_slam'
 
 class CO3D_FRAME_TYPES(str, ExtEnum):
     DEV_KNOWN = 'dev_known'

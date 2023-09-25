@@ -272,19 +272,33 @@ def reproj2d3d(pxl2d, proj4x4_inv):
     pts3d_reproj = pts3d_reproj.squeeze(dim=-1)
     return pts3d_reproj
 
-def depth2pts3d(depth, cam_intr4x4):
+def depth2pts3d_grid(depth, cam_intr4x4):
     device = cam_intr4x4.device
     dtype = cam_intr4x4.dtype
     H, W = depth.shape[-2:]
     pxl2d = torch.stack(torch.meshgrid(torch.arange(W), torch.arange(H), indexing='xy'), dim=-1).to(device=device, dtype=dtype)
-    pts3d_homog = reproj2d3d_broadcast(pxl2d, proj4x4_inv=cam_intr4x4.inverse()).transpose(-2, -1).transpose(-3, -2)
-    pts3d = pts3d_homog[(None, ) * (depth.dim() - 3)] * depth
+
+    pts3d_homog = reproj2d3d_broadcast(pxl2d[(None, ) * (cam_intr4x4.dim() - 2)], proj4x4_inv=cam_intr4x4[..., None, None, :, :].inverse()).transpose(-2, -1).transpose(-3, -2)
+    pts3d = pts3d_homog[(None, ) * (depth.dim() - 3)] * depth[..., None, :, :]
     return pts3d
 
 def transf3d_broadcast(pts3d, transf4x4):
     shape_first_dims = torch.broadcast_shapes(pts3d.shape[:-1], transf4x4.shape[:-2])
     return transf3d(pts3d.expand(*shape_first_dims, 3), transf4x4.expand(*shape_first_dims, 4, 4))
 
+def cam_intr_4_to_4x4(cam_intr4):
+    """
+    Args:
+        cam_intr4: ...x4, [fx, fy, cx, cy]
+    Returns:
+        cam_intr_4x4: ...x4x4, [[fx, 0, cx, 0], [0, fy, cy, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    """
+    cam_intr4x4 = torch.eye(4).expand(cam_intr4.shape[:-1] + (4, 4)).clone()
+    cam_intr4x4[..., 0, 0] = cam_intr4[..., 0]
+    cam_intr4x4[..., 1, 1] = cam_intr4[..., 1]
+    cam_intr4x4[..., 0, 2] = cam_intr4[..., 2]
+    cam_intr4x4[..., 1, 2] = cam_intr4[..., 3]
+    return cam_intr4x4
 def transf3d(pts3d, transf4x4):
     """
     Args:

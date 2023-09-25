@@ -14,6 +14,8 @@ from od3d.cv.visual.draw import get_colors
 from pathlib import Path
 from typing import List
 import torchvision
+import open3d as o3d
+import numpy as np
 
 def pt3d_camera_from_tform4x4_intr4x4_imgs_size(cam_tform4x4_obj: torch.Tensor, cam_intr4x4: torch.Tensor, img_size: torch.Tensor):
     if cam_tform4x4_obj.dim() == 2:
@@ -55,6 +57,25 @@ def show_mesh():
     input('bla')
     """
 
+def show_pcl_via_open3d(pts3d):
+    vis = o3d.visualization.VisualizerWithEditing()
+    vis.create_window()
+    # vis.add_geometry(pcd)
+
+    pcd = o3d.geometry.PointCloud()
+    # from od3d.cv.geometry.transform import inv_tform4x4
+    pcd.points = o3d.utility.Vector3dVector(pts3d.numpy())
+    # pcd.colors = o3d.utility.Vector3dVector(ncds.numpy())
+    vis.add_geometry(pcd)
+    vis.run()  # user picks points
+    vis.destroy_window()
+
+def show_open3d_pcl(pcd):
+    vis = o3d.visualization.VisualizerWithEditing()
+    vis.create_window()
+    vis.add_geometry(pcd)
+    vis.run()  # user picks points
+    vis.destroy_window()
 
 def show_pcl(verts, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tensor=None, img_size: torch.Tensor=None):
     """
@@ -216,12 +237,12 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
         Path(fpath).parent.mkdir(exist_ok=True, parents=True)
         cv2.imwrite(str(fpath), img)
     else:
+        logging.basicConfig(level=logging.DEBUG)
         cv2.imshow("img", img)
         return cv2.waitKey(duration)
 
 
 def get_img_from_plot(ax, fig, axis_off=True):
-    import numpy as np
 
     # Image from plot
     if axis_off:

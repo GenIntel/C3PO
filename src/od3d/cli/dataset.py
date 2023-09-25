@@ -142,7 +142,6 @@ def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
 
 
 
-
     import torchvision
     from od3d.cv.transforms import Crop, CenterZoom3D, RandomCenterZoom3D
     # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
