@@ -1,6 +1,8 @@
 #FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
 # as base
 
+# docker build . --mount source=/scratch/sommerl/repos/NeMo/third_party/DROID-SLAM,target=/root/DROID-SLAM
+
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
 # Metadata
@@ -14,7 +16,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 ENV NVIDIA_VISIBLE_DIVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES graphics,utility,compute
-
 
 # Fetch nvidia signing keys
 RUN apt-key del 7fa2af80
@@ -55,7 +56,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
-RUN mkdir -p /root/
+#RUN mkdir -p /root/
 WORKDIR /root/
 
 # Set user to root to avoid permission issues
@@ -80,7 +81,7 @@ RUN conda install -c conda-forge suitesparse
 
 # Clone repository
 WORKDIR /root
-RUN git clone --recursive https://github.com/pytholic/DROID-SLAM.git
+#RUN git clone --recursive https://github.com/pytholic/DROID-SLAM.git
 
 # Install extensions
 RUN cd DROID-SLAM && \
