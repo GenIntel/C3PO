@@ -2,6 +2,7 @@ import open3d.geometry
 from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES
 from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 from od3d.datasets.frame import OD3D_SequenceMeta
+from od3d.cv.geometry.mesh import Mesh
 
 from tqdm import tqdm
 import logging
@@ -15,16 +16,13 @@ import subprocess
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_Frame
 
-from omegaconf import DictConfig, OmegaConf
 from co3d.dataset.data_types import (
     load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
 )
 from od3d.cv.geometry.transform import se3_exp_map, tform4x4, transf4x4_from_rot3x3_and_transl3
 from od3d.cv.geometry.transform import rot3x3
 
-from od3d.cv.geometry.mesh import Meshes
 from typing import List
-import torchvision
 import torch
 from pathlib import Path
 from od3d.cv.visual.show import show_img
@@ -833,7 +831,7 @@ class CO3D_Sequence():
         signed_dists_pts3d_to_proposed_planes = torch.einsum('nc,pc->pn', pts3d, proposed_planes_axis_z) - proposed_planes_signed_dist[:, None]
         signed_dists_pos_perc = (signed_dists_pts3d_to_proposed_planes > mask_plane_thresh).sum(dim=-1) / N
         signed_dists_thresh_perc = (signed_dists_pts3d_to_proposed_planes.abs() < mask_plane_thresh).sum(dim=-1) / N
-        score = signed_dists_pos_perc + signed_dists_thresh_perc * 1.5
+        score = signed_dists_pos_perc + signed_dists_thresh_perc * 1.3
         plane_max_score_id = score.argmax()
         plane4d = torch.cat([proposed_planes_axis_z[plane_max_score_id], proposed_planes_signed_dist[plane_max_score_id:plane_max_score_id+1]], dim=0)
 
@@ -965,7 +963,7 @@ class CO3D_Sequence():
         o3d_pcl_noise.paint_uniform_color((0.5, 0.1, 0.1))
         geometries.append({'name': 'pcl_noise', 'geometry': o3d_pcl_noise})
 
-        # open3d.visualization.draw(geometries)
+        open3d.visualization.draw(geometries)
 
         save_ply(f=self.fpath_mesh, verts=torch.from_numpy(np.asarray(mesh.vertices)), faces=torch.LongTensor(np.asarray(mesh.triangles)))
 
@@ -982,14 +980,9 @@ class CO3D_Sequence():
     def mesh(self):
         if self._mesh is None:
             fpath_mesh = self.fpath_mesh
-            #if not fpath_mesh.exists():
-
-            self.preprocess_mesh()
-
-            # self._mesh = load_ply(fpath_mesh)
-            from od3d.cv.geometry.mesh import Mesh, Meshes
+            if not fpath_mesh.exists():
+                self.preprocess_mesh()
             self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh)
-
         return self._mesh
 
     @mesh.setter

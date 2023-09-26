@@ -57,6 +57,134 @@ def show_mesh():
     input('bla')
     """
 
+from typing import Union
+from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.visual.draw import get_colors
+import open3d
+
+def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None,
+               cams_intr4x4: Union[torch.Tensor, List[torch.Tensor]]=None,
+               cams_names: List[str]=None,
+               pts3d: Union[torch.Tensor, List[torch.Tensor]]=None,
+               pts3d_names: List[str]=None,
+               pts3d_colors: Union[torch.Tensor, List]=None,
+               meshes: Meshes=None,
+               meshes_names: List[str]=None,
+               meshes_colors: Union[torch.Tensor, List]=None,):
+    """
+    Args:
+        cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
+        cams_intr4x4 (Union[torch.Tensor, List[torch.Tensor]]): Cx4x4 or List(4x4)
+        pts3d (Union[torch.Tensor, List[torch.Tensor]]): PxNx3 or List(Npx3)
+        pts3d_names (List[str]): (P,)
+        pts3d_colors (Union[torch.Tensor, List]): Px3 or List(3)
+        meshes (Meshes)
+        meshes_names (List[str]): (M,)
+        meshes_colors (Union[torch.Tensor, List]): Mx3 or List(3)
+
+    Returns:
+        -
+    """
+
+    geometries = []
+
+    if meshes is not None:
+        for i in range(len(meshes)):
+            vertices = open3d.utility.Vector3dVector(meshes.get_verts_with_mesh_id(mesh_id=i).detach().cpu().numpy())
+            triangles = open3d.utility.Vector3iVector(meshes.get_faces_with_mesh_id(mesh_id=i).detach().cpu().numpy())
+
+            mesh_o3d = open3d.geometry.TriangleMesh(vertices=vertices, triangles=triangles)
+            if meshes.rgb is not None:
+                vertex_colors = open3d.utility.Vector3dVector(meshes.get_rgb_with_mesh_id(mesh_id=i).detach().cpu().numpy())
+                mesh_o3d.vertex_colors = vertex_colors
+
+            else:
+                vertex_colors = None
+            #vertex_colors
+            #vertex_normals
+
+            if meshes_colors is not None and len(meshes_colors) >= i+1 and meshes_colors[i] is not None:
+                mesh_color = meshes_colors[i]
+            else:
+                mesh_color = get_colors(len(meshes))[i]
+
+            if meshes_names is not None and len(meshes_names) >= i+1 and meshes_names[i] is not None:
+                mesh_name = meshes_names[i]
+            else:
+                mesh_name = f'mesh{i}'
+
+            if isinstance(mesh_color, torch.Tensor):
+                mesh_color =mesh_color.detach().cpu().numpy()
+            mat_box = open3d.visualization.rendering.MaterialRecord()
+            mat_box.shader = 'defaultLitTransparency'
+            #mat_box.shader = 'defaultLitSSR'
+
+            if vertex_colors is None:
+                if len(mesh_color) == 4:
+                    mat_box.base_color = [mesh_color[0], mesh_color[1], mesh_color[2], mesh_color[3]]
+                else:
+                    mat_box.base_color = [mesh_color[0], mesh_color[1], mesh_color[2], 0.9] # [0.467, 0.467, 0.467, 0.02]
+            else:
+                mat_box.base_color = [0.5, 0.5, 0.5, 0.9]  # [0.467, 0.467, 0.467, 0.02]
+
+            #mat_box.base_roughness = 0.0
+            #mat_box.base_reflectance = 0.0
+            #mat_box.base_clearcoat = 1.0
+            #mat_box.thickness = 1.0
+            #mat_box.transmission = 1.0
+            #mat_box.absorption_distance = 10
+            #mat_box.absorption_color = [0.5, 0.5, 0.5]
+
+            geometries.append({'name': mesh_name, 'geometry': mesh_o3d, 'material': mat_box})
+            #vertices: open3d.cpu.pybind.utility.Vector3dVector,
+            #triangles: open3d.cpu.pybind.utility.Vector3iVector
+
+
+    if pts3d is not None:
+        for i, pts3d_i in enumerate(pts3d):
+            pts3d_i_o3d = open3d.geometry.PointCloud()
+            pts3d_i_o3d.points = open3d.utility.Vector3dVector(pts3d_i.detach().cpu().numpy())
+
+            if pts3d_colors is not None and len(pts3d_colors) >= i+1 and pts3d_colors[i] is not None:
+                pts3d_i_color = pts3d_colors[i]
+            else:
+                pts3d_i_color = get_colors(len(pts3d))[i]
+
+            pts3d_i_o3d.paint_uniform_color((pts3d_i_color[0], pts3d_i_color[1], pts3d_i_color[2]))
+
+            if pts3d_names is not None and len(pts3d_names) >= i+1 and pts3d_names[i] is not None:
+                pts3d_i_name = pts3d_names[i]
+            else:
+                pts3d_i_name = f'pts3d_{i}'
+
+            geometries.append({'name': pts3d_i_name, 'geometry': pts3d_i_o3d})
+
+    if cams_tform4x4_world is not None and cams_intr4x4 is not None:
+
+        for i, cam_tform4x4_obj in enumerate(cams_tform4x4_world):
+            width = int(cams_intr4x4[0, 2] * 2)
+            height = int(cams_intr4x4[1, 2] * 2)
+
+            if len(cams_intr4x4) == 1:
+                cam_intr4x4 = cams_intr4x4[0]
+            else:
+                cam_intr4x4 = cams_intr4x4[i]
+
+            cam = open3d.geometry.LineSet.create_camera_visualization(view_width_px=width, view_height_px=height,
+                                                                      intrinsic=cam_intr4x4[i][:3, :3].detach().numpy(),
+                                                                      extrinsic=cam_tform4x4_obj.detach().cpu().numpy(),
+                                                                      scale=0.01)
+            if cams_names is not None and len(cams_names) >= i+1 and cams_names[i] is not None:
+                cam_name = cams_names[i]
+            else:
+                cam_name = f'cam{i}'
+
+            geometries.append({'name': cam_name, 'geometry': cam})
+
+    open3d.visualization.draw(geometries)
+
+    # open3d.visualization.draw_geometries(geometries)
+
 def show_pcl_via_open3d(pts3d):
     vis = o3d.visualization.VisualizerWithEditing()
     vis.create_window()

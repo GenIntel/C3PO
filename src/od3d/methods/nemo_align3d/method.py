@@ -4,6 +4,8 @@ import od3d.io
 from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.benchmark.results import OD3D_Results
+from od3d.datasets.co3d import CO3D
+
 from omegaconf import DictConfig
 import pytorch3d.transforms
 import pandas as pd
@@ -73,11 +75,12 @@ class NeMo_Align3D(OD3D_Method):
         # init Network
         self.net = OD3D_Model(config.model)
 
+        #
 
         if config.train.transform.random_color:
             self.transform_train = torchvision.transforms.Compose([
                 RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                RGB_Random(),
+                #RGB_Random(),
                 self.net.transform,
             ])
         else:
@@ -91,144 +94,79 @@ class NeMo_Align3D(OD3D_Method):
             self.net.transform
         ])
 
+        self.sequences_meshes = None
+        self.sequences_unique_names = None
+        self.sequences_meshes = None
+
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
-        # self.path_shapenemo = Path(config.path_shapenemo)
-        # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.classes]
-        self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.classes]
-        self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes)
-        # self.meshes.show()
-        self.verts_count_max = self.meshes.verts_counts_max
-        self.mem_verts_feats_count = len(config.classes) * self.verts_count_max
-        self.mem_clutter_feats_count = config.num_noise * config.max_group
-        self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
-
-        self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.net.out_dim), device=self.device),
-                                                requires_grad=True)
-        self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(
-            torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.out_dim), device=self.device),
-            requires_grad=True))
-        # self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.feat_dim), device=self.device), requires_grad=True))
-
-        # dict to save estimated tforms, sequence : tform,
-        self.seq_obj_tform4x4_est_obj = {}
-        self.seq_obj_tform4x4_est_obj_sim = {}
-
-        self.normalize_feats()
-
-        if self.config.train.loss == 'cross_entropy':
-            self.criterion = torch.nn.CrossEntropyLoss().cuda()
-        elif self.config.train.loss == 'nll_softmax':
-            self.softmax = torch.nn.LogSoftmax(dim=1)
-            self.criterion = torch.nn.NLLLoss().cuda()
-        elif self.config.train.loss == 'nll_clip':
-            self.criterion = torch.nn.NLLLoss().cuda()
-        elif self.config.train.loss == 'nll_affine_to_prob':
-            self.criterion = torch.nn.NLLLoss().cuda()
-        elif self.config.train.loss == 'l2':
-            self.criterion = torch.nn.MSELoss().cuda()
-        elif self.config.train.loss == 'l2_squared':
-            self.criterion = torch.nn.MSELoss().cuda()
-
-
-        # self.net = torch.nn.DataParallel(self.net).cuda()
         self.net.cuda()
-        self.meshes.cuda()
         self.net.eval()
 
-        self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats])
-        self.scheduler = od3d.io.get_obj_from_config(self.optim, config=self.config.train.scheduler)
-
-        # load checkpoint
-        if config.get("checkpoint", None) is not None:
-            self.load_checkpoint(config.checkpoint)
-        elif config.get("checkpoint_old", None) is not None:
-            self.load_checkpoint_old(config.checkpoint_old)
-        # load_mesh(config.path_shapenemo)
-
-        # self.meshes.show()
-
-        # self.verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
-        # note: somehow vertices are stored in wrong order of classes (starting with last class tvmonitor until first class aeroplane
-        # self.verts_feats = self.verts_feats.reshape(len(self.meshes), self.verts_count_max, -1).flip(dims=(0,)).reshape(len(self.meshes) * self.verts_count_max, -1)
+        self.config.down_sample_rate = 16
         self.down_sample_rate = self.config.down_sample_rate
 
-    def normalize_feats(self):
-        self.clutter_feats.data = self.clutter_feats.detach() / self.clutter_feats.detach().norm(dim=-1, keepdim=True)
-        self.meshes.feats.data = self.meshes.feats.detach() / self.meshes.feats.detach().norm(dim=-1, keepdim=True)
-        # self.meshes.set_feats_cat(self.meshes.feats.detach() / self.meshes.feats.detach().norm(dim=-1, keepdim=True))
-        # logger.info(self.clutter_feats[:1])
-        # logger.info(self.meshes.feats[:1])
 
-    def load_checkpoint_old(self, path_checkpoint):
-        fpaths_meshes_old = list(self.config.fpaths_meshes.values())
-        meshes_old = Meshes.load_from_files(fpaths_meshes=fpaths_meshes_old)
-        verts_count_max = meshes_old.verts_counts_max
-        mem_verts_feats_count = len(fpaths_meshes_old) * verts_count_max
-        checkpoint = torch.load(path_checkpoint, map_location="cuda:0")
-        self.net.backbone.net = torch.nn.DataParallel(self.net.backbone.net).cuda()
-        self.net.backbone.net.load_state_dict(checkpoint["state"], strict=False)
-        self.net.backbone.net = self.net.backbone.net.module
-        self.clutter_feats = checkpoint["memory"][mem_verts_feats_count:].clone().detach().cpu()
-        # self.clutter_feats = self.clutter_feats.mean(dim=0, keepdim=True)
-        self.clutter_feats = torch.nn.Parameter(self.clutter_feats.to(device=self.device), requires_grad=True)
-
-        verts_feats = []
-        map_mesh_id_to_old_id = [fpaths_meshes_old.index(fpath_mesh) for fpath_mesh in self.fpaths_meshes]
-        for i in range(len(self.fpaths_meshes)):
-            mesh_old_id = map_mesh_id_to_old_id[i]
-            verts_feats.append(checkpoint["memory"][mesh_old_id * verts_count_max: (mesh_old_id + 1) * verts_count_max].clone().detach().cpu())
-        self.meshes.set_feats_cat_with_pad(torch.cat(verts_feats, dim=0))
-
-    def save_checkpoint(self, path_checkpoint: Path):
-        torch.save({
-            'net_state_dict': self.net.state_dict(),
-            'optimizer_state_dict': self.optim.state_dict(),
-            'scheduler_state_dict': self.scheduler.state_dict(),
-            'meshes_feats': self.meshes.feats,
-            'clutter_feats': self.clutter_feats
-        }, path_checkpoint)
-
-    def load_checkpoint(self, path_checkpoint):
-        checkpoint = torch.load(path_checkpoint)
-        self.net.load_state_dict(checkpoint['net_state_dict'])
-        self.optim.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        self.meshes.set_feats_cat(checkpoint['meshes_feats'])
-        self.clutter_feats = checkpoint['clutter_feats']
-
-    @property
-    def path_checkpoint(self):
-        return self.logging_dir.joinpath('nemo.ckpt')
-
-    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+    def train(self, datasets_train: Dict[str, CO3D], datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
 
-        if 'main' in datasets_val.keys():
-            dataset_train_sub = datasets_train['labeled']
-        else:
-            dataset_train_sub, dataset_val_sub = datasets_train['labeled'].get_split(fraction1=1. - self.config.train.val_fraction,
-                                                                                     fraction2=self.config.train.val_fraction,
-                                                                                     split=self.config.train.split)
-            datasets_val['main'] = dataset_val_sub
+        dataset_train: CO3D = datasets_train['labeled']
 
-        for epoch in range(self.config.train.epochs):
-            if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
-                for dataset_val_key, dataset_val in datasets_val.items():
-                    results_val = self.test(dataset_val)
-                    results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
-                    if dataset_val_key == 'main':
-                        score_latest = results_val[score_metric_name]
+        from od3d.cv.geometry.mesh import Meshes
 
-                if not self.config.train.early_stopping or score_latest > score_ckpt_val:
-                    score_ckpt_val = score_latest
-                    self.save_checkpoint(path_checkpoint=self.path_checkpoint)
+        self.sequences = dataset_train.get_sequences()
+        self.sequences_unique_names = [seq.name_unique for seq in self.sequences]
+        self.sequences_meshes = Meshes.load_from_meshes([seq.mesh for seq in self.sequences], device=self.device)
 
-            results_epoch = self.train_epoch(dataset=dataset_train_sub)
-            results_epoch.log_with_prefix('train')
-        self.load_checkpoint(path_checkpoint=self.path_checkpoint)
+        # self.sequences_meshes.rgb = self.sequences_meshes.get_verts_ncds_cat_with_mesh_ids()
+
+        self.sequences_meshes.show()
+        self.sequences_mesh_ids_for_verts = self.sequences_meshes.get_mesh_ids_for_verts()
+
+        self.meshes_verts_aggregated_features = [torch.zeros((0, 384), device=self.device)] * self.sequences_meshes.verts.shape[0]
+
+        instances_count = len(self.sequences_meshes)
+        vertices_count = len(self.meshes_verts_aggregated_features)
+
+        results_epoch = self.train_epoch(dataset=dataset_train)
+        results_epoch.log_with_prefix('train')
+
+        meshes_verts_aggregated_features_vertices_ids = []
+        for vertex_id in range(len(self.meshes_verts_aggregated_features)):
+            meshes_verts_aggregated_features_vertices_ids.append(torch.LongTensor([vertex_id, ] * len(self.meshes_verts_aggregated_features[vertex_id])).to(device=self.device))
+
+        meshes_verts_aggregated_features_instances_ids = []
+        for vertex_id in range(len(self.meshes_verts_aggregated_features)):
+            meshes_verts_aggregated_features_instances_ids.append(torch.LongTensor([self.sequences_mesh_ids_for_verts[vertex_id], ] * len(self.meshes_verts_aggregated_features[vertex_id])).to(device=self.device))
+
+        all_features = torch.cat(self.meshes_verts_aggregated_features, dim=0)
+        all_features_vertices_ids = torch.cat(meshes_verts_aggregated_features_vertices_ids, dim=0)
+        all_features_instances_ids = torch.cat(meshes_verts_aggregated_features_instances_ids, dim=0)
+        from sklearn.manifold import TSNE
+        all_features_tsne = TSNE().fit_transform(all_features.detach().cpu().numpy())
+
+        from od3d.cv.visual.show import get_colors
+        import matplotlib.pyplot as plt
+        plt.switch_backend('Agg')
+        plt.switch_backend('TKAgg')
+
+        colors = get_colors(instances_count)
+        pts_colors = torch.stack([colors[all_features_instances_ids[i].item()] for i in range(len(all_features_instances_ids))], dim=0)
+        fig, axs = plt.subplots(nrows=2, figsize=(3, 3), facecolor="white", constrained_layout=True)
+        axs[0].scatter(all_features_tsne[:, 0], all_features_tsne[:, 1], c=pts_colors.detach().cpu().numpy(), s=50, alpha=0.8)
+
+        #first_instance_features_count =
+        #all_features_vertices_ids[]
+        colors = get_colors(vertices_count)
+        pts_colors = torch.stack([colors[all_features_vertices_ids[i].item()] for i in range(len(all_features_vertices_ids))], dim=0)
+        #fig, ax = plt.subplots(figsize=(3, 3), facecolor="white", constrained_layout=True)
+        axs[1].scatter(all_features_tsne[:, 0], all_features_tsne[:, 1], c=pts_colors.detach().cpu().numpy(), s=50, alpha=0.8)
+        plt.show()
+
+        # fix dinov2 features with correct transformation
+
 
 
     def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
@@ -236,8 +174,6 @@ class NeMo_Align3D(OD3D_Method):
         if config_inference is None:
             config_inference = self.config.inference
         self.net.eval()
-        self.meshes.feats.requires_grad = False
-        clutter_feats = self.clutter_feats.detach()
         dataset.transform = self.transform_test
 
         dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
@@ -267,31 +203,20 @@ class NeMo_Align3D(OD3D_Method):
 
     def train_epoch(self, dataset: OD3D_Dataset) -> OD3D_Results:
         self.net.train()
-        self.meshes.del_pre_rendered()
-        self.meshes.feats.requires_grad = True
         dataset.transform = self.transform_train
         dataloader_train = torch.utils.data.DataLoader(dataset=dataset,
                                                        batch_size=self.config.train.dataloader.batch_size,
-                                                       shuffle=True,
+                                                       shuffle=False,
                                                        collate_fn=dataset.collate_fn,
                                                        num_workers=self.config.train.dataloader.num_workers,
                                                        pin_memory=self.config.train.dataloader.pin_memory)
 
         results_epoch = OD3D_Results()
         accumulate_steps = 0
-        for i, batch in enumerate(iter(dataloader_train)):
+        for i, batch in tqdm(enumerate(iter(dataloader_train))):
             results_batch: OD3D_Results = self.train_batch(batch=batch)
             results_batch.log_with_prefix('train')
-            accumulate_steps += 1
-            if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
-                self.optim.step()
-                self.normalize_feats()
-                self.optim.zero_grad()
-
             results_epoch += results_batch
-
-        self.scheduler.step()
-        self.optim.zero_grad()
 
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
                                                  config_visualize=self.config.train.visualize)
@@ -309,13 +234,17 @@ class NeMo_Align3D(OD3D_Method):
 
         # logger.info(f'batch.label {batch.label}')
         # B x x N x 2
-        vts2d, vts2d_mask = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
-                                                cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                imgs_sizes=batch.size, mesh_ids=batch.label,
-                                                down_sample_rate=self.down_sample_rate)
+
+        batch_sequences_ids = [ self.sequences_unique_names.index('/'.join(name_unique.split('/')[:-1]))  for name_unique in batch.name_unique]
+
+        vts2d, vts2d_mask = self.sequences_meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
+                                                          cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                          imgs_sizes=batch.size, mesh_ids=batch_sequences_ids,
+                                                          down_sample_rate=self.down_sample_rate)
 
         N = vts2d.shape[1]
-        # B x F+N x C
+
+        # B x C x H x W
         feats2d_net = self.net(batch.rgb)
         feats2d_net_mask = resize(batch.mask_rgb, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
         if self.config.train.use_mask_object:
@@ -328,9 +257,14 @@ class NeMo_Align3D(OD3D_Method):
                            indexing='xy'), dim=0)  # HxW
         prob_noise = (1. - 1. * resize(feats2d_net_mask, scale_factor=1. / self.down_sample_rate)).flatten(1)
         prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
-        noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise)].permute(1, 2, 0)
+        if self.config.num_noise > 0:
+            noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise)].permute(1, 2, 0)
+        else:
+            noise2d = torch.ones(size=(vts2d.shape[0], 0, 2), device=self.device)
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
         vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
+
+        # B x F+N x C
         net_feats = sample_pxl2d_pts(feats2d_net, pxl2d=torch.cat([vts2d, noise2d], dim=1))
 
         C = net_feats.shape[2]
@@ -339,8 +273,8 @@ class NeMo_Align3D(OD3D_Method):
 
 
         # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
-        batch_vts_ids = self.meshes.get_verts_and_noise_ids_stacked(batch.label.tolist(),
-                                                                    count_noise_ids=self.config.num_noise)
+        batch_vts_ids = self.sequences_meshes.get_verts_and_noise_ids_stacked(batch_sequences_ids,
+                                                                              count_noise_ids=self.config.num_noise)
 
         # weighting with similarity score
         # net_feats = net_feats * (batch.cam_tform4x4_obj_sim[:, None, None] ** 4)
@@ -348,46 +282,53 @@ class NeMo_Align3D(OD3D_Method):
         # sim_weight = batch.cam_tform4x4_obj_sim[:, None].expand(*net_feats.shape[:2])
         # sim_weight = torch.cat([sim_weight[:, :N][mask_vts2d_vsbl], sim_weight[:, N:].reshape(-1)], dim=0)
 
+        # N,
         batch_vts_ids = torch.cat([batch_vts_ids[:, :N][vts2d_mask], batch_vts_ids[:, N:].reshape(-1)],
                                   dim=0)
+
+        # N x C
         net_feats = torch.cat([net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)], dim=0)
+
+        for b, vertex_id in enumerate(batch_vts_ids):
+            self.meshes_verts_aggregated_features[vertex_id] = torch.cat([net_feats[b:b+1], self.meshes_verts_aggregated_features[vertex_id]], dim=0)
+        # 1. add tsne and pca plot ( for all instances with coloring instances, for one instance with coloring vertices, for one instance with vertices coloring with pca/tsne color (avg) )
+        # 2. use dino (without head)
+        # 3. accumulate features
 
         # batch_vts_ids = self.meshes.get_feats_ids_stacked(batch.label.tolist())
 
-        bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
-
-
-        if self.config.train.bank_feats_update == 'loss_gradient':
-            sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
-        elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
-            sim = torch.einsum('nc,vc->nv', net_feats, torch.nn.functional.normalize(bank_feats, dim=1))
-        elif self.config.train.bank_feats_update == 'moving_average':
-            sim = torch.einsum('nc,vc->nv', net_feats, bank_feats.detach())
-            bank_feats_new = self.config.train.alpha * bank_feats[batch_vts_ids].detach() + (1. - self.config.train.alpha) * net_feats.detach()
-            batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
-            bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
-            bank_feats[batch_vts_ids_unique].data = bank_feats_new
-        else:
-            logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
-            sim = None
-
-        sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=vts2d_mask.device), vts2d_mask.sum(dim=1).cumsum(dim=0)], dim=0)
-        sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
-        # in case there are 0 vertices inside one image
-        sim_batchwise[sim_batchwise.isnan()] = 0.
-        results_batch['sim'] = sim_batchwise
-
-        # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
-        # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
-        loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
-
-        loss.backward()
-        logger.info(f'loss {loss.item()}')
-
-        results_batch['loss'] = loss[None,]
-        results_batch['item_id'] = batch.item_id
-        results_batch['name_unique'] = batch.name_unique
-        results_batch['gt_cam_tform4x4_obj'] = batch.cam_tform4x4_obj
+        #bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
+        # if self.config.train.bank_feats_update == 'loss_gradient':
+        #     sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
+        # elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
+        #     sim = torch.einsum('nc,vc->nv', net_feats, torch.nn.functional.normalize(bank_feats, dim=1))
+        # elif self.config.train.bank_feats_update == 'moving_average':
+        #     sim = torch.einsum('nc,vc->nv', net_feats, bank_feats.detach())
+        #     bank_feats_new = self.config.train.alpha * bank_feats[batch_vts_ids].detach() + (1. - self.config.train.alpha) * net_feats.detach()
+        #     batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
+        #     bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
+        #     bank_feats[batch_vts_ids_unique].data = bank_feats_new
+        # else:
+        #     logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
+        #     sim = None
+        #
+        # sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=vts2d_mask.device), vts2d_mask.sum(dim=1).cumsum(dim=0)], dim=0)
+        # sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
+        # # in case there are 0 vertices inside one image
+        # sim_batchwise[sim_batchwise.isnan()] = 0.
+        # results_batch['sim'] = sim_batchwise
+        #
+        # # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
+        # # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
+        # loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
+        #
+        # loss.backward()
+        # logger.info(f'loss {loss.item()}')
+        #
+        # results_batch['loss'] = loss[None,]
+        # results_batch['item_id'] = batch.item_id
+        # results_batch['name_unique'] = batch.name_unique
+        # results_batch['gt_cam_tform4x4_obj'] = batch.cam_tform4x4_obj
 
         return results_batch
 

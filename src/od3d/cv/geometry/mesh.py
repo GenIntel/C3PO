@@ -7,8 +7,6 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 from pytorch3d.renderer import MeshRasterizer, RasterizationSettings
 from pytorch3d.renderer.mesh.utils import interpolate_face_attributes
 from od3d.cv.geometry.transform import proj3d2d, proj3d2d_broadcast
-from od3d.cv.visual.draw import draw_pixels
-from od3d.cv.visual.show import show_img
 from od3d.cv.io import load_ply
 from enum import Enum
 from typing import List
@@ -18,7 +16,7 @@ from od3d.cv.geometry.transform import tform4x4, tform4x4_broadcast, inv_tform4x
     transf3d_broadcast, reproj2d3d_broadcast
 from od3d.cv.visual.sample import sample_pxl2d_grid
 from od3d.cv.geometry.grid import get_pxl2d_like, get_pxl2d
-
+from typing import Union
 
 class MESH_RENDER_MODALITIES(str, Enum):
     DEPTH = 'depth'
@@ -61,6 +59,7 @@ class Meshes(torch.nn.Module):
         self.meshes_count = len(verts)
         self.verts = torch.nn.Parameter(torch.cat([_verts for _verts in verts], dim=0), requires_grad=False)
         self.faces = torch.nn.Parameter(torch.cat([_faces for _faces in faces], dim=0), requires_grad=False)
+        self.device = self.verts.device
 
         self.verts_counts = [_verts.shape[0] for _verts in verts]
         self.faces_counts = [_faces.shape[0] for _faces in faces]
@@ -156,6 +155,17 @@ class Meshes(torch.nn.Module):
         verts3d_ncds = (verts3d - verts3d.min(dim=0).values[None,]) / (
                 verts3d.max(dim=0).values[None,] - verts3d.min(dim=0).values[None,])
         return verts3d_ncds
+
+    def get_verts_ncds_cat_with_mesh_ids(self, mesh_ids=None):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        verts3d_ncds = []
+        for mesh_id in mesh_ids:
+            verts3d_ncds.append(self.get_verts_ncds_with_mesh_id(mesh_id=mesh_id))
+        verts3d_ncds = torch.cat(verts3d_ncds, dim=0)
+        return verts3d_ncds
+
+
     def get_verts_ncds_from_faces_with_mesh_id(self, mesh_id):
         verts3d_ncds = self.get_verts_ncds_with_mesh_id(mesh_id)
         feats_from_faces = verts3d_ncds[self.get_faces_with_mesh_id(mesh_id)]
@@ -168,6 +178,12 @@ class Meshes(torch.nn.Module):
         return self.rgb[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
     def get_verts_with_mesh_id(self, mesh_id):
         return self.verts[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
+
+    def get_mesh_ids_for_verts(self):
+        mesh_ids = torch.LongTensor(size=(0,)).to(device=self.device)
+        for mesh_id in range(self.meshes_count):
+            mesh_ids = torch.cat([mesh_ids, torch.LongTensor([mesh_id] *  self.verts_counts[mesh_id]).to(device=self.device)], dim=0)
+        return mesh_ids
 
     def get_feats_with_mesh_id(self, mesh_id):
         return self.feats[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
@@ -223,6 +239,7 @@ class Meshes(torch.nn.Module):
         if mesh_ids == None:
             mesh_ids = list(range(len(self)))
         return torch.stack([self.get_faces_padded_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
+
     #def add_feats_cat(self, feats):
     #    raise Not I
     #    self.feats = [feats[self.verts_counts_acc_from_0[i] : self.verts_counts_acc_from_0[i+1]].to(device=self.device) for i in range(len(self))]
@@ -271,7 +288,7 @@ class Meshes(torch.nn.Module):
         return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
 
 
-    def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: torch.LongTensor, down_sample_rate=1., broadcast_batch_and_cams=False):
+    def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: Union[torch.LongTensor, List], down_sample_rate=1., broadcast_batch_and_cams=False):
         """
             Args:
                 cams_tform4x4_obj (torch.Tensor): Bx4x4
@@ -285,6 +302,9 @@ class Meshes(torch.nn.Module):
         """
         #meshes_count = mesh_ids.shape[0]
         # cams_count = cams_tform4x4_obj.shape[0]
+
+        if isinstance(mesh_ids, List):
+            mesh_ids = torch.LongTensor(mesh_ids)
 
         meshes_count = mesh_ids.shape[0]
         if cams_tform4x4_obj.dim() == 4:
@@ -330,6 +350,11 @@ class Meshes(torch.nn.Module):
 
         return verts2d, mask_verts_vsbl
 
+    def show(self):
+        from od3d.cv.visual.show import show_scene
+        show_scene(meshes=self)
+
+    """
     def show(self, pts3d=[], meshes_ids=None):
         from pytorch3d.vis.plotly_vis import plot_scene, AxisArgs
         from pytorch3d.structures import Pointclouds
@@ -348,6 +373,7 @@ class Meshes(torch.nn.Module):
                                    showaxeslabels=True, showticklabels=True))
         fig.show()
         input('bla')
+    """
 
     def del_pre_rendered(self):
         self.pre_rendered_modalities.clear()

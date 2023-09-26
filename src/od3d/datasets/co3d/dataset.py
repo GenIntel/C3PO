@@ -230,6 +230,13 @@ class CO3D(OD3D_Dataset):
                           meta=frame_meta, modalities=self.modalities, categories=self.categories,
                           cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source)
 
+    def get_sequences(self):
+        seqs = []
+        for category in self.dict_category_sequences_names.keys():
+            for sequence_name in self.dict_category_sequences_names[category]:
+                seqs.append(self.get_sequence_by_category_and_name(category=category, name=sequence_name))
+        return seqs
+
     def get_sequence_by_category_and_name(self, category, name):
         sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta, category=category, name=name)
         return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
