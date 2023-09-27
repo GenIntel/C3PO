@@ -70,7 +70,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                pts3d_colors: Union[torch.Tensor, List]=None,
                meshes: Meshes=None,
                meshes_names: List[str]=None,
-               meshes_colors: Union[torch.Tensor, List]=None,):
+               meshes_colors: Union[torch.Tensor, List]=None,
+               meshes_add_translation: bool=True):
     """
     Args:
         cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
@@ -89,8 +90,18 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     geometries = []
 
     if meshes is not None:
+
+        x_offset = 0.
         for i in range(len(meshes)):
-            vertices = open3d.utility.Vector3dVector(meshes.get_verts_with_mesh_id(mesh_id=i).detach().cpu().numpy())
+            vertices = meshes.get_verts_with_mesh_id(mesh_id=i).clone()
+            if meshes_add_translation:
+                x_offset_delta_current = 1.1 * (-vertices[:, 0].min()).clamp(min=0.)
+                x_offset += x_offset_delta_current
+                x_offset_delta_next = 1.1 * (vertices[:, 0].max())
+                vertices[:, 0] += x_offset
+                x_offset += x_offset_delta_next
+
+            vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
             triangles = open3d.utility.Vector3iVector(meshes.get_faces_with_mesh_id(mesh_id=i).detach().cpu().numpy())
 
             mesh_o3d = open3d.geometry.TriangleMesh(vertices=vertices, triangles=triangles)

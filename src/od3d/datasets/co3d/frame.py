@@ -281,26 +281,27 @@ class CO3D_Frame(OD3D_Frame):
 
     @property
     def fpath_cam_tform4x4_obj_droid_slam(self):
-        return self.path_preprocess.joinpath('cam_tform4x4_obj', str(self.cam_tform_obj_source), self.category, self.name)
+        return self.path_preprocess.joinpath('cam_tform4x4_obj', str(self.cam_tform_obj_source), self.name_unique + '.pt')
 
     @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
-            if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D or not self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
-                self._cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
-                #if not self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
-                #    logger.warning(f'No {self.cam_tform_obj_source} label for {self.sequence.name_unique}')
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL:
+            if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL and self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
                 self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
                                                   inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL:
+            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL and self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
                 self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
                                                   inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
             elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LIMITS3D:
-                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
+                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj) and self.sequence.fpath_cuboid_front_tform4x4_obj.exists(),
                                                   inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM:
+            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM and self.fpath_cam_tform4x4_obj_droid_slam.exists():
                 self._cam_tform4x4_obj = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+            else:
+                self._cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
+                if self.cam_tform_obj_source != CAM_TFORM_OBJ_SOURCES.CO3D:
+                    logger.warning(f'No fpath available for cam source {self.cam_tform_obj_source}.')
+
                 # tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj), inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
         return self._cam_tform4x4_obj
 

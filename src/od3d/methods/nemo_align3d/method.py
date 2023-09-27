@@ -94,9 +94,9 @@ class NeMo_Align3D(OD3D_Method):
             self.net.transform
         ])
 
-        self.sequences_meshes = None
+        self.meshes = None
         self.sequences_unique_names = None
-        self.sequences_meshes = None
+        self.meshes = None
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
@@ -106,7 +106,8 @@ class NeMo_Align3D(OD3D_Method):
         self.config.down_sample_rate = 16
         self.down_sample_rate = self.config.down_sample_rate
 
-
+        self.dir_tmp = Path('/tmp').joinpath(self.__class__.__name__)
+        self.dir_tmp.mkdir(parents=True, exist_ok=True)
     def train(self, datasets_train: Dict[str, CO3D], datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
         score_ckpt_val = 0.
@@ -118,20 +119,35 @@ class NeMo_Align3D(OD3D_Method):
 
         self.sequences = dataset_train.get_sequences()
         self.sequences_unique_names = [seq.name_unique for seq in self.sequences]
-        self.sequences_meshes = Meshes.load_from_meshes([seq.mesh for seq in self.sequences], device=self.device)
+        self.meshes = Meshes.load_from_meshes([seq.mesh for seq in self.sequences], device=self.device)
 
-        # self.sequences_meshes.rgb = self.sequences_meshes.get_verts_ncds_cat_with_mesh_ids()
+        #self.sequences_meshes.rgb = self.sequences_meshes.get_verts_ncds_cat_with_mesh_ids()
+        #self.sequences_meshes.show()
 
-        self.sequences_meshes.show()
-        self.sequences_mesh_ids_for_verts = self.sequences_meshes.get_mesh_ids_for_verts()
+        self.sequences_mesh_ids_for_verts = self.meshes.get_mesh_ids_for_verts()
 
-        self.meshes_verts_aggregated_features = [torch.zeros((0, 384), device=self.device)] * self.sequences_meshes.verts.shape[0]
+        self.meshes_verts_aggregated_features = [torch.zeros((0, 384), device=self.device)] * self.meshes.verts.shape[0]
 
-        instances_count = len(self.sequences_meshes)
+        instances_count = len(self.meshes)
         vertices_count = len(self.meshes_verts_aggregated_features)
+        feature_dim = 384
 
-        results_epoch = self.train_epoch(dataset=dataset_train)
-        results_epoch.log_with_prefix('train')
+        fpath_meshes_verts_aggregated_features = self.dir_tmp.joinpath('meshes_verts_aggregated_features.pt')
+        if fpath_meshes_verts_aggregated_features.exists():
+            self.meshes_verts_aggregated_features = torch.load(fpath_meshes_verts_aggregated_features) # .to(device=self.device)
+            logger.info(f'loading {fpath_meshes_verts_aggregated_features}')
+        else:
+            results_epoch = self.train_epoch(dataset=dataset_train)
+            results_epoch.log_with_prefix('train')
+            torch.save(self.meshes_verts_aggregated_features, fpath_meshes_verts_aggregated_features)
+
+
+        features_count_per_vertex_max = max([vert_features.shape[0] for vert_features in self.meshes_verts_aggregated_features])
+        meshes_verts_aggregated_features_padded = torch.zeros(vertices_count, features_count_per_vertex_max, feature_dim).to(device=self.device)
+        meshes_verts_aggregated_features_padded_mask = torch.zeros(vertices_count, features_count_per_vertex_max).to(device=self.device, dtype=bool)
+        for vert_id, vert_features in enumerate(self.meshes_verts_aggregated_features):
+            meshes_verts_aggregated_features_padded[vert_id, :len(vert_features)] = vert_features
+            meshes_verts_aggregated_features_padded_mask[vert_id, :len(vert_features)] = True
 
         meshes_verts_aggregated_features_vertices_ids = []
         for vertex_id in range(len(self.meshes_verts_aggregated_features)):
@@ -141,9 +157,96 @@ class NeMo_Align3D(OD3D_Method):
         for vertex_id in range(len(self.meshes_verts_aggregated_features)):
             meshes_verts_aggregated_features_instances_ids.append(torch.LongTensor([self.sequences_mesh_ids_for_verts[vertex_id], ] * len(self.meshes_verts_aggregated_features[vertex_id])).to(device=self.device))
 
+        meshes_verts_features_avg = torch.zeros((vertices_count, feature_dim)).to(device=self.device)
+        meshes_verts_features_avg_normalized = torch.zeros((vertices_count, feature_dim)).to(device=self.device)
+        for vertex_id in range(len(self.meshes_verts_aggregated_features)):
+            meshes_verts_features_avg[vertex_id] = self.meshes_verts_aggregated_features[vertex_id].mean(dim=0)
+            meshes_verts_features_avg_normalized[vertex_id] = torch.nn.functional.normalize(meshes_verts_features_avg[vertex_id], dim=0)
+            if self.meshes_verts_aggregated_features[vertex_id].numel() == 0:
+                meshes_verts_features_avg[vertex_id] = 0.
+                meshes_verts_features_avg_normalized[vertex_id] = 0.
+
+
         all_features = torch.cat(self.meshes_verts_aggregated_features, dim=0)
+        #dists_all_features = torch.cdist(all_features, all_features)
         all_features_vertices_ids = torch.cat(meshes_verts_aggregated_features_vertices_ids, dim=0)
         all_features_instances_ids = torch.cat(meshes_verts_aggregated_features_instances_ids, dim=0)
+
+        """
+        # calculate variances
+        from od3d.cv.statistics.standard_devation import mean_avg_std_with_id
+
+        logger.info(f'variance {torch.std(all_features)}')
+
+        viewpoint_variance = mean_avg_std_with_id(features=all_features, ids=all_features_vertices_ids, ids_count=vertices_count)
+        logger.info(f'vertex variance {viewpoint_variance}')
+
+        instance_variance = mean_avg_std_with_id(features=all_features, ids=all_features_instances_ids, ids_count=instances_count)
+        logger.info(f'instance variance {instance_variance}')
+        """
+
+        """
+        # optimization with padding
+        dists_verts_features_padded = torch.zeros(vertices_count, features_count_per_vertex_max, vertices_count, features_count_per_vertex_max).to(device=self.device)
+         torch.cdist(meshes_verts_aggregated_features_padded.reshape(-1, feature_dim), meshes_verts_aggregated_features_padded.reshape(-1, feature_dim))
+        for vert_id, vert_features in enumerate(self.meshes_verts_aggregated_features):
+            dists_verts_features_padded[vert_id, :len(vert_features), vert_id, :len(vert_features)] = dists_all_features[all_features_vertices_ids == vert_id][:, all_features_vertices_ids == vert_id]
+            meshes_verts_aggregated_features_padded[vert_id, :len(vert_features)] = vert_features
+            meshes_verts_aggregated_features_padded_mask[vert_id, :len(vert_features)] = True
+        """
+
+        # calculate dists between vertices
+        fpath_dist_verts_all_features_min = self.dir_tmp.joinpath('dist_verts_all_features_min.pt')
+        fpath_dist_verts_all_features_avg = self.dir_tmp.joinpath('dist_verts_all_features_avg.pt')
+
+        dist_verts_mean_features = torch.cdist(meshes_verts_features_avg, meshes_verts_features_avg)
+        dist_verts_mean_features_normalized = torch.cdist(meshes_verts_features_avg_normalized, meshes_verts_features_avg_normalized)
+
+
+        if fpath_dist_verts_all_features_min.exists() and fpath_dist_verts_all_features_avg.exists():
+
+            dist_verts_all_features_min = torch.load(fpath_dist_verts_all_features_min).to(device=self.device)
+            logger.info(f'loading {fpath_meshes_verts_aggregated_features}')
+
+            dist_verts_all_features_avg = torch.load(fpath_dist_verts_all_features_avg).to(device=self.device)
+            logger.info(f'loading {fpath_dist_verts_all_features_avg}')
+
+        else:
+            dist_verts_all_features_min = torch.zeros((vertices_count, vertices_count)).to(device=self.device) #  self.meshes_verts_aggregated_features
+            dist_verts_all_features_avg = torch.zeros((vertices_count, vertices_count)).to(device=self.device) #  self.meshes_verts_aggregated_features
+
+            for i in tqdm(range(vertices_count)):
+                for j in range(vertices_count):
+                    if i == j:
+                        dist_verts_all_features_min[i, j] = torch.inf
+                        dist_verts_all_features_avg[i, j] = torch.inf
+                    else:
+                        #dists = dists_all_features[all_features_vertices_ids == i][:, all_features_vertices_ids == j]
+                        dists = torch.cdist(self.meshes_verts_aggregated_features[i], self.meshes_verts_aggregated_features[j])
+                        if dists.numel() == 0:
+                            dist_verts_all_features_min[i, j] = torch.inf
+                            dist_verts_all_features_avg[i, j] = torch.inf
+                        else:
+                            dist_verts_all_features_min[i, j] = dists.min()
+                            dist_verts_all_features_avg[i, j] = dists.mean()
+            torch.save(dist_verts_all_features_min, fpath_dist_verts_all_features_min)
+            torch.save(dist_verts_all_features_avg, fpath_dist_verts_all_features_avg)
+
+        dists_verts = dist_verts_all_features_min # dist_verts_all_features_min, dist_verts_all_features_avg, dist_verts_mean_features, dist_verts_mean_features_normalized
+        ref_mesh_id = 0 # 0, 1, 2, 3, 4
+
+        # calculate reference vertex/feature given dists: nearest-neighbor, k-nearest-neighbor, average feature -
+        ref_vertices_mask = self.sequences_mesh_ids_for_verts == ref_mesh_id
+        ref_vertices = torch.arange(vertices_count).to(device=self.device)[ref_vertices_mask]
+        dists_verts_min_ref_vertices = dists_verts[:, ref_vertices].min(dim=-1)[1]
+
+        rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
+        rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]
+        self.meshes.rgb = rgbs_all
+        # self.meshes.show()
+
+
+        logger.info('tnse plot')
         from sklearn.manifold import TSNE
         all_features_tsne = TSNE().fit_transform(all_features.detach().cpu().numpy())
 
@@ -237,10 +340,10 @@ class NeMo_Align3D(OD3D_Method):
 
         batch_sequences_ids = [ self.sequences_unique_names.index('/'.join(name_unique.split('/')[:-1]))  for name_unique in batch.name_unique]
 
-        vts2d, vts2d_mask = self.sequences_meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
-                                                          cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                          imgs_sizes=batch.size, mesh_ids=batch_sequences_ids,
-                                                          down_sample_rate=self.down_sample_rate)
+        vts2d, vts2d_mask = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
+                                                cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                imgs_sizes=batch.size, mesh_ids=batch_sequences_ids,
+                                                down_sample_rate=self.down_sample_rate)
 
         N = vts2d.shape[1]
 
@@ -273,8 +376,8 @@ class NeMo_Align3D(OD3D_Method):
 
 
         # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
-        batch_vts_ids = self.sequences_meshes.get_verts_and_noise_ids_stacked(batch_sequences_ids,
-                                                                              count_noise_ids=self.config.num_noise)
+        batch_vts_ids = self.meshes.get_verts_and_noise_ids_stacked(batch_sequences_ids,
+                                                                    count_noise_ids=self.config.num_noise)
 
         # weighting with similarity score
         # net_feats = net_feats * (batch.cam_tform4x4_obj_sim[:, None, None] ** 4)
@@ -316,7 +419,7 @@ class NeMo_Align3D(OD3D_Method):
         # sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
         # # in case there are 0 vertices inside one image
         # sim_batchwise[sim_batchwise.isnan()] = 0.
-        # results_batch['sim'] = sim_batchwise
+        results_batch['sim'] = torch.zeros_like(batch.cam_tform4x4_obj[:, 0, 0])
         #
         # # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
         # # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
@@ -325,10 +428,10 @@ class NeMo_Align3D(OD3D_Method):
         # loss.backward()
         # logger.info(f'loss {loss.item()}')
         #
-        # results_batch['loss'] = loss[None,]
-        # results_batch['item_id'] = batch.item_id
-        # results_batch['name_unique'] = batch.name_unique
-        # results_batch['gt_cam_tform4x4_obj'] = batch.cam_tform4x4_obj
+        results_batch['loss'] = torch.zeros_like(batch.cam_tform4x4_obj[:, 0, 0])
+        results_batch['item_id'] = batch.item_id
+        results_batch['name_unique'] = batch.name_unique
+        results_batch['gt_cam_tform4x4_obj'] = batch.cam_tform4x4_obj
 
         return results_batch
 
@@ -555,6 +658,7 @@ class NeMo_Align3D(OD3D_Method):
         logger.info('create dataset ...')
         dataset_visualize = dataset.get_subset_with_item_ids(item_ids=sel_item_ids)
 
+
         logger.info('create dataloader ...')
         dataloader = torch.utils.data.DataLoader(dataset=dataset_visualize, batch_size=self.config.test.dataloader.batch_size,
                                                  shuffle=False,
@@ -569,6 +673,9 @@ class NeMo_Align3D(OD3D_Method):
                 if 'gt_cam_tform4x4_obj' in results_epoch.keys():
                     batch.cam_tform4x4_obj = results_epoch['gt_cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
 
+                batch_sequences_ids = torch.LongTensor([self.sequences_unique_names.index('/'.join(name_unique.split('/')[:-1])) for
+                                       name_unique in batch.name_unique])
+
                 batch_sel_names = [dict_name_unique_to_sel_name[batch.name_unique[b]] for b in range(B)]
                 batch_names = [batch.name_unique[b] for b in range(B)]
                 batch_sel_scores = []
@@ -582,7 +689,7 @@ class NeMo_Align3D(OD3D_Method):
                 if VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS in modalities:
 
                     logger.info('create net_feats_nearest_verts ...')
-                    verts3d = self.get_nearest_verts3d_to_feats2d_net(feats2d_net=feats2d_net, categories_ids=batch.label,
+                    verts3d = self.get_nearest_verts3d_to_feats2d_net(feats2d_net=feats2d_net, categories_ids=batch_sequences_ids,
                                                                       zero_if_sim_clutter_larger=True)
                     verts3d = resize(verts3d, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
                     for b in range(len(batch)):
@@ -612,7 +719,7 @@ class NeMo_Align3D(OD3D_Method):
 
                     ncds = self.get_ncds_with_cam(cam_tform4x4_obj=s_cam_tform4x4_obj,
                                                   cam_intr4x4=s_cam_intr4x4, size=batch.size,
-                                                  categories_ids=batch.label, down_sample_rate=config_visualize.down_sample_rate, broadcast_batch_and_cams=True, pre_rendered=False)
+                                                  categories_ids=batch_sequences_ids, down_sample_rate=config_visualize.down_sample_rate, broadcast_batch_and_cams=True, pre_rendered=False)
 
 
                     for b in range(len(batch)):
@@ -670,7 +777,7 @@ class NeMo_Align3D(OD3D_Method):
                     sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                                       cam_intr4x4=batch.cam_intr4x4,
                                                                       cam_tform4x4_obj=batch_pred_cam_tform4x4,
-                                                                      categories_ids=batch.label, return_sim_pxl=True,
+                                                                      categories_ids=batch_sequences_ids, return_sim_pxl=True,
                                                                       broadcast_batch_and_cams=False,
                                                                       sim_feats_mesh_with_image=SIM_FEATS_MESH_WITH_IMAGE.RENDERED,
                                                                       pre_rendered=False)
@@ -688,7 +795,7 @@ class NeMo_Align3D(OD3D_Method):
                     logger.info('create pred verts ncds...')
                     batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
                     batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
-                    pred_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=batch_pred_cam_tform4x4, categories_ids=batch.label, size=batch.size, down_sample_rate=config_visualize.down_sample_rate, pre_rendered=False)
+                    pred_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=batch_pred_cam_tform4x4, categories_ids=batch_sequences_ids, size=batch.size, down_sample_rate=config_visualize.down_sample_rate, pre_rendered=False)
                     if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities:
                         for b in range(len(batch)):
                             img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
@@ -701,7 +808,7 @@ class NeMo_Align3D(OD3D_Method):
                     logger.info('create gt verts ncds...')
                     gt_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4,
                                                            cam_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                           categories_ids=batch.label, size=batch.size,
+                                                           categories_ids=batch_sequences_ids, size=batch.size,
                                                            down_sample_rate=config_visualize.down_sample_rate, pre_rendered=False)
                     if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities:
                         for b in range(len(batch)):
