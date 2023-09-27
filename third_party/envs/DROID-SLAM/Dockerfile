@@ -1,7 +1,31 @@
-#FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
-# as base
+###### SETUP DOCKER WITHOUT ROOT AND GPU ######
 
-# docker build . --mount source=/scratch/sommerl/repos/NeMo/third_party/DROID-SLAM,target=/root/DROID-SLAM
+#sudo usermod -aG docker ${USER}
+
+#curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+#curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+#    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+#    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+#sudo apt-get update
+#sudo apt-get install -y nvidia-container-toolkit
+#sudo systemctl restart docker
+
+
+###### BUILD ######
+
+# docker build . -t limpbot/droid-slam:v1
+
+
+###### RUN ######
+
+#SEQ=206_21810_45890
+#PATH_IN=/misc/lmbraid19/sommerl/datasets/CO3D/car/${SEQ}/images
+#PATH_OUT=/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/droid_slam/car/${SEQ}
+#STRIDE=1
+#docker run --gpus all -e STRIDE=${STRIDE} -v ${PATH_IN}:/root/in -v ${PATH_OUT}:/root/DROID-SLAM/reconstructions/out -t limpbot/droid-slam:v1
+
+
+
 
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
@@ -82,13 +106,25 @@ RUN conda install -c conda-forge suitesparse
 # Clone repository
 WORKDIR /root
 #RUN git clone --recursive https://github.com/pytholic/DROID-SLAM.git
+RUN git clone --recursive https://github.com/limpbot/DROID-SLAM.git
+
+WORKDIR /root/DROID-SLAM
 
 # Install extensions
-RUN cd DROID-SLAM && \
-    python setup.py install
+RUN python setup.py install
 
 # Cleanup
-RUN rm -rf DROID_SLAM
+# RUN rm -rf DROID_SLAM
+
+RUN gdown https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh
+
+ENV STRIDE="1"
+ENV IN_PATH="/root/in"
+ENV OUT_PATH="/root/DROID-SLAM/reconstructions/out"
+RUN mkdir -p $IN_PATH
+RUN mkdir -p $OUT_PATH
 
 # Set entry commands
-ENTRYPOINT ["/bin/bash"]
+#ENTRYPOINT [ "/bin/bash" ]
+
+CMD ["sh", "-c", "python demo.py --imagedir=${IN_PATH} --calib=${OUT_PATH}/calib.txt --reconstruction_path out --weights droid.pth --stride ${STRIDE} --disable_vis"]
