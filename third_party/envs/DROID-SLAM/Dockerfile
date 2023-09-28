@@ -13,22 +13,28 @@
 
 ###### BUILD ######
 
-# docker build . -t limpbot/droid-slam:v1
+# docker build . -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g)
 
 
 ###### RUN ######
 
 #SEQ=206_21810_45890
 #PATH_IN=/misc/lmbraid19/sommerl/datasets/CO3D/car/${SEQ}/images
-#PATH_OUT=/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/droid_slam/car/${SEQ}
+#PATH_OUT=/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/droid_slam
+#RPATH_OUT=car/${SEQ}
 #STRIDE=1
-#docker run --gpus all -e STRIDE=${STRIDE} -v ${PATH_IN}:/root/in -v ${PATH_OUT}:/root/DROID-SLAM/reconstructions/out -t limpbot/droid-slam:v1
 
+# droid slam
+#docker run --gpus all -e RPATH_OUT=${RPATH_OUT} -e STRIDE=${STRIDE} -v ${PATH_IN}:/root/in -v ${PATH_OUT}:/root/DROID-SLAM/reconstructions/out -t limpbot/droid-slam:v1
 
+# interactive mode
+#docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT=${RPATH_OUT} -e STRIDE=${STRIDE} -v ${PATH_IN}:/root/in -v ${PATH_OUT}:/root/DROID-SLAM/reconstructions/out -it limpbot/droid-slam:v1
+#docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT=${RPATH_OUT} -e STRIDE=${STRIDE} -v ${PATH_IN}:/root/in -v ${PATH_OUT}:/root/DROID-SLAM/reconstructions/out -it limpbot/droid-slam:v1
 
 
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
-
+ARG UID=1000
+ARG GID=1000
 # Metadata
 #LABEL maintainer="rajahaseeb147@gmail.com" \
 #    project-name="Droid-SLAM" \
@@ -113,18 +119,24 @@ WORKDIR /root/DROID-SLAM
 # Install extensions
 RUN python setup.py install
 
-# Cleanup
-# RUN rm -rf DROID_SLAM
-
 RUN gdown https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh
 
 ENV STRIDE="1"
-ENV IN_PATH="/root/in"
-ENV OUT_PATH="/root/DROID-SLAM/reconstructions/out"
-RUN mkdir -p $IN_PATH
-RUN mkdir -p $OUT_PATH
+ENV RPATH_OUT="seq"
+ENV PATH_IN="/root/in"
+ENV PATH_OUT="/root/DROID-SLAM/reconstructions/out"
 
-# Set entry commands
-#ENTRYPOINT [ "/bin/bash" ]
+RUN mkdir -p $PATH_IN
+RUN mkdir -p $PATH_OUT
 
-CMD ["sh", "-c", "python demo.py --imagedir=${IN_PATH} --calib=${OUT_PATH}/calib.txt --reconstruction_path out --weights droid.pth --stride ${STRIDE} --disable_vis"]
+#RUN chown -R root:root $PATH_IN
+#RUN chown -R root:root $PATH_OUT
+#RUN chown -R root:root $PATH_OUT
+
+RUN chown -R ${UID}:${GID} /
+
+# use this for interactive container
+ENTRYPOINT [ "/bin/bash" ]
+
+# use this for droid-slam
+#CMD ["sh", "-c", "mkdir -p ${PATH_OUT}/${RPATH_OUT} && python demo.py --imagedir=${PATH_IN} --calib=${PATH_OUT}/${RPATH_OUT}/calib.txt --reconstruction_path out --weights droid.pth --stride ${STRIDE} --disable_vis"]
