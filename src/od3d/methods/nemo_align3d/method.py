@@ -232,13 +232,59 @@ class NeMo_Align3D(OD3D_Method):
             torch.save(dist_verts_all_features_min, fpath_dist_verts_all_features_min)
             torch.save(dist_verts_all_features_avg, fpath_dist_verts_all_features_avg)
 
-        dists_verts = dist_verts_all_features_min # dist_verts_all_features_min, dist_verts_all_features_avg, dist_verts_mean_features, dist_verts_mean_features_normalized
+        dists_appearance_verts = dist_verts_all_features_min # dist_verts_all_features_min, dist_verts_all_features_avg, dist_verts_mean_features, dist_verts_mean_features_normalized
+
+        dists_geometry_verts = 0.
+        from od3d.cv.optimization.ransac import ransac
+        from od3d.cv.select import batched_index_select
+
         ref_mesh_id = 0 # 0, 1, 2, 3, 4
 
         # calculate reference vertex/feature given dists: nearest-neighbor, k-nearest-neighbor, average feature -
         ref_vertices_mask = self.sequences_mesh_ids_for_verts == ref_mesh_id
         ref_vertices = torch.arange(vertices_count).to(device=self.device)[ref_vertices_mask]
-        dists_verts_min_ref_vertices = dists_verts[:, ref_vertices].min(dim=-1)[1]
+        dists_verts_min_ref_vertices = dists_appearance_verts[:, ref_vertices].min(dim=-1)[1]
+
+        dist_ref = dists_appearance_verts[:, ref_vertices]
+        pts = self.meshes.verts.clone().detach()
+        pts_ref = pts[ref_vertices_mask].clone()
+
+        def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor):
+            """
+            Args:
+                pts (torch.Tensor): ...xNxF
+                pts_ids (torch.Tensor): ...xPxS
+                pts_ref (torch.Tensor): ...xRxF
+                dist_ref (torch.Tensor): ...xNxR
+            Returns:
+                tform4x4 (torch.Tensor): ...xPx4x4
+            """
+
+            # ...xPxSxF
+            pts_sampled = batched_index_select(index=pts_ids.flatten(-2), input=pts).view(pts_ids.shape + (-1,))
+
+            tforms4x4 = None
+            return tforms4x4
+
+        def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor):
+            """
+            Args:
+                pts (torch.Tensor): ...xNxF
+                tform4x4 (torch.Tensor): ...xPx4x4
+                pts_ref (torch.Tensor): ...xRxF
+                dist_ref (torch.Tensor): ...xNxR
+            Returns:
+                scores (torch.Tensor): ...xP
+            """
+            scores = None
+            return scores
+
+        from functools import partial
+        a_tform4x4_b = ransac(pts=pts, fit_func=partial(fit_tform4x4, pts_ref=pts_ref, dist_ref=dist_ref), score_func=partial(score_tform4x4_fit, pts_ref=pts_ref, dist_ref=dist_ref), fits_count=1000, fit_pts_count=3)
+
+
+
+        # self.meshes.verts
 
         rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
         rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]

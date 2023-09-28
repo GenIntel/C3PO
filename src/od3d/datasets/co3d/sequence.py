@@ -810,30 +810,55 @@ class CO3D_Sequence():
         N = pts3d.shape[0]
         # 1. proposals
 
-        # 1.1 sampling
-        ransac_prop = 1000
-        ransac_pts_per_proposal = 3
-        probs = torch.ones(size=(ransac_prop, N,)).to(device=device)
-        pts3d_ids = torch.multinomial(probs, num_samples=ransac_pts_per_proposal)
-        ransac_pts3d = pts3d[pts3d_ids.flatten()].reshape(ransac_prop, ransac_pts_per_proposal, 3)
 
-        # 1.2 fitting
-        proposed_planes_axis_1 = ransac_pts3d[:, 1] - ransac_pts3d[:, 0]
-        proposed_planes_axis_2 = ransac_pts3d[:, 2] - ransac_pts3d[:, 0]
-        proposed_planes_axis_z = torch.cross(proposed_planes_axis_1, proposed_planes_axis_2)
-        proposed_planes_axis_z = proposed_planes_axis_z / proposed_planes_axis_z.norm(dim=-1, keepdim=True)
-        proposed_planes_signed_dist = torch.einsum('pc,pc->p', ransac_pts3d[:, 0], proposed_planes_axis_z)
+        from od3d.cv.optimization.ransac import ransac
+        from od3d.cv.select import batched_index_select
+        def fit_plane(pts: torch.Tensor, pts_ids: torch.Tensor):
+            """
+            Args:
+                pts (torch.Tensor): ...xNxF
+                pts_ids (torch.Tensor): ...xPxS
+            Returns:
+                planes (torch.Tensor): ...xPxM
+            """
 
-        # 2. selection
-        # 2.1 score
+            # ...xPxSxF
+            pts_sampled = batched_index_select(index=pts_ids.flatten(-2), input=pts).view(pts_ids.shape + (-1,))
+
+            proposed_shape = pts_sampled.shape[:-2]
+            proposed_planes_axis_1 = pts_sampled[..., 1, :] - pts_sampled[..., 0, :]
+            proposed_planes_axis_2 = pts_sampled[..., 2, :] - pts_sampled[..., 0, :]
+            proposed_planes_axis_z = torch.cross(proposed_planes_axis_1, proposed_planes_axis_2, dim=-1)
+            proposed_planes_axis_z = proposed_planes_axis_z / proposed_planes_axis_z.norm(dim=-1, keepdim=True)
+            proposed_planes_signed_dist = torch.einsum('pf,pf->p', pts_sampled[..., 0, :].view(-1, 3), proposed_planes_axis_z.view(-1, 3)).view(proposed_shape + (1,))
+            proposed_planes4d = torch.cat([proposed_planes_axis_z, proposed_planes_signed_dist], dim=-1)
+            return proposed_planes4d
+
+        def score_plane4d_fit(pts: torch.Tensor, plane4d: torch.Tensor, plane_dist_thresh: float, pts_on_plane_weight: float=1.3):
+            """
+            Args:
+                pts (torch.Tensor): ...xNxF
+                planes (torch.Tensor): ...xPxM
+            Returns:
+                scores (torch.Tensor): ...xP
+            """
+            N, F = pts.shape[-2:]
+            batch_shape = pts.shape[:-2]
+            batch_count = batch_shape.numel()
+
+            proposed_planes_axis_z = plane4d[..., :3]
+            proposed_planes_signed_dist = plane4d[..., 3:]
+            signed_dists_pts3d_to_proposed_planes = torch.einsum('bnc,bpc->bpn', pts.view(batch_count, -1, F), proposed_planes_axis_z.view(batch_count, -1, F)) - proposed_planes_signed_dist.view(batch_count, -1, 1)
+            signed_dists_pos_perc = (signed_dists_pts3d_to_proposed_planes > plane_dist_thresh).sum(dim=-1) / N
+            signed_dists_thresh_perc = (signed_dists_pts3d_to_proposed_planes.abs() < plane_dist_thresh).sum(dim=-1) / N
+            scores = signed_dists_pos_perc + signed_dists_thresh_perc * pts_on_plane_weight
+            scores = scores.view(batch_shape + (-1, ))
+            return scores
+
         mask_plane_thresh = particle_size / 5.
+        from functools import partial
+        plane4d = ransac(pts=pts3d, fit_func=fit_plane, score_func=partial(score_plane4d_fit, plane_dist_thresh=mask_plane_thresh), fits_count=1000, fit_pts_count=3)
 
-        signed_dists_pts3d_to_proposed_planes = torch.einsum('nc,pc->pn', pts3d, proposed_planes_axis_z) - proposed_planes_signed_dist[:, None]
-        signed_dists_pos_perc = (signed_dists_pts3d_to_proposed_planes > mask_plane_thresh).sum(dim=-1) / N
-        signed_dists_thresh_perc = (signed_dists_pts3d_to_proposed_planes.abs() < mask_plane_thresh).sum(dim=-1) / N
-        score = signed_dists_pos_perc + signed_dists_thresh_perc * 1.3
-        plane_max_score_id = score.argmax()
-        plane4d = torch.cat([proposed_planes_axis_z[plane_max_score_id], proposed_planes_signed_dist[plane_max_score_id:plane_max_score_id+1]], dim=0)
 
         plane3d_tform4x4_obj = torch.eye(4).to(device=device)
         top_axis = plane4d[:3] / plane4d[:3].norm()
