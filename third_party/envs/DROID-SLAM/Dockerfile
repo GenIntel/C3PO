@@ -14,27 +14,27 @@
 ###### BUILD ######
 
 # docker build . -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g)
-
-
-###### RUN ######
-
+#docker build . -t limpbot/droid-slam:v1
+#
+####### RUN ######
+#
 #SEQ=206_21810_45890
 #PATH_IN=/misc/lmbraid19/sommerl/datasets/CO3D/car/${SEQ}/images
 #PATH_OUT=/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/droid_slam
 #RPATH_OUT=car/${SEQ}
 #STRIDE=1
-
-# droid slam
-#docker run --gpus all -e RPATH_OUT=${RPATH_OUT} -e STRIDE=${STRIDE} -v ${PATH_IN}:/root/in -v ${PATH_OUT}:/root/DROID-SLAM/reconstructions/out -t limpbot/droid-slam:v1
+#
+## droid slam
+#docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT=${RPATH_OUT} -e STRIDE=${STRIDE} -v ${PATH_IN}:/home/appuser/in -v ${PATH_OUT}:/home/appuser/DROID-SLAM/reconstructions/out -t limpbot/droid-slam:v1
 
 # interactive mode
-#docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT=${RPATH_OUT} -e STRIDE=${STRIDE} -v ${PATH_IN}:/root/in -v ${PATH_OUT}:/root/DROID-SLAM/reconstructions/out -it limpbot/droid-slam:v1
-#docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT=${RPATH_OUT} -e STRIDE=${STRIDE} -v ${PATH_IN}:/root/in -v ${PATH_OUT}:/root/DROID-SLAM/reconstructions/out -it limpbot/droid-slam:v1
+# docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT=${RPATH_OUT} -e STRIDE=${STRIDE} -v ${PATH_IN}:/home/appuser/in -v ${PATH_OUT}:/home/appuser/DROID-SLAM/reconstructions/out -it limpbot/droid-slam:v1
 
 
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
-ARG UID=1000
-ARG GID=1000
+#ARG UID=1000
+#ARG GID=1000
+
 # Metadata
 #LABEL maintainer="rajahaseeb147@gmail.com" \
 #    project-name="Droid-SLAM" \
@@ -85,12 +85,21 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+
+#RUN adduser --system --group appuser
+ENV UID=19104
+ENV GID=1061
+RUN groupadd -g "${GID}" appuser && useradd --create-home --no-log-init -u "${UID}" -g "${GID}" appuser
+
+# --group # --no-create-home appuser
+USER appuser
+
 # Set working directory
 #RUN mkdir -p /root/
-WORKDIR /root/
+WORKDIR /home/appuser/
 
 # Set user to root to avoid permission issues
-USER root
+USER appuser
 
 # Install miniconda
 RUN wget \
@@ -98,7 +107,7 @@ RUN wget \
     bash Miniconda3-latest-Linux-x86_64.sh -b && \
     rm -f Miniconda3-latest-Linux-x86_64.sh
 
-ENV PATH="/root/miniconda3/bin:${PATH}"
+ENV PATH="/home/appuser/miniconda3/bin:${PATH}"
 
 # Install Droid SLAM dependencies
 RUN conda install python=3.9
@@ -110,11 +119,11 @@ RUN pip install gdown matplotlib open3d opencv-python torch-scatter tensorboard 
 RUN conda install -c conda-forge suitesparse
 
 # Clone repository
-WORKDIR /root
+WORKDIR /home/appuser/
 #RUN git clone --recursive https://github.com/pytholic/DROID-SLAM.git
 RUN git clone --recursive https://github.com/limpbot/DROID-SLAM.git
 
-WORKDIR /root/DROID-SLAM
+WORKDIR /home/appuser/DROID-SLAM
 
 # Install extensions
 RUN python setup.py install
@@ -123,20 +132,18 @@ RUN gdown https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh
 
 ENV STRIDE="1"
 ENV RPATH_OUT="seq"
-ENV PATH_IN="/root/in"
-ENV PATH_OUT="/root/DROID-SLAM/reconstructions/out"
+ENV PATH_IN="/home/appuser/in"
+ENV PATH_OUT="/home/appuser/DROID-SLAM/reconstructions/out"
 
 RUN mkdir -p $PATH_IN
 RUN mkdir -p $PATH_OUT
 
-#RUN chown -R root:root $PATH_IN
-#RUN chown -R root:root $PATH_OUT
-#RUN chown -R root:root $PATH_OUT
-
-RUN chown -R ${UID}:${GID} /
+USER root
+#RUN groupmod -g "${GID}" appuser && usermod -u "${UID}" -g "${GID}" appuser
+RUN groupmod -g "1061" appuser && usermod -u "19104" -g "1061" appuser
+USER appuser
 
 # use this for interactive container
-ENTRYPOINT [ "/bin/bash" ]
+#ENTRYPOINT [ "/bin/bash" ]
 
-# use this for droid-slam
-#CMD ["sh", "-c", "mkdir -p ${PATH_OUT}/${RPATH_OUT} && python demo.py --imagedir=${PATH_IN} --calib=${PATH_OUT}/${RPATH_OUT}/calib.txt --reconstruction_path out --weights droid.pth --stride ${STRIDE} --disable_vis"]
+CMD ["sh", "-c", "python demo.py --imagedir=${PATH_IN} --calib=${PATH_OUT}/${RPATH_OUT}/calib.txt --reconstruction_path out/${RPATH_OUT} --weights droid.pth --stride ${STRIDE} --disable_vis"]
