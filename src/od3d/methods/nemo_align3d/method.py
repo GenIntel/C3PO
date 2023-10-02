@@ -233,20 +233,23 @@ class NeMo_Align3D(OD3D_Method):
             torch.save(dist_verts_all_features_avg, fpath_dist_verts_all_features_avg)
 
         dists_appearance_verts = dist_verts_all_features_min # dist_verts_all_features_min, dist_verts_all_features_avg, dist_verts_mean_features, dist_verts_mean_features_normalized
+        ref_mesh_id = 0 # 0, 1, 2, 3, 4
 
-        dists_geometry_verts = 0.
+        #dists_appearance_verts = dists_appearance_verts / dists_appearance_verts[dists_appearance_verts.isfinite()].max() # std()
+        dists_appearance_verts[~dists_appearance_verts.isfinite()] = dists_appearance_verts[dists_appearance_verts.isfinite()].max()
+        dists_appearance_verts = dists_appearance_verts / dists_appearance_verts.max()
+
         from od3d.cv.optimization.ransac import ransac
         from od3d.cv.select import batched_index_select
-
-        ref_mesh_id = 0 # 0, 1, 2, 3, 4
 
         # calculate reference vertex/feature given dists: nearest-neighbor, k-nearest-neighbor, average feature -
         ref_vertices_mask = self.sequences_mesh_ids_for_verts == ref_mesh_id
         ref_vertices = torch.arange(vertices_count).to(device=self.device)[ref_vertices_mask]
         dists_verts_min_ref_vertices = dists_appearance_verts[:, ref_vertices].min(dim=-1)[1]
 
-        dist_ref = dists_appearance_verts[:, ref_vertices]
         pts = self.meshes.verts.clone().detach()
+
+        dist_ref = dists_appearance_verts[:, ref_vertices]
         pts_ref = pts[ref_vertices_mask].clone()
 
         def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor):
@@ -259,12 +262,37 @@ class NeMo_Align3D(OD3D_Method):
             Returns:
                 tform4x4 (torch.Tensor): ...xPx4x4
             """
+            N, F = pts.shape[-2:]
+            P, S = pts_ids.shape[-2:]
 
             # ...xPxSxF
             pts_sampled = batched_index_select(index=pts_ids.flatten(-2), input=pts).view(pts_ids.shape + (-1,))
+            # ...xPxSxR
+            dist_sampled = batched_index_select(index=pts_ids.flatten(-2), input=dist_ref).view(pts_ids.shape + (-1,))
 
-            tforms4x4 = None
-            return tforms4x4
+            pts_ref_ids = dist_sampled.argmin(dim=-1)
+            pts_ref_sampled = batched_index_select(index=pts_ref_ids.flatten(-2), input=pts_ref).view(pts_ref_ids.shape + (-1,))
+
+            ## start single batch dimension (= flatten proposals)
+            from pytorch3d.ops.points_alignment import corresponding_points_alignment
+
+            S = corresponding_points_alignment(pts_sampled.view(-1, S, F), pts_ref_sampled.view(-1, S, F), weights=None, estimate_scale=True)
+
+            pts_ref_tform4x4_pts = torch.zeros(size=(pts_sampled.shape[:-2].numel(), 4, 4)).to(device=self.device) #  torch.eye(4).to(device=self.device).view().expand( + (4, 4))
+            pts_ref_tform4x4_pts[..., 3, 3] = 1.
+            pts_ref_tform4x4_pts[..., :3, :3] = S.R.permute(0, 2, 1) * S.s[..., None, None]
+            pts_ref_tform4x4_pts[..., :3, 3] = S.T
+
+            from od3d.cv.geometry.transform import transf3d_broadcast
+            pts_ref_tform_pts_sampled = transf3d_broadcast(pts3d=pts_sampled, transf4x4=pts_ref_tform4x4_pts[:, None])
+
+            logger.info(f'sampled geometrical error before transform: \n{(pts_sampled - pts_ref_sampled).norm(dim=-1).mean(dim=1).mean()}')
+            logger.info(f'sampled geometrical error after transform: \n{(pts_ref_tform_pts_sampled - pts_ref_sampled).norm(dim=-1).mean(dim=1).mean()}')
+
+            ## end single batch dimension
+            pts_ref_tform4x4_pts = pts_ref_tform4x4_pts.view(pts_sampled.shape[:-2] + (4, 4))
+
+            return pts_ref_tform4x4_pts
 
         def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor):
             """
@@ -276,20 +304,72 @@ class NeMo_Align3D(OD3D_Method):
             Returns:
                 scores (torch.Tensor): ...xP
             """
-            scores = None
+            N, F = pts.shape[-2:]
+            P = tform4x4.shape[-3]
+            device = pts.device
+
+            from od3d.cv.geometry.transform import transf3d_broadcast
+            proposal_tform_pts = transf3d_broadcast(pts3d=pts[None,], transf4x4=tform4x4[:, None])
+
+            # PxNxR
+            # dist_ref_geometry = (proposal_tform_pts[:, :, None] - pts_ref[None, None,]).norm(dim=-1)
+            dist_ref_geometry = torch.cdist(proposal_tform_pts, pts_ref[None,], p=1) #
+
+            #dist_ref_geometry[~dist_ref_geometry.isfinite()] = dist_ref_geometry[dist_ref_geometry.isfinite()].max()
+            #dist_ref_geometry = dist_ref_geometry / dist_ref_geometry.max(dim=0)[0][None,]
+            #dist_ref_geometry = dist_ref_geometry / dist_ref_geometry[dist_ref_geometry.isfinite()].max()
+
+            # PxN
+            proposal_tform_pts_nn_ref_id = dist_ref_geometry.argmin(dim=-1)
+            # PxR
+            proposal_tform_pts_ref_nn_pts_id = dist_ref_geometry.argmin(dim=-2)
+
+            # PxNx2
+            proposal_tform_pts_nn_ref_id_2D = torch.stack([torch.arange(N).view(1, -1).expand(proposal_tform_pts_nn_ref_id.shape).to(device=device), proposal_tform_pts_nn_ref_id], dim=-1)
+            proposal_tform_pts_nn_ref_id_2D = proposal_tform_pts_nn_ref_id_2D.clone()
+            # PxRx2
+            proposal_tform_pts_ref_nn_pts_id_2D = torch.stack([torch.arange(proposal_tform_pts_ref_nn_pts_id.shape[-1]).view(1, -1).expand(proposal_tform_pts_ref_nn_pts_id.shape).to(device=device), proposal_tform_pts_ref_nn_pts_id], dim=-1)
+            proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.flip(dims=[-1])
+            proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
+            from od3d.cv.select import batched_indexMD_select
+
+            # PxNxR
+            dist_ref_total = dist_ref_geometry + dist_ref[None, ] #  + dist_ref_geometry.mean(dim=-1).mean(dim=-1)[:, None, None]
+
+            proposal_dist_ref = batched_indexMD_select(indexMD=torch.cat([proposal_tform_pts_nn_ref_id_2D, proposal_tform_pts_ref_nn_pts_id_2D], dim=1), inputMD=dist_ref_total)
+            #proposal_dist_ref = batched_indexMD_select(indexMD=proposal_tform_pts_ref_nn_pts_id_2D, inputMD=dist_ref_total)
+            #proposal_dist_ref = batched_indexMD_select(indexMD=proposal_tform_pts_nn_ref_id_2D, inputMD=dist_ref_total)
+
+            propsoal_dist_ref_isfinite = proposal_dist_ref.isfinite()
+            proposal_dist_ref[~propsoal_dist_ref_isfinite] = proposal_dist_ref.max()
+
+            #scores = -proposal_dist_ref.quantile(q=0.9, dim=-1) #  (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
+            scores = -proposal_dist_ref.mean(dim=-1) #  (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
+
             return scores
 
         from functools import partial
-        a_tform4x4_b = ransac(pts=pts, fit_func=partial(fit_tform4x4, pts_ref=pts_ref, dist_ref=dist_ref), score_func=partial(score_tform4x4_fit, pts_ref=pts_ref, dist_ref=dist_ref), fits_count=1000, fit_pts_count=3)
-
-
-
-        # self.meshes.verts
 
         rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
         rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]
         self.meshes.rgb = rgbs_all
-        # self.meshes.show()
+
+        src_mesh_ids = list(range(len(self.meshes)))
+        src_mesh_ids.remove(ref_mesh_id)
+        for src_mesh_id in src_mesh_ids:
+            src_vertices_mask = self.sequences_mesh_ids_for_verts == src_mesh_id
+            src_vertices = torch.arange(vertices_count).to(device=self.device)[src_vertices_mask]
+            pts_src = pts[src_vertices]
+            dist_src_ref = dist_ref[src_vertices]
+            # four points required, otherwise rotation yields an ambiguity. like planes without normals
+            a_tform4x4_b = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref, dist_ref=dist_src_ref), score_func=partial(score_tform4x4_fit, pts_ref=pts_ref, dist_ref=dist_src_ref), fits_count=2000, fit_pts_count=4)
+
+            from od3d.cv.geometry.transform import transf3d_broadcast
+            verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=a_tform4x4_b)
+            self.meshes.verts[src_vertices] = verts
+        # self.meshes.verts
+
+        self.meshes.show()
 
 
         logger.info('tnse plot')
