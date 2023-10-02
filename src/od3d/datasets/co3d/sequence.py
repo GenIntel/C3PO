@@ -744,10 +744,31 @@ class CO3D_Sequence():
         return self._pcl_clean
 
     def preprocess_mesh(self):
+        fpath_droid_slam_pcl = self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'pcl.ply')
+        fpath_droid_slam_traj = self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'traj_est.pt')
+
+        if not fpath_droid_slam_pcl.exists() or not fpath_droid_slam_traj.exists():
+            from od3d.io import run_cmd
+            stride = "1"
+            image_tag = "limpbot/droid-slam:v1"
+            path_in = self.path_raw.joinpath(self.name_unique, 'images')
+            path_out_root = self.path_preprocess.joinpath('droid_slam')
+            rpath_out = self.name_unique
+            path_out = path_out_root.joinpath(rpath_out)
+
+            fx = self.first_frame.meta.l_cam_intr4x4[0][0]
+            fy = self.first_frame.meta.l_cam_intr4x4[1][1]
+            cx = self.first_frame.meta.l_cam_intr4x4[0][2]
+            cy = self.first_frame.meta.l_cam_intr4x4[1][2]
+            if not path_out.exists():
+                path_out.mkdir(parents=True, exist_ok=True)
+            run_cmd(cmd=f'echo "{fx} {fy} {cx} {cy}" > {path_out_root}/{rpath_out}/calib.txt', logger=logger)
+            run_cmd(cmd=f'docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT={rpath_out} -e STRIDE={stride} -v {path_in}:/home/appuser/in -v {path_out_root}:/home/appuser/DROID-SLAM/reconstructions/out -t {image_tag}', logger=logger, live=True)
+
         # N x 3
-        pts3d, _ = load_ply(self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'pcl.ply'))
+        pts3d, _ = load_ply(fpath_droid_slam_pcl)
         # F x 4 x 4
-        cams_tform4x4_obj = torch.load(self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'traj_est.pt'))
+        cams_tform4x4_obj = torch.load(fpath_droid_slam_traj)
         import numpy as np
 
         #a = torch.from_numpy(np.load(str(self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'poses.npy'))))
