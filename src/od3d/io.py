@@ -69,8 +69,12 @@ def load_hierarchical_config(benchmark="defaults", platform="local", ablation=No
             cfg = compose(config_name=benchmark, overrides=["+ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg
 
+def read_config_intern(rfpath: Path):
+    fpath = Path("config").joinpath(rfpath)
+    return read_config_extern(fpath=fpath)
+
 def read_config_extern(fpath: Path):
-    with initialize_config_dir(config_dir=str(fpath.parent), job_name="test_app_extern"):
+    with initialize_config_dir(config_dir=str(fpath.parent.absolute()), job_name="test_app_extern"):
         cfg = compose(config_name=fpath.stem)
     return cfg
 

@@ -1,7 +1,10 @@
 import logging
 logger = logging.getLogger(__name__)
 from omegaconf import DictConfig
-from od3d.cv.transforms import RGB_UInt8ToFloat, RGB_Normalize # , CenterZoom3D, RGB_Random
+from od3d.cv.transforms.rgb_uint8_to_float import RGB_UInt8ToFloat
+from od3d.cv.transforms.rgb_normalize import RGB_Normalize
+from od3d.cv.transforms.sequential import SequentialTransform
+
 import torchvision
 from od3d.models.backbones.backbone import OD3D_Backbone
 from od3d.models.backbones.resnet_old.backbone_old import NetE2E
@@ -14,7 +17,7 @@ class ResNetOld(OD3D_Backbone):
 
         super().__init__(config=config)
 
-        self.transform = torchvision.transforms.Compose([
+        self.transform = SequentialTransform([
                 RGB_UInt8ToFloat(),
                 RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])

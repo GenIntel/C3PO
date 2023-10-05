@@ -9,8 +9,6 @@ import torch
 from od3d.cv.geometry.transform import rot3x3, se3_exp_map, se3_log_map, so3_log_map, so3_exp_map, transf4x4_from_rot3x3
 from od3d.methods.method import OD3D_Method
 from od3d.models.model import OD3D_Model #  backbones.backbone import OD3D_Backbone
-from od3d.cv.transforms.center_and_zoom3d import RandomCenterZoom3D, CenterZoom3D
-from od3d.cv.transforms.rgb import RGB_Random
 from pathlib import Path
 from torch import nn as nn
 import time
@@ -19,6 +17,8 @@ import torch.utils.data
 import pytorch3d
 import od3d.io
 from typing import Dict
+from od3d.cv.transforms.transform import OD3D_Transform
+from od3d.cv.transforms.sequential import SequentialTransform
 
 class Regression(OD3D_Method):
     def __init__(
@@ -32,20 +32,12 @@ class Regression(OD3D_Method):
 
         self.net = OD3D_Model(config.model)
 
-        if config.train.transform.random_color:
-            self.transform_train = torchvision.transforms.Compose([
-                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                RGB_Random(),
-                self.net.transform,
-            ])
-        else:
-            self.transform_train = torchvision.transforms.Compose([
-                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                self.net.transform,
-            ])
-
-        self.transform_test = torchvision.transforms.Compose([
-            CenterZoom3D(**config.test.transform),
+        self.transform_train = SequentialTransform([
+            OD3D_Transform.subclasses[config.train.transform.class_name].create_from_config(config=config.train.transform),
+            self.net.transform,
+        ])
+        self.transform_test = SequentialTransform([
+            OD3D_Transform.subclasses[config.test.transform.class_name].create_from_config(config=config.test.transform),
             self.net.transform
         ])
 

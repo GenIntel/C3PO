@@ -1,8 +1,8 @@
 import open3d.geometry
-from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES
+from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES, FEATURE_TYPES
 from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 from od3d.datasets.frame import OD3D_SequenceMeta
-from od3d.cv.geometry.mesh import Mesh
+from od3d.cv.geometry.mesh import Mesh, Meshes
 
 from tqdm import tqdm
 import logging
@@ -88,119 +88,26 @@ class CO3D_SequenceMeta(OD3D_SequenceMeta):
                                  viewpoint_quality_score=viewpoint_quality_score)
 
 
-    """
-    @staticmethod
-    def load_from_meta_with_category_and_name(path_meta: Path, category: str, name: str):
-        fpath_meta = CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta, category=category, name=name)
-        if not fpath_meta.exists():
-            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
-        return CO3D_SequenceMeta(**OmegaConf.load(fpath_meta))
-
-    @staticmethod
-    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
-        fpath_meta = path_meta.joinpath(rfpath)
-        if not fpath_meta.exists():
-            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
-        return CO3D_SequenceMeta(**OmegaConf.load(fpath_meta))
-    @staticmethod
-    def get_fpath_sequence_meta_with_rfpath(path_meta: Path, rfpath_meta: Path):
-        return path_meta.joinpath(rfpath_meta)
-
-
-    @staticmethod
-    def get_rfpath_sequences():
-        return Path("sequences")
-
-    @staticmethod
-    def get_rfpath_sequences_meta_with_category(category: str):
-        return CO3D_SequenceMeta.get_rfpath_sequences().joinpath(category)
-
-    @staticmethod
-    def get_rfpath_sequence_meta_with_category_and_name(category: str, name: str):
-        return CO3D_SequenceMeta.get_rfpath_sequences_meta_with_category(category=category).joinpath(name + '.yaml')
-
-    @staticmethod
-    def get_path_sequences_meta(path_meta: Path):
-        return path_meta.joinpath(CO3D_SequenceMeta.get_rfpath_sequences())
-
-    @staticmethod
-    def get_path_sequences_meta_with_category(path_meta: Path, category: str):
-        return path_meta.joinpath(
-            CO3D_SequenceMeta.get_rfpath_sequences_meta_with_category(category=category))
-
-
-    @staticmethod
-    def get_map_category_sequences_names(path_meta, categories):
-        map_category_sequences_names = {}
-        for category in categories:
-            map_category_sequences_names[category] = [fpath.stem for fpath in CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=path_meta, category=category).iterdir()]
-        return map_category_sequences_names
-
-    """
-    """ 
-    # legacy code
-    @staticmethod
-    def get_rfpaths_sequences_meta(categories, path_meta=None, map_category_sequences_names=None):
-        sequences_rfpaths = []
-        #if categories is None:
-        #    if path_meta is None:
-        #        categories = CO3D_CATEGORIES.list()
-        #    else:
-        #        categories = list(CO3D_SequenceMeta.get_path_sequences_meta(path_meta=path_meta).iterdir())
-        for category in categories:
-            if map_category_sequences_names is None or category not in map_category_sequences_names.keys():
-                if path_meta is None:
-                    logger.error(f'cannot load rfpaths_sequences_meta for category `{category}` as neither map_category_sequences_names nor path_meta are provided')
-                    sequences_names = []
-                else:
-                    sequences_names = list(CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=path_meta, category=category).iterdir())
-            else:
-                sequences_names = map_category_sequences_names[category]
-            for sequence_name in sequences_names:
-                sequences_rfpaths.append(CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=category, name=sequence_name))
-        return sequences_rfpaths
-    """
-
-    """
-    @staticmethod
-    def meta_rfpath_to_category(rfpath: Path):
-        return rfpath.parent.stem
-    @staticmethod
-    def meta_rfpath_to_name(rfpath: Path):
-        return rfpath.stem
-
-    def get_fpath(self, path_meta):
-        return CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta,
-                                                                                category=self.category,
-                                                                                name=self.name)
-    @property
-    def rfpath(self):
-        return CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=self.category, name=self.name)
-
-    def save(self, path_meta):
-        sequence_meta_fpath = self.get_fpath(path_meta=path_meta)
-        sequence_meta_config = OmegaConf.structured(self)
-        if not sequence_meta_fpath.parent.exists():
-            sequence_meta_fpath.parent.mkdir(parents=True)
-        OmegaConf.save(sequence_meta_config, sequence_meta_fpath, resolve=True)
-    """
 
 class CO3D_Sequence():
 
     def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, meta: CO3D_SequenceMeta,
                  modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
-                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
+                 mesh_feats_type=FEATURE_TYPES.DINOV2_AVG.value
                  ):
         self.path_raw: Path = path_raw
         self.path_preprocess: Path = path_preprocess
         self.path_meta: Path = path_meta
         self.meta = meta
         self.cam_tform_obj_source = cam_tform_obj_source
+        self.mesh_feats_type = mesh_feats_type
         self.cuboid_source = cuboid_source
         self.modalities = modalities
         self.categories = categories
         self.category_id = categories.index(self.category)
+        self._mesh_feats = None
         self._pcl = None
         self._pcl_clean = None
         self._mesh = None
@@ -731,6 +638,121 @@ class CO3D_Sequence():
     @property
     def fpath_cuboid(self):
         return self.path_preprocess.joinpath('cuboids', self.cuboid_source, self.category, self.name + '.ply')
+
+    @property
+    def fpath_mesh_feats(self):
+        return self.path_preprocess.joinpath('mesh_feats', self.mesh_feats_type, self.name_unique, 'mesh_feats.pt')
+
+    def preprocess_mesh_feats(self):
+        # fpath_mesh_feats
+        from od3d.datasets.co3d import CO3D
+        dataset = CO3D(name='co3d', modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ,
+                                                OD3D_FRAME_MODALITIES.CAM_INTR4X4],
+                       path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+                       categories=[CO3D_CATEGORIES(self.category).value],
+                       dict_nested_frames={self.category: {self.name: None}},
+                       cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM.value,
+                       cuboid_source=CUBOID_SOURCES.DROID_SLAM.value,
+                       mesh_feats_type=self.mesh_feats_type)
+
+        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
+                                                 collate_fn=dataset.collate_fn,
+                                                 num_workers=0)
+
+        if torch.cuda.is_available():
+            device = 'cuda:0'
+        else:
+            device = 'cpu'
+
+        from od3d.models.model import OD3D_Model
+        from od3d.cv.transforms.transform import OD3D_Transform
+        from od3d.cv.transforms.sequential import SequentialTransform
+
+
+        model = OD3D_Model.create_by_name('dinov2_frozen_base')
+        model.cuda()
+        model.eval()
+        transform = SequentialTransform([OD3D_Transform.create_by_name('centerzoom512'), model.transform])
+
+        down_sample_rate = 16
+        feature_dim = 384
+        meshes = Meshes.load_from_meshes([self.mesh], device=device)
+        dataset.transform = transform
+
+        meshes_verts_aggregated_features = [torch.zeros((0, feature_dim), device=device)] * meshes.verts.shape[0]
+        vertices_count = len(meshes_verts_aggregated_features)
+
+
+        for batch in tqdm(iter(dataloader)):
+            B = len(batch)
+            batch.to(device=device)
+
+            batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
+
+            vts2d, vts2d_mask = meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
+                                                    cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                    imgs_sizes=batch.size, mesh_ids=[0,] * B,
+                                                    down_sample_rate=down_sample_rate)
+
+            N = vts2d.shape[1]
+
+            # B x C x H x W
+            feats2d_net = model(batch.rgb)
+            H, W = feats2d_net.shape[-2:]
+            xy = torch.stack(
+                torch.meshgrid(torch.arange(W, device=device), torch.arange(H, device=device),
+                               indexing='xy'), dim=0)  # HxW
+            noise2d = torch.ones(size=(vts2d.shape[0], 0, 2), device=device)
+
+            # B x F+N x C
+            net_feats = sample_pxl2d_pts(feats2d_net, pxl2d=torch.cat([vts2d, noise2d], dim=1))
+
+            C = net_feats.shape[2]
+            # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
+            # returns: BxF+NxC
+
+            # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
+            batch_vts_ids = meshes.get_verts_and_noise_ids_stacked([0,] * B, count_noise_ids=0)
+
+            # N,
+            batch_vts_ids = torch.cat([batch_vts_ids[:, :N][vts2d_mask], batch_vts_ids[:, N:].reshape(-1)],
+                                      dim=0)
+
+            # N x C
+            net_feats = torch.cat([net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)], dim=0)
+
+            for b, vertex_id in enumerate(batch_vts_ids):
+                meshes_verts_aggregated_features[vertex_id] = torch.cat([net_feats[b:b + 1], meshes_verts_aggregated_features[vertex_id]], dim=0)
+
+
+        if self.mesh_feats_type == FEATURE_TYPES.DINOV2_ACC:
+            if not self.fpath_mesh_feats.parent.exists():
+                self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(meshes_verts_aggregated_features, f=self.fpath_mesh_feats)
+        elif self.mesh_feats_type == FEATURE_TYPES.DINOV2_AVG:
+            if not self.fpath_mesh_feats.parent.exists():
+                self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+            meshes_verts_aggregated_features_avg = torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0)
+            torch.save(meshes_verts_aggregated_features_avg, f=self.fpath_mesh_feats)
+        else:
+            logger.warning(f'Unknown mesh feature type {self.mesh_feats_type}.')
+
+    #def get_dist_mesh_feats_to_sequence(self, sequence: CO3D_Sequence):
+    #
+    #    fpath_dist_mesh_feats = self.path_preprocess.joinpath('dist_mesh_feats', self.mesh_feats_type, self.name_unique, sequence.name_unique, 'dist_mesh_feats.pt')
+    #    if not fpath_dist_mesh_feats.exists():
+    #        return torch.load(fpath_dist_mesh_feats)
+    #    else:
+
+
+    @property
+    def feats(self):
+        if self._mesh_feats is None:
+            if not self.fpath_mesh_feats.exists():
+                self.preprocess_mesh_feats()
+            self._feats = torch.load(self.fpath_mesh_feats)
+        return self._feats
+
     @property
     def fpath_pcl_clean(self):
         return self.path_preprocess.joinpath('pcls', self.category, self.name, 'pcl_clean.ply') #  f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
@@ -742,6 +764,7 @@ class CO3D_Sequence():
                 self.preprocess_pcl_clean()
             self._pcl_clean, _ = load_ply(fpath_pcl_clean)
         return self._pcl_clean
+
 
     def preprocess_mesh(self):
         fpath_droid_slam_pcl = self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'pcl.ply')

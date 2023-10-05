@@ -8,7 +8,10 @@ defaults:
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
-  - datasets/categories@categories: car
+
+categories:
+  #- car
+  - bicycle
 
 metrics:
   - metricA

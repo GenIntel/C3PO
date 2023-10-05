@@ -8,9 +8,12 @@ from od3d.cv.visual.crop import crop
 from omegaconf import DictConfig
 from od3d.datasets.dtd import DTD
 import torchvision
-class CenterZoom3D():
+from od3d.cv.transforms.transform import OD3D_Transform
+
+class CenterZoom3D(OD3D_Transform):
     # resize types: fit to
     def __init__(self, H, W, scale=None, center_rel_shift_xy=[0., 0.], apply_txtr=False, config: DictConfig = None, scale_with_mask=None, scale_with_dist=None):
+        super().__init__()
         self.center_rel_shift_xy = torch.Tensor(center_rel_shift_xy) if center_rel_shift_xy is not None else None
         self.H = H
         self.W = W
@@ -135,17 +138,3 @@ class CenterZoom3D():
         frame.mask, frame.depth, frame.kpts2d, frame.kpts3d_vsbl = frame.calc_mesh_proj(fpath_mesh=frame.fpath_mesh, pts3d=frame.kpts3d)
         """
 
-
-class RandomCenterZoom3D():
-    def __init__(self, H, W, apply_txtr=False, config:DictConfig = None, scale_min=None, scale_max=None, center_rel_shift_xy_min=[0., 0.], center_rel_shift_xy_max=[0., 0.]):
-        self.centerzoom3d = CenterZoom3D(H=H, W=W, scale=None, apply_txtr=apply_txtr, config=config)
-        self.center_rel_shift_xy_min = torch.Tensor(center_rel_shift_xy_min)
-        self.center_rel_shift_xy_max = torch.Tensor(center_rel_shift_xy_max)
-        self.scale_min = scale_min
-        self.scale_max = scale_max
-
-    def __call__(self, frame):
-        if self.scale_min is not None and self.scale_max is not None:
-            self.centerzoom3d.scale = self.scale_min + torch.rand(1)[0] * (self.scale_max - self.scale_min)
-        self.centerzoom3d.center_rel_shift_xy = self.center_rel_shift_xy_min + torch.rand(2) * (self.center_rel_shift_xy_max - self.center_rel_shift_xy_min)
-        return self.centerzoom3d(frame)

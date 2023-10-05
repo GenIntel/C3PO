@@ -31,9 +31,9 @@ from od3d.cv.visual.resize import resize
 from od3d.models.model import OD3D_Model
 
 from od3d.cv.geometry.grid import get_pxl2d_like
-from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks  # fit_se3_to_corresp_3d_2d_and_masks
-from od3d.cv.transforms import RandomCenterZoom3D, RGB_Random, CenterZoom3D
-import math
+from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks
+from od3d.cv.transforms.transform import OD3D_Transform
+from od3d.cv.transforms.sequential import SequentialTransform
 
 from typing import Dict
 from od3d.data.ext_enum import ExtEnum
@@ -73,23 +73,31 @@ class NeMo(OD3D_Method):
         # init Network
         self.net = OD3D_Model(config.model)
 
-
-        if config.train.transform.random_color:
-            self.transform_train = torchvision.transforms.Compose([
-                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                RGB_Random(),
-                self.net.transform,
-            ])
-        else:
-            self.transform_train = torchvision.transforms.Compose([
-                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                self.net.transform,
-            ])
-
-        self.transform_test = torchvision.transforms.Compose([
-            CenterZoom3D(**config.test.transform),
+        self.transform_train = SequentialTransform([
+            OD3D_Transform.subclasses[config.train.transform.class_name].create_from_config(config=config.train.transform),
+            self.net.transform,
+        ])
+        self.transform_test = SequentialTransform([
+            OD3D_Transform.subclasses[config.test.transform.class_name].create_from_config(config=config.test.transform),
             self.net.transform
         ])
+
+        # if config.train.transform.random_color:
+        #     self.transform_train = SequentialTransform([
+        #         RandomCenterZoom3D.create_from_config(config.train.transform.random_center_zoom3d),
+        #         RGB_Random(),
+        #         self.net.transform
+        #     ])
+        # else:
+        #     self.transform_train = SequentialTransform([
+        #         RandomCenterZoom3D.create_from_config(config.train.transform.random_center_zoom3d),
+        #         self.net.transform
+        #     ])
+        #
+        # self.transform_test = SequentialTransform([
+        #         CenterZoom3D.create_from_config(config.test.transform),
+        #         self.net.transform
+        # ])
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())

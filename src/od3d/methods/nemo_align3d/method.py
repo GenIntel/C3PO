@@ -33,9 +33,9 @@ from od3d.cv.visual.resize import resize
 from od3d.models.model import OD3D_Model
 
 from od3d.cv.geometry.grid import get_pxl2d_like
-from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks  # fit_se3_to_corresp_3d_2d_and_masks
-from od3d.cv.transforms import RandomCenterZoom3D, RGB_Random, CenterZoom3D
-import math
+from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks
+from od3d.cv.transforms.transform import OD3D_Transform
+from od3d.cv.transforms.sequential import SequentialTransform
 
 from typing import Dict
 from od3d.data.ext_enum import ExtEnum
@@ -75,24 +75,30 @@ class NeMo_Align3D(OD3D_Method):
         # init Network
         self.net = OD3D_Model(config.model)
 
-        #
-
-        if config.train.transform.random_color:
-            self.transform_train = torchvision.transforms.Compose([
-                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                #RGB_Random(),
-                self.net.transform,
-            ])
-        else:
-            self.transform_train = torchvision.transforms.Compose([
-                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                self.net.transform,
-            ])
-
-        self.transform_test = torchvision.transforms.Compose([
-            CenterZoom3D(**config.test.transform),
+        self.transform_train = SequentialTransform([
+            OD3D_Transform.subclasses[config.train.transform.class_name].create_from_config(config=config.train.transform),
+            self.net.transform,
+        ])
+        self.transform_test = SequentialTransform([
+            OD3D_Transform.subclasses[config.test.transform.class_name].create_from_config(config=config.test.transform),
             self.net.transform
         ])
+        # if config.train.transform.random_color:
+        #     self.transform_train = torchvision.transforms.Compose([
+        #         RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
+        #         #RGB_Random(),
+        #         self.net.transform,
+        #     ])
+        # else:
+        #     self.transform_train = torchvision.transforms.Compose([
+        #         RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
+        #         self.net.transform,
+        #     ])
+
+        #self.transform_test = torchvision.transforms.Compose([
+        #    CenterZoom3D(**config.test.transform),
+        #    self.net.transform
+        #])
 
         self.meshes = None
         self.sequences_unique_names = None
@@ -118,6 +124,7 @@ class NeMo_Align3D(OD3D_Method):
         from od3d.cv.geometry.mesh import Meshes
 
         self.sequences = dataset_train.get_sequences()
+        self.sequences_mesh_feats = [seq.feats for seq in self.sequences]
         self.sequences_unique_names = [seq.name_unique for seq in self.sequences]
         self.meshes = Meshes.load_from_meshes([seq.mesh for seq in self.sequences], device=self.device)
 
@@ -126,21 +133,25 @@ class NeMo_Align3D(OD3D_Method):
 
         self.sequences_mesh_ids_for_verts = self.meshes.get_mesh_ids_for_verts()
 
-        self.meshes_verts_aggregated_features = [torch.zeros((0, 384), device=self.device)] * self.meshes.verts.shape[0]
+        self.meshes_verts_aggregated_features = [vert_feats for mesh_feats in self.sequences_mesh_feats for vert_feats in mesh_feats]
+
 
         instances_count = len(self.meshes)
         vertices_count = len(self.meshes_verts_aggregated_features)
         feature_dim = 384
 
+        """        
+        self.meshes_verts_aggregated_features = [torch.zeros((0, 384), device=self.device)] * self.meshes.verts.shape[0]
+
         fpath_meshes_verts_aggregated_features = self.dir_tmp.joinpath('meshes_verts_aggregated_features.pt')
-        if fpath_meshes_verts_aggregated_features.exists():
+        if False and fpath_meshes_verts_aggregated_features.exists():
             self.meshes_verts_aggregated_features = torch.load(fpath_meshes_verts_aggregated_features) # .to(device=self.device)
             logger.info(f'loading {fpath_meshes_verts_aggregated_features}')
         else:
             results_epoch = self.train_epoch(dataset=dataset_train)
             results_epoch.log_with_prefix('train')
             torch.save(self.meshes_verts_aggregated_features, fpath_meshes_verts_aggregated_features)
-
+        """
 
         features_count_per_vertex_max = max([vert_features.shape[0] for vert_features in self.meshes_verts_aggregated_features])
         meshes_verts_aggregated_features_padded = torch.zeros(vertices_count, features_count_per_vertex_max, feature_dim).to(device=self.device)
@@ -196,8 +207,8 @@ class NeMo_Align3D(OD3D_Method):
         """
 
         # calculate dists between vertices
-        fpath_dist_verts_all_features_min = self.dir_tmp.joinpath('dist_verts_all_features_min.pt')
-        fpath_dist_verts_all_features_avg = self.dir_tmp.joinpath('dist_verts_all_features_avg.pt')
+        fpath_dist_verts_all_features_min = self.dir_tmp.joinpath(f"dist_verts_all_features_min{'_'.join(self.sequences_unique_names).replace('/', '_')}.pt")
+        fpath_dist_verts_all_features_avg = self.dir_tmp.joinpath(f"dist_verts_all_features_avg{'_'.join(self.sequences_unique_names).replace('/', '_')}.pt")
 
         dist_verts_mean_features = torch.cdist(meshes_verts_features_avg, meshes_verts_features_avg)
         dist_verts_mean_features_normalized = torch.cdist(meshes_verts_features_avg_normalized, meshes_verts_features_avg_normalized)
@@ -206,7 +217,7 @@ class NeMo_Align3D(OD3D_Method):
         if fpath_dist_verts_all_features_min.exists() and fpath_dist_verts_all_features_avg.exists():
 
             dist_verts_all_features_min = torch.load(fpath_dist_verts_all_features_min).to(device=self.device)
-            logger.info(f'loading {fpath_meshes_verts_aggregated_features}')
+            logger.info(f'loading {fpath_dist_verts_all_features_min}')
 
             dist_verts_all_features_avg = torch.load(fpath_dist_verts_all_features_avg).to(device=self.device)
             logger.info(f'loading {fpath_dist_verts_all_features_avg}')
@@ -233,7 +244,7 @@ class NeMo_Align3D(OD3D_Method):
             torch.save(dist_verts_all_features_avg, fpath_dist_verts_all_features_avg)
 
         dists_appearance_verts = dist_verts_all_features_min # dist_verts_all_features_min, dist_verts_all_features_avg, dist_verts_mean_features, dist_verts_mean_features_normalized
-        ref_mesh_id = 0 # 0, 1, 2, 3, 4
+        ref_mesh_id = 3 # 0, 1, 2, 3, 4
 
         #dists_appearance_verts = dists_appearance_verts / dists_appearance_verts[dists_appearance_verts.isfinite()].max() # std()
         dists_appearance_verts[~dists_appearance_verts.isfinite()] = dists_appearance_verts[dists_appearance_verts.isfinite()].max()
@@ -464,7 +475,7 @@ class NeMo_Align3D(OD3D_Method):
         # logger.info(f'batch.label {batch.label}')
         # B x x N x 2
 
-        batch_sequences_ids = [ self.sequences_unique_names.index('/'.join(name_unique.split('/')[:-1]))  for name_unique in batch.name_unique]
+        batch_sequences_ids = [ self.sequences_unique_names.index('/'.join(name_unique.split('/')[:-1])) for name_unique in batch.name_unique]
 
         vts2d, vts2d_mask = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
                                                 cams_tform4x4_obj=batch.cam_tform4x4_obj,

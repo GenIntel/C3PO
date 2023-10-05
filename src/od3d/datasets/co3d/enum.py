@@ -25,6 +25,10 @@ class CO3D_FRAME_TYPES(str, ExtEnum):
     TRAIN_KNOWN = 'train_known'
     TRAIN_UNSEEN = 'train_unseen'
 
+class FEATURE_TYPES(str, ExtEnum):
+    DINOV2_AVG = 'dinov2_avg'
+    DINOV2_ACC = 'dinov2_acc'
+
 class CO3D_FRAME_SPLITS(str, ExtEnum):
     MULTISEQUENCE_CAR_DEV_KNOWN = 'multisequence_car_dev_known'
     MULTISEQUENCE_CAR_DEV_UNSEEN = 'multisequence_car_dev_unseen'

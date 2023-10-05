@@ -13,9 +13,6 @@ down_sample_rate: 8
 classes: ${train_datasets.labeled.categories}
 fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
 
-transforms:
-    - class_name: nemo.datasets.pascal3d.Normalize
-
 train:
   early_stopping: True
   use_mask_object: True
@@ -27,20 +24,22 @@ train:
   split: random # 'random' 'sequences_separated' 'seqences_shared'
 
   transform:
-    random_color: True
-    random_center_zoom3d:
-      apply_txtr: False
-      config: ${texture_dataset}
-      W: 512
-      H: 512
-      scale_min: 0.5
-      scale_max: 2.0
-      center_rel_shift_xy_min:
-        - -0.
-        - -0.
-      center_rel_shift_xy_max:
-        - +0.
-        - +0.
+    class_name: SequentialTransform
+    transforms:
+      - class_name: RandomCenterZoom3D
+        apply_txtr: False
+        config: ${texture_dataset}
+        W: 512
+        H: 512
+        scale_min: 0.5
+        scale_max: 2.0
+        center_rel_shift_xy_min:
+          - -0.
+          - -0.
+        center_rel_shift_xy_max:
+          - +0.
+          - +0.
+      - class_name: RGB_Random
 
   epochs_to_next_test: 1
   epochs: 5
@@ -62,6 +61,7 @@ train:
 
 test:
     transform:
+        class_name: CenterZoom3D
         W: 512
         H: 512
         scale: 1.
