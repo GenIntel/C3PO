@@ -37,6 +37,7 @@ metrics:
 
 method:
   nemo:
+    use_only_first_reference: False
     classes: ${categories}
 
 train_datasets:
