@@ -4,3 +4,6 @@
 [submodule "third_party/AutoRecon"]
 	path = third_party/AutoRecon
 	url = git@github.com:limpbot/AutoRecon.git
+[submodule "third_party/zero-shot-pose"]
+	path = third_party/zero-shot-pose
+	url = https://github.com/limpbot/zero-shot-pose.git
