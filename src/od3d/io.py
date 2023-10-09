@@ -86,7 +86,7 @@ def write_json(config: Dict, fpath: Path):
     with open(fpath.expanduser(), "w") as outfile:
         json.dump(config, outfile)
 
-def load_json(fpath: Path):
+def read_json(fpath: Path):
     with open(fpath.expanduser(), 'r') as openfile:
         config = json.load(openfile)
     return config

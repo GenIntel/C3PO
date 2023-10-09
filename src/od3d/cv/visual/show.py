@@ -161,8 +161,10 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             else:
                 pts3d_i_color = get_colors(len(pts3d))[i]
 
-            pts3d_i_o3d.paint_uniform_color((pts3d_i_color[0], pts3d_i_color[1], pts3d_i_color[2]))
-
+            if isinstance(pts3d_i_color, list) or pts3d_i_color.dim() == 1:
+                pts3d_i_o3d.paint_uniform_color((pts3d_i_color[0], pts3d_i_color[1], pts3d_i_color[2]))
+            else:
+                pts3d_i_o3d.colors = o3d.utility.Vector3dVector(pts3d_i_color.detach().cpu().numpy())
             if pts3d_names is not None and len(pts3d_names) >= i+1 and pts3d_names[i] is not None:
                 pts3d_i_name = pts3d_names[i]
             else:

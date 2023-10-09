@@ -22,11 +22,7 @@ from tqdm import tqdm
 import torch.utils.data
 from od3d.cv.io import load_ply, save_ply
 
-from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_CO3D, FEATURE_TYPES
-
-ALLOW_LIST_FRAME_TYPES = [CO3D_FRAME_TYPES.DEV_KNOWN, CO3D_FRAME_TYPES.DEV_UNSEEN,
-                         CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
-                         CO3D_FRAME_TYPES.TEST_KNOWN]
+from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_CO3D, FEATURE_TYPES, REDUCE_TYPES, ALLOW_LIST_FRAME_TYPES
 
 class CO3D(OD3D_Dataset):
 
@@ -46,6 +42,7 @@ class CO3D(OD3D_Dataset):
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  mesh_feats_type=FEATURE_TYPES.DINOV2_AVG.value,
+                 dist_verts_mesh_feats_reduce_type=REDUCE_TYPES.MIN.value,
                  transform=None, index_shift=0, subset_fraction=1.):
 
         if categories is not None:
@@ -59,6 +56,7 @@ class CO3D(OD3D_Dataset):
         self.modalities = modalities
         self.cam_tform_obj_source = cam_tform_obj_source # required for block negative depth
         self.mesh_feats_type = mesh_feats_type
+        self.dist_verts_mesh_feats_reduce_type = dist_verts_mesh_feats_reduce_type
         self.frames_count_max_per_sequence = frames_count_max_per_sequence
         self.frames_block_negative_depth = frames_block_negative_depth
         self.cuboid_source = cuboid_source
@@ -243,7 +241,7 @@ class CO3D(OD3D_Dataset):
         sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta, category=category, name=name)
         return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                              meta=sequence_meta, modalities=self.modalities, categories=self.categories,
-                             mesh_feats_type=self.mesh_feats_type, cuboid_source=self.cuboid_source,
+                             mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
                              cam_tform_obj_source=self.cam_tform_obj_source)
 
     def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, count_max_per_category, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):

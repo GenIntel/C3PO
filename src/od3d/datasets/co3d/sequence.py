@@ -1,8 +1,9 @@
 import open3d.geometry
-from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES, FEATURE_TYPES
+from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES, FEATURE_TYPES, REDUCE_TYPES
 from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 from od3d.datasets.frame import OD3D_SequenceMeta
 from od3d.cv.geometry.mesh import Mesh, Meshes
+from od3d.cv.io import read_pts3d_colors, read_pts3d
 
 from tqdm import tqdm
 import logging
@@ -95,7 +96,8 @@ class CO3D_Sequence():
                  modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
-                 mesh_feats_type=FEATURE_TYPES.DINOV2_AVG.value
+                 mesh_feats_type=FEATURE_TYPES.DINOV2_AVG.value,
+                 dist_verts_mesh_feats_reduce_type=REDUCE_TYPES.MIN.value,
                  ):
         self.path_raw: Path = path_raw
         self.path_preprocess: Path = path_preprocess
@@ -103,12 +105,14 @@ class CO3D_Sequence():
         self.meta = meta
         self.cam_tform_obj_source = cam_tform_obj_source
         self.mesh_feats_type = mesh_feats_type
+        self.dist_verts_mesh_feats_reduce_type = dist_verts_mesh_feats_reduce_type
         self.cuboid_source = cuboid_source
         self.modalities = modalities
         self.categories = categories
         self.category_id = categories.index(self.category)
         self._mesh_feats = None
         self._pcl = None
+        self._pcl_colors = None
         self._pcl_clean = None
         self._mesh = None
         self._front_name = None
@@ -489,7 +493,15 @@ class CO3D_Sequence():
             fpath_pcl = self.fpath_pcl
             verts, _ = load_ply(str(fpath_pcl))
             self._pcl = verts
+
         return self._pcl
+
+
+    @property
+    def pcl_colors(self):
+        if self._pcl_colors is None:
+            self._pcl_colors = read_pts3d_colors(self.fpath_pcl)
+        return self._pcl_colors
 
     @property
     def fpath_pcl(self):
@@ -737,12 +749,43 @@ class CO3D_Sequence():
         else:
             logger.warning(f'Unknown mesh feature type {self.mesh_feats_type}.')
 
-    #def get_dist_mesh_feats_to_sequence(self, sequence: CO3D_Sequence):
-    #
-    #    fpath_dist_mesh_feats = self.path_preprocess.joinpath('dist_mesh_feats', self.mesh_feats_type, self.name_unique, sequence.name_unique, 'dist_mesh_feats.pt')
-    #    if not fpath_dist_mesh_feats.exists():
-    #        return torch.load(fpath_dist_mesh_feats)
-    #    else:
+    def get_dist_verts_mesh_feats_to_other_sequence(self, sequence: 'CO3D_Sequence'):
+        fpath_dist_verts_mesh_feats = self.path_preprocess.joinpath('dist_verts_mesh_feats', self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, self.name_unique, sequence.name_unique, 'dist_verts_mesh_feats.pt')
+        if fpath_dist_verts_mesh_feats.exists():
+            return torch.load(fpath_dist_verts_mesh_feats)
+        else:
+            device = self.feats[0].device
+            seq1_feats = self.feats
+            seq2_feats = sequence.feats
+
+
+            if isinstance(seq1_feats, list):
+                seq1_verts = len(seq1_feats)
+                seq2_verts = len(seq2_feats)
+                dist_verts_seq1_seq2 = torch.zeros((seq1_verts, seq2_verts)).to(device=device)
+
+                for i in tqdm(range(seq1_verts)):
+                    for j in range(seq2_verts):
+                        #if i == j:
+                        #    dist_verts_seq1_seq2[i, j] = torch.inf
+                        #else:
+                        dists = torch.cdist(self.feats[i], sequence.feats[j])
+                        if dists.numel() == 0:
+                            dist_verts_seq1_seq2[i, j] = torch.inf
+                        else:
+                            if self.dist_verts_mesh_feats_reduce_type == REDUCE_TYPES.MIN:
+                                dist_verts_seq1_seq2[i, j] = dists.min()
+                            elif self.dist_verts_mesh_feats_reduce_type == REDUCE_TYPES.AVG:
+                                dist_verts_seq1_seq2[i, j] = dists.mean()
+                            else:
+                                logger.warning(f'Unknown reduce type {self.dist_verts_mesh_feats_reduce_type}.')
+
+            else:
+                dist_verts_seq1_seq2 = torch.cdist(seq1_feats, seq2_feats)
+            if not fpath_dist_verts_mesh_feats.parent.exists():
+                fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(dist_verts_seq1_seq2, fpath_dist_verts_mesh_feats)
+            return dist_verts_seq1_seq2
 
 
     @property
@@ -750,8 +793,8 @@ class CO3D_Sequence():
         if self._mesh_feats is None:
             if not self.fpath_mesh_feats.exists():
                 self.preprocess_mesh_feats()
-            self._feats = torch.load(self.fpath_mesh_feats)
-        return self._feats
+            self._mesh_feats = torch.load(self.fpath_mesh_feats)
+        return self._mesh_feats
 
     @property
     def fpath_pcl_clean(self):
@@ -1032,7 +1075,7 @@ class CO3D_Sequence():
         o3d_pcl_noise.paint_uniform_color((0.5, 0.1, 0.1))
         geometries.append({'name': 'pcl_noise', 'geometry': o3d_pcl_noise})
 
-        open3d.visualization.draw(geometries)
+        # open3d.visualization.draw(geometries)
 
         save_ply(f=self.fpath_mesh, verts=torch.from_numpy(np.asarray(mesh.vertices)), faces=torch.LongTensor(np.asarray(mesh.triangles)))
 

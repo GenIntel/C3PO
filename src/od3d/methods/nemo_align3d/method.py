@@ -123,21 +123,36 @@ class NeMo_Align3D(OD3D_Method):
 
         from od3d.cv.geometry.mesh import Meshes
 
+        self.categories = dataset_train.categories
         self.sequences = dataset_train.get_sequences()
         self.sequences_mesh_feats = [seq.feats for seq in self.sequences]
         self.sequences_unique_names = [seq.name_unique for seq in self.sequences]
+        self.map_seq_to_cat = torch.LongTensor([self.categories.index(name.split('/')[0]) for name in self.sequences_unique_names])
+        self.categories_count = len(self.categories)
+        self.instances_count_per_category = [(self.map_seq_to_cat == c).sum().item() for c in range(self.categories_count)]
         self.meshes = Meshes.load_from_meshes([seq.mesh for seq in self.sequences], device=self.device)
+        self.instances_count = len(self.meshes)
+        self.meshes_verts_aggregated_features = [vert_feats for mesh_feats in self.sequences_mesh_feats for vert_feats in mesh_feats]
+        vertices_count = len(self.meshes_verts_aggregated_features)
 
         #self.sequences_meshes.rgb = self.sequences_meshes.get_verts_ncds_cat_with_mesh_ids()
         #self.sequences_meshes.show()
 
         self.sequences_mesh_ids_for_verts = self.meshes.get_mesh_ids_for_verts()
 
-        self.meshes_verts_aggregated_features = [vert_feats for mesh_feats in self.sequences_mesh_feats for vert_feats in mesh_feats]
+        """
+        dists_appearance_verts = []
+        for seq1_id in range(self.instances_count):
+            dists_appearance_verts.append([])
+            for seq2_id in range(self.instances_count):
+                dists_appearance_verts[seq1_id].append(self.sequences[seq1_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[seq2_id]))
+            dists_appearance_verts[seq1_id] = torch.cat(dists_appearance_verts[seq1_id], dim=1)
+        dists_appearance_verts = torch.cat(dists_appearance_verts, dim=0)
+        """
 
+        #dists_appearance_verts = []
+        #for
 
-        instances_count = len(self.meshes)
-        vertices_count = len(self.meshes_verts_aggregated_features)
         feature_dim = 384
 
         """        
@@ -206,6 +221,8 @@ class NeMo_Align3D(OD3D_Method):
             meshes_verts_aggregated_features_padded_mask[vert_id, :len(vert_features)] = True
         """
 
+
+        """
         # calculate dists between vertices
         fpath_dist_verts_all_features_min = self.dir_tmp.joinpath(f"dist_verts_all_features_min{'_'.join(self.sequences_unique_names).replace('/', '_')}.pt")
         fpath_dist_verts_all_features_avg = self.dir_tmp.joinpath(f"dist_verts_all_features_avg{'_'.join(self.sequences_unique_names).replace('/', '_')}.pt")
@@ -244,24 +261,11 @@ class NeMo_Align3D(OD3D_Method):
             torch.save(dist_verts_all_features_avg, fpath_dist_verts_all_features_avg)
 
         dists_appearance_verts = dist_verts_all_features_min # dist_verts_all_features_min, dist_verts_all_features_avg, dist_verts_mean_features, dist_verts_mean_features_normalized
-        ref_mesh_id = 3 # 0, 1, 2, 3, 4
+        """
 
-        #dists_appearance_verts = dists_appearance_verts / dists_appearance_verts[dists_appearance_verts.isfinite()].max() # std()
-        dists_appearance_verts[~dists_appearance_verts.isfinite()] = dists_appearance_verts[dists_appearance_verts.isfinite()].max()
-        dists_appearance_verts = dists_appearance_verts / dists_appearance_verts.max()
 
         from od3d.cv.optimization.ransac import ransac
         from od3d.cv.select import batched_index_select
-
-        # calculate reference vertex/feature given dists: nearest-neighbor, k-nearest-neighbor, average feature -
-        ref_vertices_mask = self.sequences_mesh_ids_for_verts == ref_mesh_id
-        ref_vertices = torch.arange(vertices_count).to(device=self.device)[ref_vertices_mask]
-        dists_verts_min_ref_vertices = dists_appearance_verts[:, ref_vertices].min(dim=-1)[1]
-
-        pts = self.meshes.verts.clone().detach()
-
-        dist_ref = dists_appearance_verts[:, ref_vertices]
-        pts_ref = pts[ref_vertices_mask].clone()
 
         def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor):
             """
@@ -361,28 +365,188 @@ class NeMo_Align3D(OD3D_Method):
 
         from functools import partial
 
-        rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
-        rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]
-        self.meshes.rgb = rgbs_all
 
-        src_mesh_ids = list(range(len(self.meshes)))
-        src_mesh_ids.remove(ref_mesh_id)
-        for src_mesh_id in src_mesh_ids:
-            src_vertices_mask = self.sequences_mesh_ids_for_verts == src_mesh_id
-            src_vertices = torch.arange(vertices_count).to(device=self.device)[src_vertices_mask]
-            pts_src = pts[src_vertices]
-            dist_src_ref = dist_ref[src_vertices]
-            # four points required, otherwise rotation yields an ambiguity. like planes without normals
-            a_tform4x4_b = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref, dist_ref=dist_src_ref), score_func=partial(score_tform4x4_fit, pts_ref=pts_ref, dist_ref=dist_src_ref), fits_count=2000, fit_pts_count=4)
+        dtype = meshes_verts_features_avg.dtype
+        results_diff_log_rot = {}
+        for cat_id, category in enumerate(self.categories):
+            instance_ids = torch.LongTensor(list(range(self.instances_count)))
+            results_diff_log_rot[category] = torch.zeros(size=(self.instances_count_per_category[cat_id], self.instances_count_per_category[cat_id])).to(device=self.device, dtype=dtype)
+            ref_mesh_ids = instance_ids[self.map_seq_to_cat == cat_id]
+            src_mesh_ids = instance_ids[self.map_seq_to_cat == cat_id]
 
-            from od3d.cv.geometry.transform import transf3d_broadcast
-            verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=a_tform4x4_b)
-            self.meshes.verts[src_vertices] = verts
-        # self.meshes.verts
-
-        self.meshes.show()
+            for r, ref_mesh_id in enumerate(ref_mesh_ids):
+                #ref_mesh_id = 3 # 0, 1, 2, 3, 4
 
 
+                # calculate reference vertex/feature given dists: nearest-neighbor, k-nearest-neighbor, average feature -
+                ref_vertices_mask = self.sequences_mesh_ids_for_verts == ref_mesh_id
+
+                #dists_appearance_verts[seq1_id].append(
+                #    self.sequences[seq1_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[seq2_id]))
+
+                ref_vertices = torch.arange(vertices_count).to(device=self.device)[ref_vertices_mask]
+                #dists_verts_min_ref_vertices = dists_appearance_verts[:, ref_vertices].min(dim=-1)[1]
+
+                pts = self.meshes.verts.clone().detach()
+
+                #dist_ref = dists_appearance_verts[:, ref_vertices]
+                pts_ref = pts[ref_vertices_mask].clone()
+
+
+                rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
+                #rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]
+                self.meshes.rgb = rgbs_all
+
+
+
+                for s, src_mesh_id in enumerate(src_mesh_ids):
+                    src_vertices_mask = self.sequences_mesh_ids_for_verts == src_mesh_id
+                    src_vertices = torch.arange(vertices_count).to(device=self.device)[src_vertices_mask]
+                    pts_src = pts[src_vertices]
+                    dist_src_ref = self.sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[ref_mesh_id])
+                    # remove infinities and normalize is highly important!
+                    dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
+                    dist_src_ref = dist_src_ref / dist_src_ref.max(dim=0)[0][None,]
+
+
+                    # four points required, otherwise rotation yields an ambiguity. like planes without normals
+                    ref_tform4x4_src = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref, dist_ref=dist_src_ref), score_func=partial(score_tform4x4_fit, pts_ref=pts_ref, dist_ref=dist_src_ref), fits_count=1500, fit_pts_count=4)
+
+                    pred_ref_tform_src = ref_tform4x4_src.clone()
+                    pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
+
+                    from pathlib import Path
+                    from od3d.io import read_json
+                    from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
+                    path_zsp = Path('third_party/zero-shot-pose/data/class_labels')
+                    fpath_src_gt = path_zsp.joinpath(self.sequences[src_mesh_id].name_unique + '.json')
+                    gt_co3d_global_tform_co3d_src = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_src_gt)['trans'])).to(device=self.device, dtype=ref_tform4x4_src.dtype))
+
+                    fpath_ref_gt = path_zsp.joinpath(self.sequences[ref_mesh_id].name_unique + '.json')
+                    gt_co3d_global_tform_co3d_ref = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_ref_gt)['trans'])).to(device=self.device, dtype=ref_tform4x4_src.dtype))
+
+
+
+                    gt_co3dv1_ref_tform_co3dv1_src = tform4x4(inv_tform4x4(gt_co3d_global_tform_co3d_ref), gt_co3d_global_tform_co3d_src)
+
+
+
+                    from od3d.cv.visual.show import show_scene
+                    from od3d.cv.geometry.transform import transf3d, transf3d_broadcast, transf4x4_from_rot3x3_and_transl3
+
+
+
+                    from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES
+
+                    src_frame = self.sequences[src_mesh_id].first_frame
+                    ref_frame = self.sequences[ref_mesh_id].first_frame
+                    """
+        
+                    from co3d.dataset.data_types import (
+                        load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
+                    )
+                    frame_annotations = load_dataclass_jgzip(Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1/bicycle/frame_annotations.jgz'), List[FrameAnnotation])
+                    ref_frame_annotation = list(filter(lambda fa: fa.sequence_name == ref_frame.meta.sequence_name and fa.frame_number == int(ref_frame.name), frame_annotations))[0]
+                    src_frame_annotation = list(filter(lambda fa: fa.sequence_name == src_frame.meta.sequence_name and fa.frame_number == int(src_frame.name), frame_annotations))[0]
+        
+                    cam_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(rot3x3=torch.Tensor(ref_frame_annotation.viewpoint.R).T,
+                                                                         transl3=torch.Tensor(ref_frame_annotation.viewpoint.T))
+                    default_tform_t3d = torch.Tensor([[-1., 0., 0., 0.],
+                                                      [0., -1., 0., 0.],
+                                                      [0., 0., 1., 0.],
+                                                      [0., 0., 0., 1.]])
+                    co3dv1_ref_cam0_tform_co3dv1_ref_obj = torch.bmm(default_tform_t3d[None,], cam_tform4x4_obj[None,])[0].to(device=self.device, dtype=ref_tform4x4_src.dtype)
+        
+                    cam_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(rot3x3=torch.Tensor(src_frame_annotation.viewpoint.R).T,
+                                                                         transl3=torch.Tensor(src_frame_annotation.viewpoint.T))
+                    co3dv1_src_cam0_tform_co3dv1_src_obj = torch.bmm(default_tform_t3d[None,], cam_tform4x4_obj[None,])[0].to(device=self.device, dtype=ref_tform4x4_src.dtype)
+        
+                    co3dv1_ref_tform_co3d_ref = tform4x4(inv_tform4x4(co3dv1_ref_cam0_tform_co3dv1_ref_obj), ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D).to(device=self.device, dtype=ref_tform4x4_src.dtype))
+                    co3dv1_src_tform_co3d_src = tform4x4(inv_tform4x4(co3dv1_src_cam0_tform_co3dv1_src_obj), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D).to(device=self.device, dtype=ref_tform4x4_src.dtype))
+        
+                    gt_co3d_ref_tform_co3d_src = tform4x4(tform4x4(inv_tform4x4(co3dv1_ref_tform_co3d_ref), gt_co3dv1_ref_tform_co3dv1_src), co3dv1_src_tform_co3d_src)
+                    """
+
+
+
+                    #show_scene(pts3d=[self.sequences[src_mesh_id].pcl.to(device=self.device), transf3d_broadcast(pts3d=self.sequences[ref_mesh_id].pcl.to(device=self.device), transf4x4=inv_tform4x4(gt_co3dv1_ref_tform_co3dv1_src))],
+                    #           pts3d_colors=[self.sequences[src_mesh_id].pcl_colors.to(device=self.device), self.sequences[ref_mesh_id].pcl_colors.to(device=self.device), ])
+
+
+
+                    """
+                    from od3d.cv.io import read_pts3d_colors, read_pts3d
+                    ref_pcl_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1').joinpath(self.sequences[ref_mesh_id].name_unique, "pointcloud.ply")
+                    ref_pts3d = read_pts3d(fpath=ref_pcl_fpath)
+                    src_pcl_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1').joinpath(
+                        self.sequences[src_mesh_id].name_unique, "pointcloud.ply")
+                    src_pts3d = read_pts3d(fpath=src_pcl_fpath)
+                    show_scene(pts3d=[src_pts3d.to(device=self.device, dtype=ref_tform4x4_src.dtype), transf3d_broadcast(pts3d=ref_pts3d.to(device=self.device, dtype=ref_tform4x4_src.dtype), transf4x4=inv_tform4x4(gt_co3d_ref_tform_co3d_src))])
+        
+                    """
+                    #sequence_annotations
+                    co3d_src_tform_src = tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
+                    co3d_ref_tform_ref = tform4x4(inv_tform4x4(ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
+
+                    co3d_src_tform_src = co3d_src_tform_src.to(device=self.device)
+                    co3d_ref_tform_ref = co3d_ref_tform_ref.to(device=self.device)
+
+
+                    # co3d_src_tform_src: rotation works but translation/scale are wrong
+                    #show_scene(meshes=Meshes.load_from_meshes([self.sequences[src_mesh_id].mesh], device=self.device), pts3d=[transf3d_broadcast(pts3d=self.sequences[src_mesh_id].pcl.to(device=self.device), transf4x4=inv_tform4x4(co3d_src_tform_src))/ 10.])
+                    # co3d_ref_tform_ref: rotation works but translation/scale are wrong
+                    #show_scene(meshes=Meshes.load_from_meshes([self.sequences[ref_mesh_id].mesh], device=self.device), pts3d=[transf3d_broadcast(pts3d=self.sequences[ref_mesh_id].pcl.to(device=self.device), transf4x4=inv_tform4x4(co3d_ref_tform_ref))/ 10.])
+
+                    # meshes=Meshes.load_from_meshes([self.sequences[src_mesh_id].mesh, self.sequences[ref_mesh_id].mesh], device=self.device),
+
+                    gt_ref_tform_src = tform4x4(inv_tform4x4(co3d_ref_tform_ref), tform4x4(gt_co3dv1_ref_tform_co3dv1_src, co3d_src_tform_src))
+
+                    #pred_co3d_ref_tform_co3d_src = tform4x4(co3d_ref_tform_ref, tform4x4(pred_ref_tform_src, inv_tform4x4(co3d_src_tform_src)))
+                    #diff_rot3x3 = tform4x4(inv_tform4x4(gt_ref_tform_src), pred_ref_tform4x4_src)[:3, :3]
+
+                    diff_rot3x3 = rot3x3(inv_tform4x4(gt_ref_tform_src)[:3, :3], pred_ref_tform_src[:3, :3])[:3, :3]
+
+                    try:
+                        diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3[None,])
+                        diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
+                    except ValueError:
+                        logger.warning(
+                            f'Cannot calculate deviation in rotation angle due to rot3x3 trace being too small, setting deviation to PI.')
+                        diff_rot_angle_rad = torch.ones_like(diff_rot3x3[None, 0, 0]) * np.pi
+                    print(diff_rot_angle_rad)
+
+                    if not torch.isfinite(diff_rot_angle_rad).all():
+                        logger.warning(f'Nan or Inf in diff {diff_rot_angle_rad}')
+
+                    # toytruck rotation 0 0 0 0 0 0 00 0 -> nan for :  ref_mesh_id: 1, src_mesh_id: (4,)
+                    diff_rot_angle_rad[~diff_rot_angle_rad.isfinite()] = np.pi
+
+                    results_diff_log_rot[category][r, s] = diff_rot_angle_rad
+                    #from od3d.cv.geometry.transform import transf3d_broadcast
+                    #verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=ref_tform4x4_src)
+                    #self.meshes.verts[src_vertices] = verts
+
+        results_diff_log_rot_mean = {}
+        total_results = []
+        for cat_id, category in enumerate(self.categories):
+            results = OD3D_Results()
+            #results['rot_diff_rad'] = results_diff_log_rot[category][torch.triu(torch.ones(self.instances_count_per_category[cat_id], self.instances_count_per_category[cat_id]), diagonal=1).to(device=self.device) == 1] #  results_diff_log_rot[category]
+            # excluding diagonal entries
+            results['rot_diff_rad'] = results_diff_log_rot[category][torch.eye(self.instances_count_per_category[cat_id]).to(device=self.device) == 0] #  results_diff_log_rot[category]
+
+            results_mean = results.mean()
+            results_mean.log_with_prefix(prefix=category)
+            total_results.append(results_mean)
+
+        if len(total_results) > 0:
+            total_results_mean = OD3D_Results()
+            for key in total_results[0].keys():
+                total_results_mean[key] = torch.cat([result[key] for result in total_results], dim=0).mean(dim=0)
+            total_results_mean.log_with_prefix(prefix='all_categories')
+
+        # self.meshes.show()
+
+        """
         logger.info('tnse plot')
         from sklearn.manifold import TSNE
         all_features_tsne = TSNE().fit_transform(all_features.detach().cpu().numpy())
@@ -392,7 +556,7 @@ class NeMo_Align3D(OD3D_Method):
         plt.switch_backend('Agg')
         plt.switch_backend('TKAgg')
 
-        colors = get_colors(instances_count)
+        colors = get_colors(self.instances_count)
         pts_colors = torch.stack([colors[all_features_instances_ids[i].item()] for i in range(len(all_features_instances_ids))], dim=0)
         fig, axs = plt.subplots(nrows=2, figsize=(3, 3), facecolor="white", constrained_layout=True)
         axs[0].scatter(all_features_tsne[:, 0], all_features_tsne[:, 1], c=pts_colors.detach().cpu().numpy(), s=50, alpha=0.8)
@@ -404,41 +568,43 @@ class NeMo_Align3D(OD3D_Method):
         #fig, ax = plt.subplots(figsize=(3, 3), facecolor="white", constrained_layout=True)
         axs[1].scatter(all_features_tsne[:, 0], all_features_tsne[:, 1], c=pts_colors.detach().cpu().numpy(), s=50, alpha=0.8)
         plt.show()
-
+        """
         # fix dinov2 features with correct transformation
 
 
 
     def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
-        logger.info(f'test dataset {dataset.name}')
-        if config_inference is None:
-            config_inference = self.config.inference
-        self.net.eval()
-        dataset.transform = self.transform_test
-
-        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
-                                                 shuffle=False,
-                                                 collate_fn=dataset.collate_fn,
-                                                 num_workers=self.config.test.dataloader.num_workers,
-                                                 pin_memory=self.config.test.dataloader.pin_memory)
-
-        logger.info(f"Dataset contains {len(dataset)} frames.")
-
-        results_epoch = OD3D_Results()
-        for i, batch in tqdm(enumerate(iter(dataloader))):
-            batch.to(device=self.device)
-
-            results_batch = self.inference_batch(batch=batch)
-            results_epoch += results_batch
-
-        count_pred_frames = len(results_epoch['item_id'])
-        logger.info(f'Predicted {count_pred_frames} frames.')
-
-        results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
-                                                 config_visualize=self.config.test.visualize)
-        results_epoch = results_epoch.mean()
-        results_epoch += results_visual
-        return results_epoch
+        return OD3D_Results()
+        #
+        # logger.info(f'test dataset {dataset.name}')
+        # if config_inference is None:
+        #     config_inference = self.config.inference
+        # self.net.eval()
+        # dataset.transform = self.transform_test
+        #
+        # dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
+        #                                          shuffle=False,
+        #                                          collate_fn=dataset.collate_fn,
+        #                                          num_workers=self.config.test.dataloader.num_workers,
+        #                                          pin_memory=self.config.test.dataloader.pin_memory)
+        #
+        # logger.info(f"Dataset contains {len(dataset)} frames.")
+        #
+        # results_epoch = OD3D_Results()
+        # for i, batch in tqdm(enumerate(iter(dataloader))):
+        #     batch.to(device=self.device)
+        #
+        #     results_batch = self.inference_batch(batch=batch)
+        #     results_epoch += results_batch
+        #
+        # count_pred_frames = len(results_epoch['item_id'])
+        # logger.info(f'Predicted {count_pred_frames} frames.')
+        #
+        # results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
+        #                                          config_visualize=self.config.test.visualize)
+        # results_epoch = results_epoch.mean()
+        # results_epoch += results_visual
+        # return results_epoch
 
 
     def train_epoch(self, dataset: OD3D_Dataset) -> OD3D_Results:

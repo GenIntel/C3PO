@@ -53,14 +53,14 @@ To stop a job running on slurm use
 ### Coordinate Frames
 
 The semantic axes of a camera are
-   - x: right 
-   - y: bottom 
-   - z: front
+   - x: right (pytorch3d: left)
+   - y: bottom (pytorch3d: top)
+   - z: front (pytorch3d: front)
 
 The semantic axes of an object are
-   - x: left
-   - y: back
-   - z: top
+   - x: left (pytorch3d: left) 
+   - y: back (pytorch3d: top)
+   - z: top (pytorch3d: front)
 
 This leads to the `cam_tform4x4_obj` for a camera looking straight at the front of an object of:  
 [    [1,  0,  0,     0],  

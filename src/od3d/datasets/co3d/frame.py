@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import torch.utils.data
 from typing import List
 import numpy as np
+from od3d.datasets.co3d.enum import CO3D_FRAME_TYPES
 
 from od3d.datasets.frame import OD3D_FrameMeta, \
     OD3D_FrameMetaSequenceMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
@@ -46,7 +47,10 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4
     def load_from_raw(frame_annotation: FrameAnnotation):
         category = frame_annotation.image.path.split('/')[0]
         sequence_name = frame_annotation.sequence_name
-        frame_type = frame_annotation.meta['frame_type']
+        if frame_annotation.meta is not None:
+            frame_type = frame_annotation.meta['frame_type']
+        else:
+            frame_type = CO3D_FRAME_TYPES.CO3DV1.value
         name = f'{frame_annotation.frame_number}'
 
         rfpath_mask = Path(frame_annotation.mask.path)
@@ -68,9 +72,24 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4
         H, W = frame_annotation.image.size
         size = torch.Tensor([H, W])
 
-        s = min(H, W)
-        focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length) * s / 2.
-        principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size.flip(dims=(0,)) / 2.
+        if frame_annotation.viewpoint.intrinsics_format == 'ndc_isotropic':
+            s = min(H, W)
+            focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length) * s / 2.
+            principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size.flip(
+                dims=(0,)) / 2.
+
+        elif frame_annotation.viewpoint.intrinsics_format == 'ndc_norm_image_bounds':
+            focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length)
+            focal_length[0] *= W / 2.
+            focal_length[1] *= H / 2.
+            principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point)
+            principal_point[0] *= W / 2.
+            principal_point[1] *= H / 2.
+            principal_point += size.flip(dims=(0,)) / 2.
+        else:
+            logger.warning(f'Unknown viewpoint intrinsics format {frame_annotation.viewpoint.intrinsics_format}.')
+            raise NotImplementedError
+
         cam_intr4x4 = torch.Tensor([[focal_length[0], 0., principal_point[0], 0.],
                            [0., focal_length[1], principal_point[1], 0.],
                            [0., 0., 1., 0.],
@@ -286,23 +305,24 @@ class CO3D_Frame(OD3D_Frame):
     @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
-            if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL and self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
-                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
-                                                  inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL and self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
-                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
-                                                  inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LIMITS3D:
-                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj) and self.sequence.fpath_cuboid_front_tform4x4_obj.exists(),
-                                                  inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM and self.fpath_cam_tform4x4_obj_droid_slam.exists():
-                self._cam_tform4x4_obj = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
-            else:
-                self._cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
-                if self.cam_tform_obj_source != CAM_TFORM_OBJ_SOURCES.CO3D:
-                    logger.warning(f'No fpath available for cam source {self.cam_tform_obj_source}.')
-
-                # tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj), inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
+            self._cam_tform4x4_obj = self.get_cam_tform4x4_obj(cam_tform_obj_source=self.cam_tform_obj_source)
         return self._cam_tform4x4_obj
 
-
+    def get_cam_tform4x4_obj(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES):
+        if cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL and self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
+            _cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
+                                              inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL and self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
+            _cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
+                                              inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LIMITS3D:
+            _cam_tform4x4_obj = tform4x4(
+                torch.Tensor(self.meta.l_cam_tform4x4_obj) and self.sequence.fpath_cuboid_front_tform4x4_obj.exists(),
+                inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM and self.fpath_cam_tform4x4_obj_droid_slam.exists():
+            _cam_tform4x4_obj = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+        else:
+            _cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
+            if cam_tform_obj_source != CAM_TFORM_OBJ_SOURCES.CO3D:
+                logger.warning(f'No fpath available for cam source {cam_tform_obj_source}.')
+        return _cam_tform4x4_obj

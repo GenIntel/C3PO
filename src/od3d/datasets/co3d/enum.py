@@ -24,10 +24,15 @@ class CO3D_FRAME_TYPES(str, ExtEnum):
     TEST_UNSEEN = 'test_unseen'
     TRAIN_KNOWN = 'train_known'
     TRAIN_UNSEEN = 'train_unseen'
+    CO3DV1 = 'co3dv1'
 
 class FEATURE_TYPES(str, ExtEnum):
     DINOV2_AVG = 'dinov2_avg'
     DINOV2_ACC = 'dinov2_acc'
+
+class REDUCE_TYPES(str, ExtEnum):
+    AVG = 'avg'
+    MIN = 'min'
 
 class CO3D_FRAME_SPLITS(str, ExtEnum):
     MULTISEQUENCE_CAR_DEV_KNOWN = 'multisequence_car_dev_known'
@@ -38,6 +43,10 @@ class CO3D_FRAME_SPLITS(str, ExtEnum):
     MULTISEQUENCE_CAR_TRAIN_UNSEEN = 'multisequence_car_train_unseen'
     SINGLESEQUENCE_CAR_TEST_0_KNOWN = 'singlesequence_car_test_0_known'
     SINGLESEQUENCE_CAR_TEST_0_UNSEEN = 'singlesequence_car_test_0_unseen'
+
+ALLOW_LIST_FRAME_TYPES = [CO3D_FRAME_TYPES.DEV_KNOWN, CO3D_FRAME_TYPES.DEV_UNSEEN,
+                         CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
+                         CO3D_FRAME_TYPES.TEST_KNOWN]
 
 class CO3D_CATEGORIES(str, ExtEnum):
     APPLE = "apple"

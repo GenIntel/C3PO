@@ -7,6 +7,18 @@ import numpy as np
 import torch
 import wandb
 
+def read_pts3d_colors(fpath: Path):
+    import open3d as o3d
+    import numpy as np
+    pcd = o3d.io.read_point_cloud(str(fpath))
+    return torch.from_numpy(np.asarray(pcd.colors))
+
+def read_pts3d(fpath: Path):
+    import open3d as o3d
+    import numpy as np
+    pcd = o3d.io.read_point_cloud(str(fpath))
+    return torch.from_numpy(np.asarray(pcd.points))
+
 def read_co3d_depth_image(path: Path):
     img = Image.open(path)
 
