@@ -447,11 +447,11 @@ class NeMo_Align3D(OD3D_Method):
             accurate_sim = accurate_sim_geo * accurate_sim_appear
             imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device)
             from od3d.cv.visual.draw import add_boolean_table
-            accurate_table = torch.stack([accurate_pi6, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
+            accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
             from od3d.cv.visual.crop import crop_white_border_from_img
             for v in range(viewpoints_count):
                     img = crop_white_border_from_img(imgs[v])
-                    img = add_boolean_table(img, table=accurate_table, text=['Label (PI/6)', 'Sim.', 'Sim. Geo.', 'Sim. Appear.'])
+                    img = add_boolean_table(img, table=accurate_table, text=['Label (PI/6)', 'Label (PI/18)', 'Sim.', 'Sim. Geo.', 'Sim. Appear.'])
                     results_visual = OD3D_Results()
                     results_visual[f'{category}'] = image_as_wandb_image(img, caption='blub')
                     results_visual.log_with_prefix('aligned')
