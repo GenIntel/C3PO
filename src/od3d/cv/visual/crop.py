@@ -4,6 +4,46 @@ import math
 import torch
 from od3d.cv.visual.resize import resize
 from od3d.cv.visual.show import show_img
+
+
+def crop_white_border_from_img(img, crop_width=True, crop_height=True):
+    """
+    Args:
+        img: 3xHxW
+    Returns:
+        img: 3
+
+    """
+    img_mask = ~(img == 1.).all(dim=0)
+
+    H, W = img_mask.shape
+    # Find the coordinates of non-zero pixels
+    non_zero_coords = torch.nonzero(img_mask)
+
+    if non_zero_coords.numel() == 0:
+        # If there are no non-zero pixels, return the input tensor as is
+        return img
+
+    # Calculate the minimum and maximum coordinates for each dimension
+    min_coords = torch.min(non_zero_coords, dim=0).values
+    max_coords = torch.max(non_zero_coords, dim=0).values
+
+    if not crop_width:
+        min_coords[1] = 0
+        max_coords[1] = W-1
+
+    if not crop_height:
+        min_coords[0] = 0
+        max_coords[0] = H-1
+
+    # Crop the input tensor using the calculated bounding box
+    cropped_img = img[:,
+                     min_coords[0]: max_coords[0] + 1,
+                     min_coords[1]: max_coords[1] + 1,
+                     ]
+
+    return cropped_img
+
 def crop(img, H_out, W_out, center=None, scale=1., ctx=None):
     device = img.device
     dtype = img.dtype

@@ -5,6 +5,27 @@ import torch
 from od3d.cv.select import batched_indexMD_select
 from pytorch3d.ops.points_alignment import corresponding_points_alignment
 
+def fit_tform4x4_with_matches(pts: torch.Tensor, pts_ref: torch.Tensor, estimate_scale=True):
+    """
+    Args:
+        pts (torch.Tensor): ...xNxF
+        pts_ref (torch.Tensor): ...xNxF
+    Returns:
+        ref_tform4x4 (torch.Tensor): ...xNx4x4
+    """
+    N, F = pts.shape[-2:]
+    device = pts.device
+    S = corresponding_points_alignment(pts.view(-1, N, F), pts_ref.view(-1, N, F), weights=None,
+                                       estimate_scale=estimate_scale)
+
+    pts_ref_tform4x4_pts = torch.zeros(size=(pts.shape[:-2].numel(), 4, 4)).to(device=device)
+    pts_ref_tform4x4_pts[..., 3, 3] = 1.
+    pts_ref_tform4x4_pts[..., :3, :3] = S.R.permute(0, 2, 1) * S.s[..., None, None]
+    pts_ref_tform4x4_pts[..., :3, 3] = S.T
+
+    pts_ref_tform4x4_pts = pts_ref_tform4x4_pts.reshape(*pts.shape[:-2], 4, 4)
+    return pts_ref_tform4x4_pts
+
 
 def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor):
     """

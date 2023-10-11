@@ -125,15 +125,15 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
 
         #fig2 = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16], z=[], color="red")
 
-        # colorscale: 'Electric' 'Viridis', 'Blues',
+        # colorscale: 'Electric' 'Viridis', 'Blues', 'Greens'
         # showscale: True/False
         import plotly.graph_objects as go
         fig = go.Figure(data=[
             go.Scatter3d(x=X_sub, y=Y_sub, z=Z_f1_sub, mode="markers+text", name="F1", text=text_sub,
                          textposition="top center",),
-            go.Surface(z=Z_precision, x=X, y=Y, colorscale='Electric', name='Precision', hoverinfo='skip', opacity=0.5,
+            go.Surface(z=Z_precision, x=X, y=Y, colorscale='Greens', name='Precision', hoverinfo='skip', opacity=0.5,
                        showscale=False),
-            go.Surface(z=Z_recall, x=X, y=Y, colorscale='Viridis', name='Recall', hoverinfo='skip', opacity=0.5,
+            go.Surface(z=Z_recall, x=X, y=Y, colorscale='Blues', name='Recall', hoverinfo='skip', opacity=0.5,
                        showscale=False),
                               ])
         #,  x='min. sim. appearance', y='min. sim. geometry'

@@ -133,11 +133,22 @@ class NeMo_Align3D(OD3D_Method):
 
         self.categories = dataset_train.categories
         self.sequences = dataset_train.get_sequences()
-        self.sequences_mesh_feats = [seq.feats for seq in self.sequences]
+        logger.info('getting co3d_tform_droid_slam for each instance...')
+        self.sequences_co3d_tform_droid_slam = []
+        for seq in self.sequences:
+            self.sequences_co3d_tform_droid_slam.append(seq.get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3D,
+                                                                               CAM_TFORM_OBJ_SOURCES.DROID_SLAM,
+                                                                               device=self.device))
+
+        # tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
+        logger.info('loading mesh feats...')
+        #self.sequences_mesh_feats = [seq.feats for seq in self.sequences]
         self.sequences_unique_names = [seq.name_unique for seq in self.sequences]
         self.map_seq_to_cat = torch.LongTensor([self.categories.index(name.split('/')[0]) for name in self.sequences_unique_names])
         self.categories_count = len(self.categories)
         self.instances_count_per_category = [(self.map_seq_to_cat == c).sum().item() for c in range(self.categories_count)]
+
+        logger.info('loading meshes...')
         self.meshes = Meshes.load_from_meshes([seq.mesh for seq in self.sequences], device=self.device)
         self.instances_count = len(self.meshes)
         #self.meshes_verts_aggregated_features = [vert_feats for mesh_feats in self.sequences_mesh_feats for vert_feats in mesh_feats]
@@ -155,6 +166,7 @@ class NeMo_Align3D(OD3D_Method):
         all_pred_pose_dist_geo = {}
         all_pred_pose_dist_appear = {}
         for cat_id, category in enumerate(self.categories):
+            logger.info(f'category id {cat_id} name {category}')
             results_diff_log_rot[category] = torch.zeros(
                 size=(self.instances_count_per_category[cat_id], self.instances_count_per_category[cat_id])).to(
                 device=self.device, dtype=dtype)
@@ -245,8 +257,8 @@ class NeMo_Align3D(OD3D_Method):
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
                                 pred_ref_tform_src = ref_tform4x4_src.clone()
-                                pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1,
-                                                                                keepdim=True)
+                                #pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1,
+                                #                                                keepdim=True)
 
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
                             else:
@@ -262,7 +274,7 @@ class NeMo_Align3D(OD3D_Method):
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
 
                                 pred_ref_tform_src = ref_tform4x4_src.clone()
-                                pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
+                                #pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
 
@@ -322,8 +334,11 @@ class NeMo_Align3D(OD3D_Method):
             
                         """
                         #sequence_annotations
-                        co3d_src_tform_src = tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
-                        co3d_ref_tform_ref = tform4x4(inv_tform4x4(ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
+                        co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[src_mesh_id] #  self.sequences[src_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3D, CAM_TFORM_OBJ_SOURCES.DROID_SLAM, device=self.device)
+                        co3d_ref_tform_ref = self.sequences_co3d_tform_droid_slam[ref_mesh_id] # self.sequences[ref_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3D, CAM_TFORM_OBJ_SOURCES.DROID_SLAM, device=self.device)
+
+                        #co3d_src_tform_src = tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
+                        #co3d_ref_tform_ref = tform4x4(inv_tform4x4(ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
 
                         co3d_src_tform_src = co3d_src_tform_src.to(device=self.device)
                         co3d_ref_tform_ref = co3d_ref_tform_ref.to(device=self.device)
@@ -341,7 +356,15 @@ class NeMo_Align3D(OD3D_Method):
                         #pred_co3d_ref_tform_co3d_src = tform4x4(co3d_ref_tform_ref, tform4x4(pred_ref_tform_src, inv_tform4x4(co3d_src_tform_src)))
                         #diff_rot3x3 = tform4x4(inv_tform4x4(gt_ref_tform_src), pred_ref_tform4x4_src)[:3, :3]
 
-                        diff_rot3x3 = rot3x3(inv_tform4x4(gt_ref_tform_src)[:3, :3], pred_ref_tform_src[:3, :3])[:3, :3]
+                        pred_ref_tform_src_scaled = pred_ref_tform_src.clone()
+                        pred_ref_tform_src_scaled[:3, :3] /= torch.linalg.norm(pred_ref_tform_src_scaled[:3, :3], dim=-1,
+                                                                        keepdim=True)
+
+                        gt_ref_tform_src_scaled = gt_ref_tform_src.clone()
+                        gt_ref_tform_src_scaled[:3, :3] /= torch.linalg.norm(gt_ref_tform_src_scaled[:3, :3], dim=-1,
+                                                                        keepdim=True)
+
+                        diff_rot3x3 = rot3x3(inv_tform4x4(gt_ref_tform_src_scaled)[:3, :3], pred_ref_tform_src_scaled[:3, :3])[:3, :3]
 
                         try:
                             diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3[None,])
@@ -390,6 +413,8 @@ class NeMo_Align3D(OD3D_Method):
         #    verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=pred_ref_tform_src)
         #    self.meshes.verts[src_vertices] = verts
         for cat_id, category in enumerate(self.categories):
+
+                    ### VISUALIZATIONS
             instance_ids = torch.LongTensor(list(range(self.instances_count)))
             category_instance_ids = instance_ids[self.map_seq_to_cat == cat_id]
 
@@ -404,29 +429,32 @@ class NeMo_Align3D(OD3D_Method):
                 self.meshes.verts[vertices_mask] = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(instance_id), transf4x4=all_pred_ref_tform_src[category][0, instance_id_in_category])
                 self.meshes.rgb[vertices_mask] = self.meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
 
-                src_frame = self.sequences[instance_id].first_frame
-                co3d_src_tform_src = tform4x4(
-                    inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)),
-                    src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM)).to(device=self.device, dtype=dtype)
-
+                co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                 pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][0, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
                 pts3d_colors.append(self.sequences[instance_id].pcl_colors)
 
             from od3d.cv.visual.show import show_scene
+            import math
             viewpoints_count = 2
-
-            imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count)
-            for v in range(viewpoints_count):
-                results_visual = OD3D_Results()
-                results_visual[f'{category}'] = image_as_wandb_image(imgs[v], caption='blub')
-                results_visual.log_with_prefix('aligned')
-
             category_meshes = self.meshes.get_meshes_with_ids(meshes_ids=category_instance_ids)
-            imgs = category_meshes.show(return_visualization=True, viewpoints_count=viewpoints_count)
+
+            # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.)
+            rot_diff_rad = results_diff_log_rot[category][0, :]
+            accurate_pi6 = rot_diff_rad < (math.pi / 6.)
+            accurate_pi18 = rot_diff_rad < (math.pi / 18.)
+            accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][0, :]) > 0.90
+            accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.65
+            accurate_sim = accurate_sim_geo * accurate_sim_appear
+            imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device)
+            from od3d.cv.visual.draw import add_boolean_table
+            accurate_table = torch.stack([accurate_pi6, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
+            from od3d.cv.visual.crop import crop_white_border_from_img
             for v in range(viewpoints_count):
-                results_visual = OD3D_Results()
-                results_visual[f'{category}'] = image_as_wandb_image(imgs[v], caption='blub')
-                results_visual.log_with_prefix('nearest_neighbor')
+                    img = crop_white_border_from_img(imgs[v])
+                    img = add_boolean_table(img, table=accurate_table, text=['Label (PI/6)', 'Sim.', 'Sim. Geo.', 'Sim. Appear.'])
+                    results_visual = OD3D_Results()
+                    results_visual[f'{category}'] = image_as_wandb_image(img, caption='blub')
+                    results_visual.log_with_prefix('aligned')
 
             # #rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]
             # rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()

@@ -808,6 +808,32 @@ class CO3D_Sequence():
             self._pcl_clean, _ = load_ply(fpath_pcl_clean)
         return self._pcl_clean
 
+    def get_trajectory(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES):
+
+        cams_tform_obj = []
+        for f in range(len(self.frames_names)):
+            cams_tform_obj.append(self.get_frame_by_index(f).get_cam_tform4x4_obj(cam_tform_obj_source=cam_tform_obj_source))
+        cams_tform_obj = torch.stack(cams_tform_obj, dim=0)
+        obj_cams_traj = inv_tform4x4(cams_tform_obj)[:, :3, 3]
+        return obj_cams_traj
+
+    def get_a_src_tform_b_src(self, src_a: CAM_TFORM_OBJ_SOURCES, src_b: CAM_TFORM_OBJ_SOURCES, estimate_scale=True, device='cpu'):
+        fpath = self.path_preprocess.joinpath('a_src_tform_b_src', f'{src_a}_tform_{src_b}', self.name_unique, f'{src_a}_tform_{src_b}.pt')
+        if fpath.exists():
+            a_src_tform_b_src = torch.load(fpath).to(device=device)
+        else:
+            obj_cams_traj_a = self.get_trajectory(cam_tform_obj_source=src_a).to(device=device)
+            obj_cams_traj_b = self.get_trajectory(cam_tform_obj_source=src_b).to(device=device)
+
+            from od3d.cv.geometry.fit.tform4x4 import fit_tform4x4_with_matches
+            a_src_tform_b_src = fit_tform4x4_with_matches(pts=obj_cams_traj_b, pts_ref=obj_cams_traj_a, estimate_scale=estimate_scale)
+
+            fpath.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(a_src_tform_b_src, fpath)
+        return a_src_tform_b_src
+    #    co3d_src_tform_src = tform4x4(
+    #        inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)),
+    #        src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
 
     def preprocess_mesh(self):
         fpath_droid_slam_pcl = self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'pcl.ply')

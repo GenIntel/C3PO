@@ -10,26 +10,26 @@ defaults:
   - platform: local
 
 categories:
-  - bicycle
-  - toytruck
-  - toytrain
-  - teddybear
-  - car
-  - toybus
-  - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - toyplane
-  - toilet
-  - hairdryer
-  - mouse
+#  - bicycle
+#  - toytruck
+#  - toytrain
+#  - teddybear
+#  - car
+#  - toybus
+#  - motorcycle
+#  - keyboard
+#  - handbag
+#  - remote
+#  - toyplane
+#  - toilet
+#  - hairdryer
+#  - mouse
   - toaster
-  - hydrant
-  - chair
-  - laptop
-  - book
-  - backpack
+#  - hydrant
+#  - chair
+#  - laptop
+#  - book
+#  - backpack
 
 
 metrics:

@@ -72,9 +72,12 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                meshes_names: List[str]=None,
                meshes_colors: Union[torch.Tensor, List]=None,
                meshes_add_translation: bool=True,
+               pts3d_add_translation: bool=True,
                fpath: Path=None,
                return_visualization=False,
-               viewpoints_count=1):
+               viewpoints_count=1,
+               dtype=torch.float,
+               device='cpu'):
     """
     Args:
         cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
@@ -91,7 +94,9 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     """
 
     geometries = []
-
+    meshes_x_offsets = []
+    meshes_z_offset = 0.
+    meshes_y_offset = 0.
     if meshes is not None:
 
         x_offset = 0.
@@ -99,9 +104,15 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             vertices = meshes.get_verts_with_mesh_id(mesh_id=i).clone()
             if meshes_add_translation:
                 x_offset_delta_current = 1.1 * (-vertices[:, 0].min()).clamp(min=0.)
+                if (vertices[:, 2].max() - vertices[:, 2].min()) * 1.1 > meshes_z_offset:
+                    meshes_z_offset =  (vertices[:, 2].max() - vertices[:, 2].min()) * 1.1
+                if (vertices[:, 1].max() - vertices[:, 1].min()) * 1.1 > meshes_y_offset:
+                    meshes_y_offset = (vertices[:, 1].max() - vertices[:, 1].min()) * 1.1
                 x_offset += x_offset_delta_current
                 x_offset_delta_next = 1.1 * (vertices[:, 0].max())
                 vertices[:, 0] += x_offset
+                meshes_x_offsets.append(x_offset.item())
+
                 x_offset += x_offset_delta_next
 
             vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
@@ -155,9 +166,23 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
 
     if pts3d is not None:
+        x_offset = 0.
         for i, pts3d_i in enumerate(pts3d):
             pts3d_i_o3d = open3d.geometry.PointCloud()
-            pts3d_i_o3d.points = open3d.utility.Vector3dVector(pts3d_i.detach().cpu().numpy())
+
+            _pts3d_i = pts3d_i.clone()
+            if pts3d_add_translation:
+                _pts3d_i[:, 1] += meshes_y_offset
+                #_pts3d_i[:, 2] += meshes_z_offset
+                if len(meshes_x_offsets) > i:
+                    x_offset = meshes_x_offsets[i]
+                else:
+                    x_offset_delta_current = 1.1 * (-_pts3d_i[:, 0].min()).clamp(min=0.)
+                    x_offset += x_offset_delta_current
+                x_offset_delta_next = 1.1 * (_pts3d_i[:, 0].max())
+                _pts3d_i[:, 0] += x_offset
+                x_offset += x_offset_delta_next
+            pts3d_i_o3d.points = open3d.utility.Vector3dVector(_pts3d_i.detach().cpu().numpy())
 
             if pts3d_colors is not None and len(pts3d_colors) >= i+1 and pts3d_colors[i] is not None:
                 pts3d_i_color = pts3d_colors[i]
@@ -208,9 +233,9 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
         for geometry in geometries:
             vis.add_geometry(geometry['geometry'])
             if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
-                geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].points)).clone())
+                geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].points)).clone().to(device=device, dtype=dtype))
             elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
-                geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].vertices)).clone())
+                geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].vertices)).clone().to(device=device, dtype=dtype))
             else:
                 geometries_vertices_orig.append(None)
             #vis.update_geometry(geometry['geometry'])
@@ -221,7 +246,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             imgs = []
 
             from od3d.cv.geometry.transform import get_cam_tform4x4_obj_for_viewpoints_count, transf3d, tform4x4_broadcast
-            objs_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.)
+            objs_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.).to(dtype=dtype, device=device)
             # open3d version 0.17.0 bug, view control does not work
             #camera_orig = view_control.convert_to_pinhole_camera_parameters()
             #cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
@@ -238,7 +263,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
                 for g, geometry in enumerate(geometries):
                     if geometries_vertices_orig[g] is not None:
-                        vertices = geometries_vertices_orig[g].to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
+                        vertices = geometries_vertices_orig[g] # .to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
                         vertices = transf3d_broadcast(pts3d=vertices, transf4x4=objs_new_tform4x4_obj[v])
 
                         if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
