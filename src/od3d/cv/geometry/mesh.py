@@ -150,6 +150,19 @@ class Meshes(torch.nn.Module):
         super()._apply(fn)
         self.init_pt3d()
 
+    def get_meshes_with_ids(self, meshes_ids):
+        verts = [self.get_verts_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+        faces = [self.get_faces_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+        if self.rgb is None:
+            rgb = None
+        else:
+            rgb = [self.get_rgb_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+        if self.feats is None:
+            feats = None
+        else:
+            feats = [self.get_feats_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+        return Meshes(verts=verts, faces=faces, rgb=rgb, feats=feats)
+
     def get_verts_ncds_with_mesh_id(self, mesh_id):
         verts3d = self.get_verts_with_mesh_id(mesh_id)
         verts3d_ncds = (verts3d - verts3d.min(dim=0).values[None,]) / (
@@ -165,6 +178,23 @@ class Meshes(torch.nn.Module):
         verts3d_ncds = torch.cat(verts3d_ncds, dim=0)
         return verts3d_ncds
 
+    def get_verts_cat_with_mesh_ids(self, mesh_ids=None):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        verts3d = []
+        for mesh_id in mesh_ids:
+            verts3d.append(self.get_verts_with_mesh_id(mesh_id=mesh_id))
+        verts3d = torch.cat(verts3d, dim=0)
+        return verts3d
+
+    def get_faces_cat_with_mesh_ids(self, mesh_ids=None):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        faces = []
+        for mesh_id in mesh_ids:
+            faces.append(self.get_faces_with_mesh_id(mesh_id=mesh_id))
+        faces = torch.cat(faces, dim=0)
+        return faces
 
     def get_verts_ncds_from_faces_with_mesh_id(self, mesh_id):
         verts3d_ncds = self.get_verts_ncds_with_mesh_id(mesh_id)
@@ -350,9 +380,9 @@ class Meshes(torch.nn.Module):
 
         return verts2d, mask_verts_vsbl
 
-    def show(self):
+    def show(self, fpath: Path = None, return_visualization=False, viewpoints_count=1):
         from od3d.cv.visual.show import show_scene
-        show_scene(meshes=self)
+        return show_scene(meshes=self, fpath=fpath, return_visualization=return_visualization, viewpoints_count=viewpoints_count)
 
     """
     def show(self, pts3d=[], meshes_ids=None):

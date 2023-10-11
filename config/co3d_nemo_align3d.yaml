@@ -31,13 +31,15 @@ categories:
   - book
   - backpack
 
+
 metrics:
   - metricA
   - metricB
 
 method:
   nemo:
-    use_only_first_reference: False
+    use_only_first_reference: True
+    global_optimization_steps: 1
     classes: ${categories}
 
 train_datasets:

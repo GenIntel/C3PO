@@ -58,7 +58,7 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
     return pts_ref_tform4x4_pts
 
 
-def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor):
+def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False):
     """
     Args:
         pts (torch.Tensor): ...xNxF
@@ -78,12 +78,11 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     # PxNxR
     # dist_ref_geometry = (proposal_tform_pts[:, :, None] - pts_ref[None, None,]).norm(dim=-1)
     dist_ref_geometry = torch.cdist(proposal_tform_pts, pts_ref[None,], p=1)  #
+    dist_ref_geo_max = torch.cdist(pts_ref[None,], pts_ref[None,], p=1).max()  #
 
-    #dist_ref_finite_mask = dist_ref_geometry.isfinite()
-    #dist_ref_geometry[~dist_ref_finite_mask] = dist_ref_geometry[dist_ref_finite_mask].max()
     if (~dist_ref_geometry.isfinite()).any():
         logger.warning(f'There are some infinite vlaues in dist geometry. WHY?')
-    dist_ref_geometry = dist_ref_geometry / (pts_ref.flatten(-2).max() - pts_ref.flatten(-2).min())
+    dist_ref_geometry = dist_ref_geometry / dist_ref_geo_max
 
     # PxN
     proposal_tform_pts_nn_ref_id = dist_ref_geometry.argmin(dim=-1)
@@ -103,19 +102,28 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
 
     # PxNxR
-    dist_ref_total = dist_ref_geometry + dist_ref[None,]  # + dist_ref_geometry.mean(dim=-1).mean(dim=-1)[:, None, None]
+    dist_ref_appearance = dist_ref[None,].expand(*dist_ref_geometry.shape)
+    #dist_ref_total = dist_ref_geometry + dist_ref[None,]  # + dist_ref_geometry.mean(dim=-1).mean(dim=-1)[:, None, None]
 
-    proposal_dist_ref = batched_indexMD_select(
-        indexMD=torch.cat([proposal_tform_pts_nn_ref_id_2D, proposal_tform_pts_ref_nn_pts_id_2D], dim=1),
-        inputMD=dist_ref_total)
-    # proposal_dist_ref = batched_indexMD_select(indexMD=proposal_tform_pts_ref_nn_pts_id_2D, inputMD=dist_ref_total)
-    # proposal_dist_ref = batched_indexMD_select(indexMD=proposal_tform_pts_nn_ref_id_2D, inputMD=dist_ref_total)
+    # forward+backward nn
+    proposal_pts_nn_id_2D = torch.cat([proposal_tform_pts_nn_ref_id_2D, proposal_tform_pts_ref_nn_pts_id_2D], dim=1)
+    # backward nn
+    #proposal_pts_nn_id_2D = proposal_tform_pts_ref_nn_pts_id_2D
+    # forward nn
+    #proposal_pts_nn_id_2D = proposal_tform_pts_nn_ref_id_2D
 
-    propsoal_dist_ref_isfinite = proposal_dist_ref.isfinite()
-    proposal_dist_ref[~propsoal_dist_ref_isfinite] = proposal_dist_ref.max()
+
+    proposal_dist_ref_appear = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_appearance)
+    proposal_dist_ref_geometry = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_geometry)
+
+    proposal_dist_ref_appear_avg = proposal_dist_ref_appear.mean(dim=-1)
+    proposal_dist_ref_geo_avg = proposal_dist_ref_geometry.mean(dim=-1)
 
     # scores = -proposal_dist_ref.quantile(q=0.9, dim=-1) #  (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
-    scores = -proposal_dist_ref.mean(
-        dim=-1)  # (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
+    #scores = -proposal_dist_ref.mean(dim=-1)  # (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
 
-    return scores
+    proposal_scores = -(proposal_dist_ref_geo_avg + proposal_dist_ref_appear_avg)
+    if return_dists:
+        return proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg
+    else:
+        return proposal_scores

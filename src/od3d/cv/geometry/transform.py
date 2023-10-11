@@ -123,6 +123,51 @@ def transf4x4_from_pos_and_theta(pos, theta):
     #elev = torch.asin(pos[..., 2] / dist)
     #return transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
 
+
+def get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=1, dist: float=1., device=None, dtype=None):
+    if viewpoints_count == 1:
+        # front:
+        azim = torch.Tensor([0.])
+        elev = torch.Tensor([0.])
+        theta = torch.Tensor([0.])
+    elif viewpoints_count == 2:
+        # front, top
+        azim = torch.Tensor([0., 0.])
+        elev = torch.Tensor([0., math.pi / 2.])
+        theta = torch.Tensor([0., 0.])
+    elif viewpoints_count == 3:
+        # front, top, right
+        azim = torch.Tensor([0., 0., math.pi / 2.])
+        elev = torch.Tensor([0., math.pi / 2., 0.])
+        theta = torch.Tensor([0., 0., 0.])
+    elif viewpoints_count == 4:
+        # front, top, right, bottom
+        azim = torch.Tensor([0., 0., math.pi / 2., 0.])
+        elev = torch.Tensor([0., math.pi / 2., 0., -math.pi/2.])
+        theta = torch.Tensor([0., 0., 0., 0.])
+    else:
+        viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
+        range_max = 1. - 1./ viewpoints_count_sqrt
+        azim = torch.linspace(-math.pi * range_max, math.pi * range_max, viewpoints_count_sqrt)
+        elev = torch.linspace(-math.pi / 2. * range_max, math.pi / 2. * range_max, viewpoints_count_sqrt)
+        azim = azim.repeat_interleave(viewpoints_count_sqrt)[:viewpoints_count]
+        elev = elev.repeat(viewpoints_count_sqrt)[:viewpoints_count]
+        theta = torch.zeros_like(elev)
+
+    if dist == 0.:
+        cam_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=1.)
+        cam_tform4x4_obj[:, :3, 3] = 0.
+    else:
+        cam_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+
+    if dtype is not None:
+        cam_tform4x4_obj = cam_tform4x4_obj.to(dtype=dtype)
+
+    if device is not None:
+        cam_tform4x4_obj = cam_tform4x4_obj.to(device=device)
+
+    return cam_tform4x4_obj
+
 def transf4x4_from_spherical(azim, elev, theta, dist):
     # camera center
     obj_transl3_cam = torch.stack([

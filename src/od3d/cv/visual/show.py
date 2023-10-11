@@ -71,7 +71,10 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                meshes: Meshes=None,
                meshes_names: List[str]=None,
                meshes_colors: Union[torch.Tensor, List]=None,
-               meshes_add_translation: bool=True):
+               meshes_add_translation: bool=True,
+               fpath: Path=None,
+               return_visualization=False,
+               viewpoints_count=1):
     """
     Args:
         cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
@@ -194,7 +197,66 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
             geometries.append({'name': cam_name, 'geometry': cam})
 
-    open3d.visualization.draw(geometries)
+    if return_visualization is False and fpath is None:
+        open3d.visualization.draw(geometries)
+    else:
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(visible=False) #, height=720, width=1280)
+
+        geometries_vertices_orig = []
+
+        for geometry in geometries:
+            vis.add_geometry(geometry['geometry'])
+            if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
+                geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].points)).clone())
+            elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
+                geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].vertices)).clone())
+            else:
+                geometries_vertices_orig.append(None)
+            #vis.update_geometry(geometry['geometry'])
+        vis.poll_events()
+        vis.update_renderer()
+        view_control = vis.get_view_control()
+        if return_visualization:
+            imgs = []
+
+            from od3d.cv.geometry.transform import get_cam_tform4x4_obj_for_viewpoints_count, transf3d, tform4x4_broadcast
+            objs_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.)
+            # open3d version 0.17.0 bug, view control does not work
+            #camera_orig = view_control.convert_to_pinhole_camera_parameters()
+            #cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
+
+            for v in range(viewpoints_count):
+                vis.update_renderer()
+                img = vis.capture_screen_float_buffer(do_render=True)
+                img = torch.from_numpy(np.array(img)).permute(2, 0, 1)
+                imgs.append(img)
+
+                #camera_orig.extrinsic = tform4x4_broadcast(cam_tform4x4_obj,
+                #                                           objs_new_tform4x4_obj[v]).detach().cpu().numpy()
+                #view_control.convert_from_pinhole_camera_parameters(camera_orig)
+
+                for g, geometry in enumerate(geometries):
+                    if geometries_vertices_orig[g] is not None:
+                        vertices = geometries_vertices_orig[g].to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
+                        vertices = transf3d_broadcast(pts3d=vertices, transf4x4=objs_new_tform4x4_obj[v])
+
+                        if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
+                            geometry['geometry'].points = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+                        elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
+                            geometry['geometry'].vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+                        vis.update_geometry(geometry['geometry'])
+
+                vis.update_renderer()
+            if viewpoints_count == 1:
+                imgs = imgs[0]
+            return imgs
+        else:
+            vis.capture_screen_image(str(fpath))
+
+
+        vis.update_renderer()
+        vis.destroy_window()
 
     # open3d.visualization.draw_geometries(geometries)
 
