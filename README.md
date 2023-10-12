@@ -63,11 +63,19 @@ The semantic axes of an object are
    - z: top (pytorch3d: front)
 
 This leads to the `cam_tform4x4_obj` for a camera looking straight at the front of an object of:  
-[    [1,  0,  0,     0],  
+[  [1,  0,  0,     0],  
    [0,  0, -1,     0],   
-   [0, -1,  0, +dist],  
+   [0, 1,  0, +dist],  
    [0,  0,  0,     0],
 ]
+
+Open3d uses as default `cam_tform4x4_obj`:   
+[    [1,  0,  0,     0],  
+   [0,  -1, 0,     0],   
+   [0, 0,  -1, +dist],  
+   [0,  0,  0,     0],
+]
+
 
 ## Roadmap
 

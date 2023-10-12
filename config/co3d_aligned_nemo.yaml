@@ -1,0 +1,93 @@
+defaults:
+  - logger: wandb
+  - methods@method.nemo: nemo
+  - methods/dataset@method.nemo: co3d
+  - datasets@train_datasets.labeled: co3d_5s_zero_shot_pose_aligned # co3d_5s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+  - datasets@val_datasets.main: pascal3d_val
+  #- datasets@val_datasets.pascal3d: # pascal3d_val
+  - datasets@test_datasets.co3d: co3d_5s_test # co3d_10s_test, co3d_test
+  - datasets@test_datasets.pascal3d: pascal3d_test
+  - datasets@texture_dataset: dtd
+  - platform@platform_local: local
+  - platform: local
+
+
+
+categories:
+  - bicycle
+#  - toytruck
+#  - toytrain
+#  - teddybear
+  - car
+#  - toybus
+  - motorcycle
+#  - keyboard
+#  - handbag
+#  - remote
+#  - toyplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+  - chair
+#  - laptop
+#  - book
+#  - backpack
+
+metrics:
+  - metricA
+  - metricB
+
+method:
+  nemo:
+    train:
+      epochs: 20
+      dataloader:
+        num_workers: 4
+        batch_size: 12
+    classes: ${categories}
+    #fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
+    path_meshes: ${train_datasets.labeled.path_preprocess}/aligned/all_to_one_12_10_23/mesh
+    fpaths_meshes:
+      bicycle: ${..path_meshes}/bicycle/mesh.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      toytruck: ${..path_meshes}/toytruck/mesh.ply
+      toytrain: ${..path_meshes}/toytrain/mesh.ply
+      teddybear: ${..path_meshes}/teddybear/mesh.ply
+      car: ${..path_meshes}/car/mesh.ply
+      toybus: ${..path_meshes}/toybus/mesh.ply
+      motorcycle: ${..path_meshes}/motorcycle/mesh.ply
+      keyboard: ${..path_meshes}/keyboard/mesh.ply
+      handbag: ${..path_meshes}/handbag/mesh.ply
+      remote: ${..path_meshes}/remote/mesh.ply
+      toyplane: ${..path_meshes}/toyplane/mesh.ply
+      toilet: ${..path_meshes}/toilet/mesh.ply
+      hairdryer: ${..path_meshes}/hairdryer/mesh.ply
+      mouse: ${..path_meshes}/mouse/mesh.ply
+      toaster: ${..path_meshes}/toaster/mesh.ply
+      hydrant: ${..path_meshes}/hydrant/mesh.ply
+      chair: ${..path_meshes}/chair/mesh.ply
+      laptop: ${..path_meshes}/laptop/mesh.ply
+      book: ${..path_meshes}/book/mesh.ply
+      backpack: ${..path_meshes}/backpack/mesh.ply
+
+
+train_datasets:
+  labeled:
+    aligned_name: 'all_to_one_12_10_23'
+    categories: ${categories}
+
+val_datasets:
+  main:
+    categories: ${categories}
+  pascal3d:
+    categories: ${categories}
+
+test_datasets:
+  co3d:
+    categories: ${categories}
+  pascal3d:
+    categories: ${categories}
+
+train: True
+test: True

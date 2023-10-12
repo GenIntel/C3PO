@@ -25,6 +25,8 @@ from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+# note: math is actually used by config
+import math
 
 from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize

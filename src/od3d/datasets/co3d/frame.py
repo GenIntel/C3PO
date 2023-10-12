@@ -73,6 +73,7 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4
         size = torch.Tensor([H, W])
 
         if frame_annotation.viewpoint.intrinsics_format == 'ndc_isotropic':
+            # see https://pytorch3d.org/docs/cameras
             s = min(H, W)
             focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length) * s / 2.
             principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size.flip(
@@ -245,13 +246,15 @@ class CO3D_Frame(OD3D_Frame):
     def __init__(self, path_raw: Path, path_preprocess: Path, meta: CO3D_FrameMeta, path_meta: Path,
                  modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
-                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value):
+                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
+                 aligned_name:str=None):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
 
         self.meta = meta
         self.path_meta: Path = path_meta
         self._sequence = None
         self.cam_tform_obj_source = cam_tform_obj_source
+        self.aligned_name = aligned_name
         self.cuboid_source = cuboid_source
         # the following variables can be configured dynamically
         # self._config = None
@@ -281,6 +284,7 @@ class CO3D_Frame(OD3D_Frame):
             self._sequence = CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                                            path_meta=self.path_meta, meta=sequence_meta, modalities=self.modalities,
                                            categories=self.all_categories, cam_tform_obj_source=self.cam_tform_obj_source,
+                                           aligned_name=self.aligned_name,
                                            cuboid_source=self.cuboid_source)
         return self._sequence
 
@@ -300,7 +304,7 @@ class CO3D_Frame(OD3D_Frame):
 
     @property
     def fpath_cam_tform4x4_obj_droid_slam(self):
-        return self.path_preprocess.joinpath('cam_tform4x4_obj', str(self.cam_tform_obj_source), self.name_unique + '.pt')
+        return self.path_preprocess.joinpath('cam_tform4x4_obj', 'droid_slam', self.name_unique + '.pt')
 
     @property
     def cam_tform4x4_obj(self):
@@ -321,6 +325,10 @@ class CO3D_Frame(OD3D_Frame):
                 inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
         elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM and self.fpath_cam_tform4x4_obj_droid_slam.exists():
             _cam_tform4x4_obj = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
+            _cam_tform4x4_obj_droid_slam = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+            _droid_slam_aligned_tform_droid_slam = self.sequence.droid_slam_aligned_tform_droid_slam
+            _cam_tform4x4_obj = tform4x4(_cam_tform4x4_obj_droid_slam, inv_tform4x4(_droid_slam_aligned_tform_droid_slam))
         else:
             _cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
             if cam_tform_obj_source != CAM_TFORM_OBJ_SOURCES.CO3D:

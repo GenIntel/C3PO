@@ -167,6 +167,13 @@ class NeMo_Align3D(OD3D_Method):
         all_pred_pose_dist_appear = {}
         for cat_id, category in enumerate(self.categories):
             logger.info(f'category id {cat_id} name {category}')
+            instance_ids = torch.LongTensor(list(range(self.instances_count)))
+            category_instance_ids = instance_ids[self.map_seq_to_cat == cat_id]
+            droid_slam_labeled_tform_droid_slam = self.sequences[
+                category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
+
+
+
             results_diff_log_rot[category] = torch.zeros(
                 size=(self.instances_count_per_category[cat_id], self.instances_count_per_category[cat_id])).to(
                 device=self.device, dtype=dtype)
@@ -409,29 +416,43 @@ class NeMo_Align3D(OD3D_Method):
 
 
         from od3d.cv.geometry.transform import transf3d_broadcast
+        from od3d.datasets.co3d.enum import PCL_SOURCES
         # if r == 0:
         #    verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=pred_ref_tform_src)
         #    self.meshes.verts[src_vertices] = verts
         for cat_id, category in enumerate(self.categories):
+            logger.info(f'category {category}')
 
-                    ### VISUALIZATIONS
+            ### VISUALIZATIONS
             instance_ids = torch.LongTensor(list(range(self.instances_count)))
             category_instance_ids = instance_ids[self.map_seq_to_cat == cat_id]
+            droid_slam_labeled_tform_droid_slam = self.sequences[category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
+            droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.sequences[category_instance_ids[0]].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
+            droid_slam_labeled_cuboid_tform_droid_slam = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam_labeled, droid_slam_labeled_tform_droid_slam)
+            self.sequences[category_instance_ids[0]].write_aligned_cuboid(aligned_name=self.config.aligned_name, cuboid=self.sequences[category_instance_ids[0]].droid_slam_labeled_cuboid)
+
 
             pts3d = []
             pts3d_colors = []
             for instance_id_in_category, instance_id in enumerate(category_instance_ids):
+                droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][0, instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
+                self.sequences[instance_id].write_aligned_droid_slam_tform_droid_slam(aligned_name=self.config.aligned_name, aligned_droid_slam_tform_droid_slam=droid_slam_labeled_cuboid_tform_droid_slam_instance)
+
                 vertices_mask = self.sequences_mesh_ids_for_verts == instance_id
                 ref_vertices_mask = self.sequences_mesh_ids_for_verts == category_instance_ids[0]
 
                 dist_verts_ref = self.sequences[instance_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[ category_instance_ids[0]])
                 dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
-                self.meshes.verts[vertices_mask] = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(instance_id), transf4x4=all_pred_ref_tform_src[category][0, instance_id_in_category])
+                self.meshes.verts[vertices_mask] = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(instance_id), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance)
                 self.meshes.rgb[vertices_mask] = self.meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
 
-                co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
-                pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][0, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
-                pts3d_colors.append(self.sequences[instance_id].pcl_colors)
+                #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
+                #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][0, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
+
+                pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance))
+
+                pts3d_colors.append(self.sequences[instance_id].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype))
+
 
             from od3d.cv.visual.show import show_scene
             import math
@@ -445,16 +466,16 @@ class NeMo_Align3D(OD3D_Method):
             accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][0, :]) > 0.90
             accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.65
             accurate_sim = accurate_sim_geo * accurate_sim_appear
-            imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device)
+            imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
             from od3d.cv.visual.draw import add_boolean_table
             accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
             from od3d.cv.visual.crop import crop_white_border_from_img
             for v in range(viewpoints_count):
-                    img = crop_white_border_from_img(imgs[v])
-                    img = add_boolean_table(img, table=accurate_table, text=['Label (PI/6)', 'Label (PI/18)', 'Sim.', 'Sim. Geo.', 'Sim. Appear.'])
-                    results_visual = OD3D_Results()
-                    results_visual[f'{category}'] = image_as_wandb_image(img, caption='blub')
-                    results_visual.log_with_prefix('aligned')
+                img = crop_white_border_from_img(imgs[v])
+                img = add_boolean_table(img, table=accurate_table, text=['Label (PI/6)', 'Label (PI/18)', 'Sim.', 'Sim. Geo.', 'Sim. Appear.'])
+                results_visual = OD3D_Results()
+                results_visual[f'{category}'] = image_as_wandb_image(img, caption='blub')
+                results_visual.log_with_prefix('aligned')
 
             # #rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]
             # rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()

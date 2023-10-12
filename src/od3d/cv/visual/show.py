@@ -16,6 +16,35 @@ from typing import List
 import torchvision
 import open3d as o3d
 import numpy as np
+from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
+
+DEFAULT_CAM_TFORM_OBJ = torch.Tensor([[1., 0., 0., 0.],
+                                      [0., 0., -1., 0.],
+                                      [0., 1., 0., 0.],
+                                      [0., 0., 0., 1.]])
+
+OPEN3D_DEFAULT_CAM_TFORM_OBJ = torch.Tensor([[1., 0., 0., 0.],
+                                             [0., -1., 0., 0.],
+                                             [0., 0., -1., 0.],
+                                             [0., 0., 0., 1.]])
+
+OBJ_TFORM_OPEN3D_DEFAULT_CAM = torch.Tensor([[1., 0., 0., 0.],
+                                             [0., -1., 0., 0.],
+                                             [0., 0., -1., 0.],
+                                             [0., 0., 0., 1.]])
+
+OPEN3D_DEFAULT_TFORM_DEFAULT = torch.Tensor([[1., 0., 0., 0.],
+                                             [0., 0., -1., 0.],
+                                             [0., 1., 0., 0.],
+                                             [0., 0., 0., 1.]])
+
+DEFAULT_TFORM_OPEN3D_DEFAULT = torch.Tensor([[1., 0., 0., 0.],
+                                             [0., 0., 1., 0.],
+                                             [0., -1., 0., 0.],
+                                             [0., 0., 0., 1.]])
+
+#OPEN3D_DEFAULT_TFORM_DEFAULT = tform4x4(OPEN3D_DEFAULT_CAM_TFORM_OBJ, inv_tform4x4(DEFAULT_CAM_TFORM_OBJ))
+#DEFAULT_TFORM_OPEN3D_DEFAULT = inv_tform4x4(OPEN3D_DEFAULT_TFORM_DEFAULT)
 
 def pt3d_camera_from_tform4x4_intr4x4_imgs_size(cam_tform4x4_obj: torch.Tensor, cam_intr4x4: torch.Tensor, img_size: torch.Tensor):
     if cam_tform4x4_obj.dim() == 2:
@@ -71,8 +100,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                meshes: Meshes=None,
                meshes_names: List[str]=None,
                meshes_colors: Union[torch.Tensor, List]=None,
-               meshes_add_translation: bool=True,
-               pts3d_add_translation: bool=True,
+               meshes_add_translation: bool=False,
+               pts3d_add_translation: bool=False,
                fpath: Path=None,
                return_visualization=False,
                viewpoints_count=1,
@@ -140,6 +169,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
             if isinstance(mesh_color, torch.Tensor):
                 mesh_color =mesh_color.detach().cpu().numpy()
+
             mat_box = open3d.visualization.rendering.MaterialRecord()
             mat_box.shader = 'defaultLitTransparency'
             #mat_box.shader = 'defaultLitSSR'
@@ -203,16 +233,16 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     if cams_tform4x4_world is not None and cams_intr4x4 is not None:
 
         for i, cam_tform4x4_obj in enumerate(cams_tform4x4_world):
-            width = int(cams_intr4x4[0, 2] * 2)
-            height = int(cams_intr4x4[1, 2] * 2)
-
             if len(cams_intr4x4) == 1:
                 cam_intr4x4 = cams_intr4x4[0]
             else:
                 cam_intr4x4 = cams_intr4x4[i]
 
+            width = int(cam_intr4x4[0, 2] * 2)
+            height = int(cam_intr4x4[1, 2] * 2)
+
             cam = open3d.geometry.LineSet.create_camera_visualization(view_width_px=width, view_height_px=height,
-                                                                      intrinsic=cam_intr4x4[i][:3, :3].detach().numpy(),
+                                                                      intrinsic=cam_intr4x4[:3, :3].detach().cpu().numpy(),
                                                                       extrinsic=cam_tform4x4_obj.detach().cpu().numpy(),
                                                                       scale=0.01)
             if cams_names is not None and len(cams_names) >= i+1 and cams_names[i] is not None:
@@ -246,17 +276,12 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             imgs = []
 
             from od3d.cv.geometry.transform import get_cam_tform4x4_obj_for_viewpoints_count, transf3d, tform4x4_broadcast
-            objs_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.).to(dtype=dtype, device=device)
+            cams_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.).to(dtype=dtype, device=device)
             # open3d version 0.17.0 bug, view control does not work
             #camera_orig = view_control.convert_to_pinhole_camera_parameters()
             #cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
 
             for v in range(viewpoints_count):
-                vis.update_renderer()
-                img = vis.capture_screen_float_buffer(do_render=True)
-                img = torch.from_numpy(np.array(img)).permute(2, 0, 1)
-                imgs.append(img)
-
                 #camera_orig.extrinsic = tform4x4_broadcast(cam_tform4x4_obj,
                 #                                           objs_new_tform4x4_obj[v]).detach().cpu().numpy()
                 #view_control.convert_from_pinhole_camera_parameters(camera_orig)
@@ -264,7 +289,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 for g, geometry in enumerate(geometries):
                     if geometries_vertices_orig[g] is not None:
                         vertices = geometries_vertices_orig[g] # .to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
-                        vertices = transf3d_broadcast(pts3d=vertices, transf4x4=objs_new_tform4x4_obj[v])
+                        vertices = transf3d_broadcast(pts3d=vertices, transf4x4=tform4x4(OBJ_TFORM_OPEN3D_DEFAULT_CAM.to(dtype=dtype, device=device), cams_new_tform4x4_obj[v]))
 
                         if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
                             geometry['geometry'].points = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
@@ -273,6 +298,10 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                         vis.update_geometry(geometry['geometry'])
 
                 vis.update_renderer()
+                img = vis.capture_screen_float_buffer(do_render=True)
+                img = torch.from_numpy(np.array(img)).permute(2, 0, 1)
+                imgs.append(img)
+
             if viewpoints_count == 1:
                 imgs = imgs[0]
             return imgs

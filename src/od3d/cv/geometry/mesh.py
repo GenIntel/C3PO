@@ -7,7 +7,7 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 from pytorch3d.renderer import MeshRasterizer, RasterizationSettings
 from pytorch3d.renderer.mesh.utils import interpolate_face_attributes
 from od3d.cv.geometry.transform import proj3d2d, proj3d2d_broadcast
-from od3d.cv.io import load_ply
+from od3d.cv.io import load_ply, save_ply
 from enum import Enum
 from typing import List
 logger = logging.getLogger(__name__)
@@ -48,6 +48,9 @@ class Mesh:
         verts, faces = load_ply(fpath)
         return Mesh(verts=verts, faces=faces)
 
+
+    def write_to_file(self, fpath: Path):
+        save_ply(fpath, verts=self.verts, faces=self.faces)
     def verts_count(self):
         return self.verts.shape[0]
 
@@ -102,6 +105,9 @@ class Meshes(torch.nn.Module):
             verts=[self.get_verts_with_mesh_id(i) for i in range(self.meshes_count)],
             faces=[self.get_faces_with_mesh_id(i) for i in range(self.meshes_count)]
         )
+
+    def write_to_file(self, fpath: Path):
+        save_ply(fpath, verts=self.verts, faces=self.faces)
 
     @dataclass
     class PreRendered():

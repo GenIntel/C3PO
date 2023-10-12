@@ -5,8 +5,9 @@ import torchvision.io.image
 logger = logging.getLogger(__name__)
 import shutil
 from od3d.datasets.co3d import CO3D
-from od3d.datasets.co3d.enum import CO3D_CATEGORIES, ALLOW_LIST_FRAME_TYPES
+from od3d.datasets.co3d.enum import CO3D_CATEGORIES, ALLOW_LIST_FRAME_TYPES, PCL_SOURCES
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_DATASET_SPLITS
+from od3d.cv.io import write_pts3d_with_colors, read_pts3d, read_pts3d_colors
 from omegaconf import DictConfig
 from pathlib import Path
 from od3d.io import run_cmd
@@ -137,7 +138,8 @@ class CO3Dv1(CO3D):
         return CO3Dv1_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                                meta=sequence_meta, modalities=self.modalities, categories=self.categories,
                                mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
-                               cam_tform_obj_source=self.cam_tform_obj_source)
+                               cam_tform_obj_source=self.cam_tform_obj_source,
+                               aligned_name=self.aligned_name)
 
 
 class CO3Dv1_Sequence(CO3D_Sequence):
@@ -278,11 +280,13 @@ class CO3Dv1_Sequence(CO3D_Sequence):
             proposed_planes4d = torch.cat([proposed_planes_axis_z, proposed_planes_signed_dist], dim=-1)
             return proposed_planes4d
 
-        def score_plane4d_fit(pts: torch.Tensor, plane4d: torch.Tensor, plane_dist_thresh: float, pts_on_plane_weight: float=1.3):
+        def score_plane4d_fit(pts: torch.Tensor, plane4d: torch.Tensor, plane_dist_thresh: float,
+                              cams_traj: torch.Tensor, pts_on_plane_weight: float = 1.3):
             """
             Args:
                 pts (torch.Tensor): ...xNxF
                 planes (torch.Tensor): ...xPxM
+                cams_traj ( torch.Tensor): ...xCx3
             Returns:
                 scores (torch.Tensor): ...xP
             """
@@ -292,16 +296,29 @@ class CO3Dv1_Sequence(CO3D_Sequence):
 
             proposed_planes_axis_z = plane4d[..., :3]
             proposed_planes_signed_dist = plane4d[..., 3:]
-            signed_dists_pts3d_to_proposed_planes = torch.einsum('bnc,bpc->bpn', pts.view(batch_count, -1, F), proposed_planes_axis_z.view(batch_count, -1, F)) - proposed_planes_signed_dist.view(batch_count, -1, 1)
+            signed_dists_pts3d_to_proposed_planes = torch.einsum('bnc,bpc->bpn', pts.view(batch_count, -1, F),
+                                                                 proposed_planes_axis_z.view(batch_count, -1,
+                                                                                             F)) - proposed_planes_signed_dist.view(
+                batch_count, -1, 1)
+            signed_dists_cams_traj_to_proposed_planes = torch.einsum('bnc,bpc->bpn', cams_traj.view(batch_count, -1, F),
+                                                                     proposed_planes_axis_z.view(batch_count, -1,
+                                                                                                 F)) - proposed_planes_signed_dist.view(
+                batch_count, -1, 1)
+
             signed_dists_pos_perc = (signed_dists_pts3d_to_proposed_planes > plane_dist_thresh).sum(dim=-1) / N
             signed_dists_thresh_perc = (signed_dists_pts3d_to_proposed_planes.abs() < plane_dist_thresh).sum(dim=-1) / N
             scores = signed_dists_pos_perc + signed_dists_thresh_perc * pts_on_plane_weight
-            scores = scores.view(batch_shape + (-1, ))
+            scores[(signed_dists_cams_traj_to_proposed_planes < 0.).any(dim=-1)] = 0.
+
+            scores = scores.view(batch_shape + (-1,))
             return scores
 
         mask_plane_thresh = particle_size / 5.
         from functools import partial
-        plane4d = ransac(pts=pts3d, fit_func=fit_plane, score_func=partial(score_plane4d_fit, plane_dist_thresh=mask_plane_thresh), fits_count=1000, fit_pts_count=3)
+        cams_traj = inv_tform4x4(cams_tform4x4_obj)[:, :3, 3]
+        plane4d = ransac(pts=pts3d, fit_func=fit_plane,
+                         score_func=partial(score_plane4d_fit, plane_dist_thresh=mask_plane_thresh,
+                                            cams_traj=cams_traj), fits_count=1000, fit_pts_count=3)
 
 
         plane3d_tform4x4_obj = torch.eye(4).to(device=device)
@@ -429,9 +446,26 @@ class CO3Dv1_Sequence(CO3D_Sequence):
 
         logger.info(self.name_unique)
         # open3d.visualization.draw(geometries)
+        obj_tform_droid_slam = tform4x4(plane3d_tform4x4_obj, center3d_tform4x4_obj)
+        # save point cloud clean
+        pts3d = read_pts3d(fpath_droid_slam_pcl).to(device=device)
+        pts3d = transf3d_broadcast(pts3d, transf4x4=obj_tform_droid_slam)
+        pts3d_colors = read_pts3d_colors(fpath_droid_slam_pcl).to(device=device)
+        vertices_dist_median = torch.cdist(pts3d_obj[None,], pts3d_obj[None,])[0].median()
+        pts3d_mask = torch.cdist(pts3d[None,], pts3d_obj[None,])[0].min(dim=-1).values < vertices_dist_median / 5.
+        pts3d_clean = pts3d[pts3d_mask]
+        pts3d_colors_clean = pts3d_colors[pts3d_mask]
 
-        save_ply(f=self.fpath_mesh, verts=torch.from_numpy(np.asarray(mesh.vertices)), faces=torch.LongTensor(np.asarray(mesh.triangles)))
+        self.fpath_pcl_droid_slam_clean.parent.mkdir(parents=True, exist_ok=True)
+        self.fpath_pcl_droid_slam.parent.mkdir(parents=True, exist_ok=True)
+        write_pts3d_with_colors(fpath=self.fpath_pcl_droid_slam_clean, pts3d=pts3d_clean,
+                                pts3d_colors=pts3d_colors_clean)
+        write_pts3d_with_colors(fpath=self.fpath_pcl_droid_slam, pts3d=pts3d, pts3d_colors=pts3d_colors)
 
+        save_ply(f=self.fpath_mesh, verts=torch.from_numpy(np.asarray(mesh.vertices)),
+                 faces=torch.LongTensor(np.asarray(mesh.triangles)))
+
+        # save transformation
         for i, cam_tform4x4_obj in enumerate(cams_tform4x4_obj):
             frame = self.get_frame_by_index(i)
             frame.fpath_cam_tform4x4_obj_droid_slam.parent.mkdir(parents=True, exist_ok=True)

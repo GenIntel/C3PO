@@ -22,7 +22,7 @@ from tqdm import tqdm
 import torch.utils.data
 from od3d.cv.io import load_ply, save_ply
 
-from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_CO3D, FEATURE_TYPES, REDUCE_TYPES, ALLOW_LIST_FRAME_TYPES
+from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_CO3D, FEATURE_TYPES, REDUCE_TYPES, ALLOW_LIST_FRAME_TYPES, PCL_SOURCES
 
 class CO3D(OD3D_Dataset):
 
@@ -43,7 +43,9 @@ class CO3D(OD3D_Dataset):
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  mesh_feats_type=FEATURE_TYPES.DINOV2_AVG.value,
                  dist_verts_mesh_feats_reduce_type=REDUCE_TYPES.MIN.value,
-                 transform=None, index_shift=0, subset_fraction=1.):
+                 pcl_source=PCL_SOURCES.CO3D.value,
+                 transform=None, index_shift=0, subset_fraction=1.,
+                 aligned_name: str = None):
 
         if categories is not None:
             categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES.list() else category for category in categories]
@@ -60,6 +62,8 @@ class CO3D(OD3D_Dataset):
         self.frames_count_max_per_sequence = frames_count_max_per_sequence
         self.frames_block_negative_depth = frames_block_negative_depth
         self.cuboid_source = cuboid_source
+        self.aligned_name = aligned_name
+        self.pcl_source = pcl_source
 
         logger.info("filtering sequences...")
         self.dict_category_sequences_names = self.filter_dict_nested_sequences(dict_nested_frames=
@@ -90,7 +94,7 @@ class CO3D(OD3D_Dataset):
                     frames_count_max_per_sequence=frames_count_max_per_sequence,
                     dict_nested_frames=dict_nested_frames,
                     cam_tform_obj_source=self.cam_tform_obj_source,
-                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
+                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name)
 
     def get_split_sequences_shared(self, fraction1: float):
         dict_category_sequence_name_frames_names_subsetA = {}
@@ -138,26 +142,29 @@ class CO3D(OD3D_Dataset):
                     path_preprocess=self.path_preprocess, categories=self.categories,
                     dict_nested_frames=dict_nested_frames,
                     cam_tform_obj_source=self.cam_tform_obj_source,
-                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
+                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name)
 
     def get_split_from_dicts(self, dict_nested_frames_subsetA, dict_nested_frames_subsetB):
         co3d_subsetA = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
                             path_preprocess=self.path_preprocess, categories=self.categories,
                             dict_nested_frames=dict_nested_frames_subsetA,
                             cam_tform_obj_source=self.cam_tform_obj_source,
-                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
+                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name)
 
         co3d_subsetB = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
                             path_preprocess=self.path_preprocess, categories=self.categories,
                             dict_nested_frames=dict_nested_frames_subsetB,
                             cam_tform_obj_source=self.cam_tform_obj_source,
-                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift)
+                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name)
 
         return co3d_subsetA, co3d_subsetB
 
     def get_item(self, item):
         frame_meta = CO3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
-        return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta, meta=frame_meta, modalities=self.modalities, categories=self.categories, cam_tform_obj_source=self.cam_tform_obj_source, cuboid_source=self.cuboid_source)
+        return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+                          meta=frame_meta, modalities=self.modalities, categories=self.categories,
+                          aligned_name=self.aligned_name,
+                          cam_tform_obj_source=self.cam_tform_obj_source, cuboid_source=self.cuboid_source)
 
 
     """
@@ -228,7 +235,8 @@ class CO3D(OD3D_Dataset):
     def get_frame_by_meta(self, frame_meta: CO3D_FrameMeta):
         return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                           meta=frame_meta, modalities=self.modalities, categories=self.categories,
-                          cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source)
+                          cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source,
+                          aligned_name=self.aligned_name)
 
     def get_sequences(self):
         seqs = []
@@ -240,9 +248,9 @@ class CO3D(OD3D_Dataset):
     def get_sequence_by_category_and_name(self, category, name):
         sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta, category=category, name=name)
         return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
-                             meta=sequence_meta, modalities=self.modalities, categories=self.categories,
+                             meta=sequence_meta, modalities=self.modalities, categories=self.categories, aligned_name=self.aligned_name,
                              mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
-                             cam_tform_obj_source=self.cam_tform_obj_source)
+                             cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source)
 
     def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, count_max_per_category, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
         logger.info("filtering frames...")
