@@ -13,6 +13,10 @@ down_sample_rate: 8
 classes: ${train_datasets.labeled.categories}
 fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
 
+multiview:
+  batch_size: 4
+
+
 train:
   early_stopping: True
   use_mask_object: True

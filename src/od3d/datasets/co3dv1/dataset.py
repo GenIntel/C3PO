@@ -68,20 +68,23 @@ class CO3Dv1(CO3D):
         preprocess_meta_remove_previous = config.get('extract_meta', False).get('remove_previous', False)
 
         categories = list(dict_nested_frames.keys()) if dict_nested_frames is not None else CO3D_CATEGORIES.list()
-        sequences_count_max_per_class = config.get("sequences_count_max_per_class", None)
+        sequences_count_max_per_category = config.get("sequences_count_max_per_category", None)
 
         if preprocess_meta_remove_previous:
             if path_meta.exists():
                 shutil.rmtree(path_meta)
 
         for category in categories:
-            sequences_names = list(dict_nested_frames[category].keys()) if dict_nested_frames is not None and dict_nested_frames[category] is not None else None
-            if dict_nested_frames_banned is not None and category in dict_nested_frames_banned.keys() and dict_nested_frames_banned[category] is not None:
-                sequences_names = list(filter(lambda seq: seq not in dict_nested_frames_banned[category].keys(), sequences_names))
             logger.info(f'preprocess meta for class {category}')
             sequence_annotations = load_dataclass_jgzip(
                 f"{path}/{category}/sequence_annotations.jgz", List[SequenceAnnotation]
             )
+            sequences_names = list(dict_nested_frames[category].keys()) if dict_nested_frames is not None and category in dict_nested_frames.keys() and dict_nested_frames[category] is not None else None
+            if sequences_names is None and (dict_nested_frames is None or (category in dict_nested_frames.keys() and dict_nested_frames[category] is None)):
+                sequences_names = [sequence_annoation.sequence_name for sequence_annoation in tqdm(sequence_annotations)]
+            if dict_nested_frames_banned is not None and category in dict_nested_frames_banned.keys() and dict_nested_frames_banned[category] is not None:
+                sequences_names = list(filter(lambda seq: seq not in dict_nested_frames_banned[category].keys(), sequences_names))
+
             logger.info('reading sequence annotations...')
             seq_count_per_class = 0
             read_sequences = []
@@ -91,8 +94,8 @@ class CO3Dv1(CO3D):
 
                 read_sequences.append(sequence_annoation.sequence_name)
                 seq_count_per_class += 1
-                if sequences_count_max_per_class is not None:
-                    if seq_count_per_class > sequences_count_max_per_class:
+                if sequences_count_max_per_category is not None:
+                    if seq_count_per_class > sequences_count_max_per_category:
                         break
 
                 sequence_name = str(sequence_annoation.sequence_name)
@@ -401,8 +404,10 @@ class CO3Dv1_Sequence(CO3D_Sequence):
 
         alpha = mask_center_thresh
         #mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(o3d_pcl, depth=9)
-        mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+        #mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+        mesh, _ = o3d_pcl.compute_convex_hull()
         mesh.compute_vertex_normals()
+
         geometries.append({'name': 'mesh', 'geometry': mesh})
 
         for i, cam_tform4x4_obj in enumerate(cams_tform4x4_obj):

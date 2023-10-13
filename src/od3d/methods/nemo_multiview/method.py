@@ -78,7 +78,7 @@ class NeMo_MultiView(NeMo):
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
 
-            results_batch = self.inference_batch(batch=batch)
+            results_batch = self.inference_batch_single_view(batch=batch)
             results_epoch += results_batch
 
         count_pred_frames = len(results_epoch['item_id'])
@@ -90,13 +90,13 @@ class NeMo_MultiView(NeMo):
         results_epoch += results_visual
         return results_epoch
 
-    def inference_batch(self, batch, return_samples_with_sim=True):
+    def inference_batch_single_view(self, batch, return_samples_with_sim=True):
         if self.config.multiview.type == MultiViewType.MULTIVIEW:
             return self.inference_batch_multiview(batch, return_samples_with_sim=return_samples_with_sim)
         elif self.config.multiview.type == MultiViewType.SINGLE:
-            return super().inference_batch(batch, return_samples_with_sim=return_samples_with_sim)
+            return super().inference_batch_single_view(batch, return_samples_with_sim=return_samples_with_sim)
         elif self.config.multiview.type == MultiViewType.MULTIVIEW_MEAN_SE3:
-            results_batch = super().inference_batch(batch, return_samples_with_sim=return_samples_with_sim)
+            results_batch = super().inference_batch_single_view(batch, return_samples_with_sim=return_samples_with_sim)
             obj_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(batch.cam_tform4x4_obj), results_batch['cam_tform4x4_obj'])
             obj_tform6_cuboid_front = se3_log_map(obj_tform4x4_cuboid_front).mean(dim=0, keepdim=True)
             obj_tform4x4_cuboid_front = se3_exp_map(obj_tform6_cuboid_front)

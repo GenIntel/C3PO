@@ -204,6 +204,14 @@ class OD3D_Frames():
         if OD3D_FRAME_MODALITIES.BBOX in self.modalities:
             img = draw_bbox(img=img, bbox=self.bbox[0])
 
+        if OD3D_FRAME_MODALITIES.PCL in self.modalities:
+            from od3d.datasets.co3d.enum import PCL_SOURCES
+            from od3d.cv.visual.show import show_scene
+            pcl = self.sequence[0].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN)
+            pts3d_colors = self.sequence[0].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN)
+
+            show_scene(pts3d=[pcl], pts3d_colors=[pts3d_colors])
+
         if OD3D_FRAME_MODALITIES.MESH in self.modalities:
             # from od3d.cv.geometry.fit3d2d import fit_se3_to_corresp_3d_2d_and_masks
             cam_tform4x4_obj = self.cam_tform4x4_obj[:1]

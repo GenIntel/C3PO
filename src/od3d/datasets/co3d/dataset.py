@@ -38,6 +38,7 @@ class CO3D(OD3D_Dataset):
                  sequences_require_pcl=False,
                  sequences_sort_pcl_score=False,
                  sequences_require_pcl_score=-1000.1,
+                 sequences_require_gt_pose=False,
                  sequences_count_max_per_category=None,
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
@@ -71,6 +72,7 @@ class CO3D(OD3D_Dataset):
                                                                                require_pcl=sequences_require_pcl,
                                                                                sort_pcl_score=sequences_sort_pcl_score,
                                                                                require_pcl_score=sequences_require_pcl_score,
+                                                                               require_gt_pose=sequences_require_gt_pose,
                                                                                count_max_per_category=sequences_count_max_per_category,
                                                                                dict_nested_frames_ban=dict_nested_frames_ban)
 
@@ -252,7 +254,7 @@ class CO3D(OD3D_Dataset):
                              mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
                              cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source)
 
-    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, count_max_per_category, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
+    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, require_gt_pose, count_max_per_category, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
         logger.info("filtering frames...")
         if dict_nested_frames is not None:
             dict_nested_sequences = {}
@@ -293,11 +295,14 @@ class CO3D(OD3D_Dataset):
             if category not in self.categories:
                 dict_nested_sequences[category] = []
                 continue
-            if require_pcl or count_max_per_category is not None:
+            if require_pcl or require_gt_pose or count_max_per_category is not None:
                 sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
                              in dict_nested_sequences[category]]
                 #if dict_nested_sequences_ban is not None and category in dict_nested_sequences_ban.keys():
                 #    sequences = [seq for seq in sequences if seq not in dict_nested_sequences_ban[category]]
+                if require_gt_pose:
+                    sequences = list(filter(lambda sequence: sequence.gt_pose_available, sequences))
+
                 if require_pcl:
                     sequences = list(filter(lambda sequence: sequence.meta.rfpath_pcl != Path('None'), sequences))
                     if require_pcl_score is not None:
@@ -341,20 +346,24 @@ class CO3D(OD3D_Dataset):
         preprocess_meta_remove_previous = config.get('extract_meta', False).get('remove_previous', False)
 
         categories = list(dict_nested_frames.keys()) if dict_nested_frames is not None else CO3D_CATEGORIES.list()
-        sequences_count_max_per_class = config.get("sequences_count_max_per_class", None)
+        sequences_count_max_per_category = config.get("sequences_count_max_per_category", None)
 
         if preprocess_meta_remove_previous:
             if path_meta.exists():
                 shutil.rmtree(path_meta)
 
         for category in categories:
-            sequences_names = list(dict_nested_frames[category].keys()) if dict_nested_frames is not None and dict_nested_frames[category] is not None else None
-            if dict_nested_frames_banned is not None and category in dict_nested_frames_banned.keys() and dict_nested_frames_banned[category] is not None:
-                sequences_names = list(filter(lambda seq: seq not in dict_nested_frames_banned[category].keys(), sequences_names))
             logger.info(f'preprocess meta for class {category}')
             sequence_annotations = load_dataclass_jgzip(
                 f"{path}/{category}/sequence_annotations.jgz", List[SequenceAnnotation]
             )
+
+            sequences_names = list(dict_nested_frames[category].keys()) if dict_nested_frames is not None and category in dict_nested_frames.keys() and dict_nested_frames[category] is not None else None
+            if sequences_names is None and (dict_nested_frames is None or (category in dict_nested_frames.keys() and dict_nested_frames[category] is None)):
+                sequences_names = [sequence_annoation.sequence_name for sequence_annoation in tqdm(sequence_annotations)]
+            if dict_nested_frames_banned is not None and category in dict_nested_frames_banned.keys() and dict_nested_frames_banned[category] is not None:
+                sequences_names = list(filter(lambda seq: seq not in dict_nested_frames_banned[category].keys(), sequences_names))
+
             logger.info('reading sequence annotations...')
             seq_count_per_class = 0
             read_sequences = []
@@ -364,8 +373,8 @@ class CO3D(OD3D_Dataset):
 
                 read_sequences.append(sequence_annoation.sequence_name)
                 seq_count_per_class += 1
-                if sequences_count_max_per_class is not None:
-                    if seq_count_per_class > sequences_count_max_per_class:
+                if sequences_count_max_per_category is not None:
+                    if seq_count_per_class > sequences_count_max_per_category:
                         break
 
                 sequence_name = str(sequence_annoation.sequence_name)

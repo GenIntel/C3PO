@@ -133,12 +133,7 @@ class NeMo_Align3D(OD3D_Method):
 
         self.categories = dataset_train.categories
         self.sequences = dataset_train.get_sequences()
-        logger.info('getting co3d_tform_droid_slam for each instance...')
-        self.sequences_co3d_tform_droid_slam = []
-        for seq in self.sequences:
-            self.sequences_co3d_tform_droid_slam.append(seq.get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3D,
-                                                                               CAM_TFORM_OBJ_SOURCES.DROID_SLAM,
-                                                                               device=self.device))
+
 
         # tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
         logger.info('loading mesh feats...')
@@ -150,6 +145,15 @@ class NeMo_Align3D(OD3D_Method):
 
         logger.info('loading meshes...')
         self.meshes = Meshes.load_from_meshes([seq.mesh for seq in self.sequences], device=self.device)
+
+        # note: first get mesh to get DROID_SLAM tforms
+        logger.info('getting co3d_tform_droid_slam for each instance...')
+        self.sequences_co3d_tform_droid_slam = []
+        for seq in self.sequences:
+            self.sequences_co3d_tform_droid_slam.append(seq.get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3D,
+                                                                               CAM_TFORM_OBJ_SOURCES.DROID_SLAM,
+                                                                               device=self.device))
+
         self.instances_count = len(self.meshes)
         #self.meshes_verts_aggregated_features = [vert_feats for mesh_feats in self.sequences_mesh_feats for vert_feats in mesh_feats]
         #dtype = self.meshes_verts_aggregated_features[0].dtype
@@ -169,10 +173,11 @@ class NeMo_Align3D(OD3D_Method):
             logger.info(f'category id {cat_id} name {category}')
             instance_ids = torch.LongTensor(list(range(self.instances_count)))
             category_instance_ids = instance_ids[self.map_seq_to_cat == cat_id]
+            # this ensures that we first label the axis, which are required later to fit the cuboid
             droid_slam_labeled_tform_droid_slam = self.sequences[
                 category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
-
-
+            droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.sequences[
+                category_instance_ids[0]].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
 
             results_diff_log_rot[category] = torch.zeros(
                 size=(self.instances_count_per_category[cat_id], self.instances_count_per_category[cat_id])).to(
@@ -287,15 +292,21 @@ class NeMo_Align3D(OD3D_Method):
 
                         path_zsp = Path('third_party/zero-shot-pose/data/class_labels')
                         fpath_src_gt = path_zsp.joinpath(self.sequences[src_mesh_id].name_unique + '.json')
-                        gt_co3d_global_tform_co3d_src = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_src_gt)['trans'])).to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        if fpath_src_gt.exists():
+                            gt_co3d_global_tform_co3d_src = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_src_gt)['trans'])).to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        else:
+                            gt_co3d_global_tform_co3d_src = torch.eye(4).to(device=self.device, dtype=pred_ref_tform_src.dtype)
 
                         fpath_ref_gt = path_zsp.joinpath(self.sequences[ref_mesh_id].name_unique + '.json')
-                        gt_co3d_global_tform_co3d_ref = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_ref_gt)['trans'])).to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        if fpath_ref_gt.exists():
+                            gt_co3d_global_tform_co3d_ref = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_ref_gt)['trans'])).to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        else:
+                            gt_co3d_global_tform_co3d_ref = torch.eye(4).to(device=self.device, dtype=pred_ref_tform_src.dtype)
 
                         gt_co3dv1_ref_tform_co3dv1_src = tform4x4(inv_tform4x4(gt_co3d_global_tform_co3d_ref), gt_co3d_global_tform_co3d_src)
 
-                        src_frame = self.sequences[src_mesh_id].first_frame
-                        ref_frame = self.sequences[ref_mesh_id].first_frame
+                        #src_frame = self.sequences[src_mesh_id].first_frame
+                        #ref_frame = self.sequences[ref_mesh_id].first_frame
                         """
             
                         from co3d.dataset.data_types import (
@@ -363,31 +374,10 @@ class NeMo_Align3D(OD3D_Method):
                         #pred_co3d_ref_tform_co3d_src = tform4x4(co3d_ref_tform_ref, tform4x4(pred_ref_tform_src, inv_tform4x4(co3d_src_tform_src)))
                         #diff_rot3x3 = tform4x4(inv_tform4x4(gt_ref_tform_src), pred_ref_tform4x4_src)[:3, :3]
 
-                        pred_ref_tform_src_scaled = pred_ref_tform_src.clone()
-                        pred_ref_tform_src_scaled[:3, :3] /= torch.linalg.norm(pred_ref_tform_src_scaled[:3, :3], dim=-1,
-                                                                        keepdim=True)
 
-                        gt_ref_tform_src_scaled = gt_ref_tform_src.clone()
-                        gt_ref_tform_src_scaled[:3, :3] /= torch.linalg.norm(gt_ref_tform_src_scaled[:3, :3], dim=-1,
-                                                                        keepdim=True)
 
-                        diff_rot3x3 = rot3x3(inv_tform4x4(gt_ref_tform_src_scaled)[:3, :3], pred_ref_tform_src_scaled[:3, :3])[:3, :3]
-
-                        try:
-                            diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3[None,])
-                            diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
-                        except ValueError:
-                            logger.warning(
-                                f'Cannot calculate deviation in rotation angle due to rot3x3 trace being too small, setting deviation to PI.')
-                            diff_rot_angle_rad = torch.ones_like(diff_rot3x3[None, 0, 0]) * np.pi
-                        print(diff_rot_angle_rad)
-
-                        if not torch.isfinite(diff_rot_angle_rad).all():
-                            logger.warning(f'Nan or Inf in diff {diff_rot_angle_rad}')
-
-                        # toytruck rotation 0 0 0 0 0 0 00 0 -> nan for :  ref_mesh_id: 1, src_mesh_id: (4,)
-                        diff_rot_angle_rad[~diff_rot_angle_rad.isfinite()] = np.pi
-
+                        from od3d.cv.metric.pose import get_pose_diff_in_rad
+                        diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
                         results_diff_log_rot[category][r, s] = diff_rot_angle_rad
 
 

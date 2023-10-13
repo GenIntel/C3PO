@@ -3,9 +3,10 @@ defaults:
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: co3d
   - datasets@train_datasets.labeled: co3d_5s_zero_shot_pose_aligned # co3d_5s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
-  - datasets@val_datasets.main: pascal3d_val
+  - datasets@val_datasets.main: co3d_5s_zero_shot_pose_aligned #  pascal3d_val # pascal3d_val
   #- datasets@val_datasets.pascal3d: # pascal3d_val
-  - datasets@test_datasets.co3d: co3d_5s_test # co3d_10s_test, co3d_test
+  - datasets@val_datasets.co3d: pascal3d_val # co3d_5s_zero_shot_pose_aligned # pascal3d_val co3d_5s_test # co3d_10s_test, co3d_test
+  - datasets@test_datasets.co3d: co3d_5s_zero_shot_pose_aligned
   - datasets@test_datasets.pascal3d: pascal3d_test
   - datasets@texture_dataset: dtd
   - platform@platform_local: local
@@ -39,6 +40,7 @@ metrics:
   - metricA
   - metricB
 
+aligned_name: 'all_to_one_13_10_23' # 'all_to_one_13_10_23' 'all_to_one_12_10_23'
 method:
   nemo:
     train:
@@ -48,7 +50,7 @@ method:
         batch_size: 12
     classes: ${categories}
     #fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
-    path_meshes: ${train_datasets.labeled.path_preprocess}/aligned/all_to_one_12_10_23/mesh
+    path_meshes: ${train_datasets.labeled.path_preprocess}/aligned/${aligned_name}/mesh
     fpaths_meshes:
       bicycle: ${..path_meshes}/bicycle/mesh.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
       toytruck: ${..path_meshes}/toytruck/mesh.ply
@@ -74,13 +76,13 @@ method:
 
 train_datasets:
   labeled:
-    aligned_name: 'all_to_one_12_10_23'
+    aligned_name: ${aligned_name}
     categories: ${categories}
 
 val_datasets:
   main:
     categories: ${categories}
-  pascal3d:
+  co3d:
     categories: ${categories}
 
 test_datasets:

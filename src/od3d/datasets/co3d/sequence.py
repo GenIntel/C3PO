@@ -1108,7 +1108,8 @@ class CO3D_Sequence():
 
         alpha = mask_center_thresh
         #mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(o3d_pcl, depth=9)
-        mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+        #mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+        mesh, _ = o3d_pcl.compute_convex_hull()
         mesh.compute_vertex_normals()
         geometries.append({'name': 'mesh', 'geometry': mesh})
 
@@ -1156,7 +1157,7 @@ class CO3D_Sequence():
         # save point cloud clean
         pts3d = read_pts3d(fpath_droid_slam_pcl).to(device=device)
         pts3d = transf3d_broadcast(pts3d, transf4x4=obj_tform_droid_slam).to(device=device)
-        pts3d_colors = read_pts3d_colors(fpath_droid_slam_pcl)
+        pts3d_colors = read_pts3d_colors(fpath_droid_slam_pcl).to(device=device)
         vertices_dist_median = torch.cdist(pts3d_obj[None,], pts3d_obj[None,])[0].median()
         pts3d_mask = torch.cdist(pts3d[None,], pts3d_obj[None,])[0].min(dim=-1).values < vertices_dist_median / 5.
         pts3d_clean = pts3d[pts3d_mask]
@@ -1221,8 +1222,11 @@ class CO3D_Sequence():
         return droid_slam_labeled_cuboid
 
     @property
+    def fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
+        return self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_cuboid_tform_droid_slam_labeled', self.name_unique, 'tform.pt')
+    @property
     def droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
-        fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_cuboid_tform_droid_slam_labeled', self.name_unique, 'tform.pt')
+        fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled
         if fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.exists():
             droid_slam_labeled_cuboid_tform_droid_slam_labeled = torch.load(fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled)
         else:
@@ -1239,9 +1243,7 @@ class CO3D_Sequence():
         return droid_slam_labeled_cuboid_tform_droid_slam_labeled
 
     def write_aligned_droid_slam_tform_droid_slam(self, aligned_droid_slam_tform_droid_slam: torch.Tensor, aligned_name: str):
-        fpath_tform_aligned = self.path_preprocess.joinpath('aligned', aligned_name,
-                                                            'aligned_droid_slam_tform_droid_slam', self.name_unique,
-                                                            'tform.pt')
+        fpath_tform_aligned = self.get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(aligned_name=aligned_name)
         fpath_tform_aligned.parent.mkdir(parents=True, exist_ok=True)
         torch.save(aligned_droid_slam_tform_droid_slam.detach().cpu(), f=fpath_tform_aligned)
     def write_aligned_cuboid(self, cuboid: Meshes, aligned_name: str):
@@ -1251,11 +1253,24 @@ class CO3D_Sequence():
 
     @property
     def droid_slam_aligned_tform_droid_slam(self):
-        fpath_tform_aligned = self.path_preprocess.joinpath('aligned', self.aligned_name,
-                                                            'aligned_droid_slam_tform_droid_slam', self.name_unique,
-                                                            'tform.pt')
+        fpath_tform_aligned = self.fpath_droid_slam_aligned_tform_droid_slam
         droid_slam_aligned_tform_droid_slam = torch.load(fpath_tform_aligned).to('cpu')
         return droid_slam_aligned_tform_droid_slam
+
+    @property
+    def gt_pose_available(self):
+        if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
+            return self.fpath_droid_slam_aligned_tform_droid_slam.exists()
+        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
+            return self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.exists()
+        else:
+            return True
+    @property
+    def fpath_droid_slam_aligned_tform_droid_slam(self):
+        return self.get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(aligned_name=self.aligned_name)
+
+    def get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(self, aligned_name: str):
+        return self.path_preprocess.joinpath('aligned', aligned_name, 'aligned_droid_slam_tform_droid_slam', self.name_unique, 'tform.pt')
 
     @property
     def fpath_mesh(self):

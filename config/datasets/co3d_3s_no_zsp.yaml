@@ -5,10 +5,13 @@ class_name: CO3Dv1
 path_raw: ${platform.path_datasets}/CO3Dv1
 path_preprocess: ${platform.path_datasets}/CO3Dv1_Preprocess
 
-name: co3d_10s_zsp_test
+name: co3d_3s_no_zsp
 
 mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
+
+sequences_count_max_per_category: 3
+# frames_count_max_per_sequence: 5
 
 #modalities:
 #  - 'size'
@@ -22,8 +25,6 @@ dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 #  - 'sequence'
 #  - 'mesh'
 #  # - 'pcl'
-
-# frames_count_max_per_sequence: 2
 
 subset_fraction: 1.
 
@@ -49,51 +50,15 @@ categories:
   - book
   - backpack
 
-#    AEROPLANE = "aeroplane"
-#    BICYCLE = "bicycle"
-#    BOAT = "boat"
-#    BOTTLE = "bottle"
-#    BUS = "bus"
-#    CAR = "car"
-#    CHAIR = "chair"
-#    DININGTABLE = "diningtable"
-#    MOTORBIKE = "motorbike"
-#    SOFA = "sofa"
-#    TRAIN = "train"
-#    TVMONITOR = "tvmonitor"
-
-# python
-#from pathlib import Path
-#path_zsp = Path('third_party/zero-shot-pose/data/class_labels')
-#path_zsp_classes = list(path_zsp.iterdir())
-#count_classes = len(path_zsp_classes)
-#path_zsp_classes_sequences = []
-#for path_zsp_class in path_zsp_classes:
-#  print(f"{path_zsp_class.stem}:")
-#  path_zsp_classes_sequences += list(path_zsp_class.iterdir())
-#  for path_zsp_class_sequence in list(path_zsp_class.iterdir()):
-#    print(f"  '{path_zsp_class_sequence.stem}':")
-#count_classes_sequences = len(path_zsp_classes_sequences)
-
-#labels = {}
-#path_zsp_determ = Path('third_party/zero-shot-pose/data/determ_eval')
-#for path in list(path_zsp_determ.iterdir()):
-#  labels[path.stem] = {}
-#  for fpath in list(path.iterdir()):
-#    labels[path.stem][fpath.stem] = torch.load(fpath)
-
-#len(labels['200samples_20tgt']['car'])
-# 'class': 'car', 'reference_seq_name': '244_25999_52630', 'reference_frame_id': 7550, 'target_seq_name': '336_34859_64111', 'all_target_id': [...]
-# problem frame ids are not separate from 0 for each sequence.
-# '200samples_50tgt' : 100 samples
-#,'200samples_20tgt' : 100 samples
-# '200samples_5tgt' : 200 samples
-# '200samples_3tgt' : 200 samples
-# '200samples_1tgt' : 100 samples
-
-dict_nested_frames_ban:
 
 dict_nested_frames:
+  bicycle:
+  motorcycle:
+  car:
+  chair:
+
+
+dict_nested_frames_ban:
   bicycle:
     '397_49943_98337':
     '397_49968_98375':

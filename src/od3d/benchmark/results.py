@@ -26,6 +26,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
 
     def __add__(self, other: Dict[str, torch.Tensor]):
         for key, val in other.items():
+            # logger.info(key)
             if isinstance(val, torch.Tensor):
                 if val.dim() == 0:
                     val = val[None,]

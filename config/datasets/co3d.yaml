@@ -83,7 +83,7 @@ dict_nested_frames_ban:
   bicycle:
     '377_43836_87236': # two bicycles with inverse directions
 
-dict_nested_frames:
+#dict_nested_frames:
 #  car:
 #    '185_19982_37678':
 #    '206_21799_45886':
@@ -106,8 +106,8 @@ dict_nested_frames:
 #    '375_42646_85487':
 #    '111_13148_23780':
 #    '426_59638_115345':
-  bicycle:
-    '397_49943_98337':
+#  bicycle:
+#    '397_49943_98337':
 #    '404_53464_104258':
 #    '392_47830_94973':
 #    '426_59751_116222':
