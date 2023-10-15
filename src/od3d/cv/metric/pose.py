@@ -25,7 +25,6 @@ def get_pose_diff_in_rad(pred_tform4x4: torch.Tensor, gt_tform4x4: torch.Tensor)
     diff_rot3x3 = rot3x3(inv_tform4x4(gt_ref_tform_src_scaled)[..., :3, :3], pred_ref_tform_src_scaled[..., :3, :3])[..., :3, :3]
 
     try:
-
         diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3.reshape(-1, 3, 3)).reshape(*diff_rot3x3.shape[:-2], 3)
         diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
     except ValueError:

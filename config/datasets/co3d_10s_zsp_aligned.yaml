@@ -1,5 +1,5 @@
 defaults:
-  - co3d_5s_zero_shot_pose
+  - co3d_10s_zsp_unlabeled
 
 # frames_count_max_per_sequence: 1
 

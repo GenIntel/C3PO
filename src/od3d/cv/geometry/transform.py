@@ -82,8 +82,8 @@ def rot3x3_from_two_vectors(a: torch.Tensor, b: torch.Tensor):
 
 def inv_tform4x4(a_tform4x4_b):
     scale = torch.linalg.norm(a_tform4x4_b[..., :3, :3], dim=-1, keepdim=True)
-    scale_avg = scale.mean(dim=-1, keepdim=True)
-    if ((scale - scale_avg).abs() > 1e-8).any():
+    scale_avg = scale.mean(dim=-2, keepdim=True)
+    if ((scale - scale_avg).abs() > 1e-5).any():
         logger.warning(f'Scale is not constant over all dimensions {scale}')
 
     b_rot3x3_a = a_tform4x4_b[..., :3, :3].transpose(-1, -2) / (scale_avg ** 2)

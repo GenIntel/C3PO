@@ -2,11 +2,11 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.labeled: co3d_5s_zero_shot_pose_aligned # co3d_5s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
-  - datasets@val_datasets.main: co3d_5s_zero_shot_pose_aligned #  pascal3d_val # pascal3d_val
+  - datasets@train_datasets.labeled: co3d_10s_zsp_aligned # co3d_5s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+  - datasets@val_datasets.main: co3d_10s_zsp_labeled #  pascal3d_val # pascal3d_val
   #- datasets@val_datasets.pascal3d: # pascal3d_val
   - datasets@val_datasets.co3d: pascal3d_val # co3d_5s_zero_shot_pose_aligned # pascal3d_val co3d_5s_test # co3d_10s_test, co3d_test
-  - datasets@test_datasets.co3d: co3d_5s_zero_shot_pose_aligned
+  - datasets@test_datasets.co3d: co3d_10s_zsp_labeled
   - datasets@test_datasets.pascal3d: pascal3d_test
   - datasets@texture_dataset: dtd
   - platform@platform_local: local
@@ -48,7 +48,7 @@ method:
       dataloader:
         num_workers: 4
         batch_size: 12
-    classes: ${categories}
+    categories: ${categories}
     #fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
     path_meshes: ${train_datasets.labeled.path_preprocess}/aligned/${aligned_name}/mesh
     fpaths_meshes:

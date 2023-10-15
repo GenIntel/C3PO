@@ -216,7 +216,7 @@ class CO3D_Sequence():
         cuboid_limits3d = torch.load(self.fpath_cuboid_limits3d).to(dtype=torch.float32)
         return cuboid_limits3d
 
-
+    """
     def preprocess_front_name(self, override=False):
         fpath_front_name = self.fpath_front_name
 
@@ -490,7 +490,7 @@ class CO3D_Sequence():
                 # cframe = CoordinateFrame(origin=obj_tform_cuboid_front[:3, 3], axes=obj_tform_cuboid_front[:3, :3])
 
                 save_ply(fpath_cuboid, verts=cuboids.verts, faces=cuboids.faces)
-
+    """
 
 
     @property
@@ -577,6 +577,7 @@ class CO3D_Sequence():
         #     self._cam_tform4x4_obj[:3, :3] = axis3d_from_pxl2d(kpts2d_orient=self.kpts2d_orient, cam_intr4x4=self.cam_intr4x4) #  orients
         #
 
+    """
     @property
     def front_name(self):
         if self._front_name is None:
@@ -585,6 +586,7 @@ class CO3D_Sequence():
                 self.preprocess_front_name()
             self._front_name = od3d.io.read_str_from_file(fpath_front_name)
         return self._front_name
+    """
 
     @property
     def cam_front_tform4x4_obj(self):
@@ -609,6 +611,17 @@ class CO3D_Sequence():
                            cam_tform_obj_source=self.cam_tform_obj_source, cuboid_source=self.cuboid_source,
                            aligned_name=self.aligned_name)
         return frame
+
+    def get_sequence_by_category_and_name(self, category: str, name: str):
+        sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta,
+                                                                                category=category, name=name)
+        return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+                             meta=sequence_meta, modalities=self.modalities, categories=self.categories,
+                             aligned_name=self.aligned_name,
+                             mesh_feats_type=self.mesh_feats_type,
+                             dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type,
+                             cuboid_source=self.cuboid_source,
+                             cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source)
 
     @property
     def front_frame(self):
@@ -1191,9 +1204,17 @@ class CO3D_Sequence():
         return axis_droid_slam
 
     @property
+    def fpath_droid_slam_labeled_tform_droid_slam(self):
+        return self.path_droid_slam_labeled_tform_droid_slam.joinpath(self.name_unique, 'tform.pt')
+
+    @property
+    def path_droid_slam_labeled_tform_droid_slam(self):
+        return self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_tform_droid_slam')
+
+    @property
     def droid_slam_labeled_tform_droid_slam(self):
         from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
-        fpath_droid_slam_labeled_tform_droid_slam = self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_tform_droid_slam', self.name_unique, 'tform.pt')
+        fpath_droid_slam_labeled_tform_droid_slam = self.fpath_droid_slam_labeled_tform_droid_slam
         if fpath_droid_slam_labeled_tform_droid_slam.exists():
             droid_slam_labeled_tform_droid_slam = torch.load(fpath_droid_slam_labeled_tform_droid_slam)
         else:
@@ -1201,6 +1222,36 @@ class CO3D_Sequence():
             fpath_droid_slam_labeled_tform_droid_slam.parent.mkdir(parents=True, exist_ok=True)
             torch.save(droid_slam_labeled_tform_droid_slam, fpath_droid_slam_labeled_tform_droid_slam)
         return droid_slam_labeled_tform_droid_slam
+
+    @property
+    def path_zsp_labels(self):
+        return Path('third_party/zero-shot-pose/data/class_labels')
+    @property
+    def co3dv1_zsp_obj_tform_co3dv1_obj(self):
+        import numpy as np
+        from od3d.io import read_json
+        path_zsp = self.path_zsp_labels
+        fpath_src_gt = path_zsp.joinpath(self.name_unique + '.json')
+        #if fpath_src_gt.exists():
+        gt_co3d_global_tform_co3d_src = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_src_gt)['trans'])))
+        #else:
+        #    gt_co3d_global_tform_co3d_src = torch.eye(4)
+        gt_co3d_global_tform_co3d_src = gt_co3d_global_tform_co3d_src.to(torch.float)
+        return gt_co3d_global_tform_co3d_src
+
+    @property
+    def co3dv1_zsp_obj_tform_droid_slam_obj(self):
+        droid_slam_obj_tform_co3dv1_obj = self.get_a_src_tform_b_src(src_a=CAM_TFORM_OBJ_SOURCES.DROID_SLAM, src_b=CAM_TFORM_OBJ_SOURCES.CO3DV1)
+        co3dv1_zsp_obj_tform_droid_slam_obj = tform4x4(self.co3dv1_zsp_obj_tform_co3dv1_obj, inv_tform4x4(droid_slam_obj_tform_co3dv1_obj))
+        return co3dv1_zsp_obj_tform_droid_slam_obj
+
+    @property
+    def zsp_labeled_cuboid_ref_tform_droid_slam_obj(self):
+        ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
+        ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
+
+        droid_slam_labeled_ref_tform_droid_slam_obj = tform4x4(ref_seq.droid_slam_labeled_cuboid_tform_droid_slam_labeled, tform4x4(ref_seq.droid_slam_labeled_tform_droid_slam, tform4x4(inv_tform4x4(ref_seq.co3dv1_zsp_obj_tform_droid_slam_obj), self.co3dv1_zsp_obj_tform_droid_slam_obj)))
+        return droid_slam_labeled_ref_tform_droid_slam_obj
 
     @property
     def droid_slam_labeled_cuboid(self):

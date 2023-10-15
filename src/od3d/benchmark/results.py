@@ -42,49 +42,52 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                 self[key] = val
         return self
 
+    def add_prefix(self, prefix: str):
+        res = {}
+        for key, val in self.items():
+            res[f'{prefix}_{key}'] = val
+        return OD3D_Results(init_dict=res)
+
     def mean(self):
         res = {}
         for key, val in self.items():
-            if key not in self.mean_blocklist:
+            if not any(s in key for s in self.mean_blocklist): #  key not in self.mean_blocklist:
                 res[key] = val.mean(dim=0)
 
-        if 'label_gt' in self.keys() and 'label_pred' in self.keys():
-            if 'label_names' in self.keys():
-                label_names = self['label_names']
-            else:
-                label_names = [str(i) for i in range(max(set(self['label_gt'] + self['label_pred']))+1)]
-            res['label/acc'] = (self['label_gt'] == self['label_pred']).to(dtype=float).mean(dim=0)
-            res['label/confusion'] = wandb.plot.confusion_matrix(probs=None,
-                                                                 y_true=self['label_gt'].numpy(), preds=self['label_pred'].numpy(),
-                                                                 class_names=label_names)
 
-        if 'rot_diff_rad' in self.keys():
-            res['pose/acc_pi6'] = (self['rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
-            res['pose/acc_pi18'] = (self['rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
-            res['pose/err_median'] = 180 / math.pi * self['rot_diff_rad'].median()
-            res['pose/err_mean'] = 180 / math.pi * self['rot_diff_rad'].mean()
+        for k in self.keys():
+            if 'label_gt' in k:
+                prefix = k[:k.find('label_gt')]
+                prefix_saved = f'prefix/{prefix}' if len(prefix) > 0 else ''
+                if f'{prefix}label_pred' in self.keys():
+                    if f'{prefix}label_names' in self.keys():
+                        label_names = self[f'{prefix}label_names']
+                    else:
+                        label_names = [str(i) for i in range(max(set(self[f'{prefix}label_gt'] + self[f'{prefix}label_pred'])) + 1)]
+                    res[f'label/{prefix_saved}acc'] = (self[f'{prefix}label_gt'] == self[f'{prefix}label_pred']).to(dtype=float).mean(dim=0)
+                    res[f'label/{prefix_saved}confusion'] = wandb.plot.confusion_matrix(probs=None,
+                                                                         y_true=self[f'{prefix}label_gt'].numpy(),
+                                                                         preds=self[f'{prefix}label_pred'].numpy(),
+                                                                         class_names=label_names)
 
-            #if 'pose_sim_geo' in self.keys():
-            #    res['pose/pr/sim_geo_pi6'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int), predictions=self['pose_sim_geo'][:].detach().cpu().numpy(), title=f"PI/6={res['pose/acc_pi6']:.2f}")
-            #    res['pose/pr/sim_geo_pi18'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).detach().cpu().numpy().astype(int), predictions=self['pose_sim_geo'][:].detach().cpu().numpy(), title=f"PI/18={res['pose/acc_pi18']:.2f}")
+            if 'rot_diff_rad' in k:
+                prefix = k[:k.find('rot_diff_rad')]
+                prefix_saved = f'prefix/{prefix}' if len(prefix) > 0 else ''
+                res[f'pose/{prefix_saved}acc_pi6'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
+                res[f'pose/{prefix_saved}acc_pi18'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
+                res[f'pose/{prefix_saved}err_median'] = 180 / math.pi * self[f'{prefix}rot_diff_rad'].median()
+                res[f'pose/{prefix_saved}err_mean'] = 180 / math.pi * self[f'{prefix}rot_diff_rad'].mean()
 
-            #if 'pose_sim_appear' in self.keys():
-            #    res['pose/pr/sim_appear_pi6'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int), predictions=self['pose_sim_appear'][:].detach().cpu().numpy(), title=f"PI/6={res['pose/acc_pi6']:.2f}")
-            #    res['pose/pr/sim_appear_pi18'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).detach().cpu().numpy().astype(int), predictions=self['pose_sim_appear'][:].detach().cpu().numpy(), title=f"PI/18={res['pose/acc_pi18']:.2f}")
+                if f'{prefix}pose_sim_geo' in self.keys() and f'{prefix}pose_sim_appear' in self.keys():
+                    res[f'pose/pr/{prefix_saved}pi6_pr_vs_sim_geo_and_appear'] = self.get_pr_3d(
+                        ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int),
+                        sim_1st_dim=self[f'{prefix}pose_sim_geo'][:].detach().cpu().numpy(),
+                        sim_2nd_dim=self[f'{prefix}pose_sim_appear'][:].detach().cpu().numpy(),
+                        title=f"PI/6={res[f'pose/{prefix_saved}acc_pi6']:.2f}")
 
-            if 'pose_sim_geo' in self.keys() and 'pose_sim_appear' in self.keys():
-                res['pose/pr/pi6_pr_vs_sim_geo_and_appear'] = self.get_pr_3d(
-                    ground_truth=(self['rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int),
-                    sim_1st_dim=self['pose_sim_geo'][:].detach().cpu().numpy(),
-                    sim_2nd_dim=self['pose_sim_appear'][:].detach().cpu().numpy(),
-                    title=f"PI/6={res['pose/acc_pi6']:.2f}")
-
-            if 'sim' in self.keys():
-                res['pose/pr/pi6'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int), predictions=self['sim'][:, 0].detach().cpu().numpy(), title=f"PI/6={res['pose/acc_pi6']:.2f}")
-                res['pose/pr/pi18'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).detach().cpu().numpy().astype(int), predictions=self['sim'][:, 0].detach().cpu().numpy(), title=f"PI/18={res['pose/acc_pi18']:.2f}")
-
-                #res['pose/roc/pi6'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int), predictions=self['sim'][:, 0].detach().cpu().numpy(), title=f"PI/6={res['pose/acc_pi6']:.2f}")
-                #res['pose/roc/pi18'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).detach().cpu().numpy().astype(int), predictions=self['sim'][:, 0].detach().cpu().numpy(), title=f"PI/18={res['pose/acc_pi18']:.2f}")
+                if f'{prefix}sim' in self.keys():
+                    res[f'pose/pr/{prefix_saved}pi6'] = self.get_pr(ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int), predictions=self[f'{prefix}sim'][:, 0].detach().cpu().numpy(), title=f"PI/6={res[f'pose/{prefix_saved}acc_pi6']:.2f}")
+                    res[f'pose/pr/{prefix_saved}pi18'] = self.get_pr(ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 18.).detach().cpu().numpy().astype(int), predictions=self[f'{prefix}sim'][:, 0].detach().cpu().numpy(), title=f"PI/18={res[f'pose/{prefix_saved}acc_pi18']:.2f}")
 
         return OD3D_Results(init_dict=res)
 
@@ -331,12 +334,12 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
     def get_filtered_log_results(self):
         res = {}
         for key, val in self.items():
-            if key not in self.log_blocklist:
+            if not any(s in key for s in self.log_blocklist): #  key not in self.log_blocklist: # any(substring in s for s in string_list)
                 res[key] = val
         return res
 
     def log(self):
         wandb.log(self.get_filtered_log_results())
 
-    def log_with_prefix(self, prefix: str):
-        wandb.log({prefix + '/' + k: v for k, v in self.get_filtered_log_results().items()})
+    def log_with_prefix(self, prefix: str, prefix_append_char='/'):
+        wandb.log({prefix + f'{prefix_append_char}' + k: v for k, v in self.get_filtered_log_results().items()})

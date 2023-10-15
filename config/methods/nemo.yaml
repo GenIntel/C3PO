@@ -10,7 +10,7 @@ num_noise: 5
 max_group: 512
 down_sample_rate: 8
 
-classes: ${train_datasets.labeled.categories}
+categories: ${train_datasets.labeled.categories}
 fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
 
 multiview:

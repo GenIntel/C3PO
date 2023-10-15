@@ -4,6 +4,7 @@ from od3d.datasets.enum import OD3D_CATEGORIES
 
 class CAM_TFORM_OBJ_SOURCES(str, ExtEnum):
     CO3D = 'co3d'
+    CO3DV1 = 'co3dv1'
     FIRST_FRAME = 'first_frame'
     FRONT_FRAME = 'front_frame'
     FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
@@ -12,6 +13,8 @@ class CAM_TFORM_OBJ_SOURCES(str, ExtEnum):
     DROID_SLAM = 'droid_slam'
     DROID_SLAM_ALIGNED = 'droid_slam_aligned'
     DROID_SLAM_LABELED = 'droid_slam_labeled'
+    DROID_SLAM_ZSP = 'droid_slam_zsp'
+    DROID_SLAM_ZSP_LABELED = 'droid_slam_zsp_labeled'
 
 class CUBOID_SOURCES(str, ExtEnum):
     FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'

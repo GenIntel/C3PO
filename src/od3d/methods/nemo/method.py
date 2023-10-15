@@ -106,12 +106,12 @@ class NeMo(OD3D_Method):
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
         # self.path_shapenemo = Path(config.path_shapenemo)
-        # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.classes]
-        self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.classes]
+        # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
+        self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
         self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes)
         # self.meshes.show()
         self.verts_count_max = self.meshes.verts_counts_max
-        self.mem_verts_feats_count = len(config.classes) * self.verts_count_max
+        self.mem_verts_feats_count = len(config.categories) * self.verts_count_max
         self.mem_clutter_feats_count = config.num_noise * config.max_group
         self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
 
@@ -466,7 +466,7 @@ class NeMo(OD3D_Method):
 
             meshes_scores = []
             for mesh_id in range(len(self.meshes)):
-                # logger.info(f'calc score for mesh {self.config.classes[mesh_id]}')
+                # logger.info(f'calc score for mesh {self.config.categories[mesh_id]}')
                 bank_feats = torch.cat([self.meshes.get_feats_with_mesh_id(mesh_id), self.clutter_feats.detach()],
                                        dim=0)
                 # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
@@ -485,7 +485,7 @@ class NeMo(OD3D_Method):
 
             # logger.info(f'pred class ids {pred_class_ids}')
             time_pred_class = time.time()
-            # logger.info(f"predicted class: {self.config.classes[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
+            # logger.info(f"predicted class: {self.config.categories[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
 
             results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,]) / B
 
@@ -567,10 +567,13 @@ class NeMo(OD3D_Method):
         cam_tform4x4_obj = cam_tform4x4_obj.clone().detach()
 
         results['time_pose'] = torch.Tensor([time.time() - time_pred_class,]) / B
-        results['rot_diff_rad'] = get_pose_diff_in_rad(pred_tform4x4=cam_tform4x4_obj, gt_tform4x4=batch.cam_tform4x4_obj)
+        batch_rot_diff_rad = get_pose_diff_in_rad(pred_tform4x4=cam_tform4x4_obj, gt_tform4x4=batch.cam_tform4x4_obj)
+        results['rot_diff_rad'] = batch_rot_diff_rad
+        for cat_id, cat in enumerate(self.config.categories):
+            results[f'{cat}_rot_diff_rad'] = batch_rot_diff_rad[batch.label == cat_id]
         results['label_gt'] = batch.label
         results['label_pred'] = pred_class_ids
-        results['label_names'] = self.config.classes
+        results['label_names'] = self.config.categories
         results['sim'] = sim
         results['cam_tform4x4_obj'] = cam_tform4x4_obj
         results['item_id'] = batch.item_id
@@ -609,7 +612,7 @@ class NeMo(OD3D_Method):
 
             meshes_scores = []
             for mesh_id in range(len(self.meshes)):
-                # logger.info(f'calc score for mesh {self.config.classes[mesh_id]}')
+                # logger.info(f'calc score for mesh {self.config.categories[mesh_id]}')
                 bank_feats = torch.cat([self.meshes.get_feats_with_mesh_id(mesh_id), self.clutter_feats.detach()],
                                        dim=0)
                 # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
@@ -628,7 +631,7 @@ class NeMo(OD3D_Method):
 
             # logger.info(f'pred class ids {pred_class_ids}')
             time_pred_class = time.time()
-            # logger.info(f"predicted class: {self.config.classes[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
+            # logger.info(f"predicted class: {self.config.categories[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
 
             results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,]) / B
 
@@ -717,7 +720,10 @@ class NeMo(OD3D_Method):
         cam_tform4x4_obj = tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front)
 
         results['time_pose'] = torch.Tensor([time.time() - time_pred_class,]) / B
-        results['rot_diff_rad'] = get_pose_diff_in_rad(pred_tform4x4=cam_tform4x4_obj, gt_tform4x4=batch.cam_tform4x4_obj)
+        batch_rot_diff_rad = get_pose_diff_in_rad(pred_tform4x4=cam_tform4x4_obj, gt_tform4x4=batch.cam_tform4x4_obj)
+        results['rot_diff_rad'] = batch_rot_diff_rad
+        for cat_id, cat in enumerate(self.config.categories):
+            results[f'{cat}_rot_diff_rad'] = batch_rot_diff_rad[batch.label == cat_id]
         results['label_gt'] = batch.label
         results['label_pred'] = pred_class_ids
         results['sim'] = sim.mean(dim=0, keepdim=True).expand(*sim.shape)

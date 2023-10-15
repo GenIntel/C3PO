@@ -289,91 +289,20 @@ class NeMo_Align3D(OD3D_Method):
                                 #pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
+                        #gt_co3dv1_ref_tform_co3dv1_src = tform4x4(inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)), self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        #gt_ref_tform_src = tform4x4(inv_tform4x4(self.sequences[ref_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3DV1, CAM_TFORM_OBJ_SOURCES.DROID_SLAM).to(device=self.device, dtype=pred_ref_tform_src.dtype)),
+                        #                            tform4x4(gt_co3dv1_ref_tform_co3dv1_src, self.sequences[src_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3DV1, CAM_TFORM_OBJ_SOURCES.DROID_SLAM).to(device=self.device, dtype=pred_ref_tform_src.dtype)))
 
-                        path_zsp = Path('third_party/zero-shot-pose/data/class_labels')
-                        fpath_src_gt = path_zsp.joinpath(self.sequences[src_mesh_id].name_unique + '.json')
-                        if fpath_src_gt.exists():
-                            gt_co3d_global_tform_co3d_src = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_src_gt)['trans'])).to(device=self.device, dtype=pred_ref_tform_src.dtype))
-                        else:
-                            gt_co3d_global_tform_co3d_src = torch.eye(4).to(device=self.device, dtype=pred_ref_tform_src.dtype)
+                        # note this other gt approach is worse. most likely because CO3DV1_tform_DROID_SLAM is noisy and this approach requires to compute this multiple times
+                        # co3dv1_ref_tform_dsl_ref = self.sequences[ref_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3DV1, CAM_TFORM_OBJ_SOURCES.DROID_SLAM).to(device=self.device, dtype=pred_ref_tform_src.dtype)
+                        # co3dv1_src_tform_dsl_src = self.sequences[src_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3DV1, CAM_TFORM_OBJ_SOURCES.DROID_SLAM).to(device=self.device, dtype=pred_ref_tform_src.dtype)
+                        # gt_dsl_zsp_ref_tform_co3dv1_zsp_ref = tform4x4(inv_tform4x4(co3dv1_ref_tform_dsl_ref), inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)))
+                        # gt_dsl_zsp_src_tform_co3dv1_zsp_src = tform4x4(inv_tform4x4(co3dv1_src_tform_dsl_src), inv_tform4x4(self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)))
+                        # gt_ref_tform_src = tform4x4(gt_dsl_zsp_ref_tform_co3dv1_zsp_ref, inv_tform4x4(gt_dsl_zsp_src_tform_co3dv1_zsp_src))
 
-                        fpath_ref_gt = path_zsp.joinpath(self.sequences[ref_mesh_id].name_unique + '.json')
-                        if fpath_ref_gt.exists():
-                            gt_co3d_global_tform_co3d_ref = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_ref_gt)['trans'])).to(device=self.device, dtype=pred_ref_tform_src.dtype))
-                        else:
-                            gt_co3d_global_tform_co3d_ref = torch.eye(4).to(device=self.device, dtype=pred_ref_tform_src.dtype)
-
-                        gt_co3dv1_ref_tform_co3dv1_src = tform4x4(inv_tform4x4(gt_co3d_global_tform_co3d_ref), gt_co3d_global_tform_co3d_src)
-
-                        #src_frame = self.sequences[src_mesh_id].first_frame
-                        #ref_frame = self.sequences[ref_mesh_id].first_frame
-                        """
-            
-                        from co3d.dataset.data_types import (
-                            load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
-                        )
-                        frame_annotations = load_dataclass_jgzip(Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1/bicycle/frame_annotations.jgz'), List[FrameAnnotation])
-                        ref_frame_annotation = list(filter(lambda fa: fa.sequence_name == ref_frame.meta.sequence_name and fa.frame_number == int(ref_frame.name), frame_annotations))[0]
-                        src_frame_annotation = list(filter(lambda fa: fa.sequence_name == src_frame.meta.sequence_name and fa.frame_number == int(src_frame.name), frame_annotations))[0]
-            
-                        cam_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(rot3x3=torch.Tensor(ref_frame_annotation.viewpoint.R).T,
-                                                                             transl3=torch.Tensor(ref_frame_annotation.viewpoint.T))
-                        default_tform_t3d = torch.Tensor([[-1., 0., 0., 0.],
-                                                          [0., -1., 0., 0.],
-                                                          [0., 0., 1., 0.],
-                                                          [0., 0., 0., 1.]])
-                        co3dv1_ref_cam0_tform_co3dv1_ref_obj = torch.bmm(default_tform_t3d[None,], cam_tform4x4_obj[None,])[0].to(device=self.device, dtype=ref_tform4x4_src.dtype)
-            
-                        cam_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(rot3x3=torch.Tensor(src_frame_annotation.viewpoint.R).T,
-                                                                             transl3=torch.Tensor(src_frame_annotation.viewpoint.T))
-                        co3dv1_src_cam0_tform_co3dv1_src_obj = torch.bmm(default_tform_t3d[None,], cam_tform4x4_obj[None,])[0].to(device=self.device, dtype=ref_tform4x4_src.dtype)
-            
-                        co3dv1_ref_tform_co3d_ref = tform4x4(inv_tform4x4(co3dv1_ref_cam0_tform_co3dv1_ref_obj), ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D).to(device=self.device, dtype=ref_tform4x4_src.dtype))
-                        co3dv1_src_tform_co3d_src = tform4x4(inv_tform4x4(co3dv1_src_cam0_tform_co3dv1_src_obj), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D).to(device=self.device, dtype=ref_tform4x4_src.dtype))
-            
-                        gt_co3d_ref_tform_co3d_src = tform4x4(tform4x4(inv_tform4x4(co3dv1_ref_tform_co3d_ref), gt_co3dv1_ref_tform_co3dv1_src), co3dv1_src_tform_co3d_src)
-                        """
-
-
-
-                        #show_scene(pts3d=[self.sequences[src_mesh_id].pcl.to(device=self.device), transf3d_broadcast(pts3d=self.sequences[ref_mesh_id].pcl.to(device=self.device), transf4x4=inv_tform4x4(gt_co3dv1_ref_tform_co3dv1_src))],
-                        #           pts3d_colors=[self.sequences[src_mesh_id].pcl_colors.to(device=self.device), self.sequences[ref_mesh_id].pcl_colors.to(device=self.device), ])
-
-
-
-                        """
-                        from od3d.cv.io import read_pts3d_colors, read_pts3d
-                        ref_pcl_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1').joinpath(self.sequences[ref_mesh_id].name_unique, "pointcloud.ply")
-                        ref_pts3d = read_pts3d(fpath=ref_pcl_fpath)
-                        src_pcl_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1').joinpath(
-                            self.sequences[src_mesh_id].name_unique, "pointcloud.ply")
-                        src_pts3d = read_pts3d(fpath=src_pcl_fpath)
-                        show_scene(pts3d=[src_pts3d.to(device=self.device, dtype=ref_tform4x4_src.dtype), transf3d_broadcast(pts3d=ref_pts3d.to(device=self.device, dtype=ref_tform4x4_src.dtype), transf4x4=inv_tform4x4(gt_co3d_ref_tform_co3d_src))])
-            
-                        """
-                        #sequence_annotations
-                        co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[src_mesh_id] #  self.sequences[src_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3D, CAM_TFORM_OBJ_SOURCES.DROID_SLAM, device=self.device)
-                        co3d_ref_tform_ref = self.sequences_co3d_tform_droid_slam[ref_mesh_id] # self.sequences[ref_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3D, CAM_TFORM_OBJ_SOURCES.DROID_SLAM, device=self.device)
-
-                        #co3d_src_tform_src = tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
-                        #co3d_ref_tform_ref = tform4x4(inv_tform4x4(ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
-
-                        co3d_src_tform_src = co3d_src_tform_src.to(device=self.device)
-                        co3d_ref_tform_ref = co3d_ref_tform_ref.to(device=self.device)
-
-
-                        # co3d_src_tform_src: rotation works but translation/scale are wrong
-                        #show_scene(meshes=Meshes.load_from_meshes([self.sequences[src_mesh_id].mesh], device=self.device), pts3d=[transf3d_broadcast(pts3d=self.sequences[src_mesh_id].pcl.to(device=self.device), transf4x4=inv_tform4x4(co3d_src_tform_src))/ 10.])
-                        # co3d_ref_tform_ref: rotation works but translation/scale are wrong
-                        #show_scene(meshes=Meshes.load_from_meshes([self.sequences[ref_mesh_id].mesh], device=self.device), pts3d=[transf3d_broadcast(pts3d=self.sequences[ref_mesh_id].pcl.to(device=self.device), transf4x4=inv_tform4x4(co3d_ref_tform_ref))/ 10.])
-
-                        # meshes=Meshes.load_from_meshes([self.sequences[src_mesh_id].mesh, self.sequences[ref_mesh_id].mesh], device=self.device),
-
-                        gt_ref_tform_src = tform4x4(inv_tform4x4(co3d_ref_tform_ref), tform4x4(gt_co3dv1_ref_tform_co3dv1_src, co3d_src_tform_src))
-
-                        #pred_co3d_ref_tform_co3d_src = tform4x4(co3d_ref_tform_ref, tform4x4(pred_ref_tform_src, inv_tform4x4(co3d_src_tform_src)))
-                        #diff_rot3x3 = tform4x4(inv_tform4x4(gt_ref_tform_src), pred_ref_tform4x4_src)[:3, :3]
-
+                        gt_ref_tform_src = tform4x4(
+                            inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
+                            self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
 
 
                         from od3d.cv.metric.pose import get_pose_diff_in_rad
@@ -387,23 +316,38 @@ class NeMo_Align3D(OD3D_Method):
                         #    self.meshes.verts[src_vertices] = verts
 
         results = OD3D_Results()
+        results_ref = OD3D_Results()
         for cat_id, category in enumerate(self.categories):
             category_results = OD3D_Results()
             # excluding diagonal entries as these are predicted transformation between same instance
-            category_results['rot_diff_rad'] = results_diff_log_rot[category][
+            category_results[f'rot_diff_rad'] = results_diff_log_rot[category][
                 torch.eye(self.instances_count_per_category[cat_id]).to(device=self.device) == 0]
-            category_results['pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][
+            category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][
                 torch.eye(self.instances_count_per_category[cat_id]).to(device=self.device) == 0]
-            category_results['pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][
+            category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][
                 torch.eye(self.instances_count_per_category[cat_id]).to(device=self.device) == 0]
 
             results += category_results
+            category_results = category_results.add_prefix(category)
             category_results_mean = category_results.mean()
-            category_results_mean.log_with_prefix(prefix=category)
+            category_results_mean.log()
+
+
+            category_results_ref = OD3D_Results()
+            # excluding diagonal entries as these are predicted transformation between same instance
+            category_results_ref[f'rot_diff_rad'] = results_diff_log_rot[category][0, 1:]
+            category_results_ref[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][0, 1:]
+            category_results_ref[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][0, 1:]
+
+            results_ref += category_results_ref
+            category_results_ref = category_results_ref.add_prefix(category)
+            category_results_ref_mean = category_results_ref.mean()
+            category_results_ref_mean.log_with_prefix(prefix=f'only_to_ref')
 
         results_mean = results.mean()
-        results_mean.log_with_prefix(prefix='all_categories')
-
+        results_ref_mean = results_ref.mean()
+        results_mean.log()
+        results_ref_mean.log_with_prefix(prefix='only_to_ref')
 
         from od3d.cv.geometry.transform import transf3d_broadcast
         from od3d.datasets.co3d.enum import PCL_SOURCES
@@ -421,11 +365,14 @@ class NeMo_Align3D(OD3D_Method):
             droid_slam_labeled_cuboid_tform_droid_slam = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam_labeled, droid_slam_labeled_tform_droid_slam)
             self.sequences[category_instance_ids[0]].write_aligned_cuboid(aligned_name=self.config.aligned_name, cuboid=self.sequences[category_instance_ids[0]].droid_slam_labeled_cuboid)
 
-
             pts3d = []
             pts3d_colors = []
             for instance_id_in_category, instance_id in enumerate(category_instance_ids):
+                # prediction
                 droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][0, instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
+                # ground truth
+                #droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_ref_tform_droid_slam_obj.to(device=self.device)
+
                 self.sequences[instance_id].write_aligned_droid_slam_tform_droid_slam(aligned_name=self.config.aligned_name, aligned_droid_slam_tform_droid_slam=droid_slam_labeled_cuboid_tform_droid_slam_instance)
 
                 vertices_mask = self.sequences_mesh_ids_for_verts == instance_id
@@ -826,7 +773,7 @@ class NeMo_Align3D(OD3D_Method):
         results['rot_diff_rad'] = diff_rot_angle_rad
         results['label_gt'] = batch.label
         results['label_pred'] = pred_class_ids
-        results['label_names'] = self.config.classes
+        results['label_names'] = self.config.categories
         results['sim'] = sim
         results['cam_tform4x4_obj'] = cam_tform4x4_obj
         results['item_id'] = batch.item_id
