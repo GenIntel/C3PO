@@ -1026,36 +1026,45 @@ class CO3D_Sequence():
 
         # show_scene(meshes=[center3d_mesh, plan3d_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4])
 
-        o3d_pcl = open3d.geometry.PointCloud()
-        o3d_pcl.points = open3d.utility.Vector3dVector(pts3d_obj[:].detach().cpu().numpy())
-        o3d_pcl.normals = open3d.utility.Vector3dVector(np.zeros((1, 3)))  # invalidate existing normals
-        #o3d_pcl.estimate_normals()
+        # o3d_pcl = open3d.geometry.PointCloud()
+        # o3d_pcl.points = open3d.utility.Vector3dVector(pts3d_obj[:].detach().cpu().numpy())
+        # o3d_pcl.normals = open3d.utility.Vector3dVector(np.zeros((1, 3)))  # invalidate existing normals
+        #
+        # #### OPTION 1: CONVEX HULL
+        # o3d_obj_mesh, _ = o3d_pcl.compute_convex_hull()
+        # o3d_obj_mesh.compute_vertex_normals()
+        #
+        # #### OPTION 2: POISSON (requires normals)
+        # # mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(o3d_pcl, depth=9)
+        #
+        # #### OPTION 3: ALPHA_SHAPE
+        # # alpha = mask_center_thresh
+        # # o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+        #
+        #
+        # logger.info(o3d_obj_mesh)
+        # while np.asarray(o3d_obj_mesh.vertices).shape[0] < max_count_vertices:
+        #     o3d_obj_mesh = o3d_obj_mesh.subdivide_loop(number_of_iterations=1)
+        #     logger.info(o3d_obj_mesh)
+        #
+        # logger.info(o3d_obj_mesh)
+        # voxel_size = o3d_obj_mesh.get_volume() / 10.
+        # while np.asarray(o3d_obj_mesh.vertices).shape[0] > max_count_vertices:
+        #     o3d_obj_mesh = o3d_obj_mesh.simplify_vertex_clustering(voxel_size=voxel_size, contraction=open3d.geometry.SimplificationContraction.Average)
+        #     logger.info(o3d_obj_mesh)
+        #     voxel_size = voxel_size * 2.
+        #
+        # obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
 
-        alpha = mask_center_thresh
-        #mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(o3d_pcl, depth=9)
-        # o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
-        o3d_obj_mesh, _ = o3d_pcl.compute_convex_hull()
-        o3d_obj_mesh.compute_vertex_normals()
+        #### OPTION 4: VOXEL GRID
+        from  pytorch3d.ops.marching_cubes import marching_cubes
+        voxel_grid, voxel_grid_range, voxel_grid_offset = voxel_downsampling(pts3d_cls=pts3d_obj, K=1000, return_voxel_grid=True, min_steps=2)
+        # vol_batch(N, D, H, W) ->  (X, Y, Z).permute(2, 0, 1)
+        verts, faces = marching_cubes(vol_batch=voxel_grid.permute(2, 0, 1)[None,] * 1., return_local_coords=True)
+        faces = faces[0]
+        verts = (verts[0] + 1) / 2.
+        obj_mesh = Mesh(verts=voxel_grid_offset[None,] + voxel_grid_range[None,] * verts, faces=faces)
 
-
-        #o3d_obj_mesh = o3d_obj_mesh.subdivide_midpoint(number_of_iterations=2)
-        logger.info(o3d_obj_mesh)
-        while np.asarray(o3d_obj_mesh.vertices).shape[0] < max_count_vertices:
-            o3d_obj_mesh = o3d_obj_mesh.subdivide_loop(number_of_iterations=1)
-            logger.info(o3d_obj_mesh)
-
-        logger.info(o3d_obj_mesh)
-        voxel_size = o3d_obj_mesh.get_volume() / 10.
-        while np.asarray(o3d_obj_mesh.vertices).shape[0] > max_count_vertices:
-            o3d_obj_mesh = o3d_obj_mesh.simplify_vertex_clustering(voxel_size=voxel_size, contraction=open3d.geometry.SimplificationContraction.Average)
-            logger.info(o3d_obj_mesh)
-            voxel_size = voxel_size * 2.
-
-        # contraction=o3d.geometry.SimplificationContraction.Average
-        #o3d_obj_mesh.get_volume()
-        #o3d_obj_mesh.get_surface_area()
-
-        obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
         #show_scene(meshes=[obj_mesh, center3d_mesh, plan3d_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors],
         #           cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4], meshes_as_wireframe=True)
 
