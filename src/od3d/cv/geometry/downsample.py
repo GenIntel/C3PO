@@ -6,7 +6,8 @@ def farthest_point_sampling(pts3d_cls, K):
     pts3d_cls = pts3d_cls[0]
     return pts3d_cls
 
-def voxel_downsampling(pts3d_cls, K, top_bins_perc=1.0, return_mask=False):
+
+def voxel_downsampling(pts3d_cls, K, top_bins_perc=1.0, return_mask=False, return_voxel_grid=False, min_steps=1):
     """
     Args:
         pts3d_cls (torch.Tensor): Nx3
@@ -20,6 +21,7 @@ def voxel_downsampling(pts3d_cls, K, top_bins_perc=1.0, return_mask=False):
     bounds = bounds_max - bounds_min
     voxel_size = (bounds.prod(dim=-1) / K) ** (1 / 3)
     steps = (bounds / voxel_size).int()
+    steps[steps< min_steps] = min_steps
     pts3d_voxel = torch.stack(
         torch.meshgrid(torch.linspace(start=bounds_min[0], end=bounds_max[0], steps=steps[0], device=device),
                        torch.linspace(start=bounds_min[1], end=bounds_max[1], steps=steps[1], device=device),
@@ -31,6 +33,16 @@ def voxel_downsampling(pts3d_cls, K, top_bins_perc=1.0, return_mask=False):
     _, dist_min_ids_from_pts_to_voxels = dist.min(dim=-2)
     voxel_ids, voxel_counts = dist_min_ids_from_pts_to_voxels.unique(return_counts=True)
     voxel_ids = voxel_ids[voxel_counts.argsort(descending=True)[: int(len(voxel_ids) * top_bins_perc)]]
+
+    if return_voxel_grid:
+        occ_grid = torch.zeros(size=pts3d_voxel.shape[:3]).to(device=device, dtype=torch.bool)
+        occ_grid.view(-1)[voxel_ids] = True
+        occ_grid = occ_grid # .permute(2, 1, 0)
+        occ_grid_range = bounds
+        occ_grid_offset = bounds_min
+        #occ_grid_offset = occ_grid_offset.flip(dims=(0,))
+        #occ_grid_range = occ_grid_range.flip(dims=(0,))
+        return occ_grid, occ_grid_range, occ_grid_offset
 
     _, dist_min_ids_from_voxel_to_pts = dist.min(dim=-1)
     pts3d_ids = dist_min_ids_from_voxel_to_pts[voxel_ids]
