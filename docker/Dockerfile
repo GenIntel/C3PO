@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.2.0-cudnn8-runtime-ubuntu20.04
+FROM nvidia/cuda:12.2.0-runtime-ubuntu20.04
 
 #FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
