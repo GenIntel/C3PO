@@ -1,4 +1,5 @@
-#  docker build . -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g)
+#  docker build . -t limpbot/zsp:v1
+#--build-arg UID=$(id -u) --build-arg GID=$(id -g)
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
 # Install miniconda

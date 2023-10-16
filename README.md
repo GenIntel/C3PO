@@ -2,6 +2,26 @@
 
 ## Installation
 
+### Install
+
+`python3 -m venv venv_od3d`   
+`source venv_od3d/bin/activate`   
+`pip3 install pip --upgrade`   
+CUDA_HOME=/misc/software/cuda/cuda-11.7
+PATH=${CUDA_HOME}/bin:${PATH}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CUDA_HOME}/lib64
+`export FORCE_CUDA=1`
+export CUDA_HOME
+export LD_LIBRARY_PATH
+export FORCE_CUDA
+`pip install -U fvcore`
+`pip install -U iopath`
+export PATH
+export LD_LIBRARY_PATH
+export CUDA_HOME
+pip install torch
+FORCE_CUDA=1 pip3 install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+
 1. From local
 
     `pip install -e .`
@@ -10,7 +30,26 @@
 
     `pip install git+https://github.com/Generative-Vision-Robust-Learning/od3d.git`
 
+### Clone
+
+1. Repository   
+`git clone git@github.com:Generative-Vision-Robust-Learning/od3d.git`  
+
+2. Submodules   
+`git submodule update --init --recursive`
+
 ## Usage
+
+### Images
+
+
+1. OD3D  
+
+`cd docker && docker build . -t limpbot/od3d:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g)`
+
+2. Droid SLAM
+
+`cd third_party/envs/DROID-SLAM && docker build . -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g)`
 
 ### Dataset 
 
