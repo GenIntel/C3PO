@@ -19,4 +19,13 @@ RUN pip install 'pillow<7'
 
 RUN pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
-# wget https://dl.fbaipublicfiles.com/dino/dino_deitsmall8_pretrain/dino_deitsmall8_pretrain.pth
+
+RUN pip install Flask
+
+WORKDIR zsp
+
+RUN wget https://dl.fbaipublicfiles.com/dino/dino_deitsmall8_pretrain/dino_deitsmall8_pretrain.pth
+
+RUN pip install git+git@github.com:limpbot/zero-shot-pose.git
+
+ENTRYPOINT["FLASK_ENV=development", "FLASK_APP=flask.py", "flask", "run"]
