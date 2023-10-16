@@ -204,6 +204,14 @@ class OD3D_Frames():
         if OD3D_FRAME_MODALITIES.BBOX in self.modalities:
             img = draw_bbox(img=img, bbox=self.bbox[0])
 
+        if OD3D_FRAME_MODALITIES.PCL in self.modalities:
+            from od3d.datasets.co3d.enum import PCL_SOURCES
+            from od3d.cv.visual.show import show_scene
+            pcl = self.sequence[0].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN)
+            pts3d_colors = self.sequence[0].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN)
+
+            show_scene(pts3d=[pcl], pts3d_colors=[pts3d_colors])
+
         if OD3D_FRAME_MODALITIES.MESH in self.modalities:
             # from od3d.cv.geometry.fit3d2d import fit_se3_to_corresp_3d_2d_and_masks
             cam_tform4x4_obj = self.cam_tform4x4_obj[:1]
@@ -211,12 +219,18 @@ class OD3D_Frames():
             #                                                  pts1=self.kpts3d[0].T, pxl2=self.kpts2d_annot[0].T,
             #                                                  proj_mat=self.cam_intr4x4[0][:2, :3].to(device='cpu'))
             #cam_tform4x4_obj = cam_tform4x4_obj.to(device='cuda:0')
-            #self.mesh.verts *= 5. # this is ionly for pascal3d required currently
+            #self.mesh.verts *= 5. # this is ionly for pascal3d required currentlay
+
+            #cam_tform4x4_obj[:, :3, :4] = cam_tform4x4_obj[:, :3, :4] / cam_tform4x4_obj[0, :3, :3].norm(dim=-1, keepdim=True)
+            # cam_tform4x4_obj[:, :3, :3] *= 5
+            #from od3d.cv.visual.show import show_scene
+            #show_scene(cams_tform4x4_world=self.cam_tform4x4_obj, cams_intr4x4=self.cam_intr4x4, meshes=self.mesh)
+
             img = blend_rgb(img, (self.mesh.render_feats(
                 cams_tform4x4_obj=cam_tform4x4_obj,
                 cams_intr4x4=self.cam_intr4x4[:1],
                 imgs_sizes=self.size, meshes_ids=torch.LongTensor([0]),
-                modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=self.rgb.dtype, device=img.device))
+                modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0] * 255).to(dtype=self.rgb.dtype, device=img.device))
 
         elif self.sequence is not None and self.sequence[0].cuboid_labeled:
             # if self.sequence_name

@@ -1,0 +1,63 @@
+defaults:
+  - logger: wandb
+  - methods@method.nemo: nemo_align3d
+  - methods/dataset@method.nemo: co3d
+  - datasets@train_datasets.labeled: co3d_10s_zsp_unlabeled # co3d_3s_no_zsp #  co3d_5s_zero_shot_pose # co3d_5s_test #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+  - datasets@val_datasets.main:
+  - datasets@test_datasets.co3d: co3d_10s_zsp_labeled # co3d_10s_test, co3d_test
+  - platform@platform_local: local
+  - datasets@texture_dataset: dtd
+  - platform: local
+
+categories:
+  - bicycle
+  - toytruck
+  - toytrain
+  - teddybear
+  - car
+  - toybus
+  - motorcycle
+  - keyboard
+  - handbag
+  - remote
+  - toyplane
+  - toilet
+  - hairdryer
+  - mouse
+  - toaster
+  - hydrant
+  - chair
+  - laptop
+  - book
+  - backpack
+
+
+
+
+metrics:
+  - metricA
+  - metricB
+
+method:
+  nemo:
+    use_only_first_reference: True
+    global_optimization_steps: 1
+    categories: ${categories}
+    aligned_name: 'all_to_one_13_10_23'
+
+train_datasets:
+  labeled:
+    categories: ${categories}
+
+val_datasets:
+  main:
+    categories: ${categories}
+
+test_datasets:
+  co3d:
+    categories: ${categories}
+
+
+
+train: True
+test: True

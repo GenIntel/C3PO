@@ -22,6 +22,7 @@ class OD3D_FRAME_MODALITIES(str, Enum):
     CAM_TFORM4X4_OBJS = 'cam_tform4x4_objs'
     CATEGORY = 'category'
     CATEGORIES = 'categories'
+    PCL = 'pcl'
     RGB = 'rgb'
     MASK = 'mask'
     DEPTH = 'depth'

@@ -1,13 +1,13 @@
 import logging
 logger = logging.getLogger(__name__)
-import torch
-from od3d.cv.geometry.transform import proj3d2d_origin, rot3x3_from_two_vectors, proj3d2d
 from od3d.datasets.frame import OD3D_Frame, OD3D_FRAME_MODALITIES
 from od3d.cv.visual.crop import crop
-from omegaconf import DictConfig
-class Crop():
+from od3d.cv.transforms.transform import OD3D_Transform
+
+class Crop(OD3D_Transform):
 
     def __init__(self, H, W):
+        super().__init__()
         self.H = H
         self.W = W
 

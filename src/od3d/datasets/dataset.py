@@ -62,12 +62,8 @@ class OD3D_Dataset(Dataset):
         self.subset_fraction: float = subset_fraction
 
         if transform is None:
-            import torchvision
-            from od3d.cv.transforms.rgb import RGB_UInt8ToFloat, RGB_Normalize, RGB_Random
-            transform = torchvision.transforms.Compose([
-                # RGB_Random(),
-                RGB_UInt8ToFloat(),
-            ])
+            from od3d.cv.transforms.rgb_uint8_to_float import RGB_UInt8ToFloat
+            transform = RGB_UInt8ToFloat
 
         self.transform = transform
         self.index_shift = index_shift

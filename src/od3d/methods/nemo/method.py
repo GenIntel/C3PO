@@ -11,6 +11,7 @@ import numpy as np
 from torch.utils.data import RandomSampler
 import logging
 
+from od3d.cv.metric.pose import get_pose_diff_in_rad
 logger = logging.getLogger(__name__)
 import torch
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -18,22 +19,25 @@ from od3d.cv.geometry.transform import se3_exp_map
 from od3d.cv.visual.show import imgs_to_img
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
-from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4, rot3x3
+from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4, rot3x3, inv_tform4x4, tform4x4_broadcast
 from od3d.cv.visual.show import show_img
 import torchvision
 from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+# note: math is actually used by config
+import math
+from od3d.datasets.co3d import CO3D
 
 from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize
 from od3d.models.model import OD3D_Model
 
 from od3d.cv.geometry.grid import get_pxl2d_like
-from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks  # fit_se3_to_corresp_3d_2d_and_masks
-from od3d.cv.transforms import RandomCenterZoom3D, RGB_Random, CenterZoom3D
-import math
+from od3d.cv.geometry.fit3d2d import batchwise_fit_se3_to_corresp_3d_2d_and_masks
+from od3d.cv.transforms.transform import OD3D_Transform
+from od3d.cv.transforms.sequential import SequentialTransform
 
 from typing import Dict
 from od3d.data.ext_enum import ExtEnum
@@ -73,33 +77,41 @@ class NeMo(OD3D_Method):
         # init Network
         self.net = OD3D_Model(config.model)
 
-
-        if config.train.transform.random_color:
-            self.transform_train = torchvision.transforms.Compose([
-                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                RGB_Random(),
-                self.net.transform,
-            ])
-        else:
-            self.transform_train = torchvision.transforms.Compose([
-                RandomCenterZoom3D(**config.train.transform.random_center_zoom3d),
-                self.net.transform,
-            ])
-
-        self.transform_test = torchvision.transforms.Compose([
-            CenterZoom3D(**config.test.transform),
+        self.transform_train = SequentialTransform([
+            OD3D_Transform.subclasses[config.train.transform.class_name].create_from_config(config=config.train.transform),
+            self.net.transform,
+        ])
+        self.transform_test = SequentialTransform([
+            OD3D_Transform.subclasses[config.test.transform.class_name].create_from_config(config=config.test.transform),
             self.net.transform
         ])
+
+        # if config.train.transform.random_color:
+        #     self.transform_train = SequentialTransform([
+        #         RandomCenterZoom3D.create_from_config(config.train.transform.random_center_zoom3d),
+        #         RGB_Random(),
+        #         self.net.transform
+        #     ])
+        # else:
+        #     self.transform_train = SequentialTransform([
+        #         RandomCenterZoom3D.create_from_config(config.train.transform.random_center_zoom3d),
+        #         self.net.transform
+        #     ])
+        #
+        # self.transform_test = SequentialTransform([
+        #         CenterZoom3D.create_from_config(config.test.transform),
+        #         self.net.transform
+        # ])
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
         # self.path_shapenemo = Path(config.path_shapenemo)
-        # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.classes]
-        self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.classes]
+        # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
+        self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
         self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes)
         # self.meshes.show()
         self.verts_count_max = self.meshes.verts_counts_max
-        self.mem_verts_feats_count = len(config.classes) * self.verts_count_max
+        self.mem_verts_feats_count = len(config.categories) * self.verts_count_max
         self.mem_clutter_feats_count = config.num_noise * config.max_group
         self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
 
@@ -239,27 +251,45 @@ class NeMo(OD3D_Method):
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
         dataset.transform = self.transform_test
+        if not isinstance(dataset, CO3D):
+            dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
+                                                     shuffle=False,
+                                                     collate_fn=dataset.collate_fn,
+                                                     num_workers=self.config.test.dataloader.num_workers,
+                                                     pin_memory=self.config.test.dataloader.pin_memory)
+            logger.info(f"Dataset contains {len(dataset)} frames.")
 
-        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
-                                                 shuffle=False,
-                                                 collate_fn=dataset.collate_fn,
-                                                 num_workers=self.config.test.dataloader.num_workers,
-                                                 pin_memory=self.config.test.dataloader.pin_memory)
+        else:
+            dict_category_sequences = {category: list(sequence_dict.keys()) for category, sequence_dict in dataset.dict_nested_frames.items()}
+            dataset_sub = dataset.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
+                                                          frames_count_max_per_sequence=self.config.multiview.batch_size)
 
-        logger.info(f"Dataset contains {len(dataset)} frames.")
+
+            dataloader = torch.utils.data.DataLoader(dataset=dataset_sub, batch_size=self.config.multiview.batch_size,
+                                                     shuffle=False,
+                                                     collate_fn=dataset_sub.collate_fn,
+                                                     num_workers=self.config.test.dataloader.num_workers,
+                                                     pin_memory=self.config.test.dataloader.pin_memory)
+            logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
         results_epoch = OD3D_Results()
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
 
-            results_batch = self.inference_batch(batch=batch)
+            if not isinstance(dataset, CO3D):
+                results_batch = self.inference_batch_single_view(batch=batch)
+            else:
+                results_batch = self.inference_batch_multiview(batch=batch, return_samples_with_sim=True)
             results_epoch += results_batch
 
         count_pred_frames = len(results_epoch['item_id'])
         logger.info(f'Predicted {count_pred_frames} frames.')
-
-        results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
-                                                 config_visualize=self.config.test.visualize)
+        if not isinstance(dataset, CO3D):
+            results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
+                                                     config_visualize=self.config.test.visualize)
+        else:
+            results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset_sub,
+                                                     config_visualize=self.config.test.visualize)
         results_epoch = results_epoch.mean()
         results_epoch += results_visual
         return results_epoch
@@ -406,7 +436,7 @@ class NeMo(OD3D_Method):
     """
 
 
-    def inference_batch(self, batch, return_samples_with_sim=True):
+    def inference_batch_single_view(self, batch, return_samples_with_sim=True):
         results = OD3D_Results()
         B = len(batch)
 
@@ -436,7 +466,7 @@ class NeMo(OD3D_Method):
 
             meshes_scores = []
             for mesh_id in range(len(self.meshes)):
-                # logger.info(f'calc score for mesh {self.config.classes[mesh_id]}')
+                # logger.info(f'calc score for mesh {self.config.categories[mesh_id]}')
                 bank_feats = torch.cat([self.meshes.get_feats_with_mesh_id(mesh_id), self.clutter_feats.detach()],
                                        dim=0)
                 # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
@@ -455,7 +485,7 @@ class NeMo(OD3D_Method):
 
             # logger.info(f'pred class ids {pred_class_ids}')
             time_pred_class = time.time()
-            # logger.info(f"predicted class: {self.config.classes[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
+            # logger.info(f"predicted class: {self.config.categories[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
 
             results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,]) / B
 
@@ -537,22 +567,168 @@ class NeMo(OD3D_Method):
         cam_tform4x4_obj = cam_tform4x4_obj.clone().detach()
 
         results['time_pose'] = torch.Tensor([time.time() - time_pred_class,]) / B
-
-        diff_rot3x3 = rot3x3(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_tform4x4_obj[:, :3, :3])
-
-        try:
-            diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3.permute(0, 2, 1))
-            diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
-        except ValueError:
-            logger.warning(
-                f'Cannot calculate deviation in rotation angle due to rot3x3 trace being too small, setting deviation to 0.')
-            diff_rot_angle_rad = torch.zeros_like(diff_rot3x3[:, 0, 0])
-        results['rot_diff_rad'] = diff_rot_angle_rad
+        batch_rot_diff_rad = get_pose_diff_in_rad(pred_tform4x4=cam_tform4x4_obj, gt_tform4x4=batch.cam_tform4x4_obj)
+        results['rot_diff_rad'] = batch_rot_diff_rad
+        for cat_id, cat in enumerate(self.config.categories):
+            results[f'{cat}_rot_diff_rad'] = batch_rot_diff_rad[batch.label == cat_id]
         results['label_gt'] = batch.label
         results['label_pred'] = pred_class_ids
-        results['label_names'] = self.config.classes
+        results['label_names'] = self.config.categories
         results['sim'] = sim
         results['cam_tform4x4_obj'] = cam_tform4x4_obj
+        results['item_id'] = batch.item_id
+        results['name_unique'] = batch.name_unique
+
+        return results
+
+
+    def inference_batch_multiview(self, batch, return_samples_with_sim=True):
+        results = OD3D_Results()
+        B = len(batch)
+
+        """
+        # these parameters are used in prev. version
+        batch.cam_tform4x4_obj[:, 2, 3] = 5. * 6. # 5. * 6.
+        batch.cam_tform4x4_obj[:, 0, 3] = 0.
+        batch.cam_tform4x4_obj[:, 1, 3] = 0.
+        batch.cam_intr4x4[:, 0, 0] = 3000.
+        batch.cam_intr4x4[:, 1, 1] = 3000.
+        batch.cam_intr4x4[:, 0, 2] = batch.size[1] / 2.
+        batch.cam_intr4x4[:, 1, 2] = batch.size[0] / 2.
+        """
+
+        time_loaded = time.time()
+        with torch.no_grad():
+            feats2d_net = self.net(batch.rgb)
+            feats2d_net_mask = resize(batch.mask_rgb, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+            if self.config.inference.use_mask_object:
+                feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
+                                                                  W_out=feats2d_net.shape[3])
+
+            time_pred_net_feats2d = time.time()
+            # logger.info(
+            #    f"predicted net feats2d, took {(time_pred_net_feats2d - time_loaded):.3f}")
+            results['time_feats2d'] = torch.Tensor([time_pred_net_feats2d - time_loaded,]) / B
+
+            meshes_scores = []
+            for mesh_id in range(len(self.meshes)):
+                # logger.info(f'calc score for mesh {self.config.categories[mesh_id]}')
+                bank_feats = torch.cat([self.meshes.get_feats_with_mesh_id(mesh_id), self.clutter_feats.detach()],
+                                       dim=0)
+                # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
+                out_shape = feats2d_net.shape[:1] + torch.Size([1]) + feats2d_net.shape[2:]
+                inner_feats2d_net_bank_vts_max_vals = torch.einsum('bchw,kc->bkhw', feats2d_net, bank_feats).max(dim=1,
+                                                                                                                 keepdim=True).values
+                # inner_feats2d_net_bank_vts_max_vals, inner_feats2d_net_bank_vts_max_ids = inner_feats2d.max(dim=1)
+                # show_img(self.meshes.get_verts_with_mesh_id[mesh_id][inner_feats2d_net_bank_vts_max_ids[0, 0]].permute(2, 0, 1), normalize=True)
+                # show_img(inner_feats2d_net_bank_vts_max_vals[0])
+                mesh_score = inner_feats2d_net_bank_vts_max_vals.flatten(1).mean(dim=1)
+                # clutter_score = inner_feats2d[:, -clutter_feats.shape[0]:].mean(dim=1).flatten(1).mean(dim=1)
+                # mesh_score -= clutter_score
+                meshes_scores.append(mesh_score)
+            meshes_scores = torch.stack(meshes_scores, dim=-1)
+            pred_class_scores, pred_class_ids = meshes_scores.max(dim=1)
+
+            # logger.info(f'pred class ids {pred_class_ids}')
+            time_pred_class = time.time()
+            # logger.info(f"predicted class: {self.config.categories[int(pred_class_ids[0])]}, took {(time_pred_class - time_pred_net_feats2d):.3f}")
+
+            results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,]) / B
+
+            cams_multiview_tform4x4_obj, cams_multiview_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
+                                                                                   cam_intr4x4=batch.cam_intr4x4[:1],
+                                                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj[:1],
+                                                                                   feats2d_net=feats2d_net[:1],
+                                                                                   categories_ids=pred_class_ids[:1],
+                                                                                   feats2d_net_mask=feats2d_net_mask[:1])
+            # multiview adaption
+            objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(batch.cam_tform4x4_obj[:1])[:, None], cams_multiview_tform4x4_obj)
+            b_cams_multiview_tform4x4_obj = tform4x4_broadcast(batch.cam_tform4x4_obj[:, None], objs_multiview_tform4x4_cuboid_front)
+            b_cams_multiview_intr4x4 = cams_multiview_intr4x4.expand(*b_cams_multiview_tform4x4_obj.shape)
+
+            #  OPTION A: Use 2d gradient of rendered features
+            sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
+                                                     cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
+                                                     cam_intr4x4=b_cams_multiview_intr4x4,
+                                                     categories_ids=pred_class_ids,
+                                                     broadcast_batch_and_cams=True,
+                                                     feats2d_net_mask=feats2d_net_mask, pre_rendered=False)
+
+            sim = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
+
+            if return_samples_with_sim:
+                results['samples_cam_tform4x4_obj'] = b_cams_multiview_tform4x4_obj
+                results['samples_cam_intr4x4'] = b_cams_multiview_intr4x4
+                results['samples_sim'] = sim
+
+            mesh_multiple_cams_loss = -sim
+
+
+            mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
+
+            obj_tform4x4_cuboid_front = objs_multiview_tform4x4_cuboid_front[0, mesh_cam_loss_min_id[0]]
+
+            #cam_tform4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(
+            #    dim1=-2, dim2=-1).permute(2, 0, 1)
+
+        if self.config.inference.refine.enabled:
+            obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=(1, 6)).to(device=obj_tform4x4_cuboid_front.device),
+                                                requires_grad=True)
+
+            optim_inference = torch.optim.Adam(
+                params=[obj_tform6_tmp],
+                lr=self.config.inference.optimizer.lr,
+                betas=(self.config.inference.optimizer.beta0, self.config.inference.optimizer.beta1),
+            )
+
+            time_before_pose_iterative = time.time()
+            obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
+
+            for epoch in range(self.config.inference.optimizer.epochs):
+                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
+                obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
+                obj_tform6_tmp.data[:, :] = 0.
+                obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
+
+                sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
+                                                                  cam_tform4x4_obj=tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front),
+                                                                  cam_intr4x4=batch.cam_intr4x4,
+                                                                  categories_ids=pred_class_ids, return_sim_pxl=True,
+                                                                  broadcast_batch_and_cams=False,
+                                                                  feats2d_net_mask=feats2d_net_mask, pre_rendered=False)
+                mesh_cam_loss = -sim
+
+                if self.config.inference.live:
+                    show_img(
+                        blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front)[0:0 + 1],
+                                                                          cams_intr4x4=batch.cam_intr4x4[0:0 + 1],
+                                                                          imgs_sizes=batch.size,
+                                                                          meshes_ids=pred_class_ids[0:0 + 1],
+                                                                          modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
+                            0]).to(dtype=batch.rgb.dtype)), duration=1)
+
+                loss = mesh_cam_loss.mean()
+                loss.backward()
+                optim_inference.step()
+                optim_inference.zero_grad()
+
+            obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
+
+            results['time_pose_iterative'] = torch.Tensor([time.time() - time_before_pose_iterative,]) / B
+
+        obj_tform4x4_cuboid_front = obj_tform4x4_cuboid_front.clone().detach()
+        cam_tform4x4_obj = tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front)
+
+        results['time_pose'] = torch.Tensor([time.time() - time_pred_class,]) / B
+        batch_rot_diff_rad = get_pose_diff_in_rad(pred_tform4x4=cam_tform4x4_obj, gt_tform4x4=batch.cam_tform4x4_obj)
+        results['rot_diff_rad'] = batch_rot_diff_rad
+        for cat_id, cat in enumerate(self.config.categories):
+            results[f'{cat}_rot_diff_rad'] = batch_rot_diff_rad[batch.label == cat_id]
+        results['label_gt'] = batch.label
+        results['label_pred'] = pred_class_ids
+        results['sim'] = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
+        results['cam_tform4x4_obj'] = cam_tform4x4_obj
+        results['obj_tform4x4_cuboid_front'] = obj_tform4x4_cuboid_front
         results['item_id'] = batch.item_id
         results['name_unique'] = batch.name_unique
 

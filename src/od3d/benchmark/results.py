@@ -26,6 +26,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
 
     def __add__(self, other: Dict[str, torch.Tensor]):
         for key, val in other.items():
+            # logger.info(key)
             if isinstance(val, torch.Tensor):
                 if val.dim() == 0:
                     val = val[None,]
@@ -41,36 +42,118 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                 self[key] = val
         return self
 
+    def add_prefix(self, prefix: str):
+        res = {}
+        for key, val in self.items():
+            res[f'{prefix}_{key}'] = val
+        return OD3D_Results(init_dict=res)
+
     def mean(self):
         res = {}
         for key, val in self.items():
-            if key not in self.mean_blocklist:
+            if not any(s in key for s in self.mean_blocklist): #  key not in self.mean_blocklist:
                 res[key] = val.mean(dim=0)
 
-        if 'label_gt' in self.keys() and 'label_pred' in self.keys():
-            if 'label_names' in self.keys():
-                label_names = self['label_names']
-            else:
-                label_names = [str(i) for i in range(max(set(self['label_gt'] + self['label_pred']))+1)]
-            res['label/acc'] = (self['label_gt'] == self['label_pred']).to(dtype=float).mean(dim=0)
-            res['label/confusion'] = wandb.plot.confusion_matrix(probs=None,
-                                                                 y_true=self['label_gt'].numpy(), preds=self['label_pred'].numpy(),
-                                                                 class_names=label_names)
 
-        if 'rot_diff_rad' in self.keys():
-            res['pose/acc_pi6'] = (self['rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
-            res['pose/acc_pi18'] = (self['rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
-            res['pose/err_median'] = 180 / math.pi * self['rot_diff_rad'].median()
-            res['pose/err_mean'] = 180 / math.pi * self['rot_diff_rad'].mean()
+        for k in self.keys():
+            if 'label_gt' in k:
+                prefix = k[:k.find('label_gt')]
+                prefix_saved = f'prefix/{prefix}' if len(prefix) > 0 else ''
+                if f'{prefix}label_pred' in self.keys():
+                    if f'{prefix}label_names' in self.keys():
+                        label_names = self[f'{prefix}label_names']
+                    else:
+                        label_names = [str(i) for i in range(max(set(self[f'{prefix}label_gt'] + self[f'{prefix}label_pred'])) + 1)]
+                    res[f'label/{prefix_saved}acc'] = (self[f'{prefix}label_gt'] == self[f'{prefix}label_pred']).to(dtype=float).mean(dim=0)
+                    res[f'label/{prefix_saved}confusion'] = wandb.plot.confusion_matrix(probs=None,
+                                                                         y_true=self[f'{prefix}label_gt'].numpy(),
+                                                                         preds=self[f'{prefix}label_pred'].numpy(),
+                                                                         class_names=label_names)
 
-            if 'sim' in self.keys():
-                res['pose/pr/pi6'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title=f"PI/6={res['pose/acc_pi6']:.2f}")
-                res['pose/pr/pi18'] = self.get_pr(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title=f"PI/18={res['pose/acc_pi18']:.2f}")
+            if 'rot_diff_rad' in k:
+                prefix = k[:k.find('rot_diff_rad')]
+                prefix_saved = f'prefix/{prefix}' if len(prefix) > 0 else ''
+                res[f'pose/{prefix_saved}acc_pi6'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
+                res[f'pose/{prefix_saved}acc_pi18'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
+                res[f'pose/{prefix_saved}err_median'] = 180 / math.pi * self[f'{prefix}rot_diff_rad'].median()
+                res[f'pose/{prefix_saved}err_mean'] = 180 / math.pi * self[f'{prefix}rot_diff_rad'].mean()
 
-                res['pose/roc/pi6'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 6.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title=f"PI/6={res['pose/acc_pi6']:.2f}")
-                res['pose/roc/pi18'] = self.get_roc(ground_truth=(self['rot_diff_rad'] < math.pi / 18.).numpy().astype(int), predictions=self['sim'][:, 0].detach().numpy(), title=f"PI/18={res['pose/acc_pi18']:.2f}")
+                if f'{prefix}pose_sim_geo' in self.keys() and f'{prefix}pose_sim_appear' in self.keys():
+                    res[f'pose/pr/{prefix_saved}pi6_pr_vs_sim_geo_and_appear'] = self.get_pr_3d(
+                        ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int),
+                        sim_1st_dim=self[f'{prefix}pose_sim_geo'][:].detach().cpu().numpy(),
+                        sim_2nd_dim=self[f'{prefix}pose_sim_appear'][:].detach().cpu().numpy(),
+                        title=f"PI/6={res[f'pose/{prefix_saved}acc_pi6']:.2f}")
+
+                if f'{prefix}sim' in self.keys():
+                    res[f'pose/pr/{prefix_saved}pi6'] = self.get_pr(ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int), predictions=self[f'{prefix}sim'][:, 0].detach().cpu().numpy(), title=f"PI/6={res[f'pose/{prefix_saved}acc_pi6']:.2f}")
+                    res[f'pose/pr/{prefix_saved}pi18'] = self.get_pr(ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 18.).detach().cpu().numpy().astype(int), predictions=self[f'{prefix}sim'][:, 0].detach().cpu().numpy(), title=f"PI/18={res[f'pose/{prefix_saved}acc_pi18']:.2f}")
 
         return OD3D_Results(init_dict=res)
+
+    def get_pr_3d(self, ground_truth, sim_1st_dim, sim_2nd_dim, title):
+        # Make data.
+        X = np.arange(-0.01, 1.01, 0.01)
+        Y = np.arange(-0.01, 1.01, 0.01)
+        X, Y = np.meshgrid(X, Y)
+
+        mask_xy = (sim_1st_dim[:, None, None] >= X[None,]) * (sim_2nd_dim[:, None, None] >= Y[None,])
+        Z_precision = (ground_truth[:, None, None] * mask_xy).sum(axis=0) / (mask_xy.sum(axis=0))
+        Z_precision[mask_xy.sum(axis=0) == 0] = 1.
+
+        Z_recall = (ground_truth[:, None, None] * mask_xy).sum(axis=0) / (ground_truth.sum())
+        if ground_truth.sum() == 0:
+            Z_recall[:, :] = 0.
+
+        Z_f1 = 2 * (Z_recall * Z_precision) / (Z_recall + Z_precision)
+        Z_f1[Z_recall + Z_precision == 0] = 0.
+
+        Z_f1_sub = []
+        X_sub = []
+        Y_sub = []
+        text_sub = []
+        stepsize=30
+
+        for x_step in range(0, math.ceil(len(X) / stepsize)):
+            for y_step in range(0, math.ceil(len(Y) / stepsize)):
+                Z_f1_step = Z_f1[(x_step) * stepsize: (x_step+1) * stepsize, (y_step) * stepsize: (y_step+1) * stepsize, ]
+                y_amax_step = Z_f1_step.argmax(axis=-1)
+                x_amax_step = Z_f1_step[:, y_amax_step].diagonal().argmax(axis=0)
+                y_amax_step = y_amax_step[x_amax_step]
+                x_amax = (x_step) * stepsize + x_amax_step
+                y_amax = (y_step) * stepsize + y_amax_step
+                X_sub.append(X[x_amax, y_amax])
+                Y_sub.append(Y[x_amax, y_amax])
+                text_sub.append(f'Precision={Z_precision[x_amax, y_amax]:.2f}<br>Recall={Z_recall[x_amax, y_amax]:.2f}')
+                Z_f1_sub.append(Z_f1_step[x_amax_step, y_amax_step])
+
+        #fig2 = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16], z=[], color="red")
+
+        # colorscale: 'Electric' 'Viridis', 'Blues', 'Greens'
+        # showscale: True/False
+        import plotly.graph_objects as go
+        fig = go.Figure(data=[
+            go.Scatter3d(x=X_sub, y=Y_sub, z=Z_f1_sub, mode="markers+text", name="F1", text=text_sub,
+                         textposition="top center",),
+            go.Surface(z=Z_precision, x=X, y=Y, colorscale='Greens', name='Precision', hoverinfo='skip', opacity=0.5,
+                       showscale=False),
+            go.Surface(z=Z_recall, x=X, y=Y, colorscale='Blues', name='Recall', hoverinfo='skip', opacity=0.5,
+                       showscale=False),
+                              ])
+        #,  x='min. sim. appearance', y='min. sim. geometry'
+        fig.update_layout(title=title,
+                          #xaxis_title="X Axis Title",
+                          #yaxis_title="Y Axis Title",
+                          autosize=False,
+                          width=500, height=500,
+                          margin=dict(l=65, r=50, b=65, t=90),
+                          scene=dict(
+                              xaxis_title='Min. Sim. Geometry',
+                              yaxis_title='Min. Sim. Appearance'),
+                          )
+
+        #fig.show()
+        return wandb.Plotly(fig)
 
     def get_pr(self, ground_truth, predictions, title):
 
@@ -251,12 +334,12 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
     def get_filtered_log_results(self):
         res = {}
         for key, val in self.items():
-            if key not in self.log_blocklist:
+            if not any(s in key for s in self.log_blocklist): #  key not in self.log_blocklist: # any(substring in s for s in string_list)
                 res[key] = val
         return res
 
     def log(self):
         wandb.log(self.get_filtered_log_results())
 
-    def log_with_prefix(self, prefix: str):
-        wandb.log({prefix + '/' + k: v for k, v in self.get_filtered_log_results().items()})
+    def log_with_prefix(self, prefix: str, prefix_append_char='/'):
+        wandb.log({prefix + f'{prefix_append_char}' + k: v for k, v in self.get_filtered_log_results().items()})

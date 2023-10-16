@@ -14,9 +14,15 @@ modalities:
     - 'mask'
     - 'sequence_name'
     - 'sequence'
+    # - 'mesh'
 
-cuboid_source: 'limits3d' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d'
-cam_tform_obj_source: 'limits3d'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', limits3d
+mesh_name: 'convex1000'
+
+cuboid_source: 'droid_slam' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
+cam_tform_obj_source: 'droid_slam'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', 'limits3d', 'droid_slam'
+
+mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
+dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 
 frames_count_max_per_sequence:
 block_negative_depth: False
@@ -79,7 +85,7 @@ dict_nested_frames_ban:
   bicycle:
     '377_43836_87236': # two bicycles with inverse directions
 
-dict_nested_frames:
+#dict_nested_frames:
 #  car:
 #    '185_19982_37678':
 #    '206_21799_45886':
@@ -103,6 +109,7 @@ dict_nested_frames:
 #    '111_13148_23780':
 #    '426_59638_115345':
 #  bicycle:
+#    '397_49943_98337':
 #    '404_53464_104258':
 #    '392_47830_94973':
 #    '426_59751_116222':

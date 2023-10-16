@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import torch
 from pytorch3d.renderer.cameras import look_at_view_transform, look_at_rotation
 import math
@@ -78,7 +81,12 @@ def rot3x3_from_two_vectors(a: torch.Tensor, b: torch.Tensor):
 
 
 def inv_tform4x4(a_tform4x4_b):
-    b_rot3x3_a = a_tform4x4_b[..., :3, :3].transpose(-1, -2)
+    scale = torch.linalg.norm(a_tform4x4_b[..., :3, :3], dim=-1, keepdim=True)
+    scale_avg = scale.mean(dim=-2, keepdim=True)
+    if ((scale - scale_avg).abs() > 1e-5).any():
+        logger.warning(f'Scale is not constant over all dimensions {scale}')
+
+    b_rot3x3_a = a_tform4x4_b[..., :3, :3].transpose(-1, -2) / (scale_avg ** 2)
     a_rot3x3_b_origin = a_tform4x4_b[..., :3, 3]
     b_transl3_0 = -rot3d(pts3d=a_rot3x3_b_origin, rot3x3=b_rot3x3_a)
     return transf4x4_from_rot3x3_and_transl3(transl3=b_transl3_0, rot3x3=b_rot3x3_a)
@@ -122,6 +130,51 @@ def transf4x4_from_pos_and_theta(pos, theta):
     #azim = torch.atan(pos[..., 0] / -pos[..., 1]) % math.pi + math.pi * (pos[..., 0] < 0) # torch.atan(pos[..., 0] / pos[..., 2])  % math.pi + math.pi * (pos[..., 0] < 0)
     #elev = torch.asin(pos[..., 2] / dist)
     #return transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+
+
+def get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=1, dist: float=1., device=None, dtype=None):
+    if viewpoints_count == 1:
+        # front:
+        azim = torch.Tensor([0.])
+        elev = torch.Tensor([0.])
+        theta = torch.Tensor([0.])
+    elif viewpoints_count == 2:
+        # front, top
+        azim = torch.Tensor([0., 0.])
+        elev = torch.Tensor([0., math.pi / 2. - 0.01])
+        theta = torch.Tensor([0., 0.])
+    elif viewpoints_count == 3:
+        # front, top, right
+        azim = torch.Tensor([0., 0., math.pi / 2.])
+        elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0.])
+        theta = torch.Tensor([0., 0., 0.])
+    elif viewpoints_count == 4:
+        # front, top, right, bottom
+        azim = torch.Tensor([0., 0., math.pi / 2., 0.])
+        elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0., -math.pi/2. + 0.01])
+        theta = torch.Tensor([0., 0., 0., 0.])
+    else:
+        viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
+        range_max = 1. - 1./ viewpoints_count_sqrt
+        azim = torch.linspace(-math.pi * range_max, math.pi * range_max, viewpoints_count_sqrt)
+        elev = torch.linspace(-math.pi / 2. * range_max, math.pi / 2. * range_max, viewpoints_count_sqrt)
+        azim = azim.repeat_interleave(viewpoints_count_sqrt)[:viewpoints_count]
+        elev = elev.repeat(viewpoints_count_sqrt)[:viewpoints_count]
+        theta = torch.zeros_like(elev)
+
+    if dist == 0.:
+        cam_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=1.)
+        cam_tform4x4_obj[:, :3, 3] = 0.
+    else:
+        cam_tform4x4_obj = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+
+    if dtype is not None:
+        cam_tform4x4_obj = cam_tform4x4_obj.to(dtype=dtype)
+
+    if device is not None:
+        cam_tform4x4_obj = cam_tform4x4_obj.to(device=device)
+
+    return cam_tform4x4_obj
 
 def transf4x4_from_spherical(azim, elev, theta, dist):
     # camera center
@@ -186,6 +239,17 @@ def transf4x4_from_rot3x3_and_transl3(rot3x3, transl3):
     transf4x4 = transf4x4_from_rot3x3(rot3x3)
     transf4x4[..., :3, 3] = transl3
     return transf4x4
+
+def tform4x4_from_transl3d(transl3d: torch.Tensor):
+    """
+    Args:
+        transl3d (torch.Tensor): ...x3
+    Returns:
+        tform4x4 (torch.Tensor): ...x4x4
+    """
+    a_tform4x4_b = torch.eye(4)[(None,)* (len(transl3d.shape) - 1)].expand(transl3d.shape[:-1] + torch.Size([4, 4])).to(device=transl3d.device, dtype=transl3d.dtype)
+    a_tform4x4_b[..., :3, 3] = transl3d
+    return a_tform4x4_b
 
 
 def rot2d(pts2d, rot2x2):
@@ -272,19 +336,33 @@ def reproj2d3d(pxl2d, proj4x4_inv):
     pts3d_reproj = pts3d_reproj.squeeze(dim=-1)
     return pts3d_reproj
 
-def depth2pts3d(depth, cam_intr4x4):
+def depth2pts3d_grid(depth, cam_intr4x4):
     device = cam_intr4x4.device
     dtype = cam_intr4x4.dtype
     H, W = depth.shape[-2:]
     pxl2d = torch.stack(torch.meshgrid(torch.arange(W), torch.arange(H), indexing='xy'), dim=-1).to(device=device, dtype=dtype)
-    pts3d_homog = reproj2d3d_broadcast(pxl2d, proj4x4_inv=cam_intr4x4.inverse()).transpose(-2, -1).transpose(-3, -2)
-    pts3d = pts3d_homog[(None, ) * (depth.dim() - 3)] * depth
+
+    pts3d_homog = reproj2d3d_broadcast(pxl2d[(None, ) * (cam_intr4x4.dim() - 2)], proj4x4_inv=cam_intr4x4[..., None, None, :, :].inverse()).transpose(-2, -1).transpose(-3, -2)
+    pts3d = pts3d_homog[(None, ) * (depth.dim() - 3)] * depth[..., None, :, :]
     return pts3d
 
 def transf3d_broadcast(pts3d, transf4x4):
     shape_first_dims = torch.broadcast_shapes(pts3d.shape[:-1], transf4x4.shape[:-2])
     return transf3d(pts3d.expand(*shape_first_dims, 3), transf4x4.expand(*shape_first_dims, 4, 4))
 
+def cam_intr_4_to_4x4(cam_intr4):
+    """
+    Args:
+        cam_intr4: ...x4, [fx, fy, cx, cy]
+    Returns:
+        cam_intr_4x4: ...x4x4, [[fx, 0, cx, 0], [0, fy, cy, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    """
+    cam_intr4x4 = torch.eye(4).expand(cam_intr4.shape[:-1] + (4, 4)).clone()
+    cam_intr4x4[..., 0, 0] = cam_intr4[..., 0]
+    cam_intr4x4[..., 1, 1] = cam_intr4[..., 1]
+    cam_intr4x4[..., 0, 2] = cam_intr4[..., 2]
+    cam_intr4x4[..., 1, 2] = cam_intr4[..., 3]
+    return cam_intr4x4
 def transf3d(pts3d, transf4x4):
     """
     Args:
@@ -325,3 +403,34 @@ def transf2d(pts2d, transf3x3):
     pts2d_transf = pts2d_transf.index_select(dim=dim_coords2d, index=torch.LongTensor([0, 1]).to(device=device))
     pts2d_transf = pts2d_transf.squeeze(dim=-1)
     return pts2d_transf
+
+
+def plane4d_to_tform4x4(plane4d: torch.Tensor):
+    """
+    Args:
+        plane4d (torch.Tensor): ...x4, first 3 dimensions are axis, last dimension offset.
+    Returns:
+        plan3d_tform_pts (torch.Tensor): ...x4x4
+
+    """
+    device = plane4d.device
+    plane3d_tform4x4_obj = torch.eye(4).to(device=device)
+    top_axis = plane4d[:3] / plane4d[:3].norm()
+    x = top_axis[0]
+    y = top_axis[1]
+    z = top_axis[2]
+    if x != 0 or y != 0:
+        left_axis = torch.Tensor([-y, x, 0.]).to(device=device)
+        left_axis = left_axis / left_axis.norm()
+        back_axis = torch.Tensor([-x * z, -y * z, x * x + y * y]).to(device=device)
+        back_axis = back_axis / back_axis.norm()
+    else:
+        left_axis = torch.Tensor([1., 0., 0.], device=device)
+        back_axis = torch.Tensor([0., 1., 0.], device=device)
+    plane3d_tform4x4_obj[0, :3] = left_axis
+    plane3d_tform4x4_obj[1, :3] = back_axis
+    plane3d_tform4x4_obj[2, :3] = top_axis
+    plane3d_tform4x4_obj[2, 3] = -plane4d[3]
+
+    return plane3d_tform4x4_obj
+

@@ -193,19 +193,19 @@ def fit_se3_to_corresp_3d_2d_opencv(pts1, pxl2, weights, proj_mat, method, prev_
 
 
 def mask_points(masks_in, pts1, pts2, weights_in=None):
-    """ mask points and weights so that they are in the required forms for se3 fits
+    """ mask points and weights so that they are in the required forms for se3 fits. Masks should have same number of points M, otherwise M equals the maximum number of masked points.
     Paramters
     ---------
-    masks_in torch.Tensor: KxHxW / KxN, bool
+    masks_in torch.Tensor: KxHxW / KxN, bool #
     pts1 torch.Tensor: C1xHxW / C1xN, float
     pts2 torch.Tensor: C2xHxW / C2xN, float
     weights_in torch.Tensor: KxHxW / KxN, float
 
     Returns
     -------
-    pts1 torch.Tensor: KxNxC1, float
-    pts2 torch.Tensor: KxNxC2, float
-    weights_out torch.Tensor: KxN, float
+    pts1 torch.Tensor: KxMxC1, float
+    pts2 torch.Tensor: KxMxC2, float
+    weights_out torch.Tensor: KxM, float
     """
 
     C1 = pts1.shape[0]

@@ -19,7 +19,7 @@ metrics:
 
 method:
   nemo:
-    classes: ${categories}
+    categories: ${categories}
 
 train_datasets:
   labeled:

@@ -18,6 +18,61 @@ def tensor_to_cv_img(x_in):
     x_out = x_out[:, :, ::-1]
     return x_out
 
+from typing import List
+def add_boolean_table(img: torch.Tensor, table: torch.Tensor, text: List=None):
+    """
+    Args:
+        img (torch.Tensor): 3xHxW
+        table (torch.Tensor): RxC
+        W: int
+    Return:
+        img (torch.Tensor): 3xHxW
+    """
+    dtype = img.dtype
+    device = img.device
+
+    W = img.shape[-1]
+    R, C = table.shape
+    K = R * C
+    column_offset = W // 4
+    margin = 5
+    entry_width = (W) // C
+    font_scale = entry_width / 60.
+    margin_top = int(40 * font_scale)
+    H = R * entry_width
+    letters_count_max = 0
+    if text is not None:
+        for t, _text in enumerate(text):
+            if len(_text) > letters_count_max:
+                letters_count_max = len(_text)
+    W_text = int(font_scale * letters_count_max * 20.)
+
+    img_text = torch.ones(size=(3, H, W_text)).to(dtype=dtype, device=device)
+    img_table = torch.ones(size=(3, H, W)).to(dtype=dtype, device=device)
+
+    if text is not None:
+        for t, _text in enumerate(text):
+            img_text = draw_text_in_rgb(img=img_text, text=_text, leftTopCornerOfText=(margin, margin+margin_top+entry_width * t), fontColor=(0, 0, 0), fontScale=font_scale)
+
+    pxls = torch.stack(torch.meshgrid(torch.arange(R), torch.arange(C), indexing='ij'), dim=-1)
+    pxls = pxls.flip(dims=[-1,]) # x, y
+    pxls = ((pxls + 0.5) * entry_width).to(dtype=int, device=device)
+    #pxls[:, :, 0] += column_offset
+    pxls = pxls.reshape(-1, 2)
+    K = pxls.shape[0]
+    blue = torch.Tensor([0, 0, 1.]).to(dtype=dtype, device=device)
+    green = torch.Tensor([0, 1., 0]).to(dtype=dtype, device=device)
+    colors = table[..., None].to(dtype=dtype, device=device) * green[None, None] + (~table[..., None]).to(dtype=dtype, device=device) * blue[None, None]
+    colors = colors.reshape(-1, 3)
+    img_table = draw_pixels(img_table, pxls=pxls, colors=colors, radius_in=0, radius_out=entry_width // 5) / 255.
+
+    img_table = torch.cat([img_text, img_table], dim=-1)
+
+    img = torch.cat([torch.ones(img.shape[0], img.shape[1], W_text).to(dtype=dtype, device=device), img], dim=-1)
+    img = torch.cat([img, img_table], dim=1)
+
+    return img
+
 def draw_bbox(img, bbox, color=(255, 255, 255), line_width=2):
     # img: 3xHxW, bbox: [x0, y0, x1, y1]
 
@@ -119,7 +174,7 @@ def draw_text_as_img(H: int, W: int, text: str, fontScale=1., lineThickness: int
     img = torch.zeros(size=(3, H, W))
     return draw_text_in_rgb(img, text=text, fontScale=fontScale, lineThickness=lineThickness)
 
-def draw_text_in_rgb(img, text='title0', fontScale=1., lineThickness: int=2, fontColor = (255, 255, 255)):
+def draw_text_in_rgb(img, text='title0', fontScale=1., lineThickness: int=2, fontColor = (255, 255, 255), leftTopCornerOfText=(10, 50)):
     # 3xHxW
     _, H, W = img.shape
     device = img.device
@@ -131,12 +186,10 @@ def draw_text_in_rgb(img, text='title0', fontScale=1., lineThickness: int=2, fon
     img = img.astype(np.float32)
 
     font = cv2.FONT_HERSHEY_SIMPLEX
-    topLeftCornerOfText = (10, 50)  # left, top
-
 
     for i, line in enumerate(text.split('\n')):
         gap = cv2.getTextSize(line, font, fontScale, lineThickness)[0][1] + 5
-        topLeftCornerOfLine = (topLeftCornerOfText[0], topLeftCornerOfText[1] + gap * i)
+        topLeftCornerOfLine = (leftTopCornerOfText[0], leftTopCornerOfText[1] + gap * i)
 
         cv2.putText(img, line,
                     topLeftCornerOfLine,

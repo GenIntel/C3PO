@@ -1,5 +1,4 @@
 import pandas
-import torchvision.io
 import typer
 import od3d.io
 from omegaconf import OmegaConf

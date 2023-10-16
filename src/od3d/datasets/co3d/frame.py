@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import torch.utils.data
 from typing import List
 import numpy as np
+from od3d.datasets.co3d.enum import CO3D_FRAME_TYPES
 
 from od3d.datasets.frame import OD3D_FrameMeta, \
     OD3D_FrameMetaSequenceMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
@@ -46,7 +47,10 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4
     def load_from_raw(frame_annotation: FrameAnnotation):
         category = frame_annotation.image.path.split('/')[0]
         sequence_name = frame_annotation.sequence_name
-        frame_type = frame_annotation.meta['frame_type']
+        if frame_annotation.meta is not None:
+            frame_type = frame_annotation.meta['frame_type']
+        else:
+            frame_type = CO3D_FRAME_TYPES.CO3DV1.value
         name = f'{frame_annotation.frame_number}'
 
         rfpath_mask = Path(frame_annotation.mask.path)
@@ -68,9 +72,25 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4
         H, W = frame_annotation.image.size
         size = torch.Tensor([H, W])
 
-        s = min(H, W)
-        focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length) * s / 2.
-        principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size.flip(dims=(0,)) / 2.
+        if frame_annotation.viewpoint.intrinsics_format == 'ndc_isotropic':
+            # see https://pytorch3d.org/docs/cameras
+            s = min(H, W)
+            focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length) * s / 2.
+            principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size.flip(
+                dims=(0,)) / 2.
+
+        elif frame_annotation.viewpoint.intrinsics_format == 'ndc_norm_image_bounds':
+            focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length)
+            focal_length[0] *= W / 2.
+            focal_length[1] *= H / 2.
+            principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point)
+            principal_point[0] *= W / 2.
+            principal_point[1] *= H / 2.
+            principal_point += size.flip(dims=(0,)) / 2.
+        else:
+            logger.warning(f'Unknown viewpoint intrinsics format {frame_annotation.viewpoint.intrinsics_format}.')
+            raise NotImplementedError
+
         cam_intr4x4 = torch.Tensor([[focal_length[0], 0., principal_point[0], 0.],
                            [0., focal_length[1], principal_point[1], 0.],
                            [0., 0., 1., 0.],
@@ -112,6 +132,12 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4
     @staticmethod
     def get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta: Path, category: str, sequence_name: str, name: str):
         return path_meta.joinpath(CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=name))
+
+    @staticmethod
+    def get_frames_names_of_category_sequence(path_meta: Path, category: str, sequence_name: str):
+        dict_nested_frames = CO3D_FrameMeta.complete_nested_metas(path_meta=path_meta, dict_nested_metas={category: {sequence_name: None}})
+        frames_names = dict_nested_frames[category][sequence_name]
+        return frames_names
 
     """
     @staticmethod
@@ -220,14 +246,17 @@ class CO3D_Frame(OD3D_Frame):
     def __init__(self, path_raw: Path, path_preprocess: Path, meta: CO3D_FrameMeta, path_meta: Path,
                  modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
-                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value):
+                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
+                 aligned_name:str=None, mesh_name:str='default'):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
 
         self.meta = meta
         self.path_meta: Path = path_meta
         self._sequence = None
         self.cam_tform_obj_source = cam_tform_obj_source
+        self.aligned_name = aligned_name
         self.cuboid_source = cuboid_source
+        self.mesh_name = mesh_name
         # the following variables can be configured dynamically
         # self._config = None
 
@@ -256,6 +285,7 @@ class CO3D_Frame(OD3D_Frame):
             self._sequence = CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                                            path_meta=self.path_meta, meta=sequence_meta, modalities=self.modalities,
                                            categories=self.all_categories, cam_tform_obj_source=self.cam_tform_obj_source,
+                                           aligned_name=self.aligned_name, mesh_name=self.mesh_name,
                                            cuboid_source=self.cuboid_source)
         return self._sequence
 
@@ -266,22 +296,67 @@ class CO3D_Frame(OD3D_Frame):
         return self._depth
 
     @property
+    def fpath_mesh(self):
+        return self.sequence.fpath_mesh
+
+    @property
+    def mesh(self):
+        return self.sequence.mesh
+
+    @property
+    def fpath_cam_tform4x4_obj_droid_slam(self):
+        return self.path_preprocess.joinpath('cam_tform4x4_obj', 'droid_slam', self.name_unique + '.pt')
+
+    @property
     def cam_tform4x4_obj(self):
         if self._cam_tform4x4_obj is None:
-            if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D or not self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
-                self._cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
-                #if not self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
-                #    logger.warning(f'No {self.cam_tform_obj_source} label for {self.sequence.name_unique}')
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL:
-                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
-                                                  inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL:
-                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
-                                                  inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-            elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LIMITS3D:
-                self._cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
-                                                  inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
-
+            self._cam_tform4x4_obj = self.get_cam_tform4x4_obj(cam_tform_obj_source=self.cam_tform_obj_source)
         return self._cam_tform4x4_obj
 
-
+    def get_cam_tform4x4_obj(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES):
+        if cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.FRONT_FRAME_AND_PCL and self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
+            _cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
+                                              inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL and self.sequence.fpath_cuboid_front_tform4x4_obj.exists():
+            _cam_tform4x4_obj = tform4x4(torch.Tensor(self.meta.l_cam_tform4x4_obj),
+                                              inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LIMITS3D:
+            _cam_tform4x4_obj = tform4x4(
+                torch.Tensor(self.meta.l_cam_tform4x4_obj) and self.sequence.fpath_cuboid_front_tform4x4_obj.exists(),
+                inv_tform4x4(self.sequence.cuboid_front_tform4x4_obj))
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM and self.fpath_cam_tform4x4_obj_droid_slam.exists():
+            _cam_tform4x4_obj = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED and self.fpath_cam_tform4x4_obj_droid_slam.exists():
+            _cam_tform4x4_obj_droid_slam = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+            _droid_slam_aligned_tform_droid_slam = self.sequence.droid_slam_aligned_tform_droid_slam
+            _cam_tform4x4_obj = tform4x4(_cam_tform4x4_obj_droid_slam, inv_tform4x4(_droid_slam_aligned_tform_droid_slam))
+            # note: not alignment of droid slam may include scale, therefore remove this scale.
+            # note: projection does not change as we scale the depth z to the object as well
+            _scale = _cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+            _cam_tform4x4_obj[:3] = _cam_tform4x4_obj[:3] / _scale
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP and self.fpath_cam_tform4x4_obj_droid_slam.exists():
+            _cam_tform4x4_obj_droid_slam = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+            co3dv1_zsp_obj_tform_droid_slam_obj = self.sequence.co3dv1_zsp_obj_tform_droid_slam_obj
+            _cam_tform4x4_obj = tform4x4(_cam_tform4x4_obj_droid_slam, inv_tform4x4(co3dv1_zsp_obj_tform_droid_slam_obj))
+            # note: not alignment of droid slam may include scale, therefore remove this scale.
+            # note: projection does not change as we scale the depth z to the object as well
+            _scale = _cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+            _cam_tform4x4_obj[:3] = _cam_tform4x4_obj[:3] / _scale
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
+            _cam_tform4x4_obj_droid_slam = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
+            zsp_labeled_ref_tform_droid_slam_obj = self.sequence.zsp_labeled_cuboid_ref_tform_droid_slam_obj
+            _cam_tform4x4_obj = tform4x4(_cam_tform4x4_obj_droid_slam, inv_tform4x4(zsp_labeled_ref_tform_droid_slam_obj))
+            # note: not alignment of droid slam may include scale, therefore remove this scale.
+            # note: projection does not change as we scale the depth z to the object as well
+            _scale = _cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+            _cam_tform4x4_obj[:3] = _cam_tform4x4_obj[:3] / _scale
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3DV1:
+            metav1 = CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_preprocess.joinpath('..', 'CO3Dv1_Preprocess', 'meta'), rfpath=self.meta.rfpath)
+            if metav1 is None:
+                raise NotImplementedError
+            _cam_tform4x4_obj = torch.Tensor(metav1.l_cam_tform4x4_obj)
+        else:
+            _cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
+            if cam_tform_obj_source != CAM_TFORM_OBJ_SOURCES.CO3D:
+                logger.warning(f'No fpath available for cam source {cam_tform_obj_source}.')
+        return _cam_tform4x4_obj

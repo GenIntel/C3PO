@@ -1,7 +1,11 @@
-from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES
+import open3d.geometry
+from od3d.datasets.co3d.enum import CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES, CO3D_CATEGORIES, FEATURE_TYPES, REDUCE_TYPES, PCL_SOURCES
+from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
+from od3d.datasets.co3d.enum import MAP_CATEGORIES_CO3D_TO_OD3D
 from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 from od3d.datasets.frame import OD3D_SequenceMeta
-
+from od3d.cv.geometry.mesh import Mesh, Meshes
+from od3d.cv.io import read_pts3d_colors, read_pts3d, write_pts3d_with_colors
 from tqdm import tqdm
 import logging
 logger = logging.getLogger(__name__)
@@ -14,16 +18,13 @@ import subprocess
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_Frame
 
-from omegaconf import DictConfig, OmegaConf
 from co3d.dataset.data_types import (
     load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
 )
 from od3d.cv.geometry.transform import se3_exp_map, tform4x4, transf4x4_from_rot3x3_and_transl3
 from od3d.cv.geometry.transform import rot3x3
 
-from od3d.cv.geometry.mesh import Meshes
 from typing import List
-import torchvision
 import torch
 from pathlib import Path
 from od3d.cv.visual.show import show_img
@@ -37,6 +38,7 @@ from od3d.cv.geometry.points_alignment import get_pca_tform_world
 from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4, inv_tform4x4
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.geometry.points_alignment import icp
+from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
 
 from dataclasses import dataclass
 import torch.utils.data
@@ -51,7 +53,6 @@ class CO3D_SequenceMeta(OD3D_SequenceMeta):
     pcl_quality_score: float
     rfpath_pcl: Path
     viewpoint_quality_score: float
-
 
     @property
     def name_unique(self):
@@ -89,121 +90,39 @@ class CO3D_SequenceMeta(OD3D_SequenceMeta):
                                  pcl_pts_count=pcl_pts_count, pcl_quality_score=pcl_quality_score,
                                  viewpoint_quality_score=viewpoint_quality_score)
 
-    """
-    @staticmethod
-    def load_from_meta_with_category_and_name(path_meta: Path, category: str, name: str):
-        fpath_meta = CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta, category=category, name=name)
-        if not fpath_meta.exists():
-            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
-        return CO3D_SequenceMeta(**OmegaConf.load(fpath_meta))
 
-    @staticmethod
-    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
-        fpath_meta = path_meta.joinpath(rfpath)
-        if not fpath_meta.exists():
-            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
-        return CO3D_SequenceMeta(**OmegaConf.load(fpath_meta))
-    @staticmethod
-    def get_fpath_sequence_meta_with_rfpath(path_meta: Path, rfpath_meta: Path):
-        return path_meta.joinpath(rfpath_meta)
-
-
-    @staticmethod
-    def get_rfpath_sequences():
-        return Path("sequences")
-
-    @staticmethod
-    def get_rfpath_sequences_meta_with_category(category: str):
-        return CO3D_SequenceMeta.get_rfpath_sequences().joinpath(category)
-
-    @staticmethod
-    def get_rfpath_sequence_meta_with_category_and_name(category: str, name: str):
-        return CO3D_SequenceMeta.get_rfpath_sequences_meta_with_category(category=category).joinpath(name + '.yaml')
-
-    @staticmethod
-    def get_path_sequences_meta(path_meta: Path):
-        return path_meta.joinpath(CO3D_SequenceMeta.get_rfpath_sequences())
-
-    @staticmethod
-    def get_path_sequences_meta_with_category(path_meta: Path, category: str):
-        return path_meta.joinpath(
-            CO3D_SequenceMeta.get_rfpath_sequences_meta_with_category(category=category))
-
-
-    @staticmethod
-    def get_map_category_sequences_names(path_meta, categories):
-        map_category_sequences_names = {}
-        for category in categories:
-            map_category_sequences_names[category] = [fpath.stem for fpath in CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=path_meta, category=category).iterdir()]
-        return map_category_sequences_names
-
-    """
-    """ 
-    # legacy code
-    @staticmethod
-    def get_rfpaths_sequences_meta(categories, path_meta=None, map_category_sequences_names=None):
-        sequences_rfpaths = []
-        #if categories is None:
-        #    if path_meta is None:
-        #        categories = CO3D_CATEGORIES.list()
-        #    else:
-        #        categories = list(CO3D_SequenceMeta.get_path_sequences_meta(path_meta=path_meta).iterdir())
-        for category in categories:
-            if map_category_sequences_names is None or category not in map_category_sequences_names.keys():
-                if path_meta is None:
-                    logger.error(f'cannot load rfpaths_sequences_meta for category `{category}` as neither map_category_sequences_names nor path_meta are provided')
-                    sequences_names = []
-                else:
-                    sequences_names = list(CO3D_SequenceMeta.get_path_sequences_meta_with_category(path_meta=path_meta, category=category).iterdir())
-            else:
-                sequences_names = map_category_sequences_names[category]
-            for sequence_name in sequences_names:
-                sequences_rfpaths.append(CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=category, name=sequence_name))
-        return sequences_rfpaths
-    """
-
-    """
-    @staticmethod
-    def meta_rfpath_to_category(rfpath: Path):
-        return rfpath.parent.stem
-    @staticmethod
-    def meta_rfpath_to_name(rfpath: Path):
-        return rfpath.stem
-
-    def get_fpath(self, path_meta):
-        return CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta,
-                                                                                category=self.category,
-                                                                                name=self.name)
-    @property
-    def rfpath(self):
-        return CO3D_SequenceMeta.get_rfpath_sequence_meta_with_category_and_name(category=self.category, name=self.name)
-
-    def save(self, path_meta):
-        sequence_meta_fpath = self.get_fpath(path_meta=path_meta)
-        sequence_meta_config = OmegaConf.structured(self)
-        if not sequence_meta_fpath.parent.exists():
-            sequence_meta_fpath.parent.mkdir(parents=True)
-        OmegaConf.save(sequence_meta_config, sequence_meta_fpath, resolve=True)
-    """
 
 class CO3D_Sequence():
 
     def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, meta: CO3D_SequenceMeta,
                  modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
-                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value
+                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
+                 mesh_feats_type=FEATURE_TYPES.DINOV2_AVG.value,
+                 dist_verts_mesh_feats_reduce_type=REDUCE_TYPES.MIN.value,
+                 pcl_source=PCL_SOURCES.CO3D.value,
+                 aligned_name:str =None,
+                 mesh_name: str='default',
                  ):
         self.path_raw: Path = path_raw
         self.path_preprocess: Path = path_preprocess
         self.path_meta: Path = path_meta
         self.meta = meta
         self.cam_tform_obj_source = cam_tform_obj_source
+        self.aligned_name = aligned_name
+        self.mesh_name = mesh_name
+        self.mesh_feats_type = mesh_feats_type
+        self.pcl_source = pcl_source
+        self.dist_verts_mesh_feats_reduce_type = dist_verts_mesh_feats_reduce_type
         self.cuboid_source = cuboid_source
         self.modalities = modalities
         self.categories = categories
         self.category_id = categories.index(self.category)
+        self._mesh_feats = None
         self._pcl = None
+        self._pcl_colors = None
         self._pcl_clean = None
+        self._mesh = None
         self._front_name = None
         self._cuboid_front_tform4x4_obj = None
         self._cuboid = None
@@ -252,7 +171,7 @@ class CO3D_Sequence():
             vis = o3d.visualization.VisualizerWithEditing()
             vis.create_window()
             #vis.add_geometry(pcd)
-            pcd = o3d.io.read_point_cloud(str(self.fpath_pcl))
+            pcd = o3d.io.read_point_cloud(str(self.fpath_pcl_co3d))
 
             # vis.add_geometry(pcd)
 
@@ -299,7 +218,7 @@ class CO3D_Sequence():
         cuboid_limits3d = torch.load(self.fpath_cuboid_limits3d).to(dtype=torch.float32)
         return cuboid_limits3d
 
-
+    """
     def preprocess_front_name(self, override=False):
         fpath_front_name = self.fpath_front_name
 
@@ -417,6 +336,7 @@ class CO3D_Sequence():
                     logger.info("2) Afther picking points, press q for close the window")
                     vis = o3d.visualization.Visualizer()
                     vis.create_window()
+
                     for i, pts3d in enumerate(l_pts3d):
                         # Create an Open3D PointCloud object
                         pcd = o3d.geometry.PointCloud()
@@ -572,20 +492,64 @@ class CO3D_Sequence():
                 # cframe = CoordinateFrame(origin=obj_tform_cuboid_front[:3, 3], axes=obj_tform_cuboid_front[:3, :3])
 
                 save_ply(fpath_cuboid, verts=cuboids.verts, faces=cuboids.faces)
-
+    """
 
 
     @property
     def pcl(self):
         if self._pcl is None:
-            fpath_pcl = self.fpath_pcl
+            fpath_pcl = self.fpath_pcl_co3d
             verts, _ = load_ply(str(fpath_pcl))
             self._pcl = verts
+
         return self._pcl
 
+    def get_pcl(self, pcl_source: PCL_SOURCES):
+        if pcl_source == PCL_SOURCES.CO3D:
+            fpath = self.fpath_pcl_co3d
+            return read_pts3d(fpath)
+        elif pcl_source == PCL_SOURCES.DROID_SLAM:
+            fpath = self.fpath_pcl_droid_slam
+            return read_pts3d(fpath)
+        elif pcl_source == PCL_SOURCES.DROID_SLAM_CLEAN:
+            fpath = self.fpath_pcl_droid_slam_clean
+            return read_pts3d(fpath)
+        else:
+            logger.warning(f'Unknown pcl source {pcl_source}')
+            return None
+
+    def get_pcl_colors(self, pcl_source: PCL_SOURCES):
+        if pcl_source == PCL_SOURCES.CO3D:
+            fpath = self.fpath_pcl_co3d
+            return read_pts3d_colors(fpath)
+        elif pcl_source == PCL_SOURCES.DROID_SLAM:
+            fpath = self.fpath_pcl_droid_slam
+            return read_pts3d_colors(fpath)
+        elif pcl_source == PCL_SOURCES.DROID_SLAM_CLEAN:
+            fpath = self.fpath_pcl_droid_slam_clean
+            return read_pts3d_colors(fpath)
+        else:
+            logger.warning(f'Unknown pcl source {pcl_source}')
+            return None
+
+
     @property
-    def fpath_pcl(self):
+    def pcl_colors_co3d(self):
+        if self._pcl_colors is None:
+            self._pcl_colors = read_pts3d_colors(self.fpath_pcl_co3d)
+        return self._pcl_colors
+
+    @property
+    def fpath_pcl_co3d(self):
         return self.path_raw.joinpath(self.meta.rfpath_pcl)
+
+    @property
+    def fpath_pcl_droid_slam(self):
+        return self.path_preprocess.joinpath('pcl', 'droid_slam', self.category, self.name, 'pcl.ply')
+
+    @property
+    def fpath_pcl_droid_slam_clean(self):
+        return self.path_preprocess.joinpath('pcl', 'droid_slam_clean', self.category, self.name, 'pcl.ply')
 
     @property
     def cuboid_labeled(self):
@@ -615,6 +579,7 @@ class CO3D_Sequence():
         #     self._cam_tform4x4_obj[:3, :3] = axis3d_from_pxl2d(kpts2d_orient=self.kpts2d_orient, cam_intr4x4=self.cam_intr4x4) #  orients
         #
 
+    """
     @property
     def front_name(self):
         if self._front_name is None:
@@ -623,6 +588,7 @@ class CO3D_Sequence():
                 self.preprocess_front_name()
             self._front_name = od3d.io.read_str_from_file(fpath_front_name)
         return self._front_name
+    """
 
     @property
     def cam_front_tform4x4_obj(self):
@@ -632,6 +598,10 @@ class CO3D_Sequence():
     def cam_first_tform4x4_obj(self):
         return torch.Tensor(self.first_frame.meta.l_cam_tform4x4_obj)
 
+
+    def get_frame_by_index(self, index: int):
+        return self.get_frame_by_name(self.frames_names[index])
+
     def get_frame_by_name(self, frame_name: str):
         frame_meta = CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_meta,
                                                                rfpath=CO3D_FrameMeta.
@@ -640,20 +610,38 @@ class CO3D_Sequence():
                                                                    name=frame_name))
         frame = CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                            meta=frame_meta, modalities=self.modalities, categories=self.categories,
-                           cam_tform_obj_source=self.cam_tform_obj_source, cuboid_source=self.cuboid_source)
+                           cam_tform_obj_source=self.cam_tform_obj_source, cuboid_source=self.cuboid_source,
+                           aligned_name=self.aligned_name, mesh_name=self.mesh_name)
         return frame
+
+    def get_sequence_by_category_and_name(self, category: str, name: str):
+        sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta,
+                                                                                category=category, name=name)
+        return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+                             meta=sequence_meta, modalities=self.modalities, categories=self.categories,
+                             aligned_name=self.aligned_name,
+                             mesh_feats_type=self.mesh_feats_type,
+                             dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type,
+                             cuboid_source=self.cuboid_source,
+                             cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
+                             mesh_name=self.mesh_name)
 
     @property
     def front_frame(self):
         return self.get_frame_by_name(frame_name=self.front_name)
 
     @property
+    def frames_names(self):
+        frames_names = CO3D_FrameMeta.get_frames_names_of_category_sequence(path_meta=self.path_meta, category=self.category, sequence_name=self.name)
+        return frames_names
+
+    @property
     def first_frame(self):
-        first_frame_fpath = sorted(CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=self.path_meta,
-                                                                                              category=self.category,
-                                                                                              sequence=self.name).iterdir(),
-                                   key=lambda p: int(p.stem))[0]
-        return self.get_frame_by_name(frame_name=first_frame_fpath.stem)
+        #first_frame_fpath = sorted(CO3D_FrameMeta.get_path_frames_meta_with_category_sequence(path_meta=self.path_meta,
+        #                                                                                      category=self.category,
+        #                                                                                      sequence=self.name).iterdir(),
+        #                           key=lambda p: int(p.stem))[0]
+        return self.get_frame_by_index(index=0)
 
     @property
     def cuboid_front_tform4x4_obj(self):
@@ -675,7 +663,8 @@ class CO3D_Sequence():
             dataset = CO3D(name='co3d', modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.MASK, OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ, OD3D_FRAME_MODALITIES.CAM_INTR4X4],
                            path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                            categories=[CO3D_CATEGORIES(self.category).value], dict_nested_frames={self.category: {self.name: None}},
-                           cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D.value)
+                           cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D.value,
+                           mesh_name=self.mesh_name)
 
             dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
                                                      collate_fn=dataset.collate_fn,
@@ -721,6 +710,153 @@ class CO3D_Sequence():
     @property
     def fpath_cuboid(self):
         return self.path_preprocess.joinpath('cuboids', self.cuboid_source, self.category, self.name + '.ply')
+
+    @property
+    def fpath_mesh_feats(self):
+        return self.path_preprocess.joinpath('mesh_feats', self.mesh_name, self.mesh_feats_type, self.name_unique, 'mesh_feats.pt')
+
+    def preprocess_mesh_feats(self):
+        # fpath_mesh_feats
+        from od3d.datasets.co3d import CO3D
+        dataset = CO3D(name='co3d', modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ,
+                                                OD3D_FRAME_MODALITIES.CAM_INTR4X4],
+                       path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+                       categories=[CO3D_CATEGORIES(self.category).value],
+                       dict_nested_frames={self.category: {self.name: None}},
+                       cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM.value,
+                       cuboid_source=CUBOID_SOURCES.DROID_SLAM.value,
+                       mesh_feats_type=self.mesh_feats_type,
+                       mesh_name=self.mesh_name)
+
+        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False,
+                                                 collate_fn=dataset.collate_fn,
+                                                 num_workers=0)
+
+        if torch.cuda.is_available():
+            device = 'cuda:0'
+        else:
+            device = 'cpu'
+
+        from od3d.models.model import OD3D_Model
+        from od3d.cv.transforms.transform import OD3D_Transform
+        from od3d.cv.transforms.sequential import SequentialTransform
+
+
+        model = OD3D_Model.create_by_name('dinov2_frozen_base')
+        model.cuda()
+        model.eval()
+        transform = SequentialTransform([OD3D_Transform.create_by_name('centerzoom512'), model.transform])
+
+        down_sample_rate = 16
+        feature_dim = 384
+        meshes = Meshes.load_from_meshes([self.mesh], device=device)
+        dataset.transform = transform
+
+        meshes_verts_aggregated_features = [torch.zeros((0, feature_dim), device=device)] * meshes.verts.shape[0]
+        vertices_count = len(meshes_verts_aggregated_features)
+
+
+        for batch in tqdm(iter(dataloader)):
+            B = len(batch)
+            batch.to(device=device)
+
+            batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
+
+            vts2d, vts2d_mask = meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
+                                               cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                                               imgs_sizes=batch.size, mesh_ids=[0,] * B,
+                                               down_sample_rate=down_sample_rate)
+
+            N = vts2d.shape[1]
+
+            # B x C x H x W
+            feats2d_net = model(batch.rgb)
+            H, W = feats2d_net.shape[-2:]
+            xy = torch.stack(
+                torch.meshgrid(torch.arange(W, device=device), torch.arange(H, device=device),
+                               indexing='xy'), dim=0)  # HxW
+            noise2d = torch.ones(size=(vts2d.shape[0], 0, 2), device=device)
+
+            # B x F+N x C
+            net_feats = sample_pxl2d_pts(feats2d_net, pxl2d=torch.cat([vts2d, noise2d], dim=1))
+
+            C = net_feats.shape[2]
+            # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
+            # returns: BxF+NxC
+
+            # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
+            batch_vts_ids = meshes.get_verts_and_noise_ids_stacked([0,] * B, count_noise_ids=0)
+
+            # N,
+            batch_vts_ids = torch.cat([batch_vts_ids[:, :N][vts2d_mask], batch_vts_ids[:, N:].reshape(-1)],
+                                      dim=0)
+
+            # N x C
+            net_feats = torch.cat([net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)], dim=0)
+
+            for b, vertex_id in enumerate(batch_vts_ids):
+                meshes_verts_aggregated_features[vertex_id] = torch.cat([net_feats[b:b + 1], meshes_verts_aggregated_features[vertex_id]], dim=0)
+
+
+        if self.mesh_feats_type == FEATURE_TYPES.DINOV2_ACC:
+            if not self.fpath_mesh_feats.parent.exists():
+                self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(meshes_verts_aggregated_features, f=self.fpath_mesh_feats)
+        elif self.mesh_feats_type == FEATURE_TYPES.DINOV2_AVG:
+            if not self.fpath_mesh_feats.parent.exists():
+                self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+            meshes_verts_aggregated_features_avg = torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0)
+            torch.save(meshes_verts_aggregated_features_avg, f=self.fpath_mesh_feats)
+        else:
+            logger.warning(f'Unknown mesh feature type {self.mesh_feats_type}.')
+
+    def get_dist_verts_mesh_feats_to_other_sequence(self, sequence: 'CO3D_Sequence'):
+        fpath_dist_verts_mesh_feats = self.path_preprocess.joinpath('dist_verts_mesh_feats', self.mesh_name, self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, self.name_unique, sequence.name_unique, 'dist_verts_mesh_feats.pt')
+        if fpath_dist_verts_mesh_feats.exists():
+            return torch.load(fpath_dist_verts_mesh_feats)
+        else:
+            device = self.feats[0].device
+            seq1_feats = self.feats
+            seq2_feats = sequence.feats
+
+
+            if isinstance(seq1_feats, list):
+                seq1_verts = len(seq1_feats)
+                seq2_verts = len(seq2_feats)
+                dist_verts_seq1_seq2 = torch.zeros((seq1_verts, seq2_verts)).to(device=device)
+
+                for i in tqdm(range(seq1_verts)):
+                    for j in range(seq2_verts):
+                        #if i == j:
+                        #    dist_verts_seq1_seq2[i, j] = torch.inf
+                        #else:
+                        dists = torch.cdist(self.feats[i], sequence.feats[j])
+                        if dists.numel() == 0:
+                            dist_verts_seq1_seq2[i, j] = torch.inf
+                        else:
+                            if self.dist_verts_mesh_feats_reduce_type == REDUCE_TYPES.MIN:
+                                dist_verts_seq1_seq2[i, j] = dists.min()
+                            elif self.dist_verts_mesh_feats_reduce_type == REDUCE_TYPES.AVG:
+                                dist_verts_seq1_seq2[i, j] = dists.mean()
+                            else:
+                                logger.warning(f'Unknown reduce type {self.dist_verts_mesh_feats_reduce_type}.')
+
+            else:
+                dist_verts_seq1_seq2 = torch.cdist(seq1_feats, seq2_feats)
+            if not fpath_dist_verts_mesh_feats.parent.exists():
+                fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(dist_verts_seq1_seq2, fpath_dist_verts_mesh_feats)
+            return dist_verts_seq1_seq2
+
+
+    @property
+    def feats(self):
+        if self._mesh_feats is None:
+            if not self.fpath_mesh_feats.exists():
+                self.preprocess_mesh_feats()
+            self._mesh_feats = torch.load(self.fpath_mesh_feats)
+        return self._mesh_feats
+
     @property
     def fpath_pcl_clean(self):
         return self.path_preprocess.joinpath('pcls', self.category, self.name, 'pcl_clean.ply') #  f'co3d_probthresh_{str(pts3d_prob_thresh).replace(".", "_")}_max_{pts3d_max_count}' + '.ply')
@@ -732,6 +868,383 @@ class CO3D_Sequence():
                 self.preprocess_pcl_clean()
             self._pcl_clean, _ = load_ply(fpath_pcl_clean)
         return self._pcl_clean
+
+    def get_trajectory(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES):
+
+        cams_tform_obj = []
+        for f in range(len(self.frames_names)):
+            cams_tform_obj.append(self.get_frame_by_index(f).get_cam_tform4x4_obj(cam_tform_obj_source=cam_tform_obj_source))
+        cams_tform_obj = torch.stack(cams_tform_obj, dim=0)
+        obj_cams_traj = inv_tform4x4(cams_tform_obj)[:, :3, 3]
+        return obj_cams_traj
+
+    def get_a_src_tform_b_src(self, src_a: CAM_TFORM_OBJ_SOURCES, src_b: CAM_TFORM_OBJ_SOURCES, estimate_scale=True, device='cpu'):
+        fpath = self.path_preprocess.joinpath('a_src_tform_b_src', f'{src_a}_tform_{src_b}', self.name_unique, f'{src_a}_tform_{src_b}.pt')
+        if fpath.exists():
+            a_src_tform_b_src = torch.load(fpath).to(device=device)
+        else:
+            obj_cams_traj_a = self.get_trajectory(cam_tform_obj_source=src_a).to(device=device)
+            obj_cams_traj_b = self.get_trajectory(cam_tform_obj_source=src_b).to(device=device)
+
+            from od3d.cv.geometry.fit.tform4x4 import fit_tform4x4_with_matches
+            a_src_tform_b_src = fit_tform4x4_with_matches(pts=obj_cams_traj_b, pts_ref=obj_cams_traj_a, estimate_scale=estimate_scale)
+
+            fpath.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(a_src_tform_b_src, fpath)
+        return a_src_tform_b_src
+    #    co3d_src_tform_src = tform4x4(
+    #        inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)),
+    #        src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
+
+    def run_droid_slam(self):
+        from od3d.io import run_cmd
+        stride = "1"
+        image_tag = "limpbot/droid-slam:v1"
+        path_in = self.path_raw.joinpath(self.name_unique, 'images')
+        path_out_root = self.path_preprocess.joinpath('droid_slam')
+        rpath_out = self.name_unique
+        path_out = path_out_root.joinpath(rpath_out)
+
+        fx = self.first_frame.meta.l_cam_intr4x4[0][0]
+        fy = self.first_frame.meta.l_cam_intr4x4[1][1]
+        cx = self.first_frame.meta.l_cam_intr4x4[0][2]
+        cy = self.first_frame.meta.l_cam_intr4x4[1][2]
+        if not path_out.exists():
+            path_out.mkdir(parents=True, exist_ok=True)
+        run_cmd(cmd=f'echo "{fx} {fy} {cx} {cy}" > {path_out_root}/{rpath_out}/calib.txt', logger=logger)
+        run_cmd(cmd=f'docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT={rpath_out} -e STRIDE={stride} -v {path_in}:/home/appuser/in -v {path_out_root}:/home/appuser/DROID-SLAM/reconstructions/out -t {image_tag}', logger=logger, live=True)
+
+    def preprocess_mesh(self):
+        import numpy as np
+        from od3d.cv.visual.show import show_scene
+        from od3d.cv.geometry.fit.rays_center3d import fit_rays_center3d
+        from od3d.cv.geometry.fit.plane4d import fit_plane, score_plane4d_fit
+        from od3d.cv.geometry.transform import plane4d_to_tform4x4, tform4x4_from_transl3d
+        from od3d.cv.optimization.ransac import ransac
+        from od3d.cv.geometry.transform import tform4x4_broadcast
+        from od3d.cv.geometry.mesh import Mesh
+        from functools import partial
+        from od3d.cv.geometry.downsample import random_sampling, voxel_downsampling
+
+        if torch.cuda.is_available():
+            device = 'cuda:0'
+        else:
+            device = 'cpu'
+
+
+        fpath_droid_slam_pcl = self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'pcl.ply')
+        fpath_droid_slam_traj = self.path_preprocess.joinpath('droid_slam', self.category, self.name, 'traj_est.pt')
+
+        if not fpath_droid_slam_pcl.exists() or not fpath_droid_slam_traj.exists():
+            self.run_droid_slam()
+
+
+        # N x 3
+        pts3d = read_pts3d(fpath_droid_slam_pcl).to(device=device)
+        pts3d_colors = read_pts3d_colors(fpath_droid_slam_pcl).to(device=device)
+
+        # F x 4 x 4
+        cams_tform4x4_obj = torch.load(fpath_droid_slam_traj).to(device=device)
+
+        #show_scene(pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4])
+
+        pts3d_range = max(pts3d.max(dim=0)[0] - pts3d.min(dim=0)[0]).item()
+        scene_size = pts3d_range
+        max_count_vertices = 500
+        scene_particles = 2000
+        _, mask_pts3d_sampled_rand = random_sampling(pts3d, pts3d_max_count=10000, return_mask=True)
+        mask_pts3d_sampled = mask_pts3d_sampled_rand.clone()
+        # _, mask_pts3d_sampled_voxel = voxel_downsampling(pts3d_cls=pts3d[mask_pts3d_sampled_rand], K=100000, top_bins_perc=0.90, return_mask=True)
+        #mask_pts3d_sampled[mask_pts3d_sampled_rand] = mask_pts3d_sampled_voxel
+        # particle_size = torch.cdist(pts3d[mask_pts3d_sampled], pts3d[mask_pts3d_sampled]).fill_diagonal_(torch.inf).min(dim=-1).values.mean()
+        # average Kth nearest neighbor distance
+        particle_size = torch.cdist(pts3d[mask_pts3d_sampled], pts3d[mask_pts3d_sampled]).quantile(dim=-1, q=3. / mask_pts3d_sampled.sum()).mean()
+
+        plane_dist_thresh = particle_size / 1.
+        plane_not_aggregating_dist_thresh = particle_size * 2.
+        obj_agg_dist_thresh = particle_size * 10.
+
+        center3d = fit_rays_center3d(cams_tform4x4_obj=cams_tform4x4_obj)
+        center3d_tform4x4_obj = tform4x4_from_transl3d(-center3d)
+
+        cams_tform4x4_obj = tform4x4_broadcast(cams_tform4x4_obj, inv_tform4x4(center3d_tform4x4_obj))
+        pts3d = transf3d_broadcast(pts3d, transf4x4=center3d_tform4x4_obj)
+        center3d = transf3d_broadcast(center3d, transf4x4=center3d_tform4x4_obj)
+
+        center3d_mesh = Mesh.create_sphere(center3d=center3d, radius=scene_size / 30., device=device)
+        #show_scene(meshes=[center3d_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4])
+
+
+        cams_traj = inv_tform4x4(cams_tform4x4_obj)[:, :3, 3]
+        plane4d = ransac(pts=pts3d[mask_pts3d_sampled], fit_func=fit_plane,
+                         score_func=partial(score_plane4d_fit, plane_dist_thresh=plane_dist_thresh,
+                                            cams_traj=cams_traj, pts_on_plane_weight=2.), fits_count=1000, fit_pts_count=3)
+
+
+        plane3d_tform4x4_obj = plane4d_to_tform4x4(plane4d)
+
+
+        #plane_z = -plane3d_tform4x4_obj[2, 3]
+        #plane3d_tform4x4_obj[:3, 3] = 0.
+        cams_tform4x4_obj = tform4x4_broadcast(cams_tform4x4_obj, inv_tform4x4(plane3d_tform4x4_obj))
+
+
+
+        pts3d = transf3d_broadcast(pts3d, transf4x4=plane3d_tform4x4_obj)
+        center3d = transf3d_broadcast(center3d, transf4x4=plane3d_tform4x4_obj)
+
+        height = scene_size / 5.
+        radius = scene_size * 0.5
+        plan3d_mesh = Mesh.create_plane_as_cone(radius=radius, height=height, device=device)
+
+        # show_scene(meshes=[center3d_mesh, plan3d_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4])
+
+        #plane_tform4x4_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=plane3d_tform4x4_obj)
+        mask_pts3d_on_plane = mask_pts3d_sampled * (pts3d[:, 2] < plane_dist_thresh)
+        mask_pts3d_on_plane_not_aggregating = mask_pts3d_sampled * (pts3d[:, 2] < plane_not_aggregating_dist_thresh)
+        # starting with 10 percentage of points
+        mask_center_thresh = (pts3d[mask_pts3d_sampled * (~mask_pts3d_on_plane)] - center3d).norm(dim=-1).quantile(0.1)
+        mask_pts3d_obj = mask_pts3d_sampled * (~mask_pts3d_on_plane) * ((pts3d - center3d).norm(dim=-1) < mask_center_thresh)
+
+        pts3d_not_on_plane = pts3d[mask_pts3d_sampled * (~mask_pts3d_on_plane)]
+        dists_pts3d_not_on_plane_plane = pts3d[mask_pts3d_sampled * (~mask_pts3d_on_plane), 2]
+        if ((~mask_pts3d_on_plane_not_aggregating) * mask_pts3d_obj).sum().item() > 0:
+            dists_pts3d_not_on_plane_obj_dists = (pts3d[(~mask_pts3d_on_plane_not_aggregating) * mask_pts3d_obj][:, None] - pts3d[mask_pts3d_sampled * (~mask_pts3d_on_plane)][None, :]).norm(dim=-1).min(dim=0)[0]
+            while ((dists_pts3d_not_on_plane_obj_dists < obj_agg_dist_thresh) * (dists_pts3d_not_on_plane_obj_dists < dists_pts3d_not_on_plane_plane)).sum() > mask_pts3d_obj.sum():
+                logger.info(mask_pts3d_obj.sum())
+                mask_pts3d_obj[mask_pts3d_sampled * (~mask_pts3d_on_plane)] += (dists_pts3d_not_on_plane_obj_dists < obj_agg_dist_thresh) * (dists_pts3d_not_on_plane_obj_dists < dists_pts3d_not_on_plane_plane)
+                if ((~mask_pts3d_on_plane_not_aggregating) * mask_pts3d_obj).sum().item() > 0:
+                    dists_pts3d_not_on_plane_obj_dists = torch.cdist(pts3d[(~mask_pts3d_on_plane_not_aggregating) * mask_pts3d_obj], pts3d_not_on_plane).min(dim=0)[0]
+                else:
+                    break
+
+        pts3d_obj = pts3d[mask_pts3d_obj]
+
+        pts3d_colors[mask_pts3d_on_plane] = torch.Tensor([0., 0., 1.]).to(device=device)
+        pts3d_colors[mask_pts3d_obj] = torch.Tensor([0., 1., 0.]).to(device=device)
+        pts3d_colors[mask_pts3d_sampled * (~mask_pts3d_on_plane) * (~mask_pts3d_obj)] = torch.Tensor([1., 0., 0.]).to(device=device)
+
+        # show_scene(meshes=[center3d_mesh, plan3d_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4])
+
+        o3d_pcl = open3d.geometry.PointCloud()
+        o3d_pcl.points = open3d.utility.Vector3dVector(pts3d_obj[:].detach().cpu().numpy())
+        o3d_pcl.normals = open3d.utility.Vector3dVector(np.zeros((1, 3)))  # invalidate existing normals
+        #o3d_pcl.estimate_normals()
+
+        alpha = mask_center_thresh
+        #mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(o3d_pcl, depth=9)
+        # o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+        o3d_obj_mesh, _ = o3d_pcl.compute_convex_hull()
+        o3d_obj_mesh.compute_vertex_normals()
+
+
+        #o3d_obj_mesh = o3d_obj_mesh.subdivide_midpoint(number_of_iterations=2)
+        logger.info(o3d_obj_mesh)
+        while np.asarray(o3d_obj_mesh.vertices).shape[0] < max_count_vertices:
+            o3d_obj_mesh = o3d_obj_mesh.subdivide_loop(number_of_iterations=1)
+            logger.info(o3d_obj_mesh)
+
+        logger.info(o3d_obj_mesh)
+        voxel_size = o3d_obj_mesh.get_volume() / 10.
+        while np.asarray(o3d_obj_mesh.vertices).shape[0] > max_count_vertices:
+            o3d_obj_mesh = o3d_obj_mesh.simplify_vertex_clustering(voxel_size=voxel_size, contraction=open3d.geometry.SimplificationContraction.Average)
+            logger.info(o3d_obj_mesh)
+            voxel_size = voxel_size * 2.
+
+        # contraction=o3d.geometry.SimplificationContraction.Average
+        #o3d_obj_mesh.get_volume()
+        #o3d_obj_mesh.get_surface_area()
+
+        obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+        #show_scene(meshes=[obj_mesh, center3d_mesh, plan3d_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors],
+        #           cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4], meshes_as_wireframe=True)
+
+        logger.info(self.name_unique)
+        # open3d.visualization.draw(geometries)
+        obj_tform_droid_slam = tform4x4(plane3d_tform4x4_obj, center3d_tform4x4_obj)
+        # save point cloud clean
+        pts3d = read_pts3d(fpath_droid_slam_pcl).to(device=device)
+        pts3d = transf3d_broadcast(pts3d, transf4x4=obj_tform_droid_slam)
+        pts3d_colors = read_pts3d_colors(fpath_droid_slam_pcl).to(device=device)
+
+        # note: only if mask is not available due to downsampling consider this
+        #vertices_dist_median = torch.cdist(pts3d_obj[None,], pts3d_obj[None,])[0].median()
+        #mask_pts3d_obj = torch.cdist(pts3d[None,], pts3d_obj[None,])[0].min(dim=-1).values < vertices_dist_median / 5.
+
+        mask_pts3d_clean = torch.cdist(pts3d[None,], pts3d[mask_pts3d_obj][None,])[0].min(dim=-1).values < particle_size
+        pts3d_clean = pts3d[mask_pts3d_clean]
+        pts3d_colors_clean = pts3d_colors[mask_pts3d_clean]
+
+        #show_scene(meshes=[obj_mesh, center3d_mesh, plan3d_mesh], pts3d=[pts3d_clean], pts3d_colors=[pts3d_colors_clean],
+        #           cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4], meshes_as_wireframe=True)
+
+
+        self.fpath_pcl_droid_slam_clean.parent.mkdir(parents=True, exist_ok=True)
+        self.fpath_pcl_droid_slam.parent.mkdir(parents=True, exist_ok=True)
+        write_pts3d_with_colors(fpath=self.fpath_pcl_droid_slam_clean, pts3d=pts3d_clean,
+                                pts3d_colors=pts3d_colors_clean)
+        write_pts3d_with_colors(fpath=self.fpath_pcl_droid_slam, pts3d=pts3d, pts3d_colors=pts3d_colors)
+
+        obj_mesh.write_to_file(fpath=self.fpath_mesh)
+
+        # save transformation
+        for i, cam_tform4x4_obj in enumerate(cams_tform4x4_obj):
+            frame = self.get_frame_by_index(i)
+            frame.fpath_cam_tform4x4_obj_droid_slam.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(obj=cam_tform4x4_obj.detach().cpu(), f=frame.fpath_cam_tform4x4_obj_droid_slam)
+
+
+    @property
+    def droid_slam_axis_labeled(self):
+        fpath_axis_droid_slam = self.path_preprocess.joinpath('axis', 'droid_slam', self.category, self.name, 'axis.pt')
+        if not fpath_axis_droid_slam.exists():
+            fpath_axis_droid_slam.parent.mkdir(parents=True, exist_ok=True)
+            from od3d.cv.label.axis import label_axis_in_pcl
+            axis_droid_slam = label_axis_in_pcl(pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN), pts3d_colors=self.get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN))
+            torch.save(axis_droid_slam, f=fpath_axis_droid_slam)
+        else:
+            axis_droid_slam = torch.load(fpath_axis_droid_slam)
+        return axis_droid_slam
+
+    @property
+    def fpath_droid_slam_labeled_tform_droid_slam(self):
+        return self.path_droid_slam_labeled_tform_droid_slam.joinpath(self.name_unique, 'tform.pt')
+
+    @property
+    def path_droid_slam_labeled_tform_droid_slam(self):
+        return self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_tform_droid_slam')
+
+    @property
+    def droid_slam_labeled_tform_droid_slam(self):
+        from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
+        fpath_droid_slam_labeled_tform_droid_slam = self.fpath_droid_slam_labeled_tform_droid_slam
+        if fpath_droid_slam_labeled_tform_droid_slam.exists():
+            droid_slam_labeled_tform_droid_slam = torch.load(fpath_droid_slam_labeled_tform_droid_slam)
+        else:
+            droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=self.droid_slam_axis_labeled)
+            fpath_droid_slam_labeled_tform_droid_slam.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(droid_slam_labeled_tform_droid_slam, fpath_droid_slam_labeled_tform_droid_slam)
+        return droid_slam_labeled_tform_droid_slam
+
+    @property
+    def path_zsp_labels(self):
+        return Path('third_party/zero-shot-pose/data/class_labels')
+    @property
+    def co3dv1_zsp_obj_tform_co3dv1_obj(self):
+        import numpy as np
+        from od3d.io import read_json
+        path_zsp = self.path_zsp_labels
+        fpath_src_gt = path_zsp.joinpath(self.name_unique + '.json')
+        #if fpath_src_gt.exists():
+        gt_co3d_global_tform_co3d_src = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_src_gt)['trans'])))
+        #else:
+        #    gt_co3d_global_tform_co3d_src = torch.eye(4)
+        gt_co3d_global_tform_co3d_src = gt_co3d_global_tform_co3d_src.to(torch.float)
+        return gt_co3d_global_tform_co3d_src
+
+    @property
+    def co3dv1_zsp_obj_tform_droid_slam_obj(self):
+        droid_slam_obj_tform_co3dv1_obj = self.get_a_src_tform_b_src(src_a=CAM_TFORM_OBJ_SOURCES.DROID_SLAM, src_b=CAM_TFORM_OBJ_SOURCES.CO3DV1)
+        co3dv1_zsp_obj_tform_droid_slam_obj = tform4x4(self.co3dv1_zsp_obj_tform_co3dv1_obj, inv_tform4x4(droid_slam_obj_tform_co3dv1_obj))
+        return co3dv1_zsp_obj_tform_droid_slam_obj
+
+    @property
+    def zsp_labeled_cuboid_ref_tform_droid_slam_obj(self):
+        ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
+        ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
+
+        droid_slam_labeled_ref_tform_droid_slam_obj = tform4x4(ref_seq.droid_slam_labeled_cuboid_tform_droid_slam_labeled, tform4x4(ref_seq.droid_slam_labeled_tform_droid_slam, tform4x4(inv_tform4x4(ref_seq.co3dv1_zsp_obj_tform_droid_slam_obj), self.co3dv1_zsp_obj_tform_droid_slam_obj)))
+        return droid_slam_labeled_ref_tform_droid_slam_obj
+
+    @property
+    def droid_slam_labeled_cuboid(self):
+        fpath_droid_slam_labeled_cuboid = self.path_preprocess.joinpath('mesh', 'cuboid', self.name_unique, 'mesh.ply')
+        if fpath_droid_slam_labeled_cuboid.exists():
+            droid_slam_labeled_cuboid = Meshes.load_from_files([fpath_droid_slam_labeled_cuboid])
+        else:
+            size = OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_CO3D_TO_OD3D[self.category]]
+            droid_slam_labeled_tform_pts3d = transf3d_broadcast(
+                pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
+                transf4x4=self.droid_slam_labeled_tform_droid_slam)
+            droid_slam_labeled_cuboid, droid_slam_labeled_cuboid_tform_droid_slam_labeled = \
+                fit_cuboid_to_pts3d(pts3d=droid_slam_labeled_tform_pts3d, size=size, optimize_rot=False,
+                                    optimize_transl=True)
+
+            fpath_droid_slam_labeled_cuboid.parent.mkdir(parents=True, exist_ok=True)
+
+            droid_slam_labeled_cuboid.write_to_file(fpath=fpath_droid_slam_labeled_cuboid)
+        return droid_slam_labeled_cuboid
+
+    @property
+    def fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
+        return self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_cuboid_tform_droid_slam_labeled', self.name_unique, 'tform.pt')
+    @property
+    def droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
+        fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled
+        if fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.exists():
+            droid_slam_labeled_cuboid_tform_droid_slam_labeled = torch.load(fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled)
+        else:
+            size = OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_CO3D_TO_OD3D[self.category]]
+            droid_slam_labeled_tform_pts3d = transf3d_broadcast(
+                pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
+                transf4x4=self.droid_slam_labeled_tform_droid_slam)
+            droid_slam_labeled_cuboid, droid_slam_labeled_cuboid_tform_droid_slam_labeled = \
+                fit_cuboid_to_pts3d(pts3d=droid_slam_labeled_tform_pts3d, size=size, optimize_rot=False,
+                                    optimize_transl=True)
+
+            fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(droid_slam_labeled_cuboid_tform_droid_slam_labeled.detach().cpu(), f=fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled)
+        return droid_slam_labeled_cuboid_tform_droid_slam_labeled
+
+    def write_aligned_droid_slam_tform_droid_slam(self, aligned_droid_slam_tform_droid_slam: torch.Tensor, aligned_name: str):
+        fpath_tform_aligned = self.get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(aligned_name=aligned_name)
+        fpath_tform_aligned.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(aligned_droid_slam_tform_droid_slam.detach().cpu(), f=fpath_tform_aligned)
+    def write_aligned_cuboid(self, cuboid: Meshes, aligned_name: str):
+        fpath_mesh_aligned = self.path_preprocess.joinpath('aligned', aligned_name, 'mesh', self.category, 'mesh.ply')
+        fpath_mesh_aligned.parent.mkdir(parents=True, exist_ok=True)
+        cuboid.write_to_file(fpath=fpath_mesh_aligned)
+
+    @property
+    def droid_slam_aligned_tform_droid_slam(self):
+        fpath_tform_aligned = self.fpath_droid_slam_aligned_tform_droid_slam
+        droid_slam_aligned_tform_droid_slam = torch.load(fpath_tform_aligned).to('cpu')
+        return droid_slam_aligned_tform_droid_slam
+
+    @property
+    def gt_pose_available(self):
+        if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
+            return self.fpath_droid_slam_aligned_tform_droid_slam.exists()
+        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
+            return self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.exists()
+        else:
+            return True
+    @property
+    def fpath_droid_slam_aligned_tform_droid_slam(self):
+        return self.get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(aligned_name=self.aligned_name)
+
+    def get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(self, aligned_name: str):
+        return self.path_preprocess.joinpath('aligned', aligned_name, 'aligned_droid_slam_tform_droid_slam', self.name_unique, 'tform.pt')
+
+    @property
+    def fpath_mesh(self):
+        if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
+            return self.path_preprocess.joinpath('aligned', self.aligned_name, 'mesh', self.category, 'mesh.ply')
+        else:
+            return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
+
+    @property
+    def mesh(self):
+        if self._mesh is None:
+            fpath_mesh = self.fpath_mesh
+            if not fpath_mesh.exists():
+                self.preprocess_mesh()
+            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh)
+        return self._mesh
+
+    @mesh.setter
+    def mesh(self, value: torch.Tensor):
+            self._mesh = value
 
     @property
     def com(self):

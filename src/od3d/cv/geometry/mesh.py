@@ -7,9 +7,7 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 from pytorch3d.renderer import MeshRasterizer, RasterizationSettings
 from pytorch3d.renderer.mesh.utils import interpolate_face_attributes
 from od3d.cv.geometry.transform import proj3d2d, proj3d2d_broadcast
-from od3d.cv.visual.draw import draw_pixels
-from od3d.cv.visual.show import show_img
-from od3d.cv.io import load_ply
+from od3d.cv.io import load_ply, save_ply
 from enum import Enum
 from typing import List
 logger = logging.getLogger(__name__)
@@ -18,7 +16,9 @@ from od3d.cv.geometry.transform import tform4x4, tform4x4_broadcast, inv_tform4x
     transf3d_broadcast, reproj2d3d_broadcast
 from od3d.cv.visual.sample import sample_pxl2d_grid
 from od3d.cv.geometry.grid import get_pxl2d_like, get_pxl2d
-
+from typing import Union
+import open3d as o3d
+import numpy as np
 
 class MESH_RENDER_MODALITIES(str, Enum):
     DEPTH = 'depth'
@@ -36,6 +36,7 @@ class Mesh:
         self.faces = faces
         self.rgb = rgb
         self.feats = feats
+        self.device = verts.device
 
     @staticmethod
     def load_from_file(fpath: Path, device='cpu', scale=1.):
@@ -50,9 +51,38 @@ class Mesh:
         verts, faces = load_ply(fpath)
         return Mesh(verts=verts, faces=faces)
 
+
+    def write_to_file(self, fpath: Path):
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        save_ply(fpath, verts=self.verts, faces=self.faces)
     def verts_count(self):
         return self.verts.shape[0]
 
+    @staticmethod
+    def from_o3d(mesh_o3d: o3d.geometry.TriangleMesh, device='cpu'):
+
+        vertices = torch.from_numpy(np.asarray(mesh_o3d.vertices)).to(dtype=torch.float, device=device)
+        faces = torch.from_numpy(np.asarray(mesh_o3d.triangles)).to(dtype=torch.long, device=device)
+        return Mesh(verts=vertices, faces=faces)
+    # .TriangleMesh(vertices=vertices, triangles=triangles)
+    @staticmethod
+    def create_sphere(center3d: torch.Tensor([0., 0., 0.]), radius: float = 1., device='cpu'):
+        return Mesh.from_o3d(o3d.geometry.TriangleMesh.create_sphere(radius=radius).translate(center3d.detach().cpu().numpy()), device=device)
+
+    @staticmethod
+    def create_plane_as_cone(center3d: torch.Tensor= torch.Tensor([0., 0., 0.]), radius:float=1., height:float=1., device='cpu'):
+        R = o3d.geometry.TriangleMesh.get_rotation_matrix_from_xyz((np.pi, 0., 0.))
+        # note: height becomes larger with lower resolution
+        plane3d_open3d = o3d.geometry.TriangleMesh.create_cone(radius=radius, height=height, resolution=100, split=1, create_uv_map=False).rotate(R=R, center=(0, 0, 0)).translate(center3d.detach().cpu().numpy())
+        plane3d_open3d.paint_uniform_color([0.2, 0.2, 0.4])
+        return Mesh.from_o3d(plane3d_open3d, device=device)
+
+    # TODO: create ray
+    # ray_range = scene_size
+    # ray = open3d.geometry.TriangleMesh.create_arrow(cylinder_radius=1.0 * particle_size,
+    #                                                 cone_radius=1.5 * particle_size, cylinder_height=ray_range,
+    #                                                 cone_height=4.0 * particle_size)
+    # ray.transform(inv_tform4x4(cam_tform4x4_obj).detach().cpu().numpy())
 
 class Meshes(torch.nn.Module):
     def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None, feats: List[torch.Tensor]=None):
@@ -61,6 +91,7 @@ class Meshes(torch.nn.Module):
         self.meshes_count = len(verts)
         self.verts = torch.nn.Parameter(torch.cat([_verts for _verts in verts], dim=0), requires_grad=False)
         self.faces = torch.nn.Parameter(torch.cat([_faces for _faces in faces], dim=0), requires_grad=False)
+        self.device = self.verts.device
 
         self.verts_counts = [_verts.shape[0] for _verts in verts]
         self.faces_counts = [_faces.shape[0] for _faces in faces]
@@ -104,6 +135,10 @@ class Meshes(torch.nn.Module):
             faces=[self.get_faces_with_mesh_id(i) for i in range(self.meshes_count)]
         )
 
+    def write_to_file(self, fpath: Path):
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        save_ply(fpath, verts=self.verts, faces=self.faces)
+
     @dataclass
     class PreRendered():
         cams_tform4x4_obj: torch.Tensor
@@ -122,7 +157,9 @@ class Meshes(torch.nn.Module):
         return Meshes.load_from_meshes(meshes=meshes)
 
     @staticmethod
-    def load_from_meshes(meshes: List[Mesh], device='cpu'):
+    def load_from_meshes(meshes: List[Mesh], device=None):
+        if device is None:
+            device = meshes[0].verts.device
         verts = [mesh.verts.to(device=device) for mesh in meshes]
         faces = [mesh.faces.to(device=device) for mesh in meshes]
 
@@ -151,11 +188,52 @@ class Meshes(torch.nn.Module):
         super()._apply(fn)
         self.init_pt3d()
 
+    def get_meshes_with_ids(self, meshes_ids):
+        verts = [self.get_verts_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+        faces = [self.get_faces_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+        if self.rgb is None:
+            rgb = None
+        else:
+            rgb = [self.get_rgb_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+        if self.feats is None:
+            feats = None
+        else:
+            feats = [self.get_feats_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+        return Meshes(verts=verts, faces=faces, rgb=rgb, feats=feats)
+
     def get_verts_ncds_with_mesh_id(self, mesh_id):
         verts3d = self.get_verts_with_mesh_id(mesh_id)
         verts3d_ncds = (verts3d - verts3d.min(dim=0).values[None,]) / (
                 verts3d.max(dim=0).values[None,] - verts3d.min(dim=0).values[None,])
         return verts3d_ncds
+
+    def get_verts_ncds_cat_with_mesh_ids(self, mesh_ids=None):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        verts3d_ncds = []
+        for mesh_id in mesh_ids:
+            verts3d_ncds.append(self.get_verts_ncds_with_mesh_id(mesh_id=mesh_id))
+        verts3d_ncds = torch.cat(verts3d_ncds, dim=0)
+        return verts3d_ncds
+
+    def get_verts_cat_with_mesh_ids(self, mesh_ids=None):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        verts3d = []
+        for mesh_id in mesh_ids:
+            verts3d.append(self.get_verts_with_mesh_id(mesh_id=mesh_id))
+        verts3d = torch.cat(verts3d, dim=0)
+        return verts3d
+
+    def get_faces_cat_with_mesh_ids(self, mesh_ids=None):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        faces = []
+        for mesh_id in mesh_ids:
+            faces.append(self.get_faces_with_mesh_id(mesh_id=mesh_id))
+        faces = torch.cat(faces, dim=0)
+        return faces
+
     def get_verts_ncds_from_faces_with_mesh_id(self, mesh_id):
         verts3d_ncds = self.get_verts_ncds_with_mesh_id(mesh_id)
         feats_from_faces = verts3d_ncds[self.get_faces_with_mesh_id(mesh_id)]
@@ -168,6 +246,12 @@ class Meshes(torch.nn.Module):
         return self.rgb[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
     def get_verts_with_mesh_id(self, mesh_id):
         return self.verts[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
+
+    def get_mesh_ids_for_verts(self):
+        mesh_ids = torch.LongTensor(size=(0,)).to(device=self.device)
+        for mesh_id in range(self.meshes_count):
+            mesh_ids = torch.cat([mesh_ids, torch.LongTensor([mesh_id] *  self.verts_counts[mesh_id]).to(device=self.device)], dim=0)
+        return mesh_ids
 
     def get_feats_with_mesh_id(self, mesh_id):
         return self.feats[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
@@ -223,6 +307,7 @@ class Meshes(torch.nn.Module):
         if mesh_ids == None:
             mesh_ids = list(range(len(self)))
         return torch.stack([self.get_faces_padded_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
+
     #def add_feats_cat(self, feats):
     #    raise Not I
     #    self.feats = [feats[self.verts_counts_acc_from_0[i] : self.verts_counts_acc_from_0[i+1]].to(device=self.device) for i in range(len(self))]
@@ -271,7 +356,7 @@ class Meshes(torch.nn.Module):
         return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
 
 
-    def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: torch.LongTensor, down_sample_rate=1., broadcast_batch_and_cams=False):
+    def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: Union[torch.LongTensor, List], down_sample_rate=1., broadcast_batch_and_cams=False):
         """
             Args:
                 cams_tform4x4_obj (torch.Tensor): Bx4x4
@@ -285,6 +370,9 @@ class Meshes(torch.nn.Module):
         """
         #meshes_count = mesh_ids.shape[0]
         # cams_count = cams_tform4x4_obj.shape[0]
+
+        if isinstance(mesh_ids, List):
+            mesh_ids = torch.LongTensor(mesh_ids)
 
         meshes_count = mesh_ids.shape[0]
         if cams_tform4x4_obj.dim() == 4:
@@ -330,6 +418,11 @@ class Meshes(torch.nn.Module):
 
         return verts2d, mask_verts_vsbl
 
+    def show(self, fpath: Path = None, return_visualization=False, viewpoints_count=1):
+        from od3d.cv.visual.show import show_scene
+        return show_scene(meshes=self, fpath=fpath, return_visualization=return_visualization, viewpoints_count=viewpoints_count)
+
+    """
     def show(self, pts3d=[], meshes_ids=None):
         from pytorch3d.vis.plotly_vis import plot_scene, AxisArgs
         from pytorch3d.structures import Pointclouds
@@ -348,6 +441,7 @@ class Meshes(torch.nn.Module):
                                    showaxeslabels=True, showticklabels=True))
         fig.show()
         input('bla')
+    """
 
     def del_pre_rendered(self):
         self.pre_rendered_modalities.clear()

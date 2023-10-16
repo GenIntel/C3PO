@@ -6,6 +6,26 @@ from pytorch3d.io import save_ply
 import numpy as np
 import torch
 import wandb
+import open3d as o3d
+import numpy as np
+def read_pts3d_colors(fpath: Path):
+    pcd = o3d.io.read_point_cloud(str(fpath))
+    return torch.from_numpy(np.asarray(pcd.colors)).to(torch.float)
+
+def read_pts3d(fpath: Path):
+    pcd = o3d.io.read_point_cloud(str(fpath))
+    return torch.from_numpy(np.asarray(pcd.points)).to(torch.float)
+
+
+def write_pts3d_with_colors(pts3d: torch.Tensor, pts3d_colors: torch.Tensor, fpath: Path):
+    pcd = o3d.geometry.PointCloud()
+
+    # Set the point cloud data
+    pcd.points = o3d.utility.Vector3dVector(pts3d.detach().cpu().numpy())
+    pcd.colors = o3d.utility.Vector3dVector(pts3d_colors.detach().cpu().numpy())
+
+    o3d.io.write_point_cloud(filename=str(fpath), pointcloud=pcd)
+
 
 def read_co3d_depth_image(path: Path):
     img = Image.open(path)

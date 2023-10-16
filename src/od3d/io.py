@@ -8,7 +8,7 @@ import zipfile
 import shutil
 import os
 import gdown
-from hydra import compose, initialize
+from hydra import compose, initialize, initialize_config_dir
 
 from omegaconf import DictConfig, OmegaConf
 import json
@@ -69,6 +69,15 @@ def load_hierarchical_config(benchmark="defaults", platform="local", ablation=No
             cfg = compose(config_name=benchmark, overrides=["+ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg
 
+def read_config_intern(rfpath: Path):
+    fpath = Path("config").joinpath(rfpath)
+    return read_config_extern(fpath=fpath)
+
+def read_config_extern(fpath: Path):
+    with initialize_config_dir(config_dir=str(fpath.parent.absolute()), job_name="test_app_extern"):
+        cfg = compose(config_name=fpath.stem)
+    return cfg
+
 def write_config_to_json_file(config: DictConfig, fpath: Path):
     write_json(config=dict(config), fpath=fpath)
 
@@ -77,7 +86,7 @@ def write_json(config: Dict, fpath: Path):
     with open(fpath.expanduser(), "w") as outfile:
         json.dump(config, outfile)
 
-def load_json(fpath: Path):
+def read_json(fpath: Path):
     with open(fpath.expanduser(), 'r') as openfile:
         config = json.load(openfile)
     return config
