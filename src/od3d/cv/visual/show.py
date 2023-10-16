@@ -87,7 +87,7 @@ def show_mesh():
     """
 
 from typing import Union
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.mesh import Meshes, Mesh
 from od3d.cv.visual.draw import get_colors
 import open3d
 
@@ -97,7 +97,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                pts3d: Union[torch.Tensor, List[torch.Tensor]]=None,
                pts3d_names: List[str]=None,
                pts3d_colors: Union[torch.Tensor, List]=None,
-               meshes: Meshes=None,
+               meshes: Union[Meshes, List[Mesh]]=None,
                meshes_names: List[str]=None,
                meshes_colors: Union[torch.Tensor, List]=None,
                meshes_add_translation: bool=False,
@@ -106,7 +106,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                return_visualization=False,
                viewpoints_count=1,
                dtype=torch.float,
-               device='cpu'):
+               device='cpu',
+               meshes_as_wireframe=False):
     """
     Args:
         cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
@@ -127,6 +128,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     meshes_z_offset = 0.
     meshes_y_offset = 0.
     if meshes is not None:
+        if isinstance(meshes, List):
+            meshes = Meshes.load_from_meshes(meshes)
 
         x_offset = 0.
         for i in range(len(meshes)):
@@ -182,6 +185,9 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             else:
                 mat_box.base_color = [0.5, 0.5, 0.5, 0.9]  # [0.467, 0.467, 0.467, 0.02]
 
+
+            if meshes_as_wireframe:
+                mesh_o3d = o3d.geometry.LineSet.create_from_triangle_mesh(mesh_o3d)
             #mat_box.base_roughness = 0.0
             #mat_box.base_reflectance = 0.0
             #mat_box.base_clearcoat = 1.0

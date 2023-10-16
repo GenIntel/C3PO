@@ -16,6 +16,7 @@ def read_pts3d(fpath: Path):
     pcd = o3d.io.read_point_cloud(str(fpath))
     return torch.from_numpy(np.asarray(pcd.points)).to(torch.float)
 
+
 def write_pts3d_with_colors(pts3d: torch.Tensor, pts3d_colors: torch.Tensor, fpath: Path):
     pcd = o3d.geometry.PointCloud()
 

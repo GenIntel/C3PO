@@ -11,25 +11,25 @@ defaults:
 
 categories:
   - bicycle
-#  - toytruck
-#  - toytrain
-#  - teddybear
+  - toytruck
+  - toytrain
+  - teddybear
   - car
-#  - toybus
+  - toybus
   - motorcycle
-#  - keyboard
-#  - handbag
-#  - remote
-#  - toyplane
-#  - toilet
-#  - hairdryer
-#  - mouse
-#  - toaster
-#  - hydrant
+  - keyboard
+  - handbag
+  - remote
+  - toyplane
+  - toilet
+  - hairdryer
+  - mouse
+  - toaster
+  - hydrant
   - chair
-#  - laptop
-#  - book
-#  - backpack
+  - laptop
+  - book
+  - backpack
 
 
 

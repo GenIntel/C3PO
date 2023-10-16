@@ -17,6 +17,8 @@ from od3d.cv.geometry.transform import tform4x4, tform4x4_broadcast, inv_tform4x
 from od3d.cv.visual.sample import sample_pxl2d_grid
 from od3d.cv.geometry.grid import get_pxl2d_like, get_pxl2d
 from typing import Union
+import open3d as o3d
+import numpy as np
 
 class MESH_RENDER_MODALITIES(str, Enum):
     DEPTH = 'depth'
@@ -34,6 +36,7 @@ class Mesh:
         self.faces = faces
         self.rgb = rgb
         self.feats = feats
+        self.device = verts.device
 
     @staticmethod
     def load_from_file(fpath: Path, device='cpu', scale=1.):
@@ -50,10 +53,36 @@ class Mesh:
 
 
     def write_to_file(self, fpath: Path):
+        fpath.parent.mkdir(parents=True, exist_ok=True)
         save_ply(fpath, verts=self.verts, faces=self.faces)
     def verts_count(self):
         return self.verts.shape[0]
 
+    @staticmethod
+    def from_o3d(mesh_o3d: o3d.geometry.TriangleMesh, device='cpu'):
+
+        vertices = torch.from_numpy(np.asarray(mesh_o3d.vertices)).to(dtype=torch.float, device=device)
+        faces = torch.from_numpy(np.asarray(mesh_o3d.triangles)).to(dtype=torch.long, device=device)
+        return Mesh(verts=vertices, faces=faces)
+    # .TriangleMesh(vertices=vertices, triangles=triangles)
+    @staticmethod
+    def create_sphere(center3d: torch.Tensor([0., 0., 0.]), radius: float = 1., device='cpu'):
+        return Mesh.from_o3d(o3d.geometry.TriangleMesh.create_sphere(radius=radius).translate(center3d.detach().cpu().numpy()), device=device)
+
+    @staticmethod
+    def create_plane_as_cone(center3d: torch.Tensor= torch.Tensor([0., 0., 0.]), radius:float=1., height:float=1., device='cpu'):
+        R = o3d.geometry.TriangleMesh.get_rotation_matrix_from_xyz((np.pi, 0., 0.))
+        # note: height becomes larger with lower resolution
+        plane3d_open3d = o3d.geometry.TriangleMesh.create_cone(radius=radius, height=height, resolution=100, split=1, create_uv_map=False).rotate(R=R, center=(0, 0, 0)).translate(center3d.detach().cpu().numpy())
+        plane3d_open3d.paint_uniform_color([0.2, 0.2, 0.4])
+        return Mesh.from_o3d(plane3d_open3d, device=device)
+
+    # TODO: create ray
+    # ray_range = scene_size
+    # ray = open3d.geometry.TriangleMesh.create_arrow(cylinder_radius=1.0 * particle_size,
+    #                                                 cone_radius=1.5 * particle_size, cylinder_height=ray_range,
+    #                                                 cone_height=4.0 * particle_size)
+    # ray.transform(inv_tform4x4(cam_tform4x4_obj).detach().cpu().numpy())
 
 class Meshes(torch.nn.Module):
     def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None, feats: List[torch.Tensor]=None):
@@ -107,6 +136,7 @@ class Meshes(torch.nn.Module):
         )
 
     def write_to_file(self, fpath: Path):
+        fpath.parent.mkdir(parents=True, exist_ok=True)
         save_ply(fpath, verts=self.verts, faces=self.faces)
 
     @dataclass
@@ -127,7 +157,9 @@ class Meshes(torch.nn.Module):
         return Meshes.load_from_meshes(meshes=meshes)
 
     @staticmethod
-    def load_from_meshes(meshes: List[Mesh], device='cpu'):
+    def load_from_meshes(meshes: List[Mesh], device=None):
+        if device is None:
+            device = meshes[0].verts.device
         verts = [mesh.verts.to(device=device) for mesh in meshes]
         faces = [mesh.faces.to(device=device) for mesh in meshes]
 

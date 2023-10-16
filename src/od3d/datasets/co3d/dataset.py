@@ -46,6 +46,7 @@ class CO3D(OD3D_Dataset):
                  dist_verts_mesh_feats_reduce_type=REDUCE_TYPES.MIN.value,
                  pcl_source=PCL_SOURCES.CO3D.value,
                  transform=None, index_shift=0, subset_fraction=1.,
+                 mesh_name: str='default',
                  aligned_name: str = None):
 
         if categories is not None:
@@ -64,6 +65,7 @@ class CO3D(OD3D_Dataset):
         self.frames_block_negative_depth = frames_block_negative_depth
         self.cuboid_source = cuboid_source
         self.aligned_name = aligned_name
+        self.mesh_name = mesh_name
         self.pcl_source = pcl_source
 
         logger.info("filtering sequences...")
@@ -96,7 +98,9 @@ class CO3D(OD3D_Dataset):
                     frames_count_max_per_sequence=frames_count_max_per_sequence,
                     dict_nested_frames=dict_nested_frames,
                     cam_tform_obj_source=self.cam_tform_obj_source,
-                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name)
+                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift,
+                    aligned_name=self.aligned_name,
+                    mesh_name=self.mesh_name)
 
     def get_split_sequences_shared(self, fraction1: float):
         dict_category_sequence_name_frames_names_subsetA = {}
@@ -144,38 +148,29 @@ class CO3D(OD3D_Dataset):
                     path_preprocess=self.path_preprocess, categories=self.categories,
                     dict_nested_frames=dict_nested_frames,
                     cam_tform_obj_source=self.cam_tform_obj_source,
-                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name)
+                    cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name,
+                    mesh_name=self.mesh_name)
 
     def get_split_from_dicts(self, dict_nested_frames_subsetA, dict_nested_frames_subsetB):
         co3d_subsetA = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
                             path_preprocess=self.path_preprocess, categories=self.categories,
                             dict_nested_frames=dict_nested_frames_subsetA,
                             cam_tform_obj_source=self.cam_tform_obj_source,
-                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name)
+                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name,
+                            mesh_name=self.mesh_name)
 
         co3d_subsetB = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
                             path_preprocess=self.path_preprocess, categories=self.categories,
                             dict_nested_frames=dict_nested_frames_subsetB,
                             cam_tform_obj_source=self.cam_tform_obj_source,
-                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name)
+                            cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name,
+                            mesh_name=self.mesh_name)
 
         return co3d_subsetA, co3d_subsetB
 
     def get_item(self, item):
         frame_meta = CO3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
-        return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
-                          meta=frame_meta, modalities=self.modalities, categories=self.categories,
-                          aligned_name=self.aligned_name,
-                          cam_tform_obj_source=self.cam_tform_obj_source, cuboid_source=self.cuboid_source)
-
-
-    """
-    def get_item(self, item):
-        category, sequence_name, frame_name = self.list_categories_sequences_names_frames_names[item]
-        return self.get_frame_by_category_sequence_and_frame_name(category=category,
-                                                                  sequence_name=sequence_name,
-                                                                  frame_name=frame_name)
-    """
+        return self.get_frame_by_meta(frame_meta=frame_meta)
 
     def filter_dict_nested_frames(self, dict_nested_frames: Dict[str, Dict[str, List[str]]]):
         dict_nested_frames = super().filter_dict_nested_frames(dict_nested_frames=dict_nested_frames)
@@ -238,7 +233,7 @@ class CO3D(OD3D_Dataset):
         return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                           meta=frame_meta, modalities=self.modalities, categories=self.categories,
                           cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source,
-                          aligned_name=self.aligned_name)
+                          aligned_name=self.aligned_name, mesh_name=self.mesh_name)
 
     def get_sequences(self):
         seqs = []
@@ -252,7 +247,7 @@ class CO3D(OD3D_Dataset):
         return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                              meta=sequence_meta, modalities=self.modalities, categories=self.categories, aligned_name=self.aligned_name,
                              mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
-                             cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source)
+                             cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source, mesh_name=self.mesh_name)
 
     def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, require_gt_pose, count_max_per_category, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
         logger.info("filtering frames...")

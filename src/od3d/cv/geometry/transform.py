@@ -240,6 +240,17 @@ def transf4x4_from_rot3x3_and_transl3(rot3x3, transl3):
     transf4x4[..., :3, 3] = transl3
     return transf4x4
 
+def tform4x4_from_transl3d(transl3d: torch.Tensor):
+    """
+    Args:
+        transl3d (torch.Tensor): ...x3
+    Returns:
+        tform4x4 (torch.Tensor): ...x4x4
+    """
+    a_tform4x4_b = torch.eye(4)[(None,)* (len(transl3d.shape) - 1)].expand(transl3d.shape[:-1] + torch.Size([4, 4])).to(device=transl3d.device, dtype=transl3d.dtype)
+    a_tform4x4_b[..., :3, 3] = transl3d
+    return a_tform4x4_b
+
 
 def rot2d(pts2d, rot2x2):
     pts2d_shape_in = pts2d.shape
@@ -392,3 +403,34 @@ def transf2d(pts2d, transf3x3):
     pts2d_transf = pts2d_transf.index_select(dim=dim_coords2d, index=torch.LongTensor([0, 1]).to(device=device))
     pts2d_transf = pts2d_transf.squeeze(dim=-1)
     return pts2d_transf
+
+
+def plane4d_to_tform4x4(plane4d: torch.Tensor):
+    """
+    Args:
+        plane4d (torch.Tensor): ...x4, first 3 dimensions are axis, last dimension offset.
+    Returns:
+        plan3d_tform_pts (torch.Tensor): ...x4x4
+
+    """
+    device = plane4d.device
+    plane3d_tform4x4_obj = torch.eye(4).to(device=device)
+    top_axis = plane4d[:3] / plane4d[:3].norm()
+    x = top_axis[0]
+    y = top_axis[1]
+    z = top_axis[2]
+    if x != 0 or y != 0:
+        left_axis = torch.Tensor([-y, x, 0.]).to(device=device)
+        left_axis = left_axis / left_axis.norm()
+        back_axis = torch.Tensor([-x * z, -y * z, x * x + y * y]).to(device=device)
+        back_axis = back_axis / back_axis.norm()
+    else:
+        left_axis = torch.Tensor([1., 0., 0.], device=device)
+        back_axis = torch.Tensor([0., 1., 0.], device=device)
+    plane3d_tform4x4_obj[0, :3] = left_axis
+    plane3d_tform4x4_obj[1, :3] = back_axis
+    plane3d_tform4x4_obj[2, :3] = top_axis
+    plane3d_tform4x4_obj[2, 3] = -plane4d[3]
+
+    return plane3d_tform4x4_obj
+

@@ -1,6 +1,12 @@
 
 import torch
-def voxel_downsampling(pts3d_cls, K):
+def farthest_point_sampling(pts3d_cls, K):
+    import pytorch3d.ops
+    pts3d_cls, _ = pytorch3d.ops.sample_farthest_points(pts3d_cls[None,], K=K)
+    pts3d_cls = pts3d_cls[0]
+    return pts3d_cls
+
+def voxel_downsampling(pts3d_cls, K, top_bins_perc=1.0, return_mask=False):
     """
     Args:
         pts3d_cls (torch.Tensor): Nx3
@@ -21,19 +27,34 @@ def voxel_downsampling(pts3d_cls, K):
                        indexing='xy'), dim=-1)
     #dist = (pts3d_voxel.reshape(-1, 3)[None, :] - pts3d_cls[:, None, ]).norm(dim=-1)
     dist = torch.cdist(pts3d_voxel.reshape(-1, 3)[None,], pts3d_cls[None, ])[0]
-    _, dist_min_ids = dist.min(dim=-1)
-    pts3d_cls = pts3d_cls[dist_min_ids]
-    del pts3d_voxel
-    del dist
-    del dist_min_ids
-    return pts3d_cls
-def farthest_point_sampling(pts3d_cls, K):
-    import pytorch3d.ops
-    pts3d_cls, _ = pytorch3d.ops.sample_farthest_points(pts3d_cls[None,], K=K)
-    pts3d_cls = pts3d_cls[0]
-    return pts3d_cls
 
-def random_sampling(pts3d_cls, pts3d_max_count):
+    _, dist_min_ids_from_pts_to_voxels = dist.min(dim=-2)
+    voxel_ids, voxel_counts = dist_min_ids_from_pts_to_voxels.unique(return_counts=True)
+    voxel_ids = voxel_ids[voxel_counts.argsort(descending=True)[: int(len(voxel_ids) * top_bins_perc)]]
+
+    _, dist_min_ids_from_voxel_to_pts = dist.min(dim=-1)
+    pts3d_ids = dist_min_ids_from_voxel_to_pts[voxel_ids]
+
+    pts3d_mask = torch.zeros(size=(pts3d_cls.shape[0],)).to(dtype=torch.bool, device=device)
+    pts3d_mask[pts3d_ids] = True
+
+    pts3d_cls = pts3d_cls[pts3d_mask]
+    #del pts3d_voxel
+    #del dist
+    #del dist_min_ids_from_voxel_to_pts
+
+    if return_mask:
+        return pts3d_cls, pts3d_mask
+    else:
+        return pts3d_cls
+
+def random_sampling(pts3d_cls, pts3d_max_count, return_mask=False):
     sample_ids = torch.randperm(pts3d_cls.shape[0])
-    pts3d_cls = pts3d_cls[sample_ids[:pts3d_max_count]]
-    return pts3d_cls
+    pts3d_mask = torch.zeros(size=(pts3d_cls.shape[0],)).to(dtype=torch.bool, device=pts3d_cls.device)
+    pts3d_mask[sample_ids[:pts3d_max_count]] = True
+    pts3d_cls = pts3d_cls[pts3d_mask]
+
+    if return_mask:
+        return pts3d_cls, pts3d_mask
+    else:
+        return pts3d_cls

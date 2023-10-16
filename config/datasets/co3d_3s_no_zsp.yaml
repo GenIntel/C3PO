@@ -7,48 +7,49 @@ path_preprocess: ${platform.path_datasets}/CO3Dv1_Preprocess
 
 name: co3d_3s_no_zsp
 
+mesh_name: 'convex1000'
 mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
-
 sequences_count_max_per_category: 3
-# frames_count_max_per_sequence: 5
 
-#modalities:
-#  - 'size'
-#  - 'category'
-#  - 'cam_intr4x4'
-#  - 'cam_tform4x4_obj'
-#  - 'category'
-#  - 'rgb'
-#  - 'mask'
-#  - 'sequence_name'
-#  - 'sequence'
-#  - 'mesh'
+frames_count_max_per_sequence: 5
+
+modalities:
+  - 'size'
+  - 'category'
+  - 'cam_intr4x4'
+  - 'cam_tform4x4_obj'
+  - 'category'
+  - 'rgb'
+  - 'mask'
+  - 'sequence_name'
+  - 'sequence'
+  - 'mesh'
 #  # - 'pcl'
 
 subset_fraction: 1.
 
 categories:
   - bicycle
-  - toytruck
-  - toytrain
-  - teddybear
-  - car
-  - toybus
-  - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - toyplane
-  - toilet
-  - hairdryer
-  - mouse
-  - toaster
-  - hydrant
-  - chair
-  - laptop
-  - book
-  - backpack
+#  - toytruck
+#  - toytrain
+#  - teddybear
+#  - car
+#  - toybus
+#  - motorcycle
+#  - keyboard
+#  - handbag
+#  - remote
+#  - toyplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+#  - chair
+#  - laptop
+#  - book
+#  - backpack
 
 
 dict_nested_frames:

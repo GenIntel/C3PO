@@ -247,7 +247,7 @@ class CO3D_Frame(OD3D_Frame):
                  modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
-                 aligned_name:str=None):
+                 aligned_name:str=None, mesh_name:str='default'):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
 
         self.meta = meta
@@ -256,6 +256,7 @@ class CO3D_Frame(OD3D_Frame):
         self.cam_tform_obj_source = cam_tform_obj_source
         self.aligned_name = aligned_name
         self.cuboid_source = cuboid_source
+        self.mesh_name = mesh_name
         # the following variables can be configured dynamically
         # self._config = None
 
@@ -284,7 +285,7 @@ class CO3D_Frame(OD3D_Frame):
             self._sequence = CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                                            path_meta=self.path_meta, meta=sequence_meta, modalities=self.modalities,
                                            categories=self.all_categories, cam_tform_obj_source=self.cam_tform_obj_source,
-                                           aligned_name=self.aligned_name,
+                                           aligned_name=self.aligned_name, mesh_name=self.mesh_name,
                                            cuboid_source=self.cuboid_source)
         return self._sequence
 
