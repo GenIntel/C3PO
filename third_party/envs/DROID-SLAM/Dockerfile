@@ -112,11 +112,11 @@ ENV PATH="/home/appuser/miniconda3/bin:${PATH}"
 # Install Droid SLAM dependencies
 RUN conda install python=3.9
 
-RUN conda install pytorch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1 cudatoolkit=11.3 -c pytorch -c conda-forge
+RUN conda install pytorch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1 cudatoolkit=11.3 -c pytorch -c conda-forge -y
 
 RUN pip install gdown matplotlib open3d opencv-python torch-scatter tensorboard scipy tqdm pyyaml
 
-RUN conda install -c conda-forge suitesparse
+RUN conda install -c conda-forge suitesparse -y
 
 # Clone repository
 WORKDIR /home/appuser/
