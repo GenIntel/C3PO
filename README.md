@@ -2,6 +2,8 @@
 
 ## Installation
 
+### Install
+
 1. From local
 
     `pip install -e .`
@@ -10,7 +12,21 @@
 
     `pip install git+https://github.com/Generative-Vision-Robust-Learning/od3d.git`
 
+### Clone
+
+1. Cloning   
+`git clone git@github.com:Generative-Vision-Robust-Learning/od3d.git`  
+
+2. Submodules   
+`git submodule update --init --recursive`
+
 ## Usage
+
+### Images
+
+1. Droid SLAM
+
+`cd third_party/envs/DROID-SLAM && docker build . -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g)`
 
 ### Dataset 
 
