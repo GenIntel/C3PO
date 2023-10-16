@@ -30,6 +30,8 @@ FROM nvidia/cuda:12.2.0-runtime-ubuntu20.04
 #fi
 #RUN python3 -m venv venv_od3d
 #RUN source venv
+RUN apt-get update
+RUN apt-get upgrade
 RUN apt-get install python3
 RUN pip install pip --upgrade
 RUN pip install torch
