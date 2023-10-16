@@ -32,7 +32,7 @@ FROM nvidia/cuda:12.2.0-runtime-ubuntu20.04
 #RUN source venv
 RUN apt-get update -y
 RUN apt-get upgrade -y
-RUN apt-get install python3 -y
+RUN apt-get install python3 python3-pip -y
 RUN pip install pip --upgrade
 RUN pip install torch
 RUN FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
