@@ -228,7 +228,7 @@ class OD3D_Meta(ABC):
                         dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in sorted(dir_fpaths, key=lambda f: [OD3D_Meta.atoi(val) for val in re.split(r'(\d+)', f.stem)]) if dir_fpath.stem not in dict_nested_metas_ban[key]]
                     else:
                         pass
-            elif isinstance(value,  Union[Dict, DictConfig]):
+            elif isinstance(value,  Dict) or isinstance(value, DictConfig):
                 if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
                     dict_nested_frames_completed[key] = cls.complete_nested_metas(path_meta=path_meta,
                                                                                   parent_key=new_key,
