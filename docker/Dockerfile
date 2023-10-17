@@ -1,3 +1,5 @@
+#docker build -f docker/Dockerfile -t limpbot/od3d:v1 --build-arg UID=$(id -u) --build-arg GID=$(id DD-g) .
+
 # note: devel is required to have nvcc
 FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
@@ -61,7 +63,18 @@ RUN FORCE_CUDA=1 pip install git+https://github.com/facebookresearch/pytorch3d.g
 #  fvcore -c iopath -c conda-forge fvcore iopath
 #RUN CUDA_HOME=/usr/local/cuda FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
-RUN pip install git+https://github.com/Generative-Vision-Robust-Learning/od3d.git
+ADD . /od3d/
+
+WORKDIR od3d
+
+RUN pip install -e .
+
+
+RUN apt-get install -y docker.io
+
+RUN docker build -f third_party/envs/DROID-SLAM/Dockerfile -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g) third_party/envs/DROID-SLAM
+
+#RUN pip install git+https://github.com/Generative-Vision-Robust-Learning/od3d.git
 ## FORCE_CUDA=1
 
 #RUN git clone https://github.com/Generative-Vision-Robust-Learning/od3d.git
