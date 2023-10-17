@@ -59,16 +59,28 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None, 
         runs = list(filter(
             lambda run: get_timestamp_from_string(run.name) > datetime.datetime.now() - datetime.timedelta(hours=age_in_hours),
             runs))
+        #logger.info('after filtering timestamp...')
+        #logger.info(runs)
+
 
     if name_partial is not None:
         runs = list(filter(lambda run: name_partial in run.name, runs))
+        #logger.info('after filtering name partial...')
+        #logger.info(runs)
 
     if name_partial_ban is not None:
         for n in name_partial_ban:
             runs = list(filter(lambda run: n not in run.name, runs))
+        #logger.info('after filtering name partial ban...')
+        #logger.info(runs)
 
     if metrics is not None:
+        #logger.info(metrics)
+        #for run in runs:
+        #    logger.info(list(run.summary.keys()))
         runs = list(filter(lambda run: all([metric in list(run.summary.keys()) for metric in metrics]), runs))
+        #logger.info('after filtering metrics...')
+        #logger.info(runs)
 
 
     rows = []

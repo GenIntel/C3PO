@@ -23,7 +23,7 @@ modalities:
   - 'mask'
   - 'sequence_name'
   - 'sequence'
-  - 'mesh'
+  #- 'mesh'
 #  # - 'pcl'
 
 subset_fraction: 1.

@@ -1,4 +1,4 @@
-
+# ubuntu20.04, python3.8, cuda11.7
 python3 -m venv venv_od3d
 source venv_od3d/bin/activate
 pip3 install pip --upgrade

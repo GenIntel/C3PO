@@ -11,7 +11,7 @@ name: co3d_3s_no_zsp
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 sequences_count_max_per_category: 3
 
-frames_count_max_per_sequence: 5
+# frames_count_max_per_sequence: 5
 
 modalities:
   - 'size'
@@ -23,39 +23,39 @@ modalities:
   - 'mask'
   - 'sequence_name'
   - 'sequence'
-  - 'mesh'
+  #- 'mesh'
 #  # - 'pcl'
 
 subset_fraction: 1.
 
 categories:
   - bicycle
-#  - toytruck
-#  - toytrain
-#  - teddybear
-#  - car
-#  - toybus
-#  - motorcycle
-#  - keyboard
-#  - handbag
-#  - remote
-#  - toyplane
-#  - toilet
-#  - hairdryer
-#  - mouse
-#  - toaster
-#  - hydrant
-#  - chair
-#  - laptop
-#  - book
-#  - backpack
+  - toytruck
+  - toytrain
+  - teddybear
+  - car
+  - toybus
+  - motorcycle
+  - keyboard
+  - handbag
+  - remote
+  - toyplane
+  - toilet
+  - hairdryer
+  - mouse
+  - toaster
+  - hydrant
+  - chair
+  - laptop
+  - book
+  - backpack
 
-
-dict_nested_frames:
-  bicycle:
-  motorcycle:
-  car:
-  chair:
+#
+#dict_nested_frames:
+#  bicycle:
+#  motorcycle:
+#  car:
+#  chair:
 
 
 dict_nested_frames_ban:
