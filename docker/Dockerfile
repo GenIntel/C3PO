@@ -1,5 +1,6 @@
-FROM nvidia/cuda:12.2.0-runtime-ubuntu20.04
+FROM nvidia/cuda:11.1.1-cudnn8-devel-ubuntu20.04
 
+#FROM nvidia/cuda:12.2.0-runtime-ubuntu20.04
 #FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 
@@ -36,6 +37,7 @@ RUN apt-get install python3 python3-pip -y
 RUN pip install pip --upgrade
 RUN pip install torch
 RUN apt-get install git -y
+RUN export CUDA_HOME=/usr/local/cuda
 RUN FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 #RUN pip3 install git+https://github.com/Generative-Vision-Robust-Learning/od3d.git
 
