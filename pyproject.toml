@@ -42,6 +42,7 @@ dependencies = [
     "scikit-learn",
     "pygit2",
     "seaborn",
+    "open3d",
 ]
 
 dynamic = ["version"]
