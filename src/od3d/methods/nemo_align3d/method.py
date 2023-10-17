@@ -369,9 +369,9 @@ class NeMo_Align3D(OD3D_Method):
             pts3d_colors = []
             for instance_id_in_category, instance_id in enumerate(category_instance_ids):
                 # prediction
-                #droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][0, instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
+                droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][0, instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
                 # ground truth
-                droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_cuboid_ref_tform_droid_slam_obj.to(device=self.device)
+                # droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_cuboid_ref_tform_droid_slam_obj.to(device=self.device)
 
                 self.sequences[instance_id].write_aligned_droid_slam_tform_droid_slam(aligned_name=self.config.aligned_name, aligned_droid_slam_tform_droid_slam=droid_slam_labeled_cuboid_tform_droid_slam_instance)
 

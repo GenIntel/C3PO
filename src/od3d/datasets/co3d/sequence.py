@@ -1149,10 +1149,9 @@ class CO3D_Sequence():
         fpath_src_gt = path_zsp.joinpath(self.name_unique + '.json')
         #if fpath_src_gt.exists():
         gt_co3d_global_tform_co3d_src = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_src_gt)['trans'])))
-        #else:
-        #    gt_co3d_global_tform_co3d_src = torch.eye(4)
         gt_co3d_global_tform_co3d_src = gt_co3d_global_tform_co3d_src.to(torch.float)
         return gt_co3d_global_tform_co3d_src
+
 
     @property
     def co3dv1_zsp_obj_tform_droid_slam_obj(self):
@@ -1166,6 +1165,10 @@ class CO3D_Sequence():
         ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
 
         droid_slam_labeled_ref_tform_droid_slam_obj = tform4x4(ref_seq.droid_slam_labeled_cuboid_tform_droid_slam_labeled, tform4x4(ref_seq.droid_slam_labeled_tform_droid_slam, tform4x4(inv_tform4x4(ref_seq.co3dv1_zsp_obj_tform_droid_slam_obj), self.co3dv1_zsp_obj_tform_droid_slam_obj)))
+        # note: as zsp does not offer scale, we cannot retrieve actual translation, therefore we use this pcl center
+        droid_slam_labeled_ref_tform_droid_slam_obj[:3, 3] = 0
+        droid_slam_labeled_ref_tform_droid_slam_obj[:3, 3] = -transf3d_broadcast(self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).mean(dim=0), transf4x4=droid_slam_labeled_ref_tform_droid_slam_obj)
+
         return droid_slam_labeled_ref_tform_droid_slam_obj
 
     @property
