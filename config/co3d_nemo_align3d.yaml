@@ -43,7 +43,7 @@ method:
     use_only_first_reference: True
     global_optimization_steps: 1
     categories: ${categories}
-    aligned_name: 'all_to_one_13_10_23'
+    aligned_name: 'latest'
 
 train_datasets:
   labeled:
