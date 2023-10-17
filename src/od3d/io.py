@@ -1,4 +1,5 @@
 import logging
+logger = logging.getLogger(__name__)
 import urllib.request
 import time
 import sys
@@ -73,9 +74,17 @@ def read_config_intern(rfpath: Path):
     fpath = Path("config").joinpath(rfpath)
     return read_config_extern(fpath=fpath)
 
+import hydra.errors
+
 def read_config_extern(fpath: Path):
-    with initialize_config_dir(config_dir=str(fpath.parent.absolute()), job_name="test_app_extern"):
-        cfg = compose(config_name=fpath.stem)
+    try:
+        with initialize_config_dir(config_dir=str(fpath.parent.absolute()), job_name="test_app_extern"):
+            cfg = compose(config_name=fpath.stem)
+    except hydra.errors.ConfigCompositionException as e:
+        logger.warning(e)
+        logger.warning('trying to read with OmegaConf')
+        cfg = OmegaConf.load(fpath)
+
     return cfg
 
 def write_config_to_json_file(config: DictConfig, fpath: Path):

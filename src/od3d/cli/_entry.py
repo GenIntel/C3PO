@@ -5,11 +5,16 @@ from od3d.cli.dataset import app as app_setup
 from od3d.cli.debug import app as app_debug
 from od3d.cli.pcl import app as app_pcl
 from od3d.cli._platform import app as app_platform
+from od3d.cli.table import app as app_table
+from od3d.cli.figure import app as app_figure
+
 app.add_typer(app_run, name='bench')
 app.add_typer(app_setup, name='dataset')
 app.add_typer(app_debug, name='debug')
 app.add_typer(app_pcl, name='pcl')
 app.add_typer(app_platform, name='platform')
+app.add_typer(app_table, name='table')
+app.add_typer(app_figure, name='figure')
 
 def main():
     app()
