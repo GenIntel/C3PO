@@ -886,6 +886,9 @@ class CO3D_Sequence():
             obj_cams_traj_a = self.get_trajectory(cam_tform_obj_source=src_a).to(device=device)
             obj_cams_traj_b = self.get_trajectory(cam_tform_obj_source=src_b).to(device=device)
 
+            #from od3d.cv.visual.show import show_scene
+            #show_scene(pts3d=[obj_cams_traj_a[50:], obj_cams_traj_b[50:]])
+
             from od3d.cv.geometry.fit.tform4x4 import fit_tform4x4_with_matches
             a_src_tform_b_src = fit_tform4x4_with_matches(pts=obj_cams_traj_b, pts_ref=obj_cams_traj_a, estimate_scale=estimate_scale)
 
@@ -1166,8 +1169,12 @@ class CO3D_Sequence():
         return droid_slam_labeled_ref_tform_droid_slam_obj
 
     @property
+    def fpath_droid_slam_labeled_cuboid(self):
+        return self.path_preprocess.joinpath('mesh', 'cuboid', self.name_unique, 'mesh.ply')
+
+    @property
     def droid_slam_labeled_cuboid(self):
-        fpath_droid_slam_labeled_cuboid = self.path_preprocess.joinpath('mesh', 'cuboid', self.name_unique, 'mesh.ply')
+        fpath_droid_slam_labeled_cuboid = self.fpath_droid_slam_labeled_cuboid
         if fpath_droid_slam_labeled_cuboid.exists():
             droid_slam_labeled_cuboid = Meshes.load_from_files([fpath_droid_slam_labeled_cuboid])
         else:
@@ -1180,8 +1187,12 @@ class CO3D_Sequence():
                                     optimize_transl=True)
 
             fpath_droid_slam_labeled_cuboid.parent.mkdir(parents=True, exist_ok=True)
-
             droid_slam_labeled_cuboid.write_to_file(fpath=fpath_droid_slam_labeled_cuboid)
+
+            self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(droid_slam_labeled_cuboid_tform_droid_slam_labeled.detach().cpu(),
+                       f=self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled)
+
         return droid_slam_labeled_cuboid
 
     @property
@@ -1203,6 +1214,9 @@ class CO3D_Sequence():
 
             fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.parent.mkdir(parents=True, exist_ok=True)
             torch.save(droid_slam_labeled_cuboid_tform_droid_slam_labeled.detach().cpu(), f=fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled)
+
+            self.fpath_droid_slam_labeled_cuboid.parent.mkdir(parents=True, exist_ok=True)
+            droid_slam_labeled_cuboid.write_to_file(fpath=self.fpath_droid_slam_labeled_cuboid)
         return droid_slam_labeled_cuboid_tform_droid_slam_labeled
 
     def write_aligned_droid_slam_tform_droid_slam(self, aligned_droid_slam_tform_droid_slam: torch.Tensor, aligned_name: str):
@@ -1239,6 +1253,11 @@ class CO3D_Sequence():
     def fpath_mesh(self):
         if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
             return self.path_preprocess.joinpath('aligned', self.aligned_name, 'mesh', self.category, 'mesh.ply')
+        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
+            ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
+            ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
+            _ = ref_seq.droid_slam_labeled_cuboid
+            return ref_seq.fpath_droid_slam_labeled_cuboid
         else:
             return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
 

@@ -55,8 +55,6 @@ def crop(img, H_out, W_out, center=None, scale=1., ctx=None):
     bbox_in_shape_xhalf = 1. * (W_out / scale) / 2.
     bbox_in_shape_yhalf = 1. * (H_out / scale) / 2.
 
-
-
     #  x0", "y0", "x1", "y1"
     bbox_in = torch.LongTensor([math.floor(center[0] - bbox_in_shape_xhalf),
                                 math.floor(center[1] - bbox_in_shape_yhalf),
@@ -83,7 +81,6 @@ def crop(img, H_out, W_out, center=None, scale=1., ctx=None):
 
     # b) first resize then crop (preferred if scale < 1. -> pad on lower-resolution image)
     else:
-
         img_res = resize(img, scale_factor=scale)
         bbox_in_res = (bbox_in * scale).to(torch.long)
         bbox_in_res[3] = H_out + bbox_in_res[1]

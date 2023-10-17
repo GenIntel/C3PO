@@ -150,8 +150,8 @@ class NeMo_Align3D(OD3D_Method):
         logger.info('getting co3d_tform_droid_slam for each instance...')
         self.sequences_co3d_tform_droid_slam = []
         for seq in self.sequences:
-            self.sequences_co3d_tform_droid_slam.append(seq.get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3D,
-                                                                               CAM_TFORM_OBJ_SOURCES.DROID_SLAM,
+            self.sequences_co3d_tform_droid_slam.append(seq.get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.DROID_SLAM,
+                                                                               CAM_TFORM_OBJ_SOURCES.CO3DV1,
                                                                                device=self.device))
 
         self.instances_count = len(self.meshes)
@@ -201,8 +201,6 @@ class NeMo_Align3D(OD3D_Method):
 
                 for r, ref_mesh_id in enumerate(ref_mesh_ids):
                     #ref_mesh_id = 3 # 0, 1, 2, 3, 4
-
-
                     # calculate reference vertex/feature given dists: nearest-neighbor, k-nearest-neighbor, average feature -
                     ref_vertices_mask = self.sequences_mesh_ids_for_verts == ref_mesh_id
 
@@ -213,7 +211,6 @@ class NeMo_Align3D(OD3D_Method):
                     #dist_ref = dists_appearance_verts[:, ref_vertices]
                     pts_ref = pts[ref_vertices_mask].clone()
 
-
                     rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
                     #rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]
                     self.meshes.rgb = rgbs_all
@@ -222,11 +219,7 @@ class NeMo_Align3D(OD3D_Method):
                         src_vertices_mask = self.sequences_mesh_ids_for_verts == src_mesh_id
                         src_vertices = torch.arange(vertices_count).to(device=self.device)[src_vertices_mask]
                         pts_src = pts[src_vertices]
-                        dist_src_ref = self.sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[ref_mesh_id])
-                        # remove infinities is highly important
-                        dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
-                        # division by two to normalize to 0. - 1.
-                        dist_src_ref = dist_src_ref / 2.
+
 
                         if r > 0 and (self.config.use_only_first_reference or self.config.global_optimization_steps > 1):
                                 pred_ref_tform_src = tform4x4(inv_tform4x4(all_pred_ref_tform_src[category][0, r]), all_pred_ref_tform_src[category][0, s])
@@ -247,7 +240,7 @@ class NeMo_Align3D(OD3D_Method):
                                     self.sequences[_ref_mesh_id]) for _ref_mesh_id in ref_mesh_ids], dim=-1)
 
                                 # remove infinities is highly important
-                                dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
+                                #dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
                                 # division by two to normalize to 0. - 1.
                                 dist_src_ref = dist_src_ref / 2.
 
@@ -275,6 +268,13 @@ class NeMo_Align3D(OD3D_Method):
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
                             else:
                                 logger.info(f'category: {category}, pts-src: {pts_src.shape}, pts-ref: {pts_ref.shape}')
+
+                                dist_src_ref = self.sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
+                                    self.sequences[ref_mesh_id])
+                                # remove infinities is highly important
+                                #dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
+                                # division by two to normalize to 0. - 1.
+                                dist_src_ref = dist_src_ref / 2.
 
                                 if s != 0:
                                     # four points required, otherwise rotation yields an ambiguity. like planes without normals
@@ -369,16 +369,16 @@ class NeMo_Align3D(OD3D_Method):
             pts3d_colors = []
             for instance_id_in_category, instance_id in enumerate(category_instance_ids):
                 # prediction
-                droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][0, instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
+                #droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][0, instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
                 # ground truth
-                #droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_ref_tform_droid_slam_obj.to(device=self.device)
+                droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_cuboid_ref_tform_droid_slam_obj.to(device=self.device)
 
                 self.sequences[instance_id].write_aligned_droid_slam_tform_droid_slam(aligned_name=self.config.aligned_name, aligned_droid_slam_tform_droid_slam=droid_slam_labeled_cuboid_tform_droid_slam_instance)
 
                 vertices_mask = self.sequences_mesh_ids_for_verts == instance_id
                 ref_vertices_mask = self.sequences_mesh_ids_for_verts == category_instance_ids[0]
 
-                dist_verts_ref = self.sequences[instance_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[ category_instance_ids[0]])
+                dist_verts_ref = self.sequences[instance_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[category_instance_ids[0]])
                 dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
                 self.meshes.verts[vertices_mask] = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(instance_id), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance)
                 self.meshes.rgb[vertices_mask] = self.meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
@@ -396,12 +396,12 @@ class NeMo_Align3D(OD3D_Method):
             viewpoints_count = 2
             category_meshes = self.meshes.get_meshes_with_ids(meshes_ids=category_instance_ids)
 
-            # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.)
+            # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55
             rot_diff_rad = results_diff_log_rot[category][0, :]
             accurate_pi6 = rot_diff_rad < (math.pi / 6.)
             accurate_pi18 = rot_diff_rad < (math.pi / 18.)
             accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][0, :]) > 0.90
-            accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.65
+            accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.55
             accurate_sim = accurate_sim_geo * accurate_sim_appear
             imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
             from od3d.cv.visual.draw import add_boolean_table

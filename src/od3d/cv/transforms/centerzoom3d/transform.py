@@ -33,6 +33,9 @@ class CenterZoom3D(OD3D_Transform):
 
         if self.center_rel_shift_xy is not None:
             center2d = proj3d2d(torch.Tensor([0., 0., 0.]), proj4x4=frame.cam_proj4x4_obj)
+            if center2d[0] < -frame.W or center2d[1] < -frame.H or center2d[0] > 2 * frame.W or center2d[1] > 2 * frame.H:
+                logger.warning(f'center {center2d[0].item():.2f}, {center2d[1].item():.2f} far outside of frame {frame.W}, {frame.H}. Setting center to image center.')
+                center2d = frame.size.flip(dims=[0]) / 2
             if center2d.isnan().any():
                 center2d = frame.size.flip(dims=[0]) / 2
 

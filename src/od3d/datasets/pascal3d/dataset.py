@@ -37,7 +37,7 @@ class Pascal3D(OD3D_Dataset):
         index_shift=0,
     ):
         if categories is not None:
-            categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES.list() else category for category in categories]
+            categories = [self.MAP_OD3D_CATEGORIES.get(category, category) if category not in self.CATEGORIES.list() else category for category in categories]
         else:
             categories = self.CATEGORIES.list()
 
