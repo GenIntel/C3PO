@@ -35,7 +35,7 @@ RUN apt-get upgrade -y
 RUN apt-get install python3 python3-pip -y
 RUN pip install pip --upgrade
 RUN pip install torch
-RUN apt-get install git
+RUN apt-get install git -y
 RUN FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 #RUN pip3 install git+https://github.com/Generative-Vision-Robust-Learning/od3d.git
 
