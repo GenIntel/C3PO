@@ -16,7 +16,7 @@ modalities:
     - 'sequence'
     # - 'mesh'
 
-mesh_name: 'convex500' # 'convex1000' ' voxel500
+mesh_name: 'alpha500' # 'convex500', 'voxel500' 'poisson500', 'alpha500'
 
 cuboid_source: 'droid_slam' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
 cam_tform_obj_source: 'droid_slam'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', 'limits3d', 'droid_slam'
@@ -41,6 +41,9 @@ extract_meta:
   remove_previous: False
 
 preprocess:
+  mesh:
+    enabled: False
+    override: False
   pcl:
     enabled: False
     override: False

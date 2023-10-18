@@ -28,6 +28,15 @@ def pose_pi6_categories():
     configs = []
 
     # CO3Dv1_NeMo, metrics
+    pascal3d_nemo_name_partial = 'CO3Dv1_NeMo_local'
+    pascal3d_nemo_metrics = ['test/pascal3d_test/pose/acc_pi6']
+    pascal3d_nemo_columns_map = {}
+    pascal3d_nemo_columns_map[pascal3d_nemo_metrics[-1]] = "Acc. Pi/6. [%]"
+    for category in categories:
+        pascal3d_nemo_metrics.append(f'test/pascal3d_test/pose/prefix/{category}_acc_pi6')
+        pascal3d_nemo_columns_map[pascal3d_nemo_metrics[-1]] = category
+
+    # CO3Dv1_NeMo, metrics
     nemo_name_partial = 'CO3Dv1_NeMo_local'
     nemo_metrics = ['val/co3d_10s_zsp_test/pose/acc_pi6']
     nemo_columns_map = {}
@@ -54,6 +63,8 @@ def pose_pi6_categories():
         align3d_1on1_metrics.append(f'pose/prefix/{MAP_CATEGORIES_OD3D_TO_CO3D[category]}_acc_pi6')
         align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = category
 
+    pascal3d_nemo_df = get_dataframe(configs=configs, metrics=pascal3d_nemo_metrics, age_in_hours=age_in_hours, name_partial=pascal3d_nemo_name_partial)
+    pascal3d_nemo_df = pascal3d_nemo_df.rename(columns=pascal3d_nemo_columns_map)
     nemo_df = get_dataframe(configs=configs, metrics=nemo_metrics, age_in_hours=age_in_hours, name_partial=nemo_name_partial)
     nemo_df = nemo_df.rename(columns=nemo_columns_map)
     align3d_df = get_dataframe(configs=configs, metrics=align3d_metrics, age_in_hours=age_in_hours, name_partial=align3d_name_partial)
@@ -61,8 +72,10 @@ def pose_pi6_categories():
     align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, age_in_hours=age_in_hours, name_partial=align3d_1on1_name_partial)
     align3d_1on1_df = align3d_1on1_df.rename(columns=align3d_1on1_columns_map)
 
-    df = pd.concat([nemo_df, align3d_df, align3d_1on1_df])
+    df = pd.concat([nemo_df, align3d_df, align3d_1on1_df, pascal3d_nemo_df])
     cols = ['Run', "Acc. Pi/6. [%]", 'bicycle', 'hydrant', 'motorcycle', 'teddybear', 'toaster']
+    cols = ['Run', "Acc. Pi/6. [%]", 'bicycle', 'motorcycle', 'car', 'chair']
+
     df = df[cols]
     logger.info(tabulate(df, headers='keys', tablefmt='latex',  floatfmt=".3f")) # 'github', 'tsv', 'latex', 'latex_raw'
     # logger.info('\n' + my_df.to_csv(sep='\t', index=False, float_format="%.3f"))

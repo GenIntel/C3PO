@@ -917,7 +917,12 @@ class CO3D_Sequence():
         run_cmd(cmd=f'echo "{fx} {fy} {cx} {cy}" > {path_out_root}/{rpath_out}/calib.txt', logger=logger)
         run_cmd(cmd=f'docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT={rpath_out} -e STRIDE={stride} -v {path_in}:/home/appuser/in -v {path_out_root}:/home/appuser/DROID-SLAM/reconstructions/out -t {image_tag}', logger=logger, live=True)
 
-    def preprocess_mesh(self):
+    def preprocess_mesh(self, override=False):
+
+        if self.fpath_mesh.exists() and not override:
+            logger.warning(f'mesh already exists {self.fpath_mesh}')
+            return
+
         import numpy as np
         from od3d.cv.visual.show import show_scene
         from od3d.cv.geometry.fit.rays_center3d import fit_rays_center3d
@@ -953,7 +958,14 @@ class CO3D_Sequence():
 
         pts3d_range = max(pts3d.max(dim=0)[0] - pts3d.min(dim=0)[0]).item()
         scene_size = pts3d_range
-        max_count_vertices = 500
+        import re
+        match = re.match(r"([a-z]+)([0-9]+)", self.mesh_name, re.I)
+        if match and len(match.groups()) == 2:
+            mesh_type, mesh_vertices_count = match.groups()
+            mesh_vertices_count = int(mesh_vertices_count)
+        else:
+            msg = f'could not retrieve mesh type and vertices count from mesh name {self.mesh_name}'
+            raise Exception(msg)
         scene_particles = 2000
         _, mask_pts3d_sampled_rand = random_sampling(pts3d, pts3d_max_count=10000, return_mask=True)
         mask_pts3d_sampled = mask_pts3d_sampled_rand.clone()
@@ -983,15 +995,11 @@ class CO3D_Sequence():
                          score_func=partial(score_plane4d_fit, plane_dist_thresh=plane_dist_thresh,
                                             cams_traj=cams_traj, pts_on_plane_weight=2.), fits_count=1000, fit_pts_count=3)
 
-
         plane3d_tform4x4_obj = plane4d_to_tform4x4(plane4d)
-
 
         #plane_z = -plane3d_tform4x4_obj[2, 3]
         #plane3d_tform4x4_obj[:3, 3] = 0.
         cams_tform4x4_obj = tform4x4_broadcast(cams_tform4x4_obj, inv_tform4x4(plane3d_tform4x4_obj))
-
-
 
         pts3d = transf3d_broadcast(pts3d, transf4x4=plane3d_tform4x4_obj)
         center3d = transf3d_broadcast(center3d, transf4x4=plane3d_tform4x4_obj)
@@ -1029,45 +1037,81 @@ class CO3D_Sequence():
 
         # show_scene(meshes=[center3d_mesh, plan3d_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4])
 
-        # o3d_pcl = open3d.geometry.PointCloud()
-        # o3d_pcl.points = open3d.utility.Vector3dVector(pts3d_obj[:].detach().cpu().numpy())
-        # o3d_pcl.normals = open3d.utility.Vector3dVector(np.zeros((1, 3)))  # invalidate existing normals
-        #
+        o3d_pcl = open3d.geometry.PointCloud()
+        o3d_pcl.points = open3d.utility.Vector3dVector(pts3d_obj[:].detach().cpu().numpy())
+        o3d_pcl.normals = open3d.utility.Vector3dVector(np.zeros((1, 3)))  # invalidate existing normals
+
         # #### OPTION 1: CONVEX HULL
-        # o3d_obj_mesh, _ = o3d_pcl.compute_convex_hull()
-        # o3d_obj_mesh.compute_vertex_normals()
-        #
-        # #### OPTION 2: POISSON (requires normals)
-        # # mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(o3d_pcl, depth=9)
-        #
-        # #### OPTION 3: ALPHA_SHAPE
-        # # alpha = mask_center_thresh
-        # # o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
-        #
-        #
-        # logger.info(o3d_obj_mesh)
-        # while np.asarray(o3d_obj_mesh.vertices).shape[0] < max_count_vertices:
-        #     o3d_obj_mesh = o3d_obj_mesh.subdivide_loop(number_of_iterations=1)
-        #     logger.info(o3d_obj_mesh)
-        #
-        # logger.info(o3d_obj_mesh)
-        # voxel_size = o3d_obj_mesh.get_volume() / 10.
-        # while np.asarray(o3d_obj_mesh.vertices).shape[0] > max_count_vertices:
-        #     o3d_obj_mesh = o3d_obj_mesh.simplify_vertex_clustering(voxel_size=voxel_size, contraction=open3d.geometry.SimplificationContraction.Average)
-        #     logger.info(o3d_obj_mesh)
-        #     voxel_size = voxel_size * 2.
-        #
-        # obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+        if mesh_type == 'convex':
+            o3d_obj_mesh, _ = o3d_pcl.compute_convex_hull()
+            o3d_obj_mesh.compute_vertex_normals()
 
-        #### OPTION 4: VOXEL GRID
-        from  pytorch3d.ops.marching_cubes import marching_cubes
-        voxel_grid, voxel_grid_range, voxel_grid_offset = voxel_downsampling(pts3d_cls=pts3d_obj, K=1000, return_voxel_grid=True, min_steps=2)
-        # vol_batch(N, D, H, W) ->  (X, Y, Z).permute(2, 0, 1)
-        verts, faces = marching_cubes(vol_batch=voxel_grid.permute(2, 0, 1)[None,] * 1., return_local_coords=True)
-        faces = faces[0]
-        verts = (verts[0] + 1) / 2.
-        obj_mesh = Mesh(verts=voxel_grid_offset[None,] + voxel_grid_range[None,] * verts, faces=faces)
+            logger.info(o3d_obj_mesh)
+            while np.asarray(o3d_obj_mesh.vertices).shape[0] < mesh_vertices_count:
+                o3d_obj_mesh = o3d_obj_mesh.subdivide_loop(number_of_iterations=1)
+                logger.info(o3d_obj_mesh)
 
+            logger.info(o3d_obj_mesh)
+            voxel_size = o3d_obj_mesh.get_volume() / 10.
+            while np.asarray(o3d_obj_mesh.vertices).shape[0] > mesh_vertices_count:
+                o3d_obj_mesh = o3d_obj_mesh.simplify_vertex_clustering(voxel_size=voxel_size,
+                                                                       contraction=open3d.geometry.SimplificationContraction.Average)
+                logger.info(o3d_obj_mesh)
+                voxel_size = voxel_size * 2.
+
+            obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+
+        elif mesh_type == 'poisson':
+            # #### OPTION 2: POISSON (requires normals)
+            o3d_pcl.estimate_normals()
+            o3d_obj_mesh, densities = open3d.geometry.TriangleMesh.create_from_point_cloud_poisson(o3d_pcl, depth=9)
+            logger.info(o3d_obj_mesh)
+            while np.asarray(o3d_obj_mesh.vertices).shape[0] < mesh_vertices_count:
+                o3d_obj_mesh = o3d_obj_mesh.subdivide_loop(number_of_iterations=1)
+                logger.info(o3d_obj_mesh)
+
+            logger.info(o3d_obj_mesh)
+            voxel_size = o3d_obj_mesh.get_volume() / 10.
+            while np.asarray(o3d_obj_mesh.vertices).shape[0] > mesh_vertices_count:
+                o3d_obj_mesh = o3d_obj_mesh.simplify_vertex_clustering(voxel_size=voxel_size,
+                                                                       contraction=open3d.geometry.SimplificationContraction.Average)
+                logger.info(o3d_obj_mesh)
+                voxel_size = voxel_size * 2.
+
+            obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+        elif mesh_type == 'alpha':
+            # #### OPTION 3: ALPHA_SHAPE
+            alpha = 10 * particle_size
+            o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+            logger.info(o3d_obj_mesh)
+            while np.asarray(o3d_obj_mesh.vertices).shape[0] < mesh_vertices_count:
+                o3d_obj_mesh = o3d_obj_mesh.subdivide_loop(number_of_iterations=1)
+                logger.info(o3d_obj_mesh)
+            logger.info(o3d_obj_mesh)
+            voxel_size = o3d_obj_mesh.get_surface_area() / 10.
+            while np.asarray(o3d_obj_mesh.vertices).shape[0] > mesh_vertices_count:
+                o3d_obj_mesh = o3d_obj_mesh.simplify_vertex_clustering(voxel_size=voxel_size,
+                                                                       contraction=open3d.geometry.SimplificationContraction.Average)
+                logger.info(o3d_obj_mesh)
+                voxel_size = voxel_size * 2.
+
+            obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+        elif mesh_type == 'voxel':
+            #### OPTION 4: VOXEL GRID
+            from pytorch3d.ops.marching_cubes import marching_cubes
+            voxel_grid, voxel_grid_range, voxel_grid_offset = voxel_downsampling(pts3d_cls=pts3d_obj, K=mesh_vertices_count * 2,
+                                                                                 return_voxel_grid=True, min_steps=2)
+            # vol_batch(N, D, H, W) ->  (X, Y, Z).permute(2, 0, 1)
+            verts, faces = marching_cubes(vol_batch=voxel_grid.permute(2, 0, 1)[None,] * 1., return_local_coords=True)
+            faces = faces[0].to(device=device)
+            verts = (verts[0].to(device=device) + 1) / 2.
+
+            obj_mesh = Mesh(verts=voxel_grid_offset[None,] + voxel_grid_range[None,] * verts, faces=faces)
+        else:
+            msg = f'Unknown mesh type {mesh_type}'
+            raise Exception(msg)
+
+        logger.info(f'vertices count = {obj_mesh.verts_count()}')
         #show_scene(meshes=[obj_mesh, center3d_mesh, plan3d_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors],
         #           cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=[self.first_frame.cam_intr4x4], meshes_as_wireframe=True)
 
