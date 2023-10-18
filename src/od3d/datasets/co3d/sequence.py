@@ -1105,10 +1105,13 @@ class CO3D_Sequence():
             frame.fpath_cam_tform4x4_obj_droid_slam.parent.mkdir(parents=True, exist_ok=True)
             torch.save(obj=cam_tform4x4_obj.detach().cpu(), f=frame.fpath_cam_tform4x4_obj_droid_slam)
 
+    @property
+    def fpath_droid_slam_axis_labeled(self):
+        return self.path_preprocess.joinpath('axis', 'droid_slam', self.category, self.name, 'axis.pt')
 
     @property
     def droid_slam_axis_labeled(self):
-        fpath_axis_droid_slam = self.path_preprocess.joinpath('axis', 'droid_slam', self.category, self.name, 'axis.pt')
+        fpath_axis_droid_slam = self.fpath_droid_slam_axis_labeled
         if not fpath_axis_droid_slam.exists():
             fpath_axis_droid_slam.parent.mkdir(parents=True, exist_ok=True)
             from od3d.cv.label.axis import label_axis_in_pcl
@@ -1134,8 +1137,17 @@ class CO3D_Sequence():
             droid_slam_labeled_tform_droid_slam = torch.load(fpath_droid_slam_labeled_tform_droid_slam)
         else:
             droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=self.droid_slam_axis_labeled)
-            fpath_droid_slam_labeled_tform_droid_slam.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(droid_slam_labeled_tform_droid_slam, fpath_droid_slam_labeled_tform_droid_slam)
+
+        while (torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3]) - 1.).abs() > 1e-5:
+            logger.warning(f'labeled determinant is not ~1, but {torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3])}')
+            if self.fpath_droid_slam_axis_labeled.exists():
+                self.fpath_droid_slam_axis_labeled.unlink()
+            if self.fpath_droid_slam_labeled_tform_droid_slam.exists():
+                self.fpath_droid_slam_labeled_tform_droid_slam.unlink()
+            droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=self.droid_slam_axis_labeled)
+
+        fpath_droid_slam_labeled_tform_droid_slam.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(droid_slam_labeled_tform_droid_slam, fpath_droid_slam_labeled_tform_droid_slam)
         return droid_slam_labeled_tform_droid_slam
 
     @property

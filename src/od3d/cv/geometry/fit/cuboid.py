@@ -4,7 +4,7 @@ import torch
 from od3d.cv.geometry.transform import rot3x3, transf4x4_from_rot3x3, tform4x4, se3_exp_map, transf3d_broadcast
 from od3d.cv.geometry.primitives import Cuboids
 
-def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=False, vertices_max_count=1000, q=0.96):
+def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=False, vertices_max_count=1000, q=0.98):
     """
     Args:
         pts3d (torch.Tensor): Nx3

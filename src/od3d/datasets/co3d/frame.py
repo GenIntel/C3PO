@@ -350,6 +350,7 @@ class CO3D_Frame(OD3D_Frame):
             # note: projection does not change as we scale the depth z to the object as well
             _scale = _cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
             _cam_tform4x4_obj[:3] = _cam_tform4x4_obj[:3] / _scale
+            # logger.info(f'det: {torch.linalg.det(_cam_tform4x4_obj[:3, :3])}')
         elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3DV1:
             metav1 = CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_preprocess.joinpath('..', 'CO3Dv1_Preprocess', 'meta'), rfpath=self.meta.rfpath)
             if metav1 is None:

@@ -52,11 +52,11 @@ FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@
 
 1. OD3D  
 
-`cd docker && docker build . -t limpbot/od3d:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g)`
+`docker build -f docker/Dockerfile -t limpbot/od3d:v1 --build-arg UID=$(id -u) --build-arg GID=$(id DD-g) .`
 
 2. Droid SLAM
 
-`docker build -f third_party/envs/DROID-SLAM -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g) third_party/envs/DROID-SLAM`
+`docker build -f third_party/envs/DROID-SLAM/Dockerfile -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g) third_party/envs/DROID-SLAM`
 
 ### Dataset 
 
