@@ -27,3 +27,8 @@ pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --ind
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
 pip install -e .
+
+# add configs:
+#  - credentials/default.yaml
+#  - platform/local.yaml
+#  - platform/slurm.yaml
