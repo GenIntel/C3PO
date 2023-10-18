@@ -289,20 +289,9 @@ class NeMo_Align3D(OD3D_Method):
                                 #pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
-                        #gt_co3dv1_ref_tform_co3dv1_src = tform4x4(inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)), self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
-                        #gt_ref_tform_src = tform4x4(inv_tform4x4(self.sequences[ref_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3DV1, CAM_TFORM_OBJ_SOURCES.DROID_SLAM).to(device=self.device, dtype=pred_ref_tform_src.dtype)),
-                        #                            tform4x4(gt_co3dv1_ref_tform_co3dv1_src, self.sequences[src_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3DV1, CAM_TFORM_OBJ_SOURCES.DROID_SLAM).to(device=self.device, dtype=pred_ref_tform_src.dtype)))
-
-                        # note this other gt approach is worse. most likely because CO3DV1_tform_DROID_SLAM is noisy and this approach requires to compute this multiple times
-                        # co3dv1_ref_tform_dsl_ref = self.sequences[ref_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3DV1, CAM_TFORM_OBJ_SOURCES.DROID_SLAM).to(device=self.device, dtype=pred_ref_tform_src.dtype)
-                        # co3dv1_src_tform_dsl_src = self.sequences[src_mesh_id].get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.CO3DV1, CAM_TFORM_OBJ_SOURCES.DROID_SLAM).to(device=self.device, dtype=pred_ref_tform_src.dtype)
-                        # gt_dsl_zsp_ref_tform_co3dv1_zsp_ref = tform4x4(inv_tform4x4(co3dv1_ref_tform_dsl_ref), inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)))
-                        # gt_dsl_zsp_src_tform_co3dv1_zsp_src = tform4x4(inv_tform4x4(co3dv1_src_tform_dsl_src), inv_tform4x4(self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)))
-                        # gt_ref_tform_src = tform4x4(gt_dsl_zsp_ref_tform_co3dv1_zsp_ref, inv_tform4x4(gt_dsl_zsp_src_tform_co3dv1_zsp_src))
-
                         gt_ref_tform_src = tform4x4(
-                            inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
-                            self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                           inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
+                           self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
 
 
                         from od3d.cv.metric.pose import get_pose_diff_in_rad
