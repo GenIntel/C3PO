@@ -1,7 +1,7 @@
 defaults:
   - co3d_10s_zsp_unlabeled
 
-name: co3d_10s_zsp_test
+name: co3d_10s_zsp_labeled
 
 # frames_count_max_per_sequence: 1
 

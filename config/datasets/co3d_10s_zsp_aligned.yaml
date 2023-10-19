@@ -1,6 +1,8 @@
 defaults:
   - co3d_10s_zsp_unlabeled
 
+name: co3d_10s_zsp_aligned
+
 # frames_count_max_per_sequence: 1
 
 #modalities:

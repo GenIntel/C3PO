@@ -290,14 +290,15 @@ class NeMo_Align3D(OD3D_Method):
                                 #pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
-                        gt_ref_tform_src = tform4x4(
-                           inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
-                           self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        if self.config.use_gt:
+                            gt_ref_tform_src = tform4x4(
+                               inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
+                               self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
 
 
-                        from od3d.cv.metric.pose import get_pose_diff_in_rad
-                        diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
-                        results_diff_log_rot[category][r, s] = diff_rot_angle_rad
+                            from od3d.cv.metric.pose import get_pose_diff_in_rad
+                            diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
+                            results_diff_log_rot[category][r, s] = diff_rot_angle_rad
 
 
                         #from od3d.cv.geometry.transform import transf3d_broadcast
@@ -310,8 +311,9 @@ class NeMo_Align3D(OD3D_Method):
         for cat_id, category in enumerate(self.categories):
             category_results = OD3D_Results()
             # excluding diagonal entries as these are predicted transformation between same instance
-            category_results[f'rot_diff_rad'] = results_diff_log_rot[category][
-                torch.eye(self.instances_count_per_category[cat_id]).to(device=self.device) == 0]
+            if self.config.use_gt:
+                category_results[f'rot_diff_rad'] = results_diff_log_rot[category][
+                    torch.eye(self.instances_count_per_category[cat_id]).to(device=self.device) == 0]
             category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][
                 torch.eye(self.instances_count_per_category[cat_id]).to(device=self.device) == 0]
             category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][
@@ -325,7 +327,8 @@ class NeMo_Align3D(OD3D_Method):
 
             category_results_ref = OD3D_Results()
             # excluding diagonal entries as these are predicted transformation between same instance
-            category_results_ref[f'rot_diff_rad'] = results_diff_log_rot[category][0, 1:]
+            if self.config.use_gt:
+                category_results_ref[f'rot_diff_rad'] = results_diff_log_rot[category][0, 1:]
             category_results_ref[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][0, 1:]
             category_results_ref[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][0, 1:]
 

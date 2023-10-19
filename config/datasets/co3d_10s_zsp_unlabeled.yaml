@@ -5,7 +5,7 @@ class_name: CO3Dv1
 path_raw: ${platform.path_datasets}/CO3Dv1
 path_preprocess: ${platform.path_datasets}/CO3Dv1_Preprocess
 
-name: co3d_10s_zsp_test
+name: co3d_10s_zsp_unlabeled
 
 cuboid_source: 'droid_slam'  # 'droid_slam_aligned' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
 cam_tform_obj_source: 'droid_slam' # 'droid_slam_aligned'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', 'limits3d', 'droid_slam'

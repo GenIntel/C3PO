@@ -11,8 +11,8 @@ name: co3d_50s_no_zsp
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 sequences_count_max_per_category: 50
 
-# frames_count_max_per_sequence: 5
-
+#frames_count_max_per_sequence: 5
+#
 #modalities:
 #  - 'size'
 #  - 'category'
@@ -24,10 +24,10 @@ sequences_count_max_per_category: 50
 #  - 'sequence_name'
 #  - 'sequence'
 #  - 'mesh'
-#  # - 'pcl'
-
-subset_fraction: 1.
+##  # - 'pcl'
 #
+#subset_fraction: 1.
+##
 #categories:
 #  - bicycle
 #  - toytruck
@@ -49,13 +49,6 @@ subset_fraction: 1.
 #  - laptop
 #  - book
 #  - backpack
-
-#
-#dict_nested_frames:
-#  bicycle:
-#  motorcycle:
-#  car:
-#  chair:
 
 
 dict_nested_frames_ban:
@@ -127,6 +120,7 @@ dict_nested_frames_ban:
     '385_45782_91506':
     '407_55228_107137':
     '378_44187_88070':
+    '77_7848_15794': # broken droid slam
   motorcycle:
     '362_38283_75358':
     '352_37168_70976':
@@ -215,6 +209,7 @@ dict_nested_frames_ban:
     '378_43936_87684':
     '117_13764_29495':
     '93_10158_18975':
+    '14_161_1089': # droid slam broken
   toaster:
     '353_37324_70302':
     '378_44230_88166':
@@ -249,6 +244,7 @@ dict_nested_frames_ban:
     '374_42035_84101':
     '378_44299_88302':
     '351_37038_67401':
+    '58_3353_10266': # has rotational symmetric axis
   laptop:
     '378_44211_88110':
     '377_43614_86861':
@@ -260,6 +256,8 @@ dict_nested_frames_ban:
     '378_44219_88122':
     '112_13277_23636':
     '385_45439_90912':
+    '58_3355_10203': # laptop from back
+    '58_3369_10288': # laptop on glass
   book:
     '271_28906_56261':
     '150_16670_31845':
@@ -271,6 +269,7 @@ dict_nested_frames_ban:
     '150_16682_31912':
     '150_16684_31898':
     '247_26469_51778':
+    '14_176_977': # droid slam broken
   backpack:
     '377_43807_87174':
     '372_41258_82188':
@@ -282,6 +281,7 @@ dict_nested_frames_ban:
     '394_48785_96498':
     '380_45067_90178':
     '373_41833_83497':
+    '20_716_1426': # droid slam broken
 
 
 
