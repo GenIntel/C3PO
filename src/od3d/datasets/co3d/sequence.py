@@ -510,9 +510,13 @@ class CO3D_Sequence():
             return read_pts3d(fpath)
         elif pcl_source == PCL_SOURCES.DROID_SLAM:
             fpath = self.fpath_pcl_droid_slam
+            if not fpath.exists():
+                self.preprocess_mesh(override=True)
             return read_pts3d(fpath)
         elif pcl_source == PCL_SOURCES.DROID_SLAM_CLEAN:
             fpath = self.fpath_pcl_droid_slam_clean
+            if not fpath.exists():
+                self.preprocess_mesh(override=True)
             return read_pts3d(fpath)
         else:
             logger.warning(f'Unknown pcl source {pcl_source}')
@@ -1172,7 +1176,12 @@ class CO3D_Sequence():
             frames_count = len(self.frames_names)
             for c in range(0, frames_count, frames_count // 4):
                 frame = self.get_frame_by_index(c)
-                cams_tform4x4_world.append(frame.cam_tform4x4_obj)
+                if self.cam_tform_obj_source is not CAM_TFORM_OBJ_SOURCES.CO3D or self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM:
+                    cams_tform4x4_world.append(frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
+                else:
+                    cams_tform4x4_world.append(
+                        frame.get_cam_tform4x4_obj(cam_tform_obj_source=self.cam_tform_obj_source))
+
                 cams_intr4x4.append(frame.cam_intr4x4)
                 cams_imgs.append(frame.rgb)
 
@@ -1180,8 +1189,11 @@ class CO3D_Sequence():
                                                 cams_tform4x4_world=cams_tform4x4_world,
                                                 cams_intr4x4=cams_intr4x4,
                                                 cams_imgs=cams_imgs)
+            logger.info(f'{axis_droid_slam}')
 
-            torch.save(axis_droid_slam, f=fpath_axis_droid_slam)
+            if axis_droid_slam is not None and axis_droid_slam.shape == (3, 2, 3):
+                torch.save(axis_droid_slam, f=fpath_axis_droid_slam)
+
         else:
             axis_droid_slam = torch.load(fpath_axis_droid_slam)
         return axis_droid_slam
@@ -1203,6 +1215,7 @@ class CO3D_Sequence():
         else:
             logger.info(f'labeling axis for sequence {self.name_unique}')
             droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=self.droid_slam_axis_labeled)
+            logger.info(f'blub')
 
         while (torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3]) - 1.).abs() > 1e-5:
             logger.warning(f'labeled determinant is not ~1, but {torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3])}')
@@ -1338,7 +1351,7 @@ class CO3D_Sequence():
         elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
             ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
             ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
-            _ = ref_seq.droid_slam_labeled_cuboid
+            #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
             return ref_seq.fpath_droid_slam_labeled_cuboid
         else:
             return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')

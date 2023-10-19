@@ -439,7 +439,7 @@ class CO3D(OD3D_Dataset):
 
         for category, sequences_names in self.dict_category_sequences_names.items():
             for sequence_name in sequences_names:
-                logger.info(f"preprocess pcls, sequence {sequence_name}")
+                logger.info(f"preprocess meshs, sequence {sequence_name}, {self.mesh_name}")
                 sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
                 sequence.preprocess_mesh(override=override)
 
