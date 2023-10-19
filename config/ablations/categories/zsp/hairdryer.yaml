@@ -1,0 +1,25 @@
+# @package _global_
+
+ablation_name: cat1_hairdryer
+
+categories:
+#  - bicycle
+#  - truck
+#  - train
+#  - teddybear
+#  - car
+#  - bus
+#  - motorcycle
+#  - keyboard
+#  - handbag
+#  - remote
+#  - airplane
+#  - toilet
+  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+#  - chair
+#  - laptop
+#  - book
+#  - backpack
