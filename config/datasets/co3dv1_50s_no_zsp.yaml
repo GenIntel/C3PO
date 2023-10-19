@@ -1,7 +1,11 @@
 defaults:
   - co3d
 
-name: co3d_50s_no_zsp
+class_name: CO3Dv1
+path_raw: ${platform.path_datasets}/CO3Dv1
+path_preprocess: ${platform.path_datasets}/CO3Dv1_Preprocess
+
+name: co3dv1_50s_no_zsp
 
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'

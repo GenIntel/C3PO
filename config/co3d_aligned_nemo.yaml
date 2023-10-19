@@ -48,7 +48,7 @@ metrics:
   - metricA
   - metricB
 
-aligned_name: 'all_to_one_17_10_23_convex500_dinov2_acc_min' # 'all_to_one_13_10_23' 'all_to_one_12_10_23'
+aligned_name: 'all_to_one_18_10_23_alpha500_dinov2_acc_min' # 'all_to_one_13_10_23' 'all_to_one_12_10_23'
 method:
   nemo:
     inference:

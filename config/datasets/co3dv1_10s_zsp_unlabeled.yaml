@@ -1,14 +1,19 @@
 defaults:
   - co3d
 
-name: co3d_50s_no_zsp
+class_name: CO3Dv1
+path_raw: ${platform.path_datasets}/CO3Dv1
+path_preprocess: ${platform.path_datasets}/CO3Dv1_Preprocess
+
+name: co3dv1_10s_zsp_unlabeled
+
+cuboid_source: 'droid_slam'  # 'droid_slam_aligned' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
+cam_tform_obj_source: 'droid_slam' # 'droid_slam_aligned'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', 'limits3d', 'droid_slam'
 
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
-sequences_count_max_per_category: 50
 
-#frames_count_max_per_sequence: 5
-#
+
 #modalities:
 #  - 'size'
 #  - 'category'
@@ -20,34 +25,79 @@ sequences_count_max_per_category: 50
 #  - 'sequence_name'
 #  - 'sequence'
 #  - 'mesh'
-##  # - 'pcl'
-#
-#subset_fraction: 1.
-##
-#categories:
-#  - bicycle
-#  - toytruck
-#  - toytrain
-#  - teddybear
-#  - car
-#  - toybus
-#  - motorcycle
-#  - keyboard
-#  - handbag
-#  - remote
-#  - toyplane
-#  - toilet
-#  - hairdryer
-#  - mouse
-#  - toaster
-#  - hydrant
-#  - chair
-#  - laptop
-#  - book
-#  - backpack
+#  # - 'pcl'
 
+# frames_count_max_per_sequence: 2
+
+subset_fraction: 1.
+
+categories:
+  - bicycle
+  - toytruck
+  - toytrain
+  - teddybear
+  - car
+  - toybus
+  - motorcycle
+  - keyboard
+  - handbag
+  - remote
+  - toyplane
+  - toilet
+  - hairdryer
+  - mouse
+  - toaster
+  - hydrant
+  - chair
+  - laptop
+  - book
+  - backpack
+
+#    AEROPLANE = "aeroplane"
+#    BICYCLE = "bicycle"
+#    BOAT = "boat"
+#    BOTTLE = "bottle"
+#    BUS = "bus"
+#    CAR = "car"
+#    CHAIR = "chair"
+#    DININGTABLE = "diningtable"
+#    MOTORBIKE = "motorbike"
+#    SOFA = "sofa"
+#    TRAIN = "train"
+#    TVMONITOR = "tvmonitor"
+
+# python
+#from pathlib import Path
+#path_zsp = Path('third_party/zero-shot-pose/data/class_labels')
+#path_zsp_classes = list(path_zsp.iterdir())
+#count_classes = len(path_zsp_classes)
+#path_zsp_classes_sequences = []
+#for path_zsp_class in path_zsp_classes:
+#  print(f"{path_zsp_class.stem}:")
+#  path_zsp_classes_sequences += list(path_zsp_class.iterdir())
+#  for path_zsp_class_sequence in list(path_zsp_class.iterdir()):
+#    print(f"  '{path_zsp_class_sequence.stem}':")
+#count_classes_sequences = len(path_zsp_classes_sequences)
+
+#labels = {}
+#path_zsp_determ = Path('third_party/zero-shot-pose/data/determ_eval')
+#for path in list(path_zsp_determ.iterdir()):
+#  labels[path.stem] = {}
+#  for fpath in list(path.iterdir()):
+#    labels[path.stem][fpath.stem] = torch.load(fpath)
+
+#len(labels['200samples_20tgt']['car'])
+# 'class': 'car', 'reference_seq_name': '244_25999_52630', 'reference_frame_id': 7550, 'target_seq_name': '336_34859_64111', 'all_target_id': [...]
+# problem frame ids are not separate from 0 for each sequence.
+# '200samples_50tgt' : 100 samples
+#,'200samples_20tgt' : 100 samples
+# '200samples_5tgt' : 200 samples
+# '200samples_3tgt' : 200 samples
+# '200samples_1tgt' : 100 samples
 
 dict_nested_frames_ban:
+
+dict_nested_frames:
   bicycle:
     '397_49943_98337':
     '397_49968_98375':
@@ -81,8 +131,6 @@ dict_nested_frames_ban:
     '372_40891_81087':
     '380_44977_90067':
     '240_25394_51994':
-    '199_21373_40106': # no pcl after removing plane
-    '199_21376_40535': # no pcl after removing plane
   teddybear:
     '34_1479_4753':
     '374_42036_84301':
@@ -116,7 +164,6 @@ dict_nested_frames_ban:
     '385_45782_91506':
     '407_55228_107137':
     '378_44187_88070':
-    '77_7848_15794': # broken droid slam
   motorcycle:
     '362_38283_75358':
     '352_37168_70976':
@@ -205,7 +252,6 @@ dict_nested_frames_ban:
     '378_43936_87684':
     '117_13764_29495':
     '93_10158_18975':
-    '14_161_1089': # droid slam broken
   toaster:
     '353_37324_70302':
     '378_44230_88166':
@@ -217,7 +263,6 @@ dict_nested_frames_ban:
     '274_29377_57743':
     '396_49530_97666':
     '409_55533_107255':
-    '153_16983_31803': # no pcl after removing plane
   hydrant:
     '417_57576_110766':
     '167_18184_34441':
@@ -240,7 +285,6 @@ dict_nested_frames_ban:
     '374_42035_84101':
     '378_44299_88302':
     '351_37038_67401':
-    '58_3353_10266': # has rotational symmetric axis
   laptop:
     '378_44211_88110':
     '377_43614_86861':
@@ -252,8 +296,6 @@ dict_nested_frames_ban:
     '378_44219_88122':
     '112_13277_23636':
     '385_45439_90912':
-    '58_3355_10203': # laptop from back
-    '58_3369_10288': # laptop on glass
   book:
     '271_28906_56261':
     '150_16670_31845':
@@ -265,7 +307,6 @@ dict_nested_frames_ban:
     '150_16682_31912':
     '150_16684_31898':
     '247_26469_51778':
-    '14_176_977': # droid slam broken
   backpack:
     '377_43807_87174':
     '372_41258_82188':
@@ -277,7 +318,6 @@ dict_nested_frames_ban:
     '394_48785_96498':
     '380_45067_90178':
     '373_41833_83497':
-    '20_716_1426': # droid slam broken
 
 
 

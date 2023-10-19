@@ -1,10 +1,6 @@
 defaults:
   - co3d
 
-class_name: CO3Dv1
-path_raw: ${platform.path_datasets}/CO3Dv1
-path_preprocess: ${platform.path_datasets}/CO3Dv1_Preprocess
-
 name: co3d_10s_zsp_unlabeled
 
 cuboid_source: 'droid_slam'  # 'droid_slam_aligned' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
@@ -13,6 +9,10 @@ cam_tform_obj_source: 'droid_slam' # 'droid_slam_aligned'  # 'kpts2d_orient_and_
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 
+preprocess:
+  mesh:
+    enabled: True
+    override: False
 
 #modalities:
 #  - 'size'
