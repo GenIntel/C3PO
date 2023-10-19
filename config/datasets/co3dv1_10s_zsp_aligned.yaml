@@ -1,5 +1,5 @@
 defaults:
-  - co3d_10s_zsp_unlabeled
+  - co3dv1_10s_zsp_unlabeled
 
 name: co3dv1_10s_zsp_aligned
 
