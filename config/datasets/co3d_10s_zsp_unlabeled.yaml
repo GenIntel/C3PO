@@ -9,10 +9,10 @@ cam_tform_obj_source: 'droid_slam' # 'droid_slam_aligned'  # 'kpts2d_orient_and_
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 
-preprocess:
-  mesh:
-    enabled: True
-    override: False
+#preprocess:
+#  mesh:
+#    enabled: True
+#    override: False
 
 #modalities:
 #  - 'size'
@@ -241,17 +241,17 @@ dict_nested_frames:
     '399_50869_99829':
     '54_3215_9769':
     '108_12886_25593':
-  mouse:
-    # '374_42100_84191': # not found in co3dv2
-    '373_41442_82717':
-    '372_40880_81064':
-    '374_41907_84025':
-    '373_41385_82618':
-    '377_43416_86289':
-    '107_12753_23606':
-    '378_43936_87684':
-    '117_13764_29495':
-    '93_10158_18975':
+#  mouse:
+#    # '374_42100_84191': # not found in co3dv2
+#    '373_41442_82717':
+#    '372_40880_81064':
+#    '374_41907_84025':
+#    '373_41385_82618':
+#    '377_43416_86289':
+#    '107_12753_23606':
+#    '378_43936_87684':
+#    '117_13764_29495':
+#    '93_10158_18975':
   toaster:
     '353_37324_70302':
     '378_44230_88166':
