@@ -93,7 +93,9 @@ import open3d
 
 def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None,
                cams_intr4x4: Union[torch.Tensor, List[torch.Tensor]]=None,
+               cams_imgs: Union[torch.Tensor, List[torch.Tensor]]=None,
                cams_names: List[str]=None,
+               cams_imgs_resize: bool = True,
                pts3d: Union[torch.Tensor, List[torch.Tensor]]=None,
                pts3d_names: List[str]=None,
                pts3d_colors: Union[torch.Tensor, List]=None,
@@ -112,6 +114,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     Args:
         cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
         cams_intr4x4 (Union[torch.Tensor, List[torch.Tensor]]): Cx4x4 or List(4x4)
+        cams_imgs (Union[torch.Tensor, List[torch.Tensor]]): Cx3xHxW or List(3xHxW)
+        cams_names: (List[str]): (P,)
         pts3d (Union[torch.Tensor, List[torch.Tensor]]): PxNx3 or List(Npx3)
         pts3d_names (List[str]): (P,)
         pts3d_colors (Union[torch.Tensor, List]): Px3 or List(3)
@@ -236,27 +240,13 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
             geometries.append({'name': pts3d_i_name, 'geometry': pts3d_i_o3d})
 
-    if cams_tform4x4_world is not None and cams_intr4x4 is not None:
-
-        for i, cam_tform4x4_obj in enumerate(cams_tform4x4_world):
-            if len(cams_intr4x4) == 1:
-                cam_intr4x4 = cams_intr4x4[0]
-            else:
-                cam_intr4x4 = cams_intr4x4[i]
-
-            width = int(cam_intr4x4[0, 2] * 2)
-            height = int(cam_intr4x4[1, 2] * 2)
-
-            cam = open3d.geometry.LineSet.create_camera_visualization(view_width_px=width, view_height_px=height,
-                                                                      intrinsic=cam_intr4x4[:3, :3].detach().cpu().numpy(),
-                                                                      extrinsic=cam_tform4x4_obj.detach().cpu().numpy(),
-                                                                      scale=0.01)
-            if cams_names is not None and len(cams_names) >= i+1 and cams_names[i] is not None:
-                cam_name = cams_names[i]
-            else:
-                cam_name = f'cam{i}'
-
-            geometries.append({'name': cam_name, 'geometry': cam})
+    o3d_geometries_for_cams = get_o3d_geometries_for_cams(cams_tform4x4_world=cams_tform4x4_world,
+                                                            cams_intr4x4=cams_intr4x4,
+                                                            cams_imgs=cams_imgs,
+                                                            cams_names=cams_names,
+                                                            cams_imgs_resize=cams_imgs_resize)
+    for o3d_geometry_for_cam in o3d_geometries_for_cams:
+        geometries.append(o3d_geometry_for_cam)
 
     if return_visualization is False and fpath is None:
         open3d.visualization.draw(geometries)
@@ -319,6 +309,78 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
         vis.destroy_window()
 
     # open3d.visualization.draw_geometries(geometries)
+
+
+def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None,
+               cams_intr4x4: Union[torch.Tensor, List[torch.Tensor]]=None,
+               cams_imgs: Union[torch.Tensor, List[torch.Tensor]]=None,
+               cams_names: List[str]=None,
+               cams_imgs_resize: bool = True):
+    """
+    Args:
+        cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
+        cams_intr4x4 (Union[torch.Tensor, List[torch.Tensor]]): Cx4x4 or List(4x4)
+        cams_imgs (Union[torch.Tensor, List[torch.Tensor]]): Cx3xHxW or List(3xHxW)
+        cams_names: (List[str]): (P,)
+    Returns:
+        od3d_geometries (List): list with geometries as dict
+    """
+
+    geometries = []
+
+    if cams_tform4x4_world is not None and cams_intr4x4 is not None:
+
+        for i in range(len(cams_tform4x4_world)):
+            if len(cams_intr4x4) == 1:
+                cam_intr4x4 = cams_intr4x4[0]
+            else:
+                cam_intr4x4 = cams_intr4x4[i]
+
+            width = int(cam_intr4x4[0, 2] * 2)
+            height = int(cam_intr4x4[1, 2] * 2)
+
+            cam_tform4x4_obj = cams_tform4x4_world[i]
+
+            cam = open3d.geometry.LineSet.create_camera_visualization(view_width_px=width, view_height_px=height,
+                                                                      intrinsic=cam_intr4x4[:3, :3].detach().cpu().numpy(),
+                                                                      extrinsic=cam_tform4x4_obj.detach().cpu().numpy(),
+                                                                      scale=0.1)
+
+
+            if cams_names is not None and len(cams_names) >= i+1 and cams_names[i] is not None:
+                cam_name = cams_names[i]
+            else:
+                cam_name = f'cam{i}'
+
+            geometries.append({'name': cam_name, 'geometry': cam})
+
+            if cams_imgs is not None and len(cams_imgs) > i:
+                h, w = cams_imgs[i].shape[1:]
+                if cams_imgs_resize:
+                    cam_img = resize(cams_imgs[i], H_out=512, W_out=512)
+                    h_resize = 512 / h
+                    w_resize = 512 / w
+                else:
+                    cam_img = cams_imgs[i]
+                    h_resize = 1.
+                    w_resize = 1.
+
+                depth = open3d.geometry.Image(((torch.ones(size=cam_img.shape[1:]) * 0.1).cpu().detach().numpy() * 255).astype(np.uint8))
+                img = open3d.geometry.Image((cam_img.permute(1, 2, 0).contiguous().cpu().detach().numpy()).astype(np.uint8))
+                fx = cam_intr4x4[0, 0].item() * w_resize
+                fy = cam_intr4x4[1, 1].item() * h_resize
+                cx = cam_intr4x4[0, 2].item() * w_resize
+                cy = cam_intr4x4[1, 2].item() * h_resize
+                rgbd = open3d.geometry.RGBDImage.create_from_color_and_depth(color=img, depth=depth, depth_scale=1., depth_trunc=3, convert_rgb_to_intensity=False)
+                intrinsic = open3d.camera.PinholeCameraIntrinsic(w, h, fx, fy, cx, cy)
+                intrinsic.intrinsic_matrix = [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
+                cam = open3d.camera.PinholeCameraParameters()
+                cam.intrinsic = intrinsic
+                cam.extrinsic = cams_tform4x4_world[i].detach().cpu().numpy()
+                pts3d_image_i = open3d.geometry.PointCloud.create_from_rgbd_image(rgbd, cam.intrinsic, cam.extrinsic)
+                geometries.append({'name': f'{cam_name}_img', 'geometry': pts3d_image_i})
+    return geometries
+
 
 def show_pcl_via_open3d(pts3d):
     vis = o3d.visualization.VisualizerWithEditing()

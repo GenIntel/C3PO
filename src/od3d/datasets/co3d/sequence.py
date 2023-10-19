@@ -1161,7 +1161,22 @@ class CO3D_Sequence():
         if not fpath_axis_droid_slam.exists():
             fpath_axis_droid_slam.parent.mkdir(parents=True, exist_ok=True)
             from od3d.cv.label.axis import label_axis_in_pcl
-            axis_droid_slam = label_axis_in_pcl(pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN), pts3d_colors=self.get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN))
+
+            cams_tform4x4_world = []
+            cams_intr4x4 = []
+            cams_imgs = []
+            frames_count = len(self.frames_names)
+            for c in range(0, frames_count, frames_count // 4):
+                frame = self.get_frame_by_index(c)
+                cams_tform4x4_world.append(frame.cam_tform4x4_obj)
+                cams_intr4x4.append(frame.cam_intr4x4)
+                cams_imgs.append(frame.rgb)
+
+            axis_droid_slam = label_axis_in_pcl(pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN), pts3d_colors=self.get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
+                                                cams_tform4x4_world=cams_tform4x4_world,
+                                                cams_intr4x4=cams_intr4x4,
+                                                cams_imgs=cams_imgs)
+
             torch.save(axis_droid_slam, f=fpath_axis_droid_slam)
         else:
             axis_droid_slam = torch.load(fpath_axis_droid_slam)
@@ -1182,6 +1197,7 @@ class CO3D_Sequence():
         if fpath_droid_slam_labeled_tform_droid_slam.exists():
             droid_slam_labeled_tform_droid_slam = torch.load(fpath_droid_slam_labeled_tform_droid_slam)
         else:
+            logger.info(f'labeling axis for sequence {self.name_unique}')
             droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=self.droid_slam_axis_labeled)
 
         while (torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3]) - 1.).abs() > 1e-5:
