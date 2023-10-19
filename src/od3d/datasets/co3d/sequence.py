@@ -922,6 +922,8 @@ class CO3D_Sequence():
         if self.fpath_mesh.exists() and not override:
             logger.warning(f'mesh already exists {self.fpath_mesh}')
             return
+        else:
+            logger.info(f'preprocessing mesh for {self.name_unique} with type {self.mesh_name}')
 
         import numpy as np
         from od3d.cv.visual.show import show_scene
@@ -1282,6 +1284,7 @@ class CO3D_Sequence():
         fpath_tform_aligned = self.get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(aligned_name=aligned_name)
         fpath_tform_aligned.parent.mkdir(parents=True, exist_ok=True)
         torch.save(aligned_droid_slam_tform_droid_slam.detach().cpu(), f=fpath_tform_aligned)
+
     def write_aligned_cuboid(self, cuboid: Meshes, aligned_name: str):
         fpath_mesh_aligned = self.path_preprocess.joinpath('aligned', aligned_name, 'mesh', self.category, 'mesh.ply')
         fpath_mesh_aligned.parent.mkdir(parents=True, exist_ok=True)

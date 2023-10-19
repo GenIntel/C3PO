@@ -112,7 +112,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         X_sub = []
         Y_sub = []
         text_sub = []
-        stepsize=30
+        stepsize=40
 
         for x_step in range(0, math.ceil(len(X) / stepsize)):
             for y_step in range(0, math.ceil(len(Y) / stepsize)):
