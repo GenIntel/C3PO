@@ -1033,6 +1033,10 @@ class CO3D_Sequence():
 
         pts3d_obj = pts3d[mask_pts3d_obj]
 
+        if len(pts3d_obj) < 10:
+            logger.warning(f'Could not estimate mesh for sequence {self.name_unique} due to too few points after removing plane {len(pts3d_obj)}')
+            return
+
         pts3d_colors[mask_pts3d_on_plane] = torch.Tensor([0., 0., 1.]).to(device=device)
         pts3d_colors[mask_pts3d_obj] = torch.Tensor([0., 1., 0.]).to(device=device)
         pts3d_colors[mask_pts3d_sampled * (~mask_pts3d_on_plane) * (~mask_pts3d_obj)] = torch.Tensor([1., 0., 0.]).to(device=device)
