@@ -13,7 +13,8 @@ import pytorch3d.transforms
 import pandas as pd
 import numpy as np
 from torch.utils.data import RandomSampler
-
+from od3d.cv.visual.show import show_scene
+import math
 import torch
 torch.multiprocessing.set_sharing_strategy('file_system')
 from od3d.cv.geometry.transform import se3_exp_map
@@ -346,6 +347,14 @@ class NeMo_Align3D(OD3D_Method):
         for cat_id, category in enumerate(self.categories):
             logger.info(f'category {category}')
 
+            # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6
+            rot_diff_rad = results_diff_log_rot[category][0, :]
+            accurate_pi6 = rot_diff_rad < (math.pi / 6.)
+            accurate_pi18 = rot_diff_rad < (math.pi / 18.)
+            accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][0, :]) > 0.90
+            accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.60
+            accurate_sim = accurate_sim_geo * accurate_sim_appear
+
             ### VISUALIZATIONS
             instance_ids = torch.LongTensor(list(range(self.instances_count)))
             category_instance_ids = instance_ids[self.map_seq_to_cat == cat_id]
@@ -362,7 +371,8 @@ class NeMo_Align3D(OD3D_Method):
                 # ground truth
                 # droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_cuboid_ref_tform_droid_slam_obj.to(device=self.device)
 
-                self.sequences[instance_id].write_aligned_droid_slam_tform_droid_slam(aligned_name=self.config.aligned_name, aligned_droid_slam_tform_droid_slam=droid_slam_labeled_cuboid_tform_droid_slam_instance)
+                if accurate_sim[instance_id_in_category] or not self.config.aligned_store_only_similar:
+                    self.sequences[instance_id].write_aligned_droid_slam_tform_droid_slam(aligned_name=self.config.aligned_name, aligned_droid_slam_tform_droid_slam=droid_slam_labeled_cuboid_tform_droid_slam_instance)
 
                 vertices_mask = self.sequences_mesh_ids_for_verts == instance_id
                 ref_vertices_mask = self.sequences_mesh_ids_for_verts == category_instance_ids[0]
@@ -379,19 +389,9 @@ class NeMo_Align3D(OD3D_Method):
 
                 pts3d_colors.append(self.sequences[instance_id].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype))
 
-
-            from od3d.cv.visual.show import show_scene
-            import math
             viewpoints_count = 2
             category_meshes = self.meshes.get_meshes_with_ids(meshes_ids=category_instance_ids)
 
-            # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55
-            rot_diff_rad = results_diff_log_rot[category][0, :]
-            accurate_pi6 = rot_diff_rad < (math.pi / 6.)
-            accurate_pi18 = rot_diff_rad < (math.pi / 18.)
-            accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][0, :]) > 0.90
-            accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.55
-            accurate_sim = accurate_sim_geo * accurate_sim_appear
             imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
             from od3d.cv.visual.draw import add_boolean_table
             accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
