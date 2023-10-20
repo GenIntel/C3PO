@@ -9,11 +9,7 @@ cam_tform_obj_source: 'droid_slam' # 'droid_slam_aligned'  # 'kpts2d_orient_and_
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 
-preprocess:
-  mesh:
-    enabled: True
-    override: False
-sequences_require_mesh: False
+
 
 #modalities:
 #  - 'size'
