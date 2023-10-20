@@ -40,6 +40,7 @@ class CO3D(OD3D_Dataset):
                  sequences_require_pcl_score=-1000.1,
                  sequences_require_gt_pose=False,
                  sequences_count_max_per_category=None,
+                 sequences_require_mesh=False,
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  mesh_feats_type=FEATURE_TYPES.DINOV2_AVG.value,
@@ -76,6 +77,7 @@ class CO3D(OD3D_Dataset):
                                                                                require_pcl_score=sequences_require_pcl_score,
                                                                                require_gt_pose=sequences_require_gt_pose,
                                                                                count_max_per_category=sequences_count_max_per_category,
+                                                                               sequences_require_mesh=sequences_require_mesh,
                                                                                dict_nested_frames_ban=dict_nested_frames_ban)
 
         logger.info(f'sequences filtered {self.dict_category_sequences_names}')
@@ -249,7 +251,7 @@ class CO3D(OD3D_Dataset):
                              mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
                              cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source, mesh_name=self.mesh_name)
 
-    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, require_gt_pose, count_max_per_category, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
+    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, require_gt_pose, count_max_per_category, sequences_require_mesh, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
         logger.info("filtering frames...")
         if dict_nested_frames is not None:
             dict_nested_sequences = {}
@@ -290,7 +292,7 @@ class CO3D(OD3D_Dataset):
             if category not in self.categories:
                 dict_nested_sequences[category] = []
                 continue
-            if require_pcl or require_gt_pose or count_max_per_category is not None:
+            if require_pcl or require_gt_pose or count_max_per_category is not None or sequences_require_mesh:
                 sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
                              in dict_nested_sequences[category]]
                 #if dict_nested_sequences_ban is not None and category in dict_nested_sequences_ban.keys():
@@ -305,6 +307,12 @@ class CO3D(OD3D_Dataset):
                             filter(lambda sequence: sequence.meta.pcl_quality_score > require_pcl_score, sequences))
                     if sort_pcl_score:
                         sequences = sorted(sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
+                if sequences_require_mesh:
+                    sequences = list(filter(lambda sequence: sequence.fpath_mesh.exists(), sequences))
+                    sequences_no_fpath_mesh = list(filter(lambda sequence: not sequence.fpath_mesh.exists(), sequences))
+                    if len(sequences_no_fpath_mesh) > 0:
+                        sequences_no_fpath_mesh_names = [s.name_unique for s in sequences_no_fpath_mesh]
+                        logger.info(f'Filtering out sequences due to no mesh available {sequences_no_fpath_mesh_names}')
                 if count_max_per_category is not None:
                     sequences = sequences[:count_max_per_category]
                 dict_nested_sequences[category] = [sequence.name for sequence in sequences]
