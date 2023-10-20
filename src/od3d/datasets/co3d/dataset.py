@@ -308,11 +308,11 @@ class CO3D(OD3D_Dataset):
                     if sort_pcl_score:
                         sequences = sorted(sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
                 if sequences_require_mesh:
-                    sequences = list(filter(lambda sequence: sequence.fpath_mesh.exists(), sequences))
                     sequences_no_fpath_mesh = list(filter(lambda sequence: not sequence.fpath_mesh.exists(), sequences))
+                    sequences = list(filter(lambda sequence: sequence.fpath_mesh.exists(), sequences))
                     if len(sequences_no_fpath_mesh) > 0:
-                        sequences_no_fpath_mesh_names = [s.name_unique for s in sequences_no_fpath_mesh]
-                        logger.info(f'Filtering out sequences due to no mesh available {sequences_no_fpath_mesh_names}')
+                        sequences_no_fpath_mesh_names = [s.name for s in sequences_no_fpath_mesh]
+                        logger.info(f'Filtering out sequences due to no mesh available for category {category}: \n{sequences_no_fpath_mesh_names}')
                 if count_max_per_category is not None:
                     sequences = sequences[:count_max_per_category]
                 dict_nested_sequences[category] = [sequence.name for sequence in sequences]
