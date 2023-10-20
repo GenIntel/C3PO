@@ -21,6 +21,9 @@ class CUBOID_SOURCES(str, ExtEnum):
     KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
     LIMITS3D = 'limits3d'
     DROID_SLAM = 'droid_slam'
+    DEFAULT = 'default'
+    ALIGNED = 'aligned'
+    ZSP_REF_CUBOID = 'zsp_ref_cuboid'
 
 class CO3D_FRAME_TYPES(str, ExtEnum):
     DEV_KNOWN = 'dev_known'
@@ -33,6 +36,7 @@ class CO3D_FRAME_TYPES(str, ExtEnum):
 
 class FEATURE_TYPES(str, ExtEnum):
     DINOV2_AVG = 'dinov2_avg'
+    DINOV2_AVG_NORM = 'dinov2_avg_norm'
     DINOV2_ACC = 'dinov2_acc'
 
 class REDUCE_TYPES(str, ExtEnum):

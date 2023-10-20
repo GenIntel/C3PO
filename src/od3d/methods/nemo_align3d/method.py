@@ -152,8 +152,8 @@ class NeMo_Align3D(OD3D_Method):
         self.sequences_co3d_tform_droid_slam = []
         for seq in self.sequences:
             self.sequences_co3d_tform_droid_slam.append(seq.get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.DROID_SLAM,
-                                                                               CAM_TFORM_OBJ_SOURCES.CO3DV1,
-                                                                               device=self.device))
+                                                                                  CAM_TFORM_OBJ_SOURCES.CO3DV1,
+                                                                                  device=self.device))
 
         self.instances_count = len(self.meshes)
         #self.meshes_verts_aggregated_features = [vert_feats for mesh_feats in self.sequences_mesh_feats for vert_feats in mesh_feats]
@@ -241,7 +241,7 @@ class NeMo_Align3D(OD3D_Method):
                                     self.sequences[_ref_mesh_id]) for _ref_mesh_id in ref_mesh_ids], dim=-1)
 
                                 # remove infinities is highly important
-                                #dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
+                                # dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
                                 # division by two to normalize to 0. - 1.
                                 dist_src_ref = dist_src_ref / 2.
 
@@ -250,7 +250,7 @@ class NeMo_Align3D(OD3D_Method):
                                     ref_tform4x4_src = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
                                                                                             dist_ref=dist_src_ref),
                                                               score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
-                                                                                 dist_ref=dist_src_ref), fits_count=500,
+                                                                                 dist_ref=dist_src_ref, use_appear_argmin=self.config.use_appear_argmin), fits_count=500,
                                                               fit_pts_count=4)
                                 else:
                                     ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
@@ -259,7 +259,8 @@ class NeMo_Align3D(OD3D_Method):
                                                                                      tform4x4=ref_tform4x4_src[None,],
                                                                                      pts_ref=pts_ref,
                                                                                      dist_ref=dist_src_ref,
-                                                                                     return_dists=True)
+                                                                                     return_dists=True,
+                                                                                     use_appear_argmin=self.config.use_appear_argmin)
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
                                 pred_ref_tform_src = ref_tform4x4_src.clone()
@@ -279,7 +280,13 @@ class NeMo_Align3D(OD3D_Method):
 
                                 if s != 0:
                                     # four points required, otherwise rotation yields an ambiguity. like planes without normals
-                                    ref_tform4x4_src = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref, dist_ref=dist_src_ref), score_func=partial(score_tform4x4_fit, pts_ref=pts_ref, dist_ref=dist_src_ref), fits_count=2000, fit_pts_count=4)
+                                    ref_tform4x4_src = ransac(pts=pts_src,
+                                                              fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
+                                                                               dist_ref=dist_src_ref),
+                                                              score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
+                                                                                 dist_ref=dist_src_ref,
+                                                                                 use_appear_argmin=self.config.use_appear_argmin),
+                                                              fits_count=2000, fit_pts_count=4)
                                 else:
                                     ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
                                 pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src, tform4x4=ref_tform4x4_src[None,], pts_ref=pts_ref, dist_ref=dist_src_ref, return_dists=True)

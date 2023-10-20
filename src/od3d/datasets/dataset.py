@@ -12,6 +12,7 @@ from od3d.data import ExtEnum
 import inspect
 from tqdm import tqdm
 import numpy as np
+import od3d.io
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -46,6 +47,11 @@ class OD3D_Dataset(Dataset):
             od3d_dataset.preprocess(config_preprocess=config.preprocess)
 
         return od3d_dataset
+
+    @classmethod
+    def create_by_name(cls, name: str):
+        config = od3d.io.read_config_intern(rfpath=Path("datasets").joinpath(f"{name}.yaml"))
+        return cls.create_from_config(config)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

@@ -811,6 +811,11 @@ class CO3D_Sequence():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             meshes_verts_aggregated_features_avg = torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0)
             torch.save(meshes_verts_aggregated_features_avg, f=self.fpath_mesh_feats)
+        elif self.mesh_feats_type == FEATURE_TYPES.DINOV2_AVG_NORM:
+            if not self.fpath_mesh_feats.parent.exists():
+                self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+            meshes_verts_aggregated_features_avg_norm = torch.nn.functional.normalize(torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0), dim=-1)
+            torch.save(meshes_verts_aggregated_features_avg_norm, f=self.fpath_mesh_feats)
         else:
             logger.warning(f'Unknown mesh feature type {self.mesh_feats_type}.')
 
@@ -1163,6 +1168,35 @@ class CO3D_Sequence():
     def fpath_droid_slam_axis_labeled(self):
         return self.path_preprocess.joinpath('axis', 'droid_slam', self.category, self.name, 'axis.pt')
 
+
+    def get_cams(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES=CAM_TFORM_OBJ_SOURCES.DROID_SLAM, cams_count=5, show_imgs=True):
+        cams_tform4x4_world = []
+        cams_intr4x4 = []
+        cams_imgs = []
+        frames_count = len(self.frames_names)
+        for c in range(0, frames_count, (frames_count // cams_count) + 1):
+            frame = self.get_frame_by_index(c)
+            if cam_tform_obj_source is not CAM_TFORM_OBJ_SOURCES.CO3D or cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM:
+                cams_tform4x4_world.append(
+                    frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
+            else:
+                cams_tform4x4_world.append(
+                    frame.get_cam_tform4x4_obj(cam_tform_obj_source=cam_tform_obj_source))
+
+            cams_intr4x4.append(frame.cam_intr4x4)
+            if show_imgs:
+                cams_imgs.append(frame.rgb)
+        return cams_tform4x4_world, cams_intr4x4, cams_imgs
+
+    def show(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES=CAM_TFORM_OBJ_SOURCES.DROID_SLAM, pcl_source: PCL_SOURCES=PCL_SOURCES.DROID_SLAM, cams_count=5, show_imgs=False):
+        cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(cam_tform_obj_source=cam_tform_obj_source, cams_count=cams_count, show_imgs=show_imgs)
+        if not show_imgs:
+            cams_imgs = None
+        pts3d = self.get_pcl(pcl_source=pcl_source)
+        pts3d_colors = self.get_pcl_colors(pcl_source=pcl_source)
+        from od3d.cv.visual.show import show_scene
+        show_scene(cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, pts3d=[pts3d], pts3d_colors=[pts3d_colors])
+
     @property
     def droid_slam_axis_labeled(self):
         fpath_axis_droid_slam = self.fpath_droid_slam_axis_labeled
@@ -1355,6 +1389,23 @@ class CO3D_Sequence():
             return ref_seq.fpath_droid_slam_labeled_cuboid
         else:
             return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
+
+    def get_fpath_mesh(self, mesh_source: CUBOID_SOURCES ):
+        if mesh_source == CUBOID_SOURCES.ALIGNED:
+            return self.path_preprocess.joinpath('aligned', self.aligned_name, 'mesh', self.category, 'mesh.ply')
+        elif self.cam_tform_obj_source == CUBOID_SOURCES.ZSP_REF_CUBOID:
+            ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
+            ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
+            #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
+            return ref_seq.fpath_droid_slam_labeled_cuboid
+        else:
+            return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
+
+    def get_mesh(self, mesh_source: CUBOID_SOURCES):
+        fpath_mesh = self.get_fpath_mesh(mesh_source=mesh_source)
+        if not fpath_mesh.exists():
+            self.preprocess_mesh()
+        return Mesh.load_from_file(fpath=fpath_mesh)
 
     @property
     def mesh(self):

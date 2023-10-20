@@ -17,9 +17,10 @@ name: co3dv1_10s_zsp_aligned
 #    - 'sequence'
 #    # - 'mesh'
 
+sequences_require_gt_pose: True
 cuboid_source: 'droid_slam_aligned' # 'droid_slam_aligned' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
 cam_tform_obj_source: 'droid_slam_aligned' # 'droid_slam_aligned'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', 'limits3d', 'droid_slam'
-aligned_name: 'all_to_one_13_10_23' # 'all_to_one_17_10_23_convex500_dinov2_acc_min'
+aligned_name: 'latest' # 'all_to_one_17_10_23_convex500_dinov2_acc_min'
 
 #categories:
 #  - bicycle

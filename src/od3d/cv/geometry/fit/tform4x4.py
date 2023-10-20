@@ -79,7 +79,7 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
     return pts_ref_tform4x4_pts
 
 
-def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False):
+def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False, use_appear_argmin=False):
     """
     Args:
         pts (torch.Tensor): ...xNxF
@@ -90,6 +90,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
         scores (torch.Tensor): ...xP
     """
     N, F = pts.shape[-2:]
+    R = dist_ref.shape[-1]
     P = tform4x4.shape[-3]
     device = pts.device
 
@@ -105,20 +106,49 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
         logger.warning(f'There are some infinite vlaues in dist geometry. WHY?')
     dist_ref_geometry = dist_ref_geometry / dist_ref_geo_max
 
-    # PxN
-    proposal_tform_pts_nn_ref_id = dist_ref_geometry.argmin(dim=-1)
-    # PxR
-    proposal_tform_pts_ref_nn_pts_id = dist_ref_geometry.argmin(dim=-2)
+    if not use_appear_argmin:
+        # PxN
+        proposal_tform_pts_nn_ref_id = dist_ref_geometry.argmin(dim=-1)
+        proposal_tform_pts_id = torch.arange(proposal_tform_pts_nn_ref_id.shape[-1]).view(1, -1).\
+            expand(proposal_tform_pts_nn_ref_id.shape).to(device=device)
+
+        # PxR
+        proposal_tform_pts_ref_nn_pts_id = dist_ref_geometry.argmin(dim=-2)
+        proposal_tform_pts_ref_id = torch.arange(proposal_tform_pts_ref_nn_pts_id.shape[-1]).view(1, -1).\
+            expand(proposal_tform_pts_ref_nn_pts_id.shape).to(device=device)
+
+    else:
+        argmin_ref_from_src = dist_ref.argmin(dim=-1) # N,
+        argmin_src_from_ref = dist_ref.argmin(dim=-2) # R,
+
+        src_cyclic_dist = (pts - pts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1)
+        ref_cyclic_dist = (pts_ref - pts_ref[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1)
+
+        # PxN?
+        proposal_tform_pts_nn_ref_id = argmin_ref_from_src
+        proposal_tform_pts_nn_ref_id = proposal_tform_pts_nn_ref_id[None].expand(P, proposal_tform_pts_nn_ref_id.shape[-1]).contiguous()
+        proposal_tform_pts_id = torch.arange(proposal_tform_pts_nn_ref_id.shape[-1]).view(1, -1). \
+            expand(proposal_tform_pts_nn_ref_id.shape).to(device=device)
+
+        src_cyclic_mask = src_cyclic_dist <= src_cyclic_dist.quantile(q=0.1)
+        proposal_tform_pts_nn_ref_id = proposal_tform_pts_nn_ref_id[:, src_cyclic_mask]
+        proposal_tform_pts_id = proposal_tform_pts_id[:, src_cyclic_mask]
+
+        # PxR?
+        proposal_tform_pts_ref_nn_pts_id = argmin_src_from_ref
+        proposal_tform_pts_ref_nn_pts_id = proposal_tform_pts_ref_nn_pts_id[None].expand(P, proposal_tform_pts_ref_nn_pts_id.shape[-1]).contiguous()
+        proposal_tform_pts_ref_id = torch.arange(proposal_tform_pts_ref_nn_pts_id.shape[-1]).view(1, -1). \
+            expand(proposal_tform_pts_ref_nn_pts_id.shape).to(device=device)
+
+        ref_cyclic_mask = ref_cyclic_dist <= ref_cyclic_dist.quantile(q=0.1)
+        proposal_tform_pts_ref_nn_pts_id = proposal_tform_pts_ref_nn_pts_id[:, ref_cyclic_mask]
+        proposal_tform_pts_ref_id = proposal_tform_pts_ref_id[:, ref_cyclic_mask]
 
     # PxNx2
-    proposal_tform_pts_nn_ref_id_2D = torch.stack(
-        [torch.arange(N).view(1, -1).expand(proposal_tform_pts_nn_ref_id.shape).to(device=device),
-         proposal_tform_pts_nn_ref_id], dim=-1)
+    proposal_tform_pts_nn_ref_id_2D = torch.stack([proposal_tform_pts_id, proposal_tform_pts_nn_ref_id], dim=-1)
     proposal_tform_pts_nn_ref_id_2D = proposal_tform_pts_nn_ref_id_2D.clone()
     # PxRx2
-    proposal_tform_pts_ref_nn_pts_id_2D = torch.stack([torch.arange(proposal_tform_pts_ref_nn_pts_id.shape[-1]).view(1,
-                                                                                                                     -1).expand(
-        proposal_tform_pts_ref_nn_pts_id.shape).to(device=device), proposal_tform_pts_ref_nn_pts_id], dim=-1)
+    proposal_tform_pts_ref_nn_pts_id_2D = torch.stack([proposal_tform_pts_ref_id, proposal_tform_pts_ref_nn_pts_id], dim=-1)
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.flip(dims=[-1])
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
 

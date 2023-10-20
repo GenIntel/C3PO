@@ -1,0 +1,12 @@
+# @package _global_
+
+ablation_name: dinov2_avg_norm
+
+mesh_feats_type: 'dinov2_avg_norm' # 'dinov2_acc', 'dinov2_avg', 'dinov2_avg_norm'
+
+train_datasets:
+  labeled:
+    mesh_feats_type: ${mesh_feats_type}
+test_datasets:
+  co3d:
+    mesh_feats_type: ${mesh_feats_type}

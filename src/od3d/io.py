@@ -70,9 +70,24 @@ def load_hierarchical_config(benchmark="defaults", platform="local", ablation=No
             cfg = compose(config_name=benchmark, overrides=["+ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg
 
-def read_config_intern(rfpath: Path):
-    fpath = Path("config").joinpath(rfpath)
-    return read_config_extern(fpath=fpath)
+def read_config_intern(rfpath: Path, benchmark="defaults", platform="local", overrides=[]):
+    config_dir_rel = "../../config"
+
+    try:
+        with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):
+            cfg = compose(config_name=benchmark, overrides=[f"+{rfpath.parent}=" + str(rfpath.stem), "platform=" + platform] + overrides)
+
+        cfg = cfg
+        for key in str(rfpath.parent).split('/'):
+            cfg = cfg.get(key)
+    except hydra.errors.ConfigCompositionException as e:
+        fpath = Path("config").joinpath(rfpath)
+        logger.warning(e)
+        logger.warning('trying to read with OmegaConf')
+        cfg = OmegaConf.load(fpath)
+
+    return cfg
+
 
 import hydra.errors
 
