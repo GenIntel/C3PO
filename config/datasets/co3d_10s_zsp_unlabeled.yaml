@@ -13,7 +13,7 @@ preprocess:
   mesh:
     enabled: True
     override: False
-sequences_require_mesh: True
+sequences_require_mesh: False
 
 #modalities:
 #  - 'size'
