@@ -11,6 +11,8 @@ name: co3dv1_50s_no_zsp
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 sequences_count_max_per_category: 50
 
+sequences_require_pcl: True # False
+
 #frames_count_max_per_sequence: 5
 #
 #modalities:

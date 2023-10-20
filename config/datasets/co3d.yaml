@@ -57,7 +57,7 @@ preprocess:
     override: False
     remove_previous: False
 
-#sequences_require_pcl: False # False
+#sequences_require_pcl: True # False
 #sequences_sort_pcl_score: False # False
 #sequences_count_max_per_category: None # None
 

@@ -12,6 +12,7 @@ preprocess:
     enabled: True
     override: False
 sequences_require_mesh: False
+sequences_require_pcl: True # False
 
 #frames_count_max_per_sequence: 5
 #
