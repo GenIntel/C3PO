@@ -1405,11 +1405,21 @@ class CO3D_Sequence():
         else:
             return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
 
-    def get_mesh(self, mesh_source: CUBOID_SOURCES):
+    def get_mesh(self, mesh_source: CUBOID_SOURCES, add_rgb_from_pca=False, device='cpu'):
         fpath_mesh = self.get_fpath_mesh(mesh_source=mesh_source)
         if not fpath_mesh.exists():
             self.preprocess_mesh()
-        return Mesh.load_from_file(fpath=fpath_mesh)
+        mesh = Mesh.load_from_file(fpath=fpath_mesh, device=device)
+        if add_rgb_from_pca:
+            instance_feats = self.feats
+            pca_V = self.categorical_pca_V.to(device=device)
+            if isinstance(instance_feats, List):
+                verts_feats_pca = torch.stack(
+                    [torch.matmul(vert_feats, pca_V[:, :3]).mean(dim=0) for vert_feats in instance_feats], dim=0)
+            else:
+                verts_feats_pca = torch.matmul(instance_feats, pca_V[:, :3])
+            mesh.rgb = (verts_feats_pca.nan_to_num() + 1.) / 2.
+        return mesh
 
     @property
     def mesh(self):
@@ -1442,6 +1452,7 @@ class CO3D_Sequence():
 
     @categorical_pca_V.setter
     def categorical_pca_V(self, value: torch.Tensor):
+        self.fpath_categorical_pca_V.parent.mkdir(parents=True, exist_ok=True)
         torch.save(value.detach().cpu(), f=self.fpath_categorical_pca_V)
 
     @property

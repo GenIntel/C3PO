@@ -163,7 +163,11 @@ class Meshes(torch.nn.Module):
         verts = [mesh.verts.to(device=device) for mesh in meshes]
         faces = [mesh.faces.to(device=device) for mesh in meshes]
 
-        return Meshes(verts=verts, faces=faces)
+        if meshes[0].rgb is not None:
+            rgb = [mesh.rgb.to(device=device) for mesh in meshes]
+        else:
+            rgb = None
+        return Meshes(verts=verts, faces=faces, rgb=rgb)
 
     @staticmethod
     def get_faces_from_verts(verts, ball_radius=0.3):
