@@ -1025,6 +1025,10 @@ class CO3D_Sequence():
         mask_pts3d_on_plane = mask_pts3d_sampled * (pts3d[:, 2] < plane_dist_thresh)
         mask_pts3d_on_plane_not_aggregating = mask_pts3d_sampled * (pts3d[:, 2] < plane_not_aggregating_dist_thresh)
         # starting with 10 percentage of points
+        if (mask_pts3d_sampled * (~mask_pts3d_on_plane)).sum() < 10:
+            logger.warning(f'Could not estimate mesh for sequence {self.name_unique} due to too few points after removing plane {(mask_pts3d_sampled * (~mask_pts3d_on_plane)).sum()}')
+            return
+
         mask_center_thresh = (pts3d[mask_pts3d_sampled * (~mask_pts3d_on_plane)] - center3d).norm(dim=-1).quantile(0.1)
         mask_pts3d_obj = mask_pts3d_sampled * (~mask_pts3d_on_plane) * ((pts3d - center3d).norm(dim=-1) < mask_center_thresh)
 
@@ -1423,6 +1427,22 @@ class CO3D_Sequence():
     @property
     def com(self):
         return self.pcl_clean.mean(dim=0)
+
+    @property
+    def fpath_categorical_pca_V(self):
+        return self.path_preprocess.joinpath('pca', 'categorical_pca_V', self.mesh_feats_type, self.category)
+
+    @property
+    def categorical_pca_V(self):
+        if self.fpath_categorical_pca_V.exists():
+            return torch.load(self.fpath_categorical_pca_V)
+        else:
+            logger.warning(f'Categorical pca V does not exist for sequence {self.name_unique}')
+            return None
+
+    @categorical_pca_V.setter
+    def categorical_pca_V(self, value: torch.Tensor):
+        torch.save(value.detach().cpu(), f=self.fpath_categorical_pca_V)
 
     @property
     def cuboid(self):
