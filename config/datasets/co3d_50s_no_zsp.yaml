@@ -5,7 +5,7 @@ name: co3d_50s_no_zsp
 
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
-sequences_count_max_per_category: 50
+sequences_count_max_per_category: 100
 
 preprocess:
   mesh:
