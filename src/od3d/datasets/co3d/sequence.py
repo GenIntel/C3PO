@@ -841,9 +841,9 @@ class CO3D_Sequence():
                 device = 'cuda:0'
             else:
                 device = 'cpu'
-            seq1_feats = self.feats.to(device=device)
-            seq2_feats = sequence.feats.to(device=device)
 
+            seq1_feats = self.feats
+            seq2_feats = sequence.feats
 
             if isinstance(seq1_feats, list):
                 seq1_verts = len(seq1_feats)
@@ -852,10 +852,10 @@ class CO3D_Sequence():
 
                 for i in tqdm(range(seq1_verts)):
                     for j in range(seq2_verts):
-                        #if i == j:
+                        # if i == j:
                         #    dist_verts_seq1_seq2[i, j] = torch.inf
-                        #else:
-                        dists = torch.cdist(self.feats[i], sequence.feats[j])
+                        # else:
+                        dists = torch.cdist(self.feats[i].to(device=device), sequence.feats[j].to(device=device))
                         if dists.numel() == 0:
                             dist_verts_seq1_seq2[i, j] = torch.inf
                         else:
@@ -867,7 +867,7 @@ class CO3D_Sequence():
                                 logger.warning(f'Unknown reduce type {self.dist_verts_mesh_feats_reduce_type}.')
 
             else:
-                dist_verts_seq1_seq2 = torch.cdist(seq1_feats, seq2_feats)
+                dist_verts_seq1_seq2 = torch.cdist(seq1_feats.to(device=device), seq2_feats.to(device=device))
             if not fpath_dist_verts_mesh_feats.parent.exists():
                 fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
