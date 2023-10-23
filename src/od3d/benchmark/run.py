@@ -105,7 +105,7 @@ cd {cfg.platform.path_od3d}
 git fetch 
 git checkout {cfg.branch}
 git pull
-git submodule update --init --recursive
+git submodule update --init --remote --recursive
 
 # Install OD3D in venv
 VENV_NAME=venv310
@@ -220,7 +220,7 @@ cd {cfg.platform.path_od3d}
 git fetch 
 git checkout {cfg.branch}
 git pull
-git submodule update --init --recursive
+git submodule update --init --remote --recursive
 
 # Install OD3D in venv
 VENV_NAME=venv310
