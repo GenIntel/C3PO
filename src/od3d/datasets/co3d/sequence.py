@@ -871,6 +871,8 @@ class CO3D_Sequence():
             if not fpath_dist_verts_mesh_feats.parent.exists():
                 fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
+            del seq1_feats
+            del seq2_feats
             return dist_verts_seq1_seq2
 
 
