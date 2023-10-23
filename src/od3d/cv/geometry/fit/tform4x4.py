@@ -79,7 +79,7 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
     return pts_ref_tform4x4_pts
 
 
-def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False, use_appear_argmin=False):
+def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False, use_appear_argmin=False, dist_appear_weight=0.5):
     """
     Args:
         pts (torch.Tensor): ...xNxF
@@ -181,7 +181,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     # scores = -proposal_dist_ref.quantile(q=0.9, dim=-1) #  (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
     #scores = -proposal_dist_ref.mean(dim=-1)  # (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
 
-    proposal_scores = -(proposal_dist_ref_geo_avg + proposal_dist_ref_appear_avg)
+    proposal_scores = -((1.-dist_appear_weight) * proposal_dist_ref_geo_avg + dist_appear_weight * proposal_dist_ref_appear_avg)
     if return_dists:
         return proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg
     else:

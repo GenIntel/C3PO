@@ -1,0 +1,18 @@
+# @package _global_
+
+ablation_name: dinov2_voxel500
+
+mesh_name: 'voxel500' # 'convex500', 'voxel500' 'poisson500', 'alpha500'
+
+train_datasets:
+  labeled:
+    mesh_name: ${mesh_name}
+    preprocess:
+      mesh:
+        enabled: True
+test_datasets:
+  co3d:
+    mesh_name: ${mesh_name}
+    preprocess:
+      mesh:
+        enabled: True

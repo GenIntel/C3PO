@@ -250,7 +250,8 @@ class NeMo_Align3D(OD3D_Method):
                                     ref_tform4x4_src = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
                                                                                             dist_ref=dist_src_ref),
                                                               score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
-                                                                                 dist_ref=dist_src_ref, use_appear_argmin=self.config.use_appear_argmin), fits_count=500,
+                                                                                 dist_ref=dist_src_ref, use_appear_argmin=self.config.use_appear_argmin,
+                                                                                 dist_appear_weight=self.config.dist_appear_weight), fits_count=500,
                                                               fit_pts_count=4)
                                 else:
                                     ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
@@ -260,7 +261,8 @@ class NeMo_Align3D(OD3D_Method):
                                                                                      pts_ref=pts_ref,
                                                                                      dist_ref=dist_src_ref,
                                                                                      return_dists=True,
-                                                                                     use_appear_argmin=self.config.use_appear_argmin)
+                                                                                     use_appear_argmin=self.config.use_appear_argmin,
+                                                                                     dist_appear_weight=self.config.dist_appear_weight)
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
                                 pred_ref_tform_src = ref_tform4x4_src.clone()
@@ -285,11 +287,15 @@ class NeMo_Align3D(OD3D_Method):
                                                                                dist_ref=dist_src_ref),
                                                               score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
                                                                                  dist_ref=dist_src_ref,
-                                                                                 use_appear_argmin=self.config.use_appear_argmin),
+                                                                                 use_appear_argmin=self.config.use_appear_argmin,
+                                                                                 dist_appear_weight=self.config.dist_appear_weight),
                                                               fits_count=2000, fit_pts_count=4)
                                 else:
                                     ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
-                                pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src, tform4x4=ref_tform4x4_src[None,], pts_ref=pts_ref, dist_ref=dist_src_ref, return_dists=True)
+                                pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src, tform4x4=ref_tform4x4_src[None,], pts_ref=pts_ref,
+                                                                                     dist_ref=dist_src_ref, return_dists=True,
+                                                                                     use_appear_argmin=self.config.use_appear_argmin,
+                                                                                     dist_appear_weight=self.config.dist_appear_weight)
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
 
