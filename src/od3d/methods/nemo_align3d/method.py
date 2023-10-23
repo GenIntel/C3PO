@@ -213,9 +213,9 @@ class NeMo_Align3D(OD3D_Method):
                     #dist_ref = dists_appearance_verts[:, ref_vertices]
                     pts_ref = pts[ref_vertices_mask].clone()
 
-                    rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
+                    #rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
                     #rgbs_all[~ref_vertices_mask] = rgbs_all[ref_vertices_mask][dists_verts_min_ref_vertices[~ref_vertices_mask]]
-                    self.meshes.rgb = rgbs_all
+                    #self.meshes.rgb = rgbs_all
 
                     for s, src_mesh_id in enumerate(src_mesh_ids):
                         src_vertices_mask = self.sequences_mesh_ids_for_verts == src_mesh_id

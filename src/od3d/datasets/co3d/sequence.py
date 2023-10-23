@@ -708,6 +708,8 @@ class CO3D_Sequence():
 
             save_ply(fpath_pcl_clean, pts3d_clean)
 
+            del dataloader
+
     @property
     def fpath_front_name(self):
         return self.path_preprocess.joinpath('front_names', self.category, self.name, 'front_name.yaml')
@@ -722,6 +724,11 @@ class CO3D_Sequence():
     def preprocess_mesh_feats(self):
         # fpath_mesh_feats
         from od3d.datasets.co3d import CO3D
+        from od3d.models.model import OD3D_Model
+        from od3d.cv.transforms.transform import OD3D_Transform
+        from od3d.cv.transforms.sequential import SequentialTransform
+        import re
+
         dataset = CO3D(name='co3d', modalities=[OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ,
                                                 OD3D_FRAME_MODALITIES.CAM_INTR4X4],
                        path_raw=self.path_raw, path_preprocess=self.path_preprocess,
@@ -741,11 +748,7 @@ class CO3D_Sequence():
         else:
             device = 'cpu'
 
-        from od3d.models.model import OD3D_Model
-        from od3d.cv.transforms.transform import OD3D_Transform
-        from od3d.cv.transforms.sequential import SequentialTransform
 
-        import re
         # e.g.: 'M_dinov2_frozen_base_T_centerzoom512_R_acc'
         match = re.match(r"M_([a-z0-9_]+)_T_([a-z0-9_]+)_R_([a-z0-9_]+)", self.mesh_feats_type, re.I)
         if match and len(match.groups()) == 3:
@@ -768,7 +771,6 @@ class CO3D_Sequence():
 
         meshes_verts_aggregated_features = [torch.zeros((0, feature_dim), device=device)] * meshes.verts.shape[0]
         vertices_count = len(meshes_verts_aggregated_features)
-
 
         for batch in tqdm(iter(dataloader)):
             B = len(batch)
@@ -829,6 +831,7 @@ class CO3D_Sequence():
         else:
             logger.warning(f'Unknown mesh feature reduce_type {reduce_type}.')
 
+        del dataloader
         del dataset
         del model
 

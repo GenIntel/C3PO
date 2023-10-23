@@ -35,6 +35,7 @@ class DINOv2(OD3D_Backbone):
         self.layers_returned = config.layers_returned # choose from [1, 2, 3, 4]
         self.layers_count = len(self.layers_returned)
 
+        self.dinov2 = 'dinov2' in self.config.hub_model
         self.out_dims = [self.extractor.embed_dim]
         self.out_downsample_scales = []
         self.downsample_rate = self.config.downsample_rate
@@ -64,10 +65,13 @@ class DINOv2(OD3D_Backbone):
         W_in = W_out * self.downsample_rate_dino
 
         x = resize(x, H_out= H_in, W_out=W_in)
-        x = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
+        if self.dinov2:
+            x = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
+        else:
+            x = self.extractor.get_intermediate_layers(x, n=12)[9]  # maximum 12 layers, zsp uses 9
+            x = torch.nn.functional.normalize(x, dim=-1)
+            x = x[:, 1:] # remove cls token
         x = x.reshape(-1, H_out, W_out, self.out_dims[-1]).permute(0, 3, 1, 2)
-        # x = resize(x, H_out=64, W_out=64)
-
         x_layers = [x]
         return x_layers
 
