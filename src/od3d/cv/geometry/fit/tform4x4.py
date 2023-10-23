@@ -4,6 +4,9 @@ from od3d.cv.select import batched_index_select
 import torch
 from od3d.cv.select import batched_indexMD_select
 from pytorch3d.ops.points_alignment import corresponding_points_alignment
+from od3d.cv.geometry.transform import transf3d_broadcast
+from od3d.cv.geometry.transform import transf3d_broadcast
+
 
 def fit_tform4x4_with_matches(pts: torch.Tensor, pts_ref: torch.Tensor, estimate_scale=True):
     """
@@ -60,7 +63,6 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
     pts_ref_tform4x4_pts[..., :3, :3] = S.R.permute(0, 2, 1) * S.s[..., None, None]
     pts_ref_tform4x4_pts[..., :3, 3] = S.T
 
-    from od3d.cv.geometry.transform import transf3d_broadcast
     pts_ref_tform_pts_sampled = transf3d_broadcast(pts3d=pts_sampled, transf4x4=pts_ref_tform4x4_pts[:, None])
 
     logger.info(
@@ -94,7 +96,6 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     P = tform4x4.shape[-3]
     device = pts.device
 
-    from od3d.cv.geometry.transform import transf3d_broadcast
     proposal_tform_pts = transf3d_broadcast(pts3d=pts[None,], transf4x4=tform4x4[:, None])
 
     # PxNxR

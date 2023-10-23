@@ -818,16 +818,19 @@ class CO3D_Sequence():
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(meshes_verts_aggregated_features, f=self.fpath_mesh_feats)
+            meshes_verts_aggregated_features.clear()
         elif reduce_type == 'avg':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             meshes_verts_aggregated_features_avg = torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0)
             torch.save(meshes_verts_aggregated_features_avg.detach().cpu(), f=self.fpath_mesh_feats)
+            del meshes_verts_aggregated_features_avg
         elif reduce_type == 'avg_norm':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             meshes_verts_aggregated_features_avg_norm = torch.nn.functional.normalize(torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0), dim=-1)
             torch.save(meshes_verts_aggregated_features_avg_norm.detach().cpu(), f=self.fpath_mesh_feats)
+            del meshes_verts_aggregated_features_avg_norm
         else:
             logger.warning(f'Unknown mesh feature reduce_type {reduce_type}.')
 
@@ -851,13 +854,10 @@ class CO3D_Sequence():
             if isinstance(seq1_feats, list):
                 seq1_verts = len(seq1_feats)
                 seq2_verts = len(seq2_feats)
-                dist_verts_seq1_seq2 = torch.zeros((seq1_verts, seq2_verts)).to(device=device)
+                dist_verts_seq1_seq2 = torch.ones(size=(seq1_verts, seq2_verts)).to(device=device) * torch.inf
 
                 for i in tqdm(range(seq1_verts)):
                     for j in range(seq2_verts):
-                        # if i == j:
-                        #    dist_verts_seq1_seq2[i, j] = torch.inf
-                        # else:
                         dists = torch.cdist(seq1_feats[i].to(device=device), seq2_feats[j].to(device=device))
                         if dists.numel() == 0:
                             dist_verts_seq1_seq2[i, j] = torch.inf
@@ -868,7 +868,12 @@ class CO3D_Sequence():
                                 dist_verts_seq1_seq2[i, j] = dists.mean()
                             else:
                                 logger.warning(f'Unknown reduce type {self.dist_verts_mesh_feats_reduce_type}.')
+                        del dists
 
+                for f in seq1_feats:
+                    del f
+                for f in seq2_feats:
+                    del f
             else:
                 dist_verts_seq1_seq2 = torch.cdist(seq1_feats.to(device=device), seq2_feats.to(device=device))
             if not fpath_dist_verts_mesh_feats.parent.exists():
@@ -890,7 +895,14 @@ class CO3D_Sequence():
     def get_feats(self):
         if not self.fpath_mesh_feats.exists():
             self.preprocess_mesh_feats()
-        return torch.load(self.fpath_mesh_feats)
+        mesh_feats = torch.load(self.fpath_mesh_feats)
+        if isinstance(mesh_feats, List):
+            for i in range(len(mesh_feats)):
+                mesh_feats[i] = mesh_feats[i].detach().cpu()
+        else:
+            mesh_feats = mesh_feats.detach().cpu()
+
+        return mesh_feats
 
     @property
     def fpath_pcl_clean(self):

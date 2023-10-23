@@ -317,6 +317,15 @@ class NeMo_Align3D(OD3D_Method):
                         #if r == 0:
                         #    verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=pred_ref_tform_src)
                         #    self.meshes.verts[src_vertices] = verts
+                        del src_vertices
+                        del src_vertices_mask
+                        del pts_src
+                        logger.info(torch.cuda.mem_get_info())
+                        logger.info(torch.cuda.memory_allocated())
+                        torch.cuda.empty_cache()
+                    del pts
+                    del pts_ref
+                    del dist_src_ref
 
         results = OD3D_Results()
         results_ref = OD3D_Results()
