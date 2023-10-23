@@ -105,7 +105,9 @@ cd {cfg.platform.path_od3d}
 git fetch 
 git checkout {cfg.branch}
 git pull
-git submodule update --init --remote --recursive
+git submodule init
+git submodule update
+git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-ref HEAD); git reset --hard origin/$(git rev-parse --abbrev-ref HEAD); git submodule update --recursive; git clean -dfx'
 
 # Install OD3D in venv
 VENV_NAME=venv310
@@ -220,7 +222,10 @@ cd {cfg.platform.path_od3d}
 git fetch 
 git checkout {cfg.branch}
 git pull
-git submodule update --init --remote --recursive
+git submodule init
+git submodule update
+git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-ref HEAD); git reset --hard origin/$(git rev-parse --abbrev-ref HEAD); git submodule update --recursive; git clean -dfx'
+
 
 # Install OD3D in venv
 VENV_NAME=venv310
