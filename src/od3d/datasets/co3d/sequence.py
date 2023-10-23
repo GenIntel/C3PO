@@ -837,9 +837,12 @@ class CO3D_Sequence():
         if fpath_dist_verts_mesh_feats.exists():
             return torch.load(fpath_dist_verts_mesh_feats)
         else:
-            device = self.feats[0].device
-            seq1_feats = self.feats
-            seq2_feats = sequence.feats
+            if torch.cuda.is_available():
+                device = 'cuda:0'
+            else:
+                device = 'cpu'
+            seq1_feats = self.feats.to(device=device)
+            seq2_feats = sequence.feats.to(device=device)
 
 
             if isinstance(seq1_feats, list):
