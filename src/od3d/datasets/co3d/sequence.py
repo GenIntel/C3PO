@@ -815,7 +815,7 @@ class CO3D_Sequence():
         if reduce_type == 'acc':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(meshes_verts_aggregated_features.detach().cpu(), f=self.fpath_mesh_feats)
+            torch.save(meshes_verts_aggregated_features, f=self.fpath_mesh_feats)
         elif reduce_type == 'avg':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
@@ -925,7 +925,9 @@ class CO3D_Sequence():
             a_src_tform_b_src = fit_tform4x4_with_matches(pts=obj_cams_traj_b, pts_ref=obj_cams_traj_a, estimate_scale=estimate_scale)
 
             fpath.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(a_src_tform_b_src, fpath)
+            torch.save(a_src_tform_b_src.detach().cpu(), fpath)
+            del obj_cams_traj_a
+            del obj_cams_traj_b
         return a_src_tform_b_src
     #    co3d_src_tform_src = tform4x4(
     #        inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)),

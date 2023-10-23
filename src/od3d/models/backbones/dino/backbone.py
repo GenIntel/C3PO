@@ -35,7 +35,7 @@ class DINOv2(OD3D_Backbone):
         self.layers_returned = config.layers_returned # choose from [1, 2, 3, 4]
         self.layers_count = len(self.layers_returned)
 
-        self.out_dims = [384]
+        self.out_dims = [self.extractor.embed_dim]
         self.out_downsample_scales = []
         self.downsample_rate = self.config.downsample_rate
         import re

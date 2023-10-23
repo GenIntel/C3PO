@@ -28,6 +28,7 @@ from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+from od3d.cv.metric.pose import get_pose_diff_in_rad
 
 from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize
@@ -308,8 +309,6 @@ class NeMo_Align3D(OD3D_Method):
                                inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
                                self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
 
-
-                            from od3d.cv.metric.pose import get_pose_diff_in_rad
                             diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
                             results_diff_log_rot[category][r, s] = diff_rot_angle_rad
 
