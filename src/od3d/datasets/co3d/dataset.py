@@ -389,7 +389,10 @@ class CO3D(OD3D_Dataset):
                     continue
 
                 sequence_meta = CO3D_SequenceMeta.load_from_raw(sequence_annotation=sequence_annoation)
-                sequence_meta.save(path_meta=path_meta)
+
+                if len(list(path.joinpath(sequence_meta.name_unique, "images").iterdir())) > 0:
+                    # filtering sequences with no rgb images
+                    sequence_meta.save(path_meta=path_meta)
 
             cls_frame_annotations = load_dataclass_jgzip(
                 f"{path}/{category}/frame_annotations.jgz", List[FrameAnnotation]
