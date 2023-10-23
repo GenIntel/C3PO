@@ -829,6 +829,9 @@ class CO3D_Sequence():
         else:
             logger.warning(f'Unknown mesh feature reduce_type {reduce_type}.')
 
+        del dataset
+        del model
+
     def get_dist_verts_mesh_feats_to_other_sequence(self, sequence: 'CO3D_Sequence'):
         fpath_dist_verts_mesh_feats = self.path_preprocess.joinpath('dist_verts_mesh_feats', self.mesh_name, self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, self.name_unique, sequence.name_unique, 'dist_verts_mesh_feats.pt')
         if fpath_dist_verts_mesh_feats.exists():
