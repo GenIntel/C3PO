@@ -89,6 +89,7 @@ class ResNet(OD3D_Head):
         assert len(self.conv_blocks_in_dims) == 0 or self.conv_blocks_in_dims[0] == self.in_upsampled_dim
         assert len(self.conv_blocks_out_dims) == len(self.conv_blocks_pre_upsampling)
 
+        self.conv_block_scaling = [ self.conv_blocks_strides[i] / self.conv_blocks_pre_upsampling[i] for i in range(len(self.conv_blocks_strides))]
         #self.conv_blocks = nn.Sequential(*[Bottleneck(inplanes=self.conv_blocks_in_dims[i],
         #                                              planes=self.conv_blocks_out_dims[i] // 4,
         #                                              stride=self.conv_blocks_strides[i],
@@ -113,7 +114,7 @@ class ResNet(OD3D_Head):
         else:
             from operator import mul
             from functools import reduce
-            self.downsample_rate = reduce(mul, [1] + self.conv_blocks_strides, 1)
+            self.downsample_rate = reduce(mul, [1] + self.conv_block_scaling, 1)
             self.fc_enabled = False
 
     def forward(self, x):

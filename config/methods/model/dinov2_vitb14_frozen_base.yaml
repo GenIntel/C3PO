@@ -1,5 +1,5 @@
 defaults:
-  - dinov2_frozen
+  - dinov2_frozen_base
 
 backbone:
   hub_repo: 'facebookresearch/dinov2' # 'facebookresearch/dino:main', 'facebookresearch/dinov2'
