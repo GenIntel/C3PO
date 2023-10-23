@@ -1,4 +1,6 @@
 import logging
+import random
+
 logger = logging.getLogger(__name__)
 import typer
 import od3d.io
@@ -14,6 +16,33 @@ from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4_from_transl3
 from od3d.datasets.co3d.enum import PCL_SOURCES, CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES
 from od3d.cv.geometry.mesh import Meshes
 from typing import List
+
+@app.command()
+def align3d():
+    logging.basicConfig(level=logging.INFO)
+    device = 'cuda:0'
+    dtype = torch.float
+    co3d = CO3D.create_by_name('co3dv1_10s_zsp_aligned') # 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+    categories = co3d.categories
+    sequences = co3d.get_sequences()
+    sequences_unique_names = [seq.name_unique for seq in sequences]
+    instances_count = len(sequences)
+    map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in sequences_unique_names])
+    categories_count = len(categories)
+    instances_count_per_category = [(map_seq_to_cat == c).sum().item() for c in range(categories_count)]
+    instance_ids = torch.LongTensor(list(range(instances_count)))
+
+    mesh_source = CUBOID_SOURCES.DEFAULT
+    meshes = Meshes.load_from_meshes([seq.get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device) for seq in sequences], device=device)
+    sequences_mesh_ids_for_verts = meshes.get_mesh_ids_for_verts()
+
+    rand_category_id = 10
+    rand_category = categories[rand_category_id]
+    rand_category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+    rand_category_rand_instance_ids = random.choice(rand_category_instance_ids)
+
+    mesh1 = None
+    mesh2 = None
 
 @app.command()
 def teaser():

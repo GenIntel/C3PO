@@ -815,17 +815,17 @@ class CO3D_Sequence():
         if reduce_type == 'acc':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(meshes_verts_aggregated_features, f=self.fpath_mesh_feats)
+            torch.save(meshes_verts_aggregated_features.detach().cpu(), f=self.fpath_mesh_feats)
         elif reduce_type == 'avg':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             meshes_verts_aggregated_features_avg = torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0)
-            torch.save(meshes_verts_aggregated_features_avg, f=self.fpath_mesh_feats)
+            torch.save(meshes_verts_aggregated_features_avg.detach().cpu(), f=self.fpath_mesh_feats)
         elif reduce_type == 'avg_norm':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             meshes_verts_aggregated_features_avg_norm = torch.nn.functional.normalize(torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0), dim=-1)
-            torch.save(meshes_verts_aggregated_features_avg_norm, f=self.fpath_mesh_feats)
+            torch.save(meshes_verts_aggregated_features_avg_norm.detach().cpu(), f=self.fpath_mesh_feats)
         else:
             logger.warning(f'Unknown mesh feature reduce_type {reduce_type}.')
 
@@ -842,8 +842,8 @@ class CO3D_Sequence():
             else:
                 device = 'cpu'
 
-            seq1_feats = self.feats
-            seq2_feats = sequence.feats
+            seq1_feats = self.get_feats()
+            seq2_feats = sequence.get_feats()
 
             if isinstance(seq1_feats, list):
                 seq1_verts = len(seq1_feats)
@@ -855,7 +855,7 @@ class CO3D_Sequence():
                         # if i == j:
                         #    dist_verts_seq1_seq2[i, j] = torch.inf
                         # else:
-                        dists = torch.cdist(self.feats[i].to(device=device), sequence.feats[j].to(device=device))
+                        dists = torch.cdist(seq1_feats[i].to(device=device), seq2_feats[j].to(device=device))
                         if dists.numel() == 0:
                             dist_verts_seq1_seq2[i, j] = torch.inf
                         else:
@@ -881,6 +881,11 @@ class CO3D_Sequence():
                 self.preprocess_mesh_feats()
             self._mesh_feats = torch.load(self.fpath_mesh_feats)
         return self._mesh_feats
+
+    def get_feats(self):
+        if not self.fpath_mesh_feats.exists():
+            self.preprocess_mesh_feats()
+        return torch.load(self.fpath_mesh_feats)
 
     @property
     def fpath_pcl_clean(self):
