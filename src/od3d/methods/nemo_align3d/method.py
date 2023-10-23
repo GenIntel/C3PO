@@ -238,7 +238,7 @@ class NeMo_Align3D(OD3D_Method):
                                 pts_ref = torch.cat([transf3d_broadcast(pts3d=pts[self.sequences_mesh_ids_for_verts == _ref_mesh_id].clone(), transf4x4=all_pred_ref_tform_src[category][0, _r]) for _r, _ref_mesh_id in enumerate(ref_mesh_ids)], dim=0)
 
                                 dist_src_ref = torch.cat([self.sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
-                                    self.sequences[_ref_mesh_id]) for _ref_mesh_id in ref_mesh_ids], dim=-1)
+                                    self.sequences[_ref_mesh_id]).to(device=self.device, dtype=dtype) for _ref_mesh_id in ref_mesh_ids], dim=-1)
 
                                 # remove infinities is highly important
                                 # dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
@@ -274,7 +274,7 @@ class NeMo_Align3D(OD3D_Method):
                                 logger.info(f'category: {category}, pts-src: {pts_src.shape}, pts-ref: {pts_ref.shape}')
 
                                 dist_src_ref = self.sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
-                                    self.sequences[ref_mesh_id])
+                                    self.sequences[ref_mesh_id]).to(device=self.device, dtype=dtype)
                                 # remove infinities is highly important
                                 #dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
                                 # division by two to normalize to 0. - 1.
@@ -393,7 +393,7 @@ class NeMo_Align3D(OD3D_Method):
                 vertices_mask = self.sequences_mesh_ids_for_verts == instance_id
                 ref_vertices_mask = self.sequences_mesh_ids_for_verts == category_instance_ids[0]
 
-                dist_verts_ref = self.sequences[instance_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[category_instance_ids[0]])
+                dist_verts_ref = self.sequences[instance_id].get_dist_verts_mesh_feats_to_other_sequence(self.sequences[category_instance_ids[0]]).to(device=self.device, dtype=dtype)
                 dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
                 self.meshes.verts[vertices_mask] = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(instance_id), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance)
                 self.meshes.rgb[vertices_mask] = self.meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
