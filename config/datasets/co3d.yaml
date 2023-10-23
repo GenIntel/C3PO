@@ -21,7 +21,7 @@ mesh_name: 'alpha500' # 'convex500', 'voxel500' 'poisson500', 'alpha500'
 cuboid_source: 'droid_slam' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
 cam_tform_obj_source: 'droid_slam'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', 'limits3d', 'droid_slam'
 
-mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
+mesh_feats_type: 'M_dinov2_frozen_base_T_centerzoom512_R_acc' # 'R_acc' # 'R_avg', 'R_avg_norm'
 dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 
 frames_count_max_per_sequence:

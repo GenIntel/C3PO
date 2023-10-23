@@ -21,4 +21,5 @@ class OD3D_Head(nn.Module):
             self.out_dim = self.in_dims[-1]
 
         self.normalize = config.normalize
+        self.downsample_rate = None
 

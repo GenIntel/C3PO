@@ -30,23 +30,42 @@ class DINOv2(OD3D_Backbone):
         ])
 
 
-        # dinov2_vits14 dinov2_vitb14 dinov2_vitl14 dinov2_vitg14
-        self.extractor = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14', pretrained=self.config.weights=='default')
-
+        # dino_vits8, dino_vitb8, dino_vits16, dino_vitb16, dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14
+        self.extractor = torch.hub.load(self.config.hub_repo, self.config.hub_model, pretrained=self.config.weights=='default')
         self.layers_returned = config.layers_returned # choose from [1, 2, 3, 4]
         self.layers_count = len(self.layers_returned)
 
-        self.out_dims = [384 ]
+        self.out_dims = [384]
         self.out_downsample_scales = []
+        self.downsample_rate = self.config.downsample_rate
+        import re
+        match = re.match(r"dino[v2]*_vit[a-z]*([0-9]+)", self.config.hub_model, re.I)
+        if match and len(match.groups()) == 1:
+            self.downsample_rate_dino = int(match.groups()[0])
+        else:
+            msg = f'could not retrieve down sample rate dino from model name {self.config.hub_model}'
+            raise Exception(msg)
 
         if self.freeze:
             for param in self.parameters():
                 param.requires_grad = False
 
     def forward(self, x):
-        x = resize(x, H_out=32 * 14, W_out=32 * 14)
+        if x.dim() == 3:
+            C, H, W = x.shape
+        elif x.dim() == 4:
+            B, C, H, W = x.shape
+        else:
+            raise NotImplementedError
+
+        H_out = (H // self.downsample_rate)
+        W_out = (W // self.downsample_rate)
+        H_in = H_out * self.downsample_rate_dino
+        W_in = W_out * self.downsample_rate_dino
+
+        x = resize(x, H_out= H_in, W_out=W_in)
         x = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
-        x = x.reshape(-1, 32, 32, 384).permute(0, 3, 1, 2)
+        x = x.reshape(-1, H_out, W_out, self.out_dims[-1]).permute(0, 3, 1, 2)
         # x = resize(x, H_out=64, W_out=64)
 
         x_layers = [x]

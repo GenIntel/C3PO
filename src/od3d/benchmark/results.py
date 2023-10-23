@@ -74,6 +74,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                 prefix = k[:k.find('rot_diff_rad')]
                 prefix_saved = f'prefix/{prefix}' if len(prefix) > 0 else ''
                 res[f'pose/{prefix_saved}acc_pi6'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
+                res[f'pose/{prefix_saved}acc_pi12'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 12.).to(dtype=float).mean()
                 res[f'pose/{prefix_saved}acc_pi18'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
                 res[f'pose/{prefix_saved}err_median'] = 180 / math.pi * self[f'{prefix}rot_diff_rad'].median()
                 res[f'pose/{prefix_saved}err_mean'] = 180 / math.pi * self[f'{prefix}rot_diff_rad'].mean()

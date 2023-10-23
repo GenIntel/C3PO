@@ -22,6 +22,7 @@ class OD3D_Model(nn.Module):
         self.head: OD3D_Head = OD3D_Head.subclasses[self.config.head.class_name](config=self.config.head, in_dims=self.backbone.out_dims, in_upsample_scales=self.backbone.out_downsample_scales)
         self.transform = self.backbone.transform
         self.out_dim = self.head.out_dim
+        self.downsample_rate = self.backbone.downsample_rate * self.head.downsample_rate
 
     @staticmethod
     def create_by_name(name: str):

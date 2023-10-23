@@ -109,7 +109,11 @@ class ResNet(OD3D_Head):
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.linear_in_dim = self.conv_blocks_out_dims[-1]
             self.fc = nn.Linear(self.linear_in_dim, self.out_dim)
+            self.downsample_rate = 1
         else:
+            from operator import mul
+            from functools import reduce
+            self.downsample_rate = reduce(mul, [1] + self.conv_blocks_strides, 1)
             self.fc_enabled = False
 
     def forward(self, x):

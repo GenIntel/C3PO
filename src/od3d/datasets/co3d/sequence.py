@@ -745,14 +745,24 @@ class CO3D_Sequence():
         from od3d.cv.transforms.transform import OD3D_Transform
         from od3d.cv.transforms.sequential import SequentialTransform
 
+        import re
+        # e.g.: 'M_dinov2_frozen_base_T_centerzoom512_R_acc'
+        match = re.match(r"M_([a-z0-9_]+)_T_([a-z0-9_]+)_R_([a-z0-9_]+)", self.mesh_feats_type, re.I)
+        if match and len(match.groups()) == 3:
+            model_name, transform_name, reduce_type = match.groups()
+        else:
+            msg = f'could not retrieve model, transform, and reduce type from mesh feats type {self.mesh_feats_type}'
+            raise Exception(msg)
 
-        model = OD3D_Model.create_by_name('dinov2_frozen_base')
+        # if self.mesh_feats_type == FEATURE_TYPES.
+        model = OD3D_Model.create_by_name(model_name)
         model.cuda()
         model.eval()
-        transform = SequentialTransform([OD3D_Transform.create_by_name('centerzoom512'), model.transform])
+        transform = SequentialTransform([OD3D_Transform.create_by_name(transform_name), model.transform])
 
-        down_sample_rate = 16
-        feature_dim = 384
+        down_sample_rate = model.downsample_rate
+        feature_dim = model.out_dim
+
         meshes = Meshes.load_from_meshes([self.mesh], device=device)
         dataset.transform = transform
 
@@ -802,22 +812,22 @@ class CO3D_Sequence():
                 meshes_verts_aggregated_features[vertex_id] = torch.cat([net_feats[b:b + 1], meshes_verts_aggregated_features[vertex_id]], dim=0)
 
 
-        if self.mesh_feats_type == FEATURE_TYPES.DINOV2_ACC:
+        if reduce_type == 'acc':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(meshes_verts_aggregated_features, f=self.fpath_mesh_feats)
-        elif self.mesh_feats_type == FEATURE_TYPES.DINOV2_AVG:
+        elif reduce_type == 'avg':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             meshes_verts_aggregated_features_avg = torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0)
             torch.save(meshes_verts_aggregated_features_avg, f=self.fpath_mesh_feats)
-        elif self.mesh_feats_type == FEATURE_TYPES.DINOV2_AVG_NORM:
+        elif reduce_type == 'avg_norm':
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             meshes_verts_aggregated_features_avg_norm = torch.nn.functional.normalize(torch.stack([agg_feats.mean(dim=0) for agg_feats in meshes_verts_aggregated_features], dim=0), dim=-1)
             torch.save(meshes_verts_aggregated_features_avg_norm, f=self.fpath_mesh_feats)
         else:
-            logger.warning(f'Unknown mesh feature type {self.mesh_feats_type}.')
+            logger.warning(f'Unknown mesh feature reduce_type {reduce_type}.')
 
     def get_dist_verts_mesh_feats_to_other_sequence(self, sequence: 'CO3D_Sequence'):
         fpath_dist_verts_mesh_feats = self.path_preprocess.joinpath('dist_verts_mesh_feats', self.mesh_name, self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, self.name_unique, sequence.name_unique, 'dist_verts_mesh_feats.pt')

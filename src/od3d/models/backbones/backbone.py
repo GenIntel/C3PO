@@ -13,5 +13,6 @@ class OD3D_Backbone(nn.Module):
         self.config = config
         self.freeze = config.get("freeze", False)
         self.transform = None
+        self.downsample_rate = None
 
     pass
