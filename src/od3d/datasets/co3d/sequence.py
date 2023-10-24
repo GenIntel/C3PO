@@ -1004,10 +1004,14 @@ class CO3D_Sequence():
         if not fpath_droid_slam_pcl.exists() or not fpath_droid_slam_traj.exists():
             self.run_droid_slam()
 
-
         # N x 3
         pts3d = read_pts3d(fpath_droid_slam_pcl).to(device=device)
         pts3d_colors = read_pts3d_colors(fpath_droid_slam_pcl).to(device=device)
+
+        N = pts3d.shape[0]
+        if N < 4:
+            logger.warning(f'Could not estimate mesh for sequence {self.name_unique} due to too few points in raw pcl {N}')
+            return
 
         # F x 4 x 4
         cams_tform4x4_obj = torch.load(fpath_droid_slam_traj).to(device=device)
