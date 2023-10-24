@@ -1253,6 +1253,7 @@ class CO3D_Sequence():
         fpath_axis_droid_slam = self.fpath_droid_slam_axis_labeled
 
         if not fpath_axis_droid_slam.exists():
+            logger.info(f'fpath_droid_slam_axis_labeled missing {fpath_axis_droid_slam}')
             self.preprocess_label(override=False)
 
         axis_droid_slam = torch.load(fpath_axis_droid_slam)
@@ -1339,6 +1340,7 @@ class CO3D_Sequence():
     def droid_slam_labeled_tform_droid_slam(self):
         fpath_droid_slam_labeled_tform_droid_slam = self.fpath_droid_slam_labeled_tform_droid_slam
         if not self.fpath_droid_slam_labeled_tform_droid_slam.exists():
+            logger.info(f'droid_slam_labeled_tform_droid_slam missing {fpath_droid_slam_labeled_tform_droid_slam}')
             self.preprocess_label()
 
         droid_slam_labeled_tform_droid_slam = torch.load(fpath_droid_slam_labeled_tform_droid_slam)
@@ -1388,6 +1390,7 @@ class CO3D_Sequence():
         fpath_droid_slam_labeled_cuboid = self.fpath_droid_slam_labeled_cuboid
 
         if not fpath_droid_slam_labeled_cuboid.exists():
+            logger.info(f'fpath_droid_slam_labeled_cuboid missing {fpath_droid_slam_labeled_cuboid}')
             self.preprocess_label(override=False)
 
         droid_slam_labeled_cuboid = Meshes.load_from_files([fpath_droid_slam_labeled_cuboid])
@@ -1400,7 +1403,9 @@ class CO3D_Sequence():
     def droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
         fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled
 
+        logger.info(f'fpath labeled cuboid {fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
         if not fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.exists():
+            logger.info(f'fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled missing {fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
             self.preprocess_label(override=False)
 
         droid_slam_labeled_cuboid_tform_droid_slam_labeled = torch.load(fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled)
