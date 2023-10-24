@@ -1370,6 +1370,7 @@ class CO3D_Sequence():
     def zsp_labeled_cuboid_ref_tform_droid_slam_obj(self):
         ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
         ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
+        logger.info(f'ref seq name {ref_seq_name}, fpath {ref_seq.droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
 
         droid_slam_labeled_ref_tform_droid_slam_obj = tform4x4(ref_seq.droid_slam_labeled_cuboid_tform_droid_slam_labeled, tform4x4(ref_seq.droid_slam_labeled_tform_droid_slam, tform4x4(inv_tform4x4(ref_seq.co3dv1_zsp_obj_tform_droid_slam_obj), self.co3dv1_zsp_obj_tform_droid_slam_obj)))
         # note: as zsp does not offer scale, we cannot retrieve actual translation, therefore we use this pcl center
