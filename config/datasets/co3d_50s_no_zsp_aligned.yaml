@@ -1,0 +1,24 @@
+defaults:
+  - co3d_50s_no_zsp
+
+name: co3d_50s_no_zsp_aligned
+
+# frames_count_max_per_sequence: 1
+
+#modalities:
+#    - 'size'
+#    - 'category'
+#    - 'cam_intr4x4'
+#    - 'cam_tform4x4_obj'
+#    - 'category'
+#    - 'rgb'
+#    - 'mask'
+#    - 'sequence_name'
+#    - 'sequence'
+#    # - 'mesh'
+
+sequences_require_gt_pose: True
+
+cuboid_source: 'droid_slam_aligned' # 'droid_slam_aligned' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'limits3d', 'droid_slam'
+cam_tform_obj_source: 'droid_slam_aligned' # 'droid_slam_aligned'  # 'kpts2d_orient_and_pcl' #'kpts2d_orient_and_pcl', 'front_frame_and_pcl', 'first_frame', 'front_frame', 'limits3d', 'droid_slam'
+aligned_name: 'latest' # 'all_to_one_17_10_23_convex500_dinov2_acc_min'

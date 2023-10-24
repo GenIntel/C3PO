@@ -52,7 +52,7 @@ def teaser():
     device = 'cuda:0'
     dtype = torch.float
 
-    co3d = CO3D.create_by_name('co3dv1_10s_zsp_aligned') # 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+    co3d = CO3D.create_by_name('co3d_50s_no_zsp_aligned') # 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
     categories = co3d.categories
     sequences = co3d.get_sequences()
 

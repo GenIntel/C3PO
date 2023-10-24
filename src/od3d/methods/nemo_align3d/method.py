@@ -149,12 +149,13 @@ class NeMo_Align3D(OD3D_Method):
         self.meshes = Meshes.load_from_meshes([seq.mesh for seq in self.sequences], device=self.device)
 
         # note: first get mesh to get DROID_SLAM tforms
-        logger.info('getting co3d_tform_droid_slam for each instance...')
-        self.sequences_co3d_tform_droid_slam = []
-        for seq in self.sequences:
-            self.sequences_co3d_tform_droid_slam.append(seq.get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.DROID_SLAM,
-                                                                                  CAM_TFORM_OBJ_SOURCES.CO3DV1,
-                                                                                  device=self.device))
+        if self.config.use_gt:
+            logger.info('getting co3d_tform_droid_slam for each instance...')
+            self.sequences_co3d_tform_droid_slam = []
+            for seq in self.sequences:
+                self.sequences_co3d_tform_droid_slam.append(seq.get_a_src_tform_b_src(CAM_TFORM_OBJ_SOURCES.DROID_SLAM,
+                                                                                      CAM_TFORM_OBJ_SOURCES.CO3DV1,
+                                                                                      device=self.device))
 
         self.instances_count = len(self.meshes)
         #self.meshes_verts_aggregated_features = [vert_feats for mesh_feats in self.sequences_mesh_feats for vert_feats in mesh_feats]
@@ -317,15 +318,7 @@ class NeMo_Align3D(OD3D_Method):
                         #if r == 0:
                         #    verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=pred_ref_tform_src)
                         #    self.meshes.verts[src_vertices] = verts
-                        del src_vertices
-                        del src_vertices_mask
-                        del pts_src
-                        logger.info(torch.cuda.mem_get_info())
-                        logger.info(torch.cuda.memory_allocated())
-                        torch.cuda.empty_cache()
-                    del pts
-                    del pts_ref
-                    del dist_src_ref
+
 
         results = OD3D_Results()
         results_ref = OD3D_Results()

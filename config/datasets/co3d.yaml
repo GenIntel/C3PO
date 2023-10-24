@@ -41,6 +41,9 @@ extract_meta:
   remove_previous: False
 
 preprocess:
+  label:
+    enabled: False
+    override: False
   mesh:
     enabled: False
     override: False

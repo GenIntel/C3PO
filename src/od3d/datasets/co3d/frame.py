@@ -352,10 +352,15 @@ class CO3D_Frame(OD3D_Frame):
             _cam_tform4x4_obj[:3] = _cam_tform4x4_obj[:3] / _scale
             # logger.info(f'det: {torch.linalg.det(_cam_tform4x4_obj[:3, :3])}')
         elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3DV1:
-            metav1 = CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_preprocess.joinpath('..', 'CO3Dv1_Preprocess', 'meta'), rfpath=self.meta.rfpath)
-            if metav1 is None:
-                raise NotImplementedError
-            _cam_tform4x4_obj = torch.Tensor(metav1.l_cam_tform4x4_obj)
+            fpath_metav1 = self.path_preprocess.joinpath('..', 'CO3Dv1_Preprocess', 'meta', self.meta.rfpath)
+            if fpath_metav1.exists():
+                metav1 = CO3D_FrameMeta.load_from_meta_with_rfpath(path_meta=self.path_preprocess.joinpath('..', 'CO3Dv1_Preprocess', 'meta'), rfpath=self.meta.rfpath)
+                if metav1 is None:
+                    raise NotImplementedError
+                _cam_tform4x4_obj = torch.Tensor(metav1.l_cam_tform4x4_obj)
+            else:
+                logger.warning(f'missing CO3Dv1 fpath to meta {fpath_metav1}')
+                _cam_tform4x4_obj = torch.ones(size=(4, 4)) * torch.nan
         else:
             _cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
             if cam_tform_obj_source != CAM_TFORM_OBJ_SOURCES.CO3D:

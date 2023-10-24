@@ -2,7 +2,7 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.labeled: co3dv1_10s_zsp_aligned # co3d_5s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+  - datasets@train_datasets.labeled: co3d_50s_no_zsp_aligned # co3d_5s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
   - datasets@val_datasets.main: co3dv1_10s_zsp_labeled #  pascal3d_val # pascal3d_val
   #- datasets@val_datasets.pascal3d: # pascal3d_val
   - datasets@val_datasets.pascal3d: pascal3d_val # co3d_5s_zero_shot_pose_aligned # pascal3d_val co3d_5s_test # co3d_10s_test, co3d_test
@@ -13,26 +13,26 @@ defaults:
   - platform: local
 
 categories:
-  - bicycle
-  - truck
-  - train
-  - teddybear
+#  - bicycle
+#  - truck
+#  - train
+#  - teddybear
   - car
-  - bus
+#  - bus
   - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - airplane
-  - toilet
-  - hairdryer
-  - mouse
-  - toaster
-  - hydrant
-  - chair
+#  - keyboard
+#  - handbag
+#  - remote
+#  - airplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+#  - chair
   - laptop
-  - book
-  - backpack
+#  - book
+#  - backpack
 
 #  (sofa, tv, bottle)
 #pascal3d_categories:
@@ -48,7 +48,7 @@ metrics:
   - metricA
   - metricB
 
-aligned_name: 'all_to_one_18_10_23_alpha500_dinov2_acc_min' # 'all_to_one_13_10_23' 'all_to_one_12_10_23'
+aligned_name: 'all_to_one_c3_s50' # 'all_to_one_13_10_23' 'all_to_one_12_10_23'
 method:
   nemo:
     inference:

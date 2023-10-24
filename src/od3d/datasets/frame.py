@@ -205,8 +205,8 @@ class OD3D_Meta(ABC):
         for key, value in dict_nested_metas.items():
             new_key = f"{parent_key}{separator}{key}" if parent_key else key
             if value is None:
-                dir_fpaths = [fpath for fpath in list(
-                    cls.get_path_metas(path_meta=path_meta).joinpath(new_key).iterdir())]
+                dir_fpaths = list(
+                    cls.get_path_metas(path_meta=path_meta).joinpath(new_key).iterdir())
                 if dir_fpaths[0].is_dir():
                     if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
                         dict_nested_frames_completed[key] = \

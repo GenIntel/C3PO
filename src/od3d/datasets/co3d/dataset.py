@@ -80,7 +80,42 @@ class CO3D(OD3D_Dataset):
                                                                                sequences_require_mesh=sequences_require_mesh,
                                                                                dict_nested_frames_ban=dict_nested_frames_ban)
 
-        logger.info(f'sequences filtered {self.dict_category_sequences_names}')
+        logger.info(f'sequences filtered')
+        for category in self.dict_category_sequences_names.keys():
+            if len(self.dict_category_sequences_names[category]) > 0:
+                category_sequences_filtered_str = '\n' + category + ': \n'
+                for sequence_name in self.dict_category_sequences_names[category]:
+                    category_sequences_filtered_str += f"  '{sequence_name}':\n"
+                logger.info(category_sequences_filtered_str)
+
+        logger.info(f'Found sequences per category')
+
+        dict_nested_frames_seqs_filtered = {}
+        for category in self.dict_category_sequences_names.keys(): #.keys():
+            logger.info(f'{category}: {len(self.dict_category_sequences_names[category])}')
+            if len(self.dict_category_sequences_names[category]) == 0:
+                continue
+            if dict_nested_frames is not None and category in dict_nested_frames.keys():
+                dict_nested_frames_seqs_filtered[category] = dict_nested_frames[category]
+            else:
+                if dict_nested_frames is None:
+                    dict_nested_frames_seqs_filtered[category] = None
+                else:
+                    # category not in dict_nested_frames
+                    dict_nested_frames_seqs_filtered[category] = {}
+
+            for sequence_name in self.dict_category_sequences_names[category]:
+                if dict_nested_frames is not None and category in dict_nested_frames.keys() and sequence_name in dict_nested_frames[category]:
+                    dict_nested_frames_seqs_filtered[category][sequence_name] = dict_nested_frames[category][sequence_name]
+                else:
+                    if dict_nested_frames is None or (category in dict_nested_frames and dict_nested_frames_seqs_filtered[category] is None):
+                        if not isinstance(dict_nested_frames_seqs_filtered[category], dict):
+                            dict_nested_frames_seqs_filtered[category] = {}
+                        dict_nested_frames_seqs_filtered[category][sequence_name] = None
+                    else:
+                        # category / sequence not in dict_nested_frames
+                        dict_nested_frames_seqs_filtered[category][sequence_name] = []
+        dict_nested_frames = dict_nested_frames_seqs_filtered
 
         super().__init__(categories=categories, name=name, modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction,
@@ -426,6 +461,9 @@ class CO3D(OD3D_Dataset):
     def preprocess(self, config_preprocess: DictConfig):
         logger.info("preprocess")
         for key in config_preprocess.keys():
+            if key == 'label' and config_preprocess.label.get('enabled', False):
+                override = config_preprocess.label.get('override', False)
+                self.preprocess_label(override=override)
             if key == 'pcl' and config_preprocess.pcl.get('enabled', False):
                 override = config_preprocess.pcl.get('override', False)
                 remove_previous = config_preprocess.pcl.get('remove_previous', False)
@@ -444,6 +482,13 @@ class CO3D(OD3D_Dataset):
 
         # CO3D.preprocess_cam_tform4x4_obj_canonic(config=config)
         # CO3D.preprocess_front_names(config=config)
+    def preprocess_label(self, override=False, remove_previous=False):
+        logger.info("preprocess labels...")
+        for category, sequences_names in self.dict_category_sequences_names.items():
+            for sequence_name in sequences_names:
+                logger.info(f"preprocess meshs, sequence {sequence_name}, {self.mesh_name}")
+                sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
+                sequence.preprocess_label(override=override)
 
     def preprocess_meshs(self, override=False, remove_previous=False):
         logger.info("preprocess meshs...")

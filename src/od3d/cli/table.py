@@ -16,13 +16,13 @@ def ablation_dist():
     from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
     categories = od3d.io.read_config_intern(Path('datasets/categories/zsp.yaml'))
 
-    align3d_1on1_name_partial = 'NeMo_Align3D_dinov2'
+    align3d_1on1_name_partial = 'NeMo_Align3D_'
     align3d_1on1_metrics = ['pose/acc_pi6'] #, 'pose/acc_pi18']
     align3d_1on1_columns_map = {}
     align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = "Acc. Pi/6. [%]"
     #align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = "Acc. Pi/18. [%]"
 
-    age_in_hours = 100
+    age_in_hours = 200
     configs = ['ablation_name']
     #configs = ['method.dist_appear_weight']
     #align3d_1on1_columns_map['method.dist_appear_weight'] = 'Appear. Weight'
@@ -39,6 +39,7 @@ def ablation_dist():
 
     cols_dec = ["Acc. Pi/6. [%]", 'bicycle', 'hydrant', 'motorcycle', 'teddybear', 'toaster'] # , "Acc. Pi/18. [%]"
     align3d_1on1_df[cols_dec] *= 100.
+    align3d_1on1_df = align3d_1on1_df.loc[align3d_1on1_df['Name'].notna()]
     align3d_1on1_df['Name'] = [row['value'] for row in align3d_1on1_df['Name']]
     cols = ['ablation_name', "Acc. Pi/6. [%]", 'bicycle', 'hydrant', 'motorcycle', 'teddybear', 'toaster'] # , "Acc. Pi/18. [%]"
 
@@ -47,21 +48,25 @@ def ablation_dist():
 
     align3d_1on1_df = align3d_1on1_df.set_index("Name")
     align3d_1on1_df = align3d_1on1_df.loc[[
-        'dinov2_dist_min',
-        'dinov2_dist_avg',
-        'dinov2_avg',
-        'dinov2_avg_norm',
-        'dinov2_dist_appear_weight_00',
-        'dinov2_dist_appear_weight_01',
-        'dinov2_dist_appear_weight_02',
-        'dinov2_dist_appear_weight_03',
-        'dinov2_dist_appear_weight_04',
-        'dinov2_dist_appear_weight_05',
-        'dinov2_dist_appear_weight_06',
-        'dinov2_dist_appear_weight_07',
-        'dinov2_dist_appear_weight_08',
-        'dinov2_dist_appear_weight_09',
-        'dinov2_dist_appear_weight_10',
+        'resnet50_acc',
+        'dino_vits8_acc',
+        'dinov2_vitb14_acc',
+        'dinov2_vits14_acc',
+        # 'dinov2_dist_min',
+        # 'dinov2_dist_avg',
+        # 'dinov2_avg',
+        # 'dinov2_avg_norm',
+        # 'dinov2_dist_appear_weight_00',
+        # 'dinov2_dist_appear_weight_01',
+        # 'dinov2_dist_appear_weight_02',
+        # 'dinov2_dist_appear_weight_03',
+        # 'dinov2_dist_appear_weight_04',
+        # 'dinov2_dist_appear_weight_05',
+        # 'dinov2_dist_appear_weight_06',
+        # 'dinov2_dist_appear_weight_07',
+        # 'dinov2_dist_appear_weight_08',
+        # 'dinov2_dist_appear_weight_09',
+        # 'dinov2_dist_appear_weight_10',
     ]]
 
     df = align3d_1on1_df[cols]
