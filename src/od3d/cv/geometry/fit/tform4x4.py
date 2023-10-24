@@ -103,8 +103,8 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     dist_ref_geometry = torch.cdist(proposal_tform_pts, pts_ref[None,], p=1)  #
     dist_ref_geo_max = torch.cdist(pts_ref[None,], pts_ref[None,], p=1).max()  #
 
-    if (~dist_ref_geometry.isfinite()).any():
-        logger.warning(f'There are some infinite vlaues in dist geometry. WHY?')
+    #if (~dist_ref_geometry.isfinite()).any():
+    #    logger.warning(f'There are some infinite vlaues in dist geometry. WHY?')
     dist_ref_geometry = dist_ref_geometry / dist_ref_geo_max
 
     if not use_appear_argmin:

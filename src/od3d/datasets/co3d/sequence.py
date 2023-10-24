@@ -815,7 +815,7 @@ class CO3D_Sequence():
             net_feats = torch.cat([net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)], dim=0)
 
             for b, vertex_id in enumerate(batch_vts_ids):
-                meshes_verts_aggregated_features[vertex_id] = torch.cat([net_feats[b:b + 1], meshes_verts_aggregated_features[vertex_id]], dim=0).detach().cpu()
+                meshes_verts_aggregated_features[vertex_id] = torch.cat([net_feats[b:b + 1].detach().cpu(), meshes_verts_aggregated_features[vertex_id].detach().cpu()], dim=0)
 
 
         if reduce_type == 'acc':
