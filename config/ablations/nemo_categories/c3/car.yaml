@@ -1,6 +1,4 @@
 # @package _global_
-defaults:
-  - /ablations/nemo_categories@: _default
 
 ablation_name: car
 
