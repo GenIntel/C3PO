@@ -368,6 +368,9 @@ class NeMo_Align3D(OD3D_Method):
         # if r == 0:
         #    verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=pred_ref_tform_src)
         #    self.meshes.verts[src_vertices] = verts
+
+        rgbs_all = self.meshes.get_verts_ncds_cat_with_mesh_ids()
+        self.meshes.rgb = rgbs_all
         for cat_id, category in enumerate(self.categories):
             logger.info(f'category {category}')
 
