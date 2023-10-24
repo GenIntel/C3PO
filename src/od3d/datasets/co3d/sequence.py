@@ -1446,6 +1446,8 @@ class CO3D_Sequence():
             ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
             #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
             return ref_seq.fpath_droid_slam_labeled_cuboid
+        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
+            return self.fpath_droid_slam_labeled_cuboid
         else:
             return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
 
