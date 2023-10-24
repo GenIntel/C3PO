@@ -3,8 +3,8 @@ defaults:
 
 name: co3dv1_10s_zsp_labeled
 
-# frames_count_max_per_sequence: 1
-
+#frames_count_max_per_sequence: 1
+##
 #modalities:
 #    - 'size'
 #    - 'category'
