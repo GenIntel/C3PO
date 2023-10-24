@@ -1,4 +1,7 @@
 # @package _global_
+defaults:
+  - override /datasets@val_datasets.pascal3d:
+  - override /datasets@test_datasets.pascal3d:
 
 ablation_name: laptop
 
