@@ -1072,7 +1072,7 @@ class CO3D_Sequence():
         mask_pts3d_on_plane = mask_pts3d_sampled * (pts3d[:, 2] < plane_dist_thresh)
         mask_pts3d_on_plane_not_aggregating = mask_pts3d_sampled * (pts3d[:, 2] < plane_not_aggregating_dist_thresh)
         # starting with 10 percentage of points
-        if (mask_pts3d_sampled * (~mask_pts3d_on_plane)).sum() < 10:
+        if (mask_pts3d_sampled * (~mask_pts3d_on_plane)).sum() < 4:
             logger.warning(f'Could not estimate mesh for sequence {self.name_unique} due to too few points after removing plane {(mask_pts3d_sampled * (~mask_pts3d_on_plane)).sum()}')
             return
 
