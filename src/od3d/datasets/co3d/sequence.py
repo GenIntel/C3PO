@@ -1294,10 +1294,11 @@ class CO3D_Sequence():
 
             from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
 
-            droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_droid_slam)
-
             if axis_droid_slam is None or axis_droid_slam.shape != (3, 2, 3):
                 break
+
+            droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_droid_slam)
+
 
             if (torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3]) - 1.).abs() <= 1e-5:
                 break

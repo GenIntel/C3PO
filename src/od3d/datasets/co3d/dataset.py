@@ -105,7 +105,7 @@ class CO3D(OD3D_Dataset):
                     dict_nested_frames_seqs_filtered[category] = {}
 
             for sequence_name in self.dict_category_sequences_names[category]:
-                if dict_nested_frames is not None and category in dict_nested_frames.keys() and sequence_name in dict_nested_frames[category]:
+                if dict_nested_frames is not None and category in dict_nested_frames.keys() and dict_nested_frames[category] is not None and sequence_name in dict_nested_frames[category]:
                     dict_nested_frames_seqs_filtered[category][sequence_name] = dict_nested_frames[category][sequence_name]
                 else:
                     if dict_nested_frames is None or (category in dict_nested_frames and dict_nested_frames_seqs_filtered[category] is None):
