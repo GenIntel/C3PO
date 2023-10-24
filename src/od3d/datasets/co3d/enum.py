@@ -24,6 +24,7 @@ class CUBOID_SOURCES(str, ExtEnum):
     DEFAULT = 'default'
     ALIGNED = 'aligned'
     ZSP_REF_CUBOID = 'zsp_ref_cuboid'
+    LABELED = 'labeled'
 
 class CO3D_FRAME_TYPES(str, ExtEnum):
     DEV_KNOWN = 'dev_known'

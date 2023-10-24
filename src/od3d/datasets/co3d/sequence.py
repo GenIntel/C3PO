@@ -970,8 +970,14 @@ class CO3D_Sequence():
         cy = self.first_frame.meta.l_cam_intr4x4[1][2]
         if not path_out.exists():
             path_out.mkdir(parents=True, exist_ok=True)
+        import os
+        cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+        if len(cuda_visible_devices) == 0:
+            cuda_visible_devices = 'all'
+        else:
+            cuda_visible_devices = f'{cuda_visible_devices}'
         run_cmd(cmd=f'echo "{fx} {fy} {cx} {cy}" > {path_out_root}/{rpath_out}/calib.txt', logger=logger)
-        run_cmd(cmd=f'docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT={rpath_out} -e STRIDE={stride} -v {path_in}:/home/appuser/in -v {path_out_root}:/home/appuser/DROID-SLAM/reconstructions/out -t {image_tag}', logger=logger, live=True)
+        run_cmd(cmd=f'docker run --user=$(id -u):$(id -g) --gpus device={cuda_visible_devices} -e RPATH_OUT={rpath_out} -e STRIDE={stride} -v {path_in}:/home/appuser/in -v {path_out_root}:/home/appuser/DROID-SLAM/reconstructions/out -t {image_tag}', logger=logger, live=True)
 
     def preprocess_mesh(self, override=False):
 
@@ -1454,13 +1460,13 @@ class CO3D_Sequence():
 
     @property
     def fpath_mesh(self):
-        if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
+        if self.cuboid_source == CUBOID_SOURCES.ALIGNED: # CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
             return self.path_preprocess.joinpath('aligned', self.aligned_name, 'mesh', self.category, 'mesh.ply')
-        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
+        elif self.cuboid_source == CUBOID_SOURCES.ZSP_REF_CUBOID: #  == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
             ref_seq = self.sequence_ref_zsp
             #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
             return ref_seq.fpath_droid_slam_labeled_cuboid
-        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
+        elif self.cuboid_source == CUBOID_SOURCES.LABELED: # CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
             return self.fpath_droid_slam_labeled_cuboid
         else:
             return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
