@@ -52,6 +52,24 @@ def bench_single_method_torque(cfg: DictConfig):
         gpu_cfg_str = f':gpus={gpu_count}' if gpu_count > 0 else ""
         cuda_cfg_str = f':nvidiaMinCC75' if gpu_count > 0 else ""
 
+        if cfg.platform.pull_od3d:
+            pull_od3d_cmds_str = f'''
+git fetch 
+git checkout {cfg.branch}
+git pull
+            '''
+        else:
+            pull_od3d_cmds_str = ''
+
+        if cfg.platform.pull_od3d_submodules:
+            pull_od3d_submodules_cmds_str = f'''
+git submodule init
+git submodule update
+git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-ref HEAD); git reset --hard origin/$(git rev-parse --abbrev-ref HEAD); git submodule update --recursive; git clean -dfx'
+            '''
+        else:
+            pull_od3d_submodules_cmds_str = ''
+
         if cfg.platform.install_od3d:
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
@@ -102,12 +120,9 @@ done
 touch "{cfg.platform.path_od3d}/installing.txt"
 
 cd {cfg.platform.path_od3d}
-git fetch 
-git checkout {cfg.branch}
-git pull
-git submodule init
-git submodule update
-git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-ref HEAD); git reset --hard origin/$(git rev-parse --abbrev-ref HEAD); git submodule update --recursive; git clean -dfx'
+
+{pull_od3d_cmds_str}
+{pull_od3d_submodules_cmds_str}
 
 # Install OD3D in venv
 VENV_NAME=venv310
@@ -164,6 +179,24 @@ def bench_single_method_slurm(cfg: DictConfig):
         ram = cfg.platform.ram
         walltime = cfg.platform.walltime
 
+        if cfg.platform.pull_od3d:
+            pull_od3d_cmds_str = f'''
+git fetch 
+git checkout {cfg.branch}
+git pull
+            '''
+        else:
+            pull_od3d_cmds_str = ''
+
+        if cfg.platform.pull_od3d_submodules:
+            pull_od3d_submodules_cmds_str = f'''
+git submodule init
+git submodule update
+git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-ref HEAD); git reset --hard origin/$(git rev-parse --abbrev-ref HEAD); git submodule update --recursive; git clean -dfx'
+            '''
+        else:
+            pull_od3d_submodules_cmds_str = ''
+
         if cfg.platform.install_od3d:
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
@@ -219,13 +252,9 @@ done
 touch "{cfg.platform.path_od3d}/installing.txt"
 
 cd {cfg.platform.path_od3d}
-git fetch 
-git checkout {cfg.branch}
-git pull
-git submodule init
-git submodule update
-git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-ref HEAD); git reset --hard origin/$(git rev-parse --abbrev-ref HEAD); git submodule update --recursive; git clean -dfx'
 
+{pull_od3d_cmds_str}
+{pull_od3d_submodules_cmds_str}
 
 # Install OD3D in venv
 VENV_NAME=venv310
