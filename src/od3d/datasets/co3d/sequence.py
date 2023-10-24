@@ -1284,21 +1284,36 @@ class CO3D_Sequence():
             cams_intr4x4.append(frame.cam_intr4x4)
             cams_imgs.append(frame.rgb)
 
-        axis_droid_slam = label_axis_in_pcl(pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
-                                            pts3d_colors=self.get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
-                                            cams_tform4x4_world=cams_tform4x4_world,
-                                            cams_intr4x4=cams_intr4x4,
-                                            cams_imgs=cams_imgs)
+        while True:
+            axis_droid_slam = label_axis_in_pcl(pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
+                                                pts3d_colors=self.get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
+                                                cams_tform4x4_world=cams_tform4x4_world,
+                                                cams_intr4x4=cams_intr4x4,
+                                                cams_imgs=cams_imgs)
 
+            from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
+
+            droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_droid_slam)
+
+            if axis_droid_slam is None or axis_droid_slam.shape != (3, 2, 3):
+                break
+
+            if (torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3]) - 1.).abs() <= 1e-5:
+                break
+
+            logger.warning(f'labeled determinant is not ~1, but {torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3])}')
 
         if axis_droid_slam is not None and axis_droid_slam.shape == (3, 2, 3):
             logger.info(f'storing axis labeled, cuboid tform, and cuboid ')
             torch.save(axis_droid_slam, f=fpath_axis_droid_slam)
 
+            self.fpath_droid_slam_labeled_tform_droid_slam.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(droid_slam_labeled_tform_droid_slam, self.fpath_droid_slam_labeled_tform_droid_slam)
+
             size = OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_CO3D_TO_OD3D[self.category]]
             droid_slam_labeled_tform_pts3d = transf3d_broadcast(
                 pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
-                transf4x4=self.droid_slam_labeled_tform_droid_slam)
+                transf4x4=droid_slam_labeled_tform_droid_slam)
             droid_slam_labeled_cuboid, droid_slam_labeled_cuboid_tform_droid_slam_labeled = \
                 fit_cuboid_to_pts3d(pts3d=droid_slam_labeled_tform_pts3d, size=size, optimize_rot=False,
                                     optimize_transl=True)
@@ -1322,25 +1337,12 @@ class CO3D_Sequence():
 
     @property
     def droid_slam_labeled_tform_droid_slam(self):
-        from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
         fpath_droid_slam_labeled_tform_droid_slam = self.fpath_droid_slam_labeled_tform_droid_slam
-        if fpath_droid_slam_labeled_tform_droid_slam.exists():
-            droid_slam_labeled_tform_droid_slam = torch.load(fpath_droid_slam_labeled_tform_droid_slam)
-        else:
-            logger.info(f'labeling axis for sequence {self.name_unique}')
-            droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=self.droid_slam_axis_labeled)
-            logger.info(f'blub')
+        if not self.fpath_droid_slam_labeled_tform_droid_slam.exists():
+            self.preprocess_label()
 
-        while (torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3]) - 1.).abs() > 1e-5:
-            logger.warning(f'labeled determinant is not ~1, but {torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3])}')
-            if self.fpath_droid_slam_axis_labeled.exists():
-                self.fpath_droid_slam_axis_labeled.unlink()
-            if self.fpath_droid_slam_labeled_tform_droid_slam.exists():
-                self.fpath_droid_slam_labeled_tform_droid_slam.unlink()
-            droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=self.droid_slam_axis_labeled)
+        droid_slam_labeled_tform_droid_slam = torch.load(fpath_droid_slam_labeled_tform_droid_slam)
 
-        fpath_droid_slam_labeled_tform_droid_slam.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(droid_slam_labeled_tform_droid_slam, fpath_droid_slam_labeled_tform_droid_slam)
         return droid_slam_labeled_tform_droid_slam
 
     @property
