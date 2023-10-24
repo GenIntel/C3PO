@@ -7,13 +7,13 @@ name: co3d_50s_no_zsp
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 sequences_count_max_per_category: 50
 
-#preprocess:
+preprocess:
 #  label:
 #    enabled: True
 #    override: False
-#  mesh:
-#    enabled: False
-#    override: False
+  mesh:
+    enabled: True
+    override: False
 
 cuboid_source: 'droid_slam' # 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
 cam_tform_obj_source: 'droid_slam' # 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
