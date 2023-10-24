@@ -773,7 +773,7 @@ class CO3D_Sequence():
         meshes = Meshes.load_from_meshes([self.mesh], device=device)
         dataset.transform = transform
 
-        meshes_verts_aggregated_features = [torch.zeros((0, feature_dim), device=device)] * meshes.verts.shape[0]
+        meshes_verts_aggregated_features = [torch.zeros((0, feature_dim), device='cpu')] * meshes.verts.shape[0]
         vertices_count = len(meshes_verts_aggregated_features)
 
         for batch in tqdm(iter(dataloader)):
@@ -815,7 +815,7 @@ class CO3D_Sequence():
             net_feats = torch.cat([net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)], dim=0)
 
             for b, vertex_id in enumerate(batch_vts_ids):
-                meshes_verts_aggregated_features[vertex_id] = torch.cat([net_feats[b:b + 1], meshes_verts_aggregated_features[vertex_id]], dim=0)
+                meshes_verts_aggregated_features[vertex_id] = torch.cat([net_feats[b:b + 1], meshes_verts_aggregated_features[vertex_id]], dim=0).detach().cpu()
 
 
         if reduce_type == 'acc':
