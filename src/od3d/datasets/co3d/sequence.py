@@ -1407,7 +1407,7 @@ class CO3D_Sequence():
     def droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
         fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled
 
-        logger.info(f'fpath labeled cuboid {fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
+        #logger.info(f'fpath labeled cuboid {fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
         if not fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.exists():
             logger.info(f'fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled missing {fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
             self.preprocess_label(override=False)
