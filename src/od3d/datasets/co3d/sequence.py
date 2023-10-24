@@ -1350,6 +1350,13 @@ class CO3D_Sequence():
     @property
     def path_zsp_labels(self):
         return Path('third_party/zero-shot-pose/data/class_labels')
+
+    @property
+    def sequence_ref_zsp(self):
+        ref_seq_name = sorted(list(self.path_zsp_labels.joinpath(self.category).iterdir()))[0].stem
+        ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
+        return ref_seq
+
     @property
     def co3dv1_zsp_obj_tform_co3dv1_obj(self):
         import numpy as np
@@ -1370,10 +1377,7 @@ class CO3D_Sequence():
 
     @property
     def zsp_labeled_cuboid_ref_tform_droid_slam_obj(self):
-        ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
-        ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
-        logger.info(f'ref seq name {ref_seq_name}, fpath {ref_seq.droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
-
+        ref_seq = self.sequence_ref_zsp
         droid_slam_labeled_ref_tform_droid_slam_obj = tform4x4(ref_seq.droid_slam_labeled_cuboid_tform_droid_slam_labeled, tform4x4(ref_seq.droid_slam_labeled_tform_droid_slam, tform4x4(inv_tform4x4(ref_seq.co3dv1_zsp_obj_tform_droid_slam_obj), self.co3dv1_zsp_obj_tform_droid_slam_obj)))
         # note: as zsp does not offer scale, we cannot retrieve actual translation, therefore we use this pcl center
         droid_slam_labeled_ref_tform_droid_slam_obj[:3, 3] = 0
@@ -1448,8 +1452,7 @@ class CO3D_Sequence():
         if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
             return self.path_preprocess.joinpath('aligned', self.aligned_name, 'mesh', self.category, 'mesh.ply')
         elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
-            ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
-            ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
+            ref_seq = self.sequence_ref_zsp
             #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
             return ref_seq.fpath_droid_slam_labeled_cuboid
         elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
@@ -1461,8 +1464,7 @@ class CO3D_Sequence():
         if mesh_source == CUBOID_SOURCES.ALIGNED:
             return self.path_preprocess.joinpath('aligned', self.aligned_name, 'mesh', self.category, 'mesh.ply')
         elif self.cam_tform_obj_source == CUBOID_SOURCES.ZSP_REF_CUBOID:
-            ref_seq_name = list(self.path_zsp_labels.joinpath(self.category).iterdir())[0].stem
-            ref_seq = self.get_sequence_by_category_and_name(category=self.category, name=ref_seq_name)
+            ref_seq = self.sequence_ref_zsp
             #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
             return ref_seq.fpath_droid_slam_labeled_cuboid
         else:
