@@ -343,7 +343,7 @@ class CO3D_Frame(OD3D_Frame):
             _scale = _cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
             _cam_tform4x4_obj[:3] = _cam_tform4x4_obj[:3] / _scale
         elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
-            logger.info(f'droid slam frame fpath {self.fpath_cam_tform4x4_obj_droid_slam}')
+            #logger.info(f'droid slam frame fpath {self.fpath_cam_tform4x4_obj_droid_slam}')
 
             _cam_tform4x4_obj_droid_slam = torch.load(self.fpath_cam_tform4x4_obj_droid_slam)
             zsp_labeled_ref_tform_droid_slam_obj = self.sequence.zsp_labeled_cuboid_ref_tform_droid_slam_obj
