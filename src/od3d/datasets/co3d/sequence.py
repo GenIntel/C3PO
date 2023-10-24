@@ -1103,7 +1103,7 @@ class CO3D_Sequence():
 
         pts3d_obj = pts3d[mask_pts3d_obj]
 
-        if len(pts3d_obj) < 10:
+        if len(pts3d_obj) < 4:
             logger.warning(f'Could not estimate mesh for sequence {self.name_unique} due to too few points after removing plane {len(pts3d_obj)}')
             return
 
