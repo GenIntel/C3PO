@@ -770,7 +770,7 @@ class CO3D_Sequence():
         down_sample_rate = model.downsample_rate
         feature_dim = model.out_dim
 
-        meshes = Meshes.load_from_meshes([self.mesh], device=device)
+        meshes = Meshes.load_from_meshes([self.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT)], device=device)
         dataset.transform = transform
 
         meshes_verts_aggregated_features = [torch.zeros((0, feature_dim), device='cpu')] * meshes.verts.shape[0]
@@ -1460,24 +1460,17 @@ class CO3D_Sequence():
 
     @property
     def fpath_mesh(self):
-        if self.cuboid_source == CUBOID_SOURCES.ALIGNED: # CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
-            return self.path_preprocess.joinpath('aligned', self.aligned_name, 'mesh', self.category, 'mesh.ply')
-        elif self.cuboid_source == CUBOID_SOURCES.ZSP_REF_CUBOID: #  == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
-            ref_seq = self.sequence_ref_zsp
-            #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
-            return ref_seq.fpath_droid_slam_labeled_cuboid
-        elif self.cuboid_source == CUBOID_SOURCES.LABELED: # CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
-            return self.fpath_droid_slam_labeled_cuboid
-        else:
-            return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
+        return self.get_fpath_mesh(mesh_source=self.cuboid_source)
 
-    def get_fpath_mesh(self, mesh_source: CUBOID_SOURCES ):
-        if mesh_source == CUBOID_SOURCES.ALIGNED:
+    def get_fpath_mesh(self, mesh_source: CUBOID_SOURCES):
+        if mesh_source == CUBOID_SOURCES.ALIGNED: # CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
             return self.path_preprocess.joinpath('aligned', self.aligned_name, 'mesh', self.category, 'mesh.ply')
-        elif self.cam_tform_obj_source == CUBOID_SOURCES.ZSP_REF_CUBOID:
+        elif mesh_source == CUBOID_SOURCES.ZSP_REF_CUBOID: #  == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
             ref_seq = self.sequence_ref_zsp
             #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
             return ref_seq.fpath_droid_slam_labeled_cuboid
+        elif mesh_source == CUBOID_SOURCES.LABELED: # CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
+            return self.fpath_droid_slam_labeled_cuboid
         else:
             return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
 
