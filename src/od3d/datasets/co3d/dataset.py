@@ -81,12 +81,13 @@ class CO3D(OD3D_Dataset):
                                                                                dict_nested_frames_ban=dict_nested_frames_ban)
 
         logger.info(f'sequences filtered')
+        sequences_filtered_str = ''
         for category in self.dict_category_sequences_names.keys():
             if len(self.dict_category_sequences_names[category]) > 0:
-                category_sequences_filtered_str = '\n' + category + ': \n'
+                sequences_filtered_str += '\n' + category + ': \n'
                 for sequence_name in self.dict_category_sequences_names[category]:
-                    category_sequences_filtered_str += f"  '{sequence_name}':\n"
-                logger.info(category_sequences_filtered_str)
+                    sequences_filtered_str += f"  '{sequence_name}':\n"
+        logger.info(sequences_filtered_str)
 
         logger.info(f'Found sequences per category')
 
