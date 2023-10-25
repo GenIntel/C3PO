@@ -249,66 +249,70 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
         geometries.append(o3d_geometry_for_cam)
 
     if return_visualization is False and fpath is None:
-        open3d.visualization.draw(geometries)
+        try:
+            open3d.visualization.draw(geometries)
+        except:
+            logger.warning('could not visualize with open3d, most likely env DISPLAY not set, try `export DISPLAY=:0.0;`')
     else:
-        vis = o3d.visualization.Visualizer()
-        vis.create_window(visible=False) #, height=720, width=1280)
+        try:
+            vis = o3d.visualization.Visualizer()
+            vis.create_window(visible=False) #, height=720, width=1280)
 
-        geometries_vertices_orig = []
+            geometries_vertices_orig = []
 
-        for geometry in geometries:
-            vis.add_geometry(geometry['geometry'])
-            if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
-                geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].points)).clone().to(device=device, dtype=dtype))
-            elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
-                geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].vertices)).clone().to(device=device, dtype=dtype))
+            for geometry in geometries:
+                vis.add_geometry(geometry['geometry'])
+                if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
+                    geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].points)).clone().to(device=device, dtype=dtype))
+                elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
+                    geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].vertices)).clone().to(device=device, dtype=dtype))
+                else:
+                    geometries_vertices_orig.append(None)
+                #vis.update_geometry(geometry['geometry'])
+            vis.poll_events()
+            vis.update_renderer()
+            # view_control = vis.get_view_control()
+            if return_visualization:
+                imgs = []
+
+                from od3d.cv.geometry.transform import get_cam_tform4x4_obj_for_viewpoints_count, transf3d, tform4x4_broadcast
+                cams_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.).to(dtype=dtype, device=device)
+                # open3d version 0.17.0 bug, view control does not work
+                #camera_orig = view_control.convert_to_pinhole_camera_parameters()
+                #cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
+
+                for v in range(viewpoints_count):
+                    #camera_orig.extrinsic = tform4x4_broadcast(cam_tform4x4_obj,
+                    #                                           objs_new_tform4x4_obj[v]).detach().cpu().numpy()
+                    #view_control.convert_from_pinhole_camera_parameters(camera_orig)
+
+                    for g, geometry in enumerate(geometries):
+                        if geometries_vertices_orig[g] is not None:
+                            vertices = geometries_vertices_orig[g] # .to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
+                            vertices = transf3d_broadcast(pts3d=vertices, transf4x4=tform4x4(OBJ_TFORM_OPEN3D_DEFAULT_CAM.to(dtype=dtype, device=device), cams_new_tform4x4_obj[v]))
+
+                            if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
+                                geometry['geometry'].points = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+                            elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
+                                geometry['geometry'].vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+                            vis.update_geometry(geometry['geometry'])
+
+                    vis.update_renderer()
+                    img = vis.capture_screen_float_buffer(do_render=True)
+                    img = torch.from_numpy(np.array(img)).permute(2, 0, 1)
+                    imgs.append(img)
+
+                if viewpoints_count == 1:
+                    imgs = imgs[0]
+                return imgs
             else:
-                geometries_vertices_orig.append(None)
-            #vis.update_geometry(geometry['geometry'])
-        vis.poll_events()
-        vis.update_renderer()
-        view_control = vis.get_view_control()
-        if return_visualization:
-            imgs = []
+                vis.capture_screen_image(str(fpath))
 
-            from od3d.cv.geometry.transform import get_cam_tform4x4_obj_for_viewpoints_count, transf3d, tform4x4_broadcast
-            cams_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.).to(dtype=dtype, device=device)
-            # open3d version 0.17.0 bug, view control does not work
-            #camera_orig = view_control.convert_to_pinhole_camera_parameters()
-            #cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
-
-            for v in range(viewpoints_count):
-                #camera_orig.extrinsic = tform4x4_broadcast(cam_tform4x4_obj,
-                #                                           objs_new_tform4x4_obj[v]).detach().cpu().numpy()
-                #view_control.convert_from_pinhole_camera_parameters(camera_orig)
-
-                for g, geometry in enumerate(geometries):
-                    if geometries_vertices_orig[g] is not None:
-                        vertices = geometries_vertices_orig[g] # .to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
-                        vertices = transf3d_broadcast(pts3d=vertices, transf4x4=tform4x4(OBJ_TFORM_OPEN3D_DEFAULT_CAM.to(dtype=dtype, device=device), cams_new_tform4x4_obj[v]))
-
-                        if isinstance(geometry['geometry'], open3d.geometry.PointCloud):
-                            geometry['geometry'].points = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
-                        elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
-                            geometry['geometry'].vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
-                        vis.update_geometry(geometry['geometry'])
-
-                vis.update_renderer()
-                img = vis.capture_screen_float_buffer(do_render=True)
-                img = torch.from_numpy(np.array(img)).permute(2, 0, 1)
-                imgs.append(img)
-
-            if viewpoints_count == 1:
-                imgs = imgs[0]
-            return imgs
-        else:
-            vis.capture_screen_image(str(fpath))
-
-
-        vis.update_renderer()
-        vis.destroy_window()
-
-    # open3d.visualization.draw_geometries(geometries)
+            vis.update_renderer()
+            vis.destroy_window()
+        except:
+            logger.warning(
+                'could not visualize with open3d, most likely env DISPLAY not set, try `export DISPLAY=:0.0;`')
 
 
 def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None,
