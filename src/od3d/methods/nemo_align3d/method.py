@@ -368,9 +368,10 @@ class NeMo_Align3D(OD3D_Method):
             logger.info(f'category {category}')
 
             # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6
-            rot_diff_rad = results_diff_log_rot[category][0, :]
-            accurate_pi6 = rot_diff_rad < (math.pi / 6.)
-            accurate_pi18 = rot_diff_rad < (math.pi / 18.)
+            if self.config.use_gt:
+                rot_diff_rad = results_diff_log_rot[category][0, :]
+                accurate_pi6 = rot_diff_rad < (math.pi / 6.)
+                accurate_pi18 = rot_diff_rad < (math.pi / 18.)
             accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][0, :]) > 0.90
             accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.60
             accurate_sim = accurate_sim_geo * accurate_sim_appear
@@ -414,7 +415,11 @@ class NeMo_Align3D(OD3D_Method):
 
             imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
             from od3d.cv.visual.draw import add_boolean_table
-            accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
+            if self.config.use_gt:
+                accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
+            else:
+                accurate_table = torch.stack(
+                    [accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
             from od3d.cv.visual.crop import crop_white_border_from_img
             for v in range(viewpoints_count):
                 img = crop_white_border_from_img(imgs[v])
