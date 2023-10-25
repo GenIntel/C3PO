@@ -3,13 +3,16 @@ class_name: ObjectNet3D
 
 modalities:
   - 'rgb'
-    # - 'mask'
+  - 'mask'
   - 'cam_intr4x4'
-  #- 'cam_tform4x4_objs'
+  - 'cam_tform4x4_obj'
   - 'categories'
   - 'size'
-    #- 'bboxs'
-    #- 'meshs'
+  # - 'mesh'
+  # - 'bbox'
+  # - 'cam_tform4x4_objs'
+  # - 'bboxs'
+  # - 'meshs'
 
 path_raw: ${platform.path_datasets}/ObjectNet3D
 path_preprocess: ${platform.path_datasets}/ObjectNet3D_Preprocess
@@ -28,9 +31,8 @@ extract_meta:
 
 filter_frames_categorical: False
 
-dict_nested_frames:
+dict_nested_frames: # train test val
     test:
-#        car:
 
 path_cuboids: '${.path_preprocess}/cuboids'
 

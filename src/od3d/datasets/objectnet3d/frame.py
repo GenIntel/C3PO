@@ -157,6 +157,7 @@ class ObjectNet3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjsMixin, OD3D_FrameMetaMe
     def get_path_frames_meta_with_subset(path_meta: Path, subset: str):
         return ObjectNet3D_FrameMeta.get_path_metas(path_meta=path_meta).joinpath(subset)
 
+
 class ObjectNet3D_Frame(OD3D_Frame):
     def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: ObjectNet3D_FrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
@@ -180,6 +181,9 @@ class ObjectNet3D_Frame(OD3D_Frame):
                 self.preprocess_mask()
             self._mask = read_image(fpath) == 255
         return self._mask
+    @mask.setter
+    def mask(self, value: torch.Tensor):
+            self._mask = value
 
     def preprocess_mask(self, override=False):
         if not self.fpath_mask.exists() or override:

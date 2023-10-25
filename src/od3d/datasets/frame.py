@@ -25,6 +25,7 @@ class OD3D_FRAME_MODALITIES(str, Enum):
     PCL = 'pcl'
     RGB = 'rgb'
     MASK = 'mask'
+    MASKS = 'masks'
     DEPTH = 'depth'
     DEPTH_MASK = 'depth_mask'
     MESH = 'mesh'
@@ -51,6 +52,10 @@ class OD3D_FrameMetaBBoxsMixin():
     @property
     def bboxs(self):
         return torch.Tensor(self.l_bboxs)
+
+    @property
+    def bbox(self):
+        return self.bboxs[0]
 
 @dataclass
 class OD3D_FrameKPTS2D3DMixin():
@@ -81,6 +86,10 @@ class OD3D_FrameMetaMeshMixin():
 class OD3D_FrameMetaMeshsMixin():
     rfpaths_meshs: List[Path]
 
+    @property
+    def rfpath_mesh(self):
+        return self.rfpaths_meshs[0]
+
 @dataclass
 class OD3D_FrameMetaSequenceMixin():
     sequence_name: str
@@ -92,6 +101,10 @@ class OD3D_FrameMetaCategoryMixin():
 @dataclass
 class OD3D_FrameMetaCategoriesMixin:
     categories: List[str]
+
+    @property
+    def category(self):
+        return self.categories[0]
 
 @dataclass
 class OD3D_FrameMetaCamIntr4x4Mixin:
@@ -117,6 +130,10 @@ class OD3D_FrameMetaCamTform4x4ObjsMixin:
     def cam_tform4x4_objs(self):
         return torch.Tensor(self.l_cam_tform4x4_objs)
 
+    @property
+    def cam_tform4x4_obj(self):
+        return self.cam_tform4x4_objs[0]
+
 @dataclass
 class OD3D_FrameMetaSizeMixin:
     l_size: List[float] # torch.Tensor
@@ -137,6 +154,15 @@ class OD3D_FrameMetaRGBMixin:
 @dataclass
 class OD3D_FrameMetaMaskMixin:
     rfpath_mask: Path
+
+@dataclass
+class OD3D_FrameMetaMasksMixin():
+    rfpaths_masks: List[Path]
+
+    @property
+    def rfpaths_mask(self):
+        return self.rfpaths_masks[0]
+
 @dataclass
 class OD3D_FrameMetaDepthMixin:
     rfpath_depth: Path

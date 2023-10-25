@@ -6,7 +6,7 @@ import shutil
 from od3d.datasets.pascal3d.frame import Pascal3DFrameMeta
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame
-from od3d.datasets.objectnet3d.enum import OBJECTNET3D_CATEOGORIES
+from od3d.datasets.objectnet3d.enum import OBJECTNET3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_OBJECTNET3D
 from pathlib import Path
 from typing import List, Dict
 from omegaconf import DictConfig
@@ -15,21 +15,29 @@ from tqdm import tqdm
 
 
 class ObjectNet3D(OD3D_Dataset):
+
+    CATEGORIES = OBJECTNET3D_CATEGORIES
+    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_OBJECTNET3D
+
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
-                 categories: List[OBJECTNET3D_CATEOGORIES]=None,
+                 categories: List[OBJECTNET3D_CATEGORIES]=None,
                  dict_nested_frames: Dict=None, dict_nested_frames_ban: Dict=None,
                  transform=None, index_shift=0, subset_fraction=1., filter_frames_categorical=False):
 
-        categories = categories if categories is not None else OBJECTNET3D_CATEOGORIES.list()
+        if categories is not None:
+            categories = [self.MAP_OD3D_CATEGORIES.get(category, category) if category not in self.CATEGORIES.list() else category for category in categories]
+        else:
+            categories = self.CATEGORIES.list()
+
         self.filter_frames_categorical = filter_frames_categorical
         super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
 
-
+        self.path_meshes = self.path_raw.joinpath('CAD')
     def get_item(self, item):
         frame_meta = ObjectNet3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
-        return OD3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta, meta=frame_meta, modalities=self.modalities, categories=self.categories)
+        return ObjectNet3D_Frame(path_meshes=self.path_meshes, path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta, meta=frame_meta, modalities=self.modalities, categories=self.categories)
 
     def filter_list_frames_unique(self, list_frames_unique):
         list_frames_unique = super().filter_list_frames_unique(list_frames_unique)
@@ -79,7 +87,7 @@ class ObjectNet3D(OD3D_Dataset):
         rfpath_annotations = Path('Annotations')
         rfpath_images = Path('Images')
 
-        subsets = ['test'] #  ['train', 'test', 'val']
+        subsets = ['train', 'test', 'val']
         for subset in subsets:
             path_frames_subset = ObjectNet3D_FrameMeta.get_path_frames_meta_with_subset(path_meta=path_meta, subset=subset)
             if not path_frames_subset.exists() or config.extract_meta.override:
