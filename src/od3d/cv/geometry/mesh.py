@@ -169,6 +169,14 @@ class Meshes(torch.nn.Module):
             rgb = None
         return Meshes(verts=verts, faces=faces, rgb=rgb)
 
+    def __add__(self, meshes2):
+        meshes = []
+        for mesh_id in list(range(len(self))):
+            meshes.append(self.get_meshes_with_ids(meshes_ids=[mesh_id]))
+        for mesh_id in list(range(len(meshes2))):
+            meshes.append(meshes2.get_meshes_with_ids(meshes_ids=[mesh_id]))
+        return Meshes.load_from_meshes(meshes=meshes, device=self.device)
+
     @staticmethod
     def get_faces_from_verts(verts, ball_radius=0.3):
         import open3d
@@ -192,7 +200,9 @@ class Meshes(torch.nn.Module):
         super()._apply(fn)
         self.init_pt3d()
 
-    def get_meshes_with_ids(self, meshes_ids):
+    def get_meshes_with_ids(self, meshes_ids=None):
+        if meshes_ids == None:
+            meshes_ids = list(range(len(self)))
         verts = [self.get_verts_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
         faces = [self.get_faces_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
         if self.rgb is None:
@@ -254,7 +264,7 @@ class Meshes(torch.nn.Module):
     def get_mesh_ids_for_verts(self):
         mesh_ids = torch.LongTensor(size=(0,)).to(device=self.device)
         for mesh_id in range(self.meshes_count):
-            mesh_ids = torch.cat([mesh_ids, torch.LongTensor([mesh_id] *  self.verts_counts[mesh_id]).to(device=self.device)], dim=0)
+            mesh_ids = torch.cat([mesh_ids, torch.LongTensor([mesh_id] * self.verts_counts[mesh_id]).to(device=self.device)], dim=0)
         return mesh_ids
 
     def get_feats_with_mesh_id(self, mesh_id):

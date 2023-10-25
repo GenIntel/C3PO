@@ -73,22 +73,31 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
             if 'rot_diff_rad' in k:
                 prefix = k[:k.find('rot_diff_rad')]
                 prefix_saved = f'prefix/{prefix}' if len(prefix) > 0 else ''
-                res[f'pose/{prefix_saved}acc_pi6'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 6.).to(dtype=float).mean()
-                res[f'pose/{prefix_saved}acc_pi12'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 12.).to(dtype=float).mean()
-                res[f'pose/{prefix_saved}acc_pi18'] = (self[f'{prefix}rot_diff_rad'] < math.pi / 18.).to(dtype=float).mean()
-                res[f'pose/{prefix_saved}err_median'] = 180 / math.pi * self[f'{prefix}rot_diff_rad'].median()
-                res[f'pose/{prefix_saved}err_mean'] = 180 / math.pi * self[f'{prefix}rot_diff_rad'].mean()
+                rot_diff_rad = self[f'{prefix}rot_diff_rad']
+                res[f'pose/{prefix_saved}acc_pi6'] = (rot_diff_rad < math.pi / 6.).to(dtype=float).mean()
+                res[f'pose/{prefix_saved}acc_pi12'] = (rot_diff_rad < math.pi / 12.).to(dtype=float).mean()
+                res[f'pose/{prefix_saved}acc_pi18'] = (rot_diff_rad < math.pi / 18.).to(dtype=float).mean()
+                if self[f'{prefix}rot_diff_rad'].dim() == 2:
+                    res[f'pose/{prefix_saved}acc_pi6_std'] = (rot_diff_rad < math.pi / 6.).to(
+                        dtype=float).mean(dim=-1).std(dim=0)
+                    res[f'pose/{prefix_saved}acc_pi12_std'] = (rot_diff_rad < math.pi / 12.).to(
+                        dtype=float).mean(dim=-1).std(dim=0)
+                    res[f'pose/{prefix_saved}acc_pi18_std'] = (rot_diff_rad < math.pi / 18.).to(
+                        dtype=float).mean(dim=-1).std(dim=0)
+
+                res[f'pose/{prefix_saved}err_median'] = 180 / math.pi * rot_diff_rad.median()
+                res[f'pose/{prefix_saved}err_mean'] = 180 / math.pi * rot_diff_rad.mean()
 
                 if f'{prefix}pose_sim_geo' in self.keys() and f'{prefix}pose_sim_appear' in self.keys():
                     res[f'pose/pr/{prefix_saved}pi6_pr_vs_sim_geo_and_appear'] = self.get_pr_3d(
-                        ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int),
-                        sim_1st_dim=self[f'{prefix}pose_sim_geo'][:].detach().cpu().numpy(),
-                        sim_2nd_dim=self[f'{prefix}pose_sim_appear'][:].detach().cpu().numpy(),
+                        ground_truth=(rot_diff_rad.flatten() < math.pi / 6.).detach().cpu().numpy().astype(int),
+                        sim_1st_dim=self[f'{prefix}pose_sim_geo'].flatten().detach().cpu().numpy(),
+                        sim_2nd_dim=self[f'{prefix}pose_sim_appear'].flatten().detach().cpu().numpy(),
                         title=f"PI/6={res[f'pose/{prefix_saved}acc_pi6']:.2f}")
 
                 if f'{prefix}sim' in self.keys():
-                    res[f'pose/pr/{prefix_saved}pi6'] = self.get_pr(ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 6.).detach().cpu().numpy().astype(int), predictions=self[f'{prefix}sim'][:, 0].detach().cpu().numpy(), title=f"PI/6={res[f'pose/{prefix_saved}acc_pi6']:.2f}")
-                    res[f'pose/pr/{prefix_saved}pi18'] = self.get_pr(ground_truth=(self[f'{prefix}rot_diff_rad'] < math.pi / 18.).detach().cpu().numpy().astype(int), predictions=self[f'{prefix}sim'][:, 0].detach().cpu().numpy(), title=f"PI/18={res[f'pose/{prefix_saved}acc_pi18']:.2f}")
+                    res[f'pose/pr/{prefix_saved}pi6'] = self.get_pr(ground_truth=(rot_diff_rad.flatten() < math.pi / 6.).detach().cpu().numpy().astype(int), predictions=self[f'{prefix}sim'].flatten().detach().cpu().numpy(), title=f"PI/6={res[f'pose/{prefix_saved}acc_pi6']:.2f}")
+                    res[f'pose/pr/{prefix_saved}pi18'] = self.get_pr(ground_truth=(rot_diff_rad.flatten() < math.pi / 18.).detach().cpu().numpy().astype(int), predictions=self[f'{prefix}sim'].flatten().detach().cpu().numpy(), title=f"PI/18={res[f'pose/{prefix_saved}acc_pi18']:.2f}")
 
         return OD3D_Results(init_dict=res)
 
