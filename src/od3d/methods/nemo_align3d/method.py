@@ -177,11 +177,13 @@ class NeMo_Align3D(OD3D_Method):
             logger.info(f'category id {cat_id} name {category}')
             instance_ids = torch.LongTensor(list(range(self.instances_count)))
             category_instance_ids = instance_ids[self.map_seq_to_cat == cat_id]
-            # this ensures that we first label the axis, which are required later to fit the cuboid
-            droid_slam_labeled_tform_droid_slam = self.sequences[
-                category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
-            droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.sequences[
-                category_instance_ids[0]].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
+
+            if self.config.use_gt:
+                # this ensures that we first label the axis, which are required later to fit the cuboid
+                droid_slam_labeled_tform_droid_slam = self.sequences[
+                    category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
+                droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.sequences[
+                    category_instance_ids[0]].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
 
             results_diff_log_rot[category] = torch.zeros(
                 size=(self.instances_count_per_category[cat_id], self.instances_count_per_category[cat_id])).to(
@@ -311,12 +313,13 @@ class NeMo_Align3D(OD3D_Method):
                                 gt_ref_tform_src = tform4x4(
                                     inv_tform4x4(self.sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
                                    self.sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
-                            else:
+                            elif dataset_train.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
                                 gt_ref_tform_src = tform4x4(
                                     inv_tform4x4(self.sequences[ref_mesh_id].droid_slam_labeled_tform_droid_slam.to(
                                     device=self.device, dtype=pred_ref_tform_src.dtype)),
                                     self.sequences[src_mesh_id].droid_slam_labeled_tform_droid_slam.to(device=self.device, dtype=pred_ref_tform_src.dtype))
-
+                            else:
+                                logger.warning('No gt available ')
                             diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
                             results_diff_log_rot[category][r, s] = diff_rot_angle_rad
 
@@ -386,9 +389,13 @@ class NeMo_Align3D(OD3D_Method):
             ### VISUALIZATIONS
             instance_ids = torch.LongTensor(list(range(self.instances_count)))
             category_instance_ids = instance_ids[self.map_seq_to_cat == cat_id]
-            droid_slam_labeled_tform_droid_slam = self.sequences[category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
-            droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.sequences[category_instance_ids[0]].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
-            droid_slam_labeled_cuboid_tform_droid_slam = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam_labeled, droid_slam_labeled_tform_droid_slam)
+            if self.config.use_gt:
+                droid_slam_labeled_tform_droid_slam = self.sequences[category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
+                droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.sequences[category_instance_ids[0]].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
+                droid_slam_labeled_cuboid_tform_droid_slam = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam_labeled, droid_slam_labeled_tform_droid_slam)
+            else:
+                droid_slam_labeled_cuboid_tform_droid_slam = torch.eye(4).to(device=self.device)
+
             self.sequences[category_instance_ids[0]].write_aligned_cuboid(aligned_name=self.config.aligned_name, cuboid=self.sequences[category_instance_ids[0]].droid_slam_labeled_cuboid)
 
             pts3d = []
