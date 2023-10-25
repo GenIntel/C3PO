@@ -250,7 +250,9 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
     if return_visualization is False and fpath is None:
         try:
-            open3d.visualization.draw(geometries)
+            #open3d.visualization.draw(geometries)
+            open3d.visualization.draw_plotly(geometries)
+
         except Exception as e:
             logger.warning('could not visualize with open3d, most likely env DISPLAY not set, try `export DISPLAY=:0.0;`')
     else:
