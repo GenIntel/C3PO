@@ -249,14 +249,14 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
         geometries.append(o3d_geometry_for_cam)
 
     if return_visualization is False and fpath is None:
-        try:
-            #open3d.visualization.draw(geometries)
-            open3d.visualization.draw_plotly(geometries)
-
-        except Exception as e:
-            logger.warning('could not visualize with open3d, most likely env DISPLAY not set, try `export DISPLAY=:0.0;`')
+        if os.environ.get('DISPLAY'):
+            open3d.visualization.draw(geometries)
+            #open3d.visualization.draw_plotly(geometries)
+        else:
+            logger.warning('could not visualize with open3d, because env DISPLAY not set, try `export DISPLAY=:0.0;`')
+            return
     else:
-        try:
+        if os.environ.get('DISPLAY'):
             vis = o3d.visualization.Visualizer()
             vis.create_window(visible=False) #, height=720, width=1280)
 
@@ -312,9 +312,12 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
             vis.update_renderer()
             vis.destroy_window()
-        except Exception as e:
+        else:
             logger.warning(
                 'could not visualize with open3d, most likely env DISPLAY not set, try `export DISPLAY=:0.0;`')
+
+            return [torch.zeros(size=(3, 480, 640)).to(device=device)] * viewpoints_count
+
 
 
 def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None,
