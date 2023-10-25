@@ -77,7 +77,14 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                 res[f'pose/{prefix_saved}acc_pi6'] = (rot_diff_rad < math.pi / 6.).to(dtype=float).mean()
                 res[f'pose/{prefix_saved}acc_pi12'] = (rot_diff_rad < math.pi / 12.).to(dtype=float).mean()
                 res[f'pose/{prefix_saved}acc_pi18'] = (rot_diff_rad < math.pi / 18.).to(dtype=float).mean()
-                if self[f'{prefix}rot_diff_rad'].dim() == 2:
+                if rot_diff_rad.dim() == 3:
+                    res[f'pose/{prefix_saved}acc_pi6_std'] = (rot_diff_rad < math.pi / 6.).to(
+                        dtype=float).permute(1, 0, 2).flatten(1).mean(dim=-1).std(dim=0)
+                    res[f'pose/{prefix_saved}acc_pi12_std'] = (rot_diff_rad < math.pi / 12.).to(
+                        dtype=float).permute(1, 0, 2).flatten(1).mean(dim=-1).std(dim=0)
+                    res[f'pose/{prefix_saved}acc_pi18_std'] = (rot_diff_rad < math.pi / 18.).to(
+                        dtype=float).permute(1, 0, 2).flatten(1).mean(dim=-1).std(dim=0)
+                elif rot_diff_rad.dim() == 2:
                     res[f'pose/{prefix_saved}acc_pi6_std'] = (rot_diff_rad < math.pi / 6.).to(
                         dtype=float).mean(dim=-1).std(dim=0)
                     res[f'pose/{prefix_saved}acc_pi12_std'] = (rot_diff_rad < math.pi / 12.).to(

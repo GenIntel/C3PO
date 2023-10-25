@@ -31,8 +31,24 @@
     use nvidia devel image, e.g. nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 
+# BUG 4
+
+[Open3D WARNING] GLFW Error: X11: The DISPLAY environment variable is missing
+[Open3D WARNING] Failed to initialize GLFW
+Segmentation fault (core dumped)
+
+export DISPLAY=:0.0; 
+
+# BUG 5
+
+end of file reading mesh
+
+/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/mesh/alpha500/remote/107_12754_22765/mesh.ply
 
 
+/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/mesh/alpha500/remote/107_12754_22765/mesh.ply
+107_12754_22765
+105_12562_23650
 
 # CUDNN=cudnn-linux-x86_64-8.9.5.29_cuda11-archive
 #cp ${CUDNN}/include/cudnn*.h ${CUDA_HOME}/include

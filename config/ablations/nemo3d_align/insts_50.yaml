@@ -1,10 +1,11 @@
 # @package _global_
 defaults:
-  - override /datasets@train_datasets.labeled: co3d_50s_no_zsp # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
+  - override /datasets@train_datasets.labeled: co3d_5s_no_zsp_labeled # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
+  - override /datasets@train_datasets.src: co3d_50s_no_zsp # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
   - override /datasets@val_datasets.main:
-  - override /datasets@test_datasets.co3d: co3d_50s_no_zsp # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
+  - override /datasets@test_datasets.co3d: co3d_5s_no_zsp_labeled # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
 
-ablation_name: insts_50
+ablation_name: src_50s_ref_5s
 
 categories:
   - bicycle
@@ -37,7 +38,7 @@ categories:
 
 method:
   nemo:
-    use_gt: False
+    use_gt_src: False
     use_only_first_reference: True
     dist_appear_weight: 0.5
     use_appear_argmin: False
