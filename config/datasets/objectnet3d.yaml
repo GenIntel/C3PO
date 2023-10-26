@@ -27,15 +27,15 @@ extract_meta:
   override: False
   remove_previous: False
 
-preprocess:
+#preprocess:
 #  cuboid:
 #    enabled: False
 #    override: False
 #    remove_previous: False
-  mask:
-    enabled: True
-    override: False
-    remove_previous: False
+#  mask:
+#    enabled: False
+#    override: False
+#    remove_previous: False
 
 filter_frames_categorical: False
 

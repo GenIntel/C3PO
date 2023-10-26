@@ -1,5 +1,5 @@
 from od3d.data.ext_enum import ExtEnum
-from od3d.datasets.enum import OD3D_CATEGORIES
+from od3d.datasets.enum import OD3D_CATEGORIES, OD3D_CATEGORIES_SIZES_IN_M
 class OBJECTNET3D_SUBSETS(str, ExtEnum):
     train = "train"
     val = "val"
@@ -316,3 +316,7 @@ MAP_CATEGORIES_OD3D_TO_OBJECTNET3D = {
     OD3D_CATEGORIES.WATCH: OBJECTNET3D_CATEGORIES.WATCH,
     OD3D_CATEGORIES.WHEELCHAIR: OBJECTNET3D_CATEGORIES.WHEELCHAIR,
 }
+
+# note: changing these parameters, requires to recompute cuboids.
+# assuming CAD size is approaximately 0.85
+OBJECTNET3D_SCALE_NORMALIZE_TO_REAL = { category.value: OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_OBJECTNET3D_TO_OD3D[category]] / 0.85 for category in list(OBJECTNET3D_CATEGORIES) }

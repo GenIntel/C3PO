@@ -60,6 +60,12 @@ def move_dir(src: Path, dst: Path):
         shutil.move(_fpath, dst)
     shutil.rmtree(src)
 
+def rm_dir(path: Path):
+    try:
+        logger.info(f'removing directory {path}')
+        shutil.rmtree(path)
+    except Exception as e:
+        logger.warning(e)
 
 def load_hierarchical_config(benchmark="defaults", platform="local", ablation=None, overrides=[]):
     config_dir_rel = "../../config"

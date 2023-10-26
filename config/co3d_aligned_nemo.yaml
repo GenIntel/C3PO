@@ -2,11 +2,10 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.labeled: co3d_50s_no_zsp # co3d_5s_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
-  - datasets@val_datasets.main: co3d_5s_no_zsp_labeled #  pascal3d_val # pascal3d_val
-  #- datasets@val_datasets.pascal3d: # pascal3d_val
-  - datasets@val_datasets.co3d_zsp: co3dv1_10s_zsp_labeled #  pascal3d_val # pascal3d_val
-  - datasets@val_datasets.pascal3d: pascal3d_val # co3d_5s_zero_shot_pose_aligned # pascal3d_val co3d_5s_test # co3d_10s_test, co3d_test
+  - datasets@train_datasets.labeled: co3d_50s_no_zsp_aligned # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
+  - datasets@val_datasets.main: co3d_5s_no_zsp_labeled
+  - datasets@val_datasets.co3d_zsp: co3dv1_10s_zsp_labeled
+  - datasets@val_datasets.pascal3d: pascal3d_val
   - datasets@val_datasets.objectnet3d: objectnet3d_val
   - datasets@test_datasets.co3d: co3d_5s_no_zsp_labeled
   - datasets@test_datasets.co3d_zsp: co3dv1_10s_zsp_labeled

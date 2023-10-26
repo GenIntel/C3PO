@@ -16,7 +16,7 @@ from omegaconf import OmegaConf
 from od3d.cv.io import read_image, save_image_mask
 from od3d.cv.geometry.mesh import Mesh, Meshes
 
-
+from od3d.datasets.objectnet3d.enum import OBJECTNET3D_SCALE_NORMALIZE_TO_REAL
 
 @dataclass
 class ObjectNet3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjsMixin, OD3D_FrameMetaMeshsMixin, OD3D_FrameMetaBBoxsMixin,
@@ -192,11 +192,17 @@ class ObjectNet3D_Frame(OD3D_Frame):
             else:
                 device = 'cpu'
             meshes = Meshes.load_from_meshes([self.mesh], device=device)
-            mask = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
+            mask = meshes.render_feats(cams_tform4x4_obj=self.meta.cam_tform4x4_obj[None,].to(device=device),
                                        cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
                                        imgs_sizes=self.size.to(device=device), modality='mask')[0]
             save_image_mask(mask, path=self.fpath_mask)
 
+    @property
+    def cam_tform4x4_obj(self):
+        if self._cam_tform4x4_obj is None:
+            self._cam_tform4x4_obj = torch.Tensor(self.meta.cam_tform4x4_obj)
+            self._cam_tform4x4_obj[2, 3] *= OBJECTNET3D_SCALE_NORMALIZE_TO_REAL[self.category]
+        return self._cam_tform4x4_obj
     # @property
     # def kpts_names(self):
     #     return self.meta.kpts_names
