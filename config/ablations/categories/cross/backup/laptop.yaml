@@ -1,11 +1,10 @@
 # @package _global_
 defaults:
-  - /ablations/categories@: _default
-  #- /ablations/categories@: _add_pascal3d
-  - /ablations/categories@: _add_objectnet3d
+  - /ablations/categories/cross/_default
+  #- /ablations/categories/cross/_add_pascal3d
+  - /ablations/categories/cross/_add_objectnet3d
 
-
-ablation_name: cat1_cup
+ablation_name: cat1_laptop
 
 categories:
 #  - bicycle
@@ -25,13 +24,13 @@ categories:
 #  - toaster
 #  - hydrant
 #  - chair
-#  - laptop
+  - laptop
 #  - book
 #  - backpack
 #  - cellphone # from cellphone on, no zsp categories
 #  - bench
 #  - bottle
 #  - couch
-  - cup
+#  - cup
 #  - suitcase
 #  - tv

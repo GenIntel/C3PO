@@ -109,8 +109,57 @@ class ObjectNet3D(OD3D_Dataset):
             else:
                 logger.info(f'found subset frames at {path_frames_subset}')
 
-        def preprocess(self, override: False):
-            pass
+    ##### PREPROCESS
+    def preprocess(self, config_preprocess: DictConfig):
+        logger.info("preprocess")
+        for key in config_preprocess.keys():
+            # if key == 'cuboid' and config_preprocess.cuboid.get('enabled', False):
+            #     override = config_preprocess.cuboid.get('override', False)
+            #     remove_previous = config_preprocess.cuboid.get('remove_previous', False)
+            #     self.preprocess_cuboids(override=override, remove_previous=remove_previous)
+            if key == 'mask' and config_preprocess.mask.get('enabled', False):
+                override = config_preprocess.mask.get('override', False)
+                remove_previous = config_preprocess.mask.get('remove_previous', False)
+                self.preprocess_masks(override=override, remove_previous=remove_previous)
+
+    # def preprocess_cuboids(self, override=False, remove_previous=False):
+    #     logger.info('preprocess cuboids...')
+    #     perc_axis_coverage = 0.99
+    #     verts_count = 1000
+    #
+    #     for path_meshes_category in tqdm(self.path_meshes.iterdir()):
+    #         if not path_meshes_category.is_dir():
+    #             continue
+    #
+    #         fpath = self.path_cuboids.joinpath(f'{path_meshes_category.name}.ply')
+    #         if not fpath.exists() or override:
+    #             paths_meshes_category = []
+    #             for path_mesh_category in path_meshes_category.iterdir():
+    #                 print(path_mesh_category)
+    #                 paths_meshes_category.append(path_mesh_category)
+    #
+    #             meshes = Meshes.load_from_files(paths_meshes_category)
+    #
+    #             verts_count_axis_coverage = int(meshes.verts.shape[0] * perc_axis_coverage)
+    #
+    #             verts_sorted = meshes.verts.sort(dim=0)[0]
+    #             verts_group = verts_sorted[verts_count_axis_coverage::] - verts_sorted[0:-verts_count_axis_coverage]
+    #             min_ids = verts_group.min(dim=0)[1]
+    #             cuboid_limits = verts_sorted[
+    #                 torch.stack([min_ids, min_ids + verts_count_axis_coverage], dim=0)].diagonal(dim1=-2, dim2=-1)
+    #
+    #             category = path_meshes_category.name
+    #             cuboid_limits = cuboid_limits * PASCAL3D_SCALE_NORMALIZE_TO_REAL[category]
+    #             meshes = Cuboids.create_dense_from_limits(limits=cuboid_limits[None,], verts_count=verts_count)
+    #
+    #             fpath.parent.mkdir(parents=True, exist_ok=True)
+    #             save_ply(fpath, verts=meshes.verts, faces=meshes.faces)
+
+    def preprocess_masks(self, override=False, remove_previous=False):
+        logger.info('preprocess masks...')
+        for frame_id in tqdm(range(len(self))):
+            frame = self.get_item(frame_id)
+            frame.preprocess_mask(override=override)
 """
 class ObjectNet3D(Pascal3D):
 

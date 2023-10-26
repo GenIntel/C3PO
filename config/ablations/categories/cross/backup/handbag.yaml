@@ -1,14 +1,13 @@
 # @package _global_
 defaults:
-  - /ablations/categories@: _default
-  - /ablations/categories@: _add_pascal3d
-  - /ablations/categories@: _add_objectnet3d
+  - /ablations/categories/cross/_default
+  #- /ablations/categories/cross/_add_pascal3d
+  #- /ablations/categories/cross/_add_objectnet3d
 
-
-ablation_name: cat1_bicycle
+ablation_name: cat1_handbag
 
 categories:
-  - bicycle
+#  - bicycle
 #  - truck
 #  - train
 #  - teddybear
@@ -16,7 +15,7 @@ categories:
 #  - bus
 #  - motorcycle
 #  - keyboard
-#  - handbag
+  - handbag
 #  - remote
 #  - airplane
 #  - toilet

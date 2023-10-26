@@ -1,0 +1,43 @@
+name: objectnet3d
+class_name: ObjectNet3D
+
+modalities:
+  - 'rgb'
+  - 'mask'
+  - 'cam_intr4x4'
+  - 'cam_tform4x4_obj'
+  - 'categories'
+  - 'size'
+  # - 'mesh'
+  # - 'bbox'
+  # - 'cam_tform4x4_objs'
+  # - 'bboxs'
+  # - 'meshs'
+
+path_raw: ${platform.path_datasets}/ObjectNet3D
+path_preprocess: ${platform.path_datasets}/ObjectNet3D_Preprocess
+
+setup:
+  enabled: False
+  override: False
+  remove_previous: False
+
+extract_meta:
+  enabled: False
+  override: False
+  remove_previous: False
+
+preprocess:
+#  cuboid:
+#    enabled: False
+#    override: False
+#    remove_previous: False
+  mask:
+    enabled: True
+    override: False
+    remove_previous: False
+
+filter_frames_categorical: False
+
+
+path_cuboids: '${.path_preprocess}/cuboids'

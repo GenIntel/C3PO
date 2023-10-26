@@ -1,10 +1,10 @@
 # @package _global_
 defaults:
-  - /ablations/categories@: _default
-  - /ablations/categories@: _add_pascal3d
-  - /ablations/categories@: _add_objectnet3d
+  - /ablations/categories/cross/_default
+  - /ablations/categories/cross/_add_pascal3d
+  - /ablations/categories/cross/_add_objectnet3d
 
-ablation_name: cat1_motorcycle
+ablation_name: cat1_bottle
 
 categories:
 #  - bicycle
@@ -13,7 +13,7 @@ categories:
 #  - teddybear
 #  - car
 #  - bus
-  - motorcycle
+#  - motorcycle
 #  - keyboard
 #  - handbag
 #  - remote
@@ -29,7 +29,7 @@ categories:
 #  - backpack
 #  - cellphone # from cellphone on, no zsp categories
 #  - bench
-#  - bottle
+  - bottle
 #  - couch
 #  - cup
 #  - suitcase

@@ -1,10 +1,10 @@
 # @package _global_
 defaults:
-  - /ablations/categories@: _default
-  #- /ablations/categories@: _add_pascal3d
-  #- /ablations/categories@: _add_objectnet3d
+  - /ablations/categories/cross/_default
+  #- /ablations/categories/cross/_add_pascal3d
+  - /ablations/categories/cross/_add_objectnet3d
 
-ablation_name: cat1_remote
+ablation_name: cat1_hairdryer
 
 categories:
 #  - bicycle
@@ -16,10 +16,10 @@ categories:
 #  - motorcycle
 #  - keyboard
 #  - handbag
-  - remote
+#  - remote
 #  - airplane
 #  - toilet
-#  - hairdryer
+  - hairdryer
 #  - mouse
 #  - toaster
 #  - hydrant

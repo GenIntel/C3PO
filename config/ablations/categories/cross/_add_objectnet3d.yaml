@@ -2,8 +2,8 @@
 
 val_datasets:
   objectnet3d:
-    skip: False
+    skip: True
 
 test_datasets:
   objectnet3d:
-    skip: False
+    skip: True
