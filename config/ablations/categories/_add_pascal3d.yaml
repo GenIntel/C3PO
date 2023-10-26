@@ -2,8 +2,8 @@
 
 val_datasets:
   pascal3d:
-    skip: True
+    skip: False
 
 test_datasets:
   pascal3d:
-    skip: True
+    skip: False

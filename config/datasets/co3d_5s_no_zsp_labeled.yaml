@@ -5,7 +5,7 @@ name: co3d_5s_no_zsp_labeled
 
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
-sequences_count_max_per_category: 100
+sequences_count_max_per_category: 50
 
 #frames_count_max_per_sequence: 1
 #modalities:
@@ -21,13 +21,13 @@ sequences_count_max_per_category: 100
 #    - 'mesh'
 
 #preprocess:
+#  mesh:
+#    enabled: True
+#    override: False
 #  label:
 #    enabled: True
 #    override: False
 
-#  mesh:
-#    enabled: False
-#    override: False
 
 cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
 cam_tform_obj_source: 'droid_slam_labeled' # 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
@@ -58,6 +58,7 @@ categories:
   - book
   - backpack
   - cellphone # from cellphone on, no zsp categories
+  - microwave
   - bench
   - bottle
   - couch
@@ -243,6 +244,13 @@ dict_nested_frames:
     '122_14255_27579':
     '122_14269_28111':
     #'122_14270_28122': # not required
+  microwave:
+    '34_1470_4676':
+    '42_1993_6067':
+    '48_2719_7900':
+    '48_2735_7961':
+    '48_2738_8001':
+    # '48_2753_8230': # not required
   bench:
     '106_12654_23221':
     '106_12699_27006':

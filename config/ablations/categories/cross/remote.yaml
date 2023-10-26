@@ -1,0 +1,36 @@
+# @package _global_
+defaults:
+  - /ablations/categories@: _default
+  #- /ablations/categories@: _add_pascal3d
+  #- /ablations/categories@: _add_objectnet3d
+
+ablation_name: cat1_remote
+
+categories:
+#  - bicycle
+#  - truck
+#  - train
+#  - teddybear
+#  - car
+#  - bus
+#  - motorcycle
+#  - keyboard
+#  - handbag
+  - remote
+#  - airplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+#  - chair
+#  - laptop
+#  - book
+#  - backpack
+#  - cellphone # from cellphone on, no zsp categories
+#  - bench
+#  - bottle
+#  - couch
+#  - cup
+#  - suitcase
+#  - tv

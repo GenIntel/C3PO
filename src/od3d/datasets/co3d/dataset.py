@@ -465,7 +465,7 @@ class CO3D(OD3D_Dataset):
             if key == 'label' and config_preprocess.label.get('enabled', False):
                 override = config_preprocess.label.get('override', False)
                 self.preprocess_label(override=override)
-            if key == 'pcl' and config_preprocess.pcl.get('enabled', False):
+            elif key == 'pcl' and config_preprocess.pcl.get('enabled', False):
                 override = config_preprocess.pcl.get('override', False)
                 remove_previous = config_preprocess.pcl.get('remove_previous', False)
                 self.preprocess_pcls(override=override, remove_previous=remove_previous)
