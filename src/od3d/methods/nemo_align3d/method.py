@@ -366,7 +366,8 @@ class NeMo_Align3D(OD3D_Method):
             category_results_mean = category_results_mean.mean()
             category_results_mean.log()
 
-            category_results[f'rot_diff_rad'] = category_results[f'rot_diff_rad'][None,]
+            if self.config.use_gt_src:
+                category_results[f'rot_diff_rad'] = category_results[f'rot_diff_rad'][None,]
             category_results[f'pose_sim_geo'] = category_results[f'pose_sim_geo'][None,]
             category_results[f'pose_sim_appear'] = category_results[f'pose_sim_appear'][None,]
             results += category_results
