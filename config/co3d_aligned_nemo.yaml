@@ -54,7 +54,7 @@ method:
     inference:
       pre_rendered: False
     train:
-      epochs: 20
+      epochs: 5
       dataloader:
         num_workers: 4
         batch_size: 12
