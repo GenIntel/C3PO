@@ -54,6 +54,7 @@ method:
     inference:
       pre_rendered: False
     train:
+      early_stopping: False
       epochs: 5
       dataloader:
         num_workers: 4

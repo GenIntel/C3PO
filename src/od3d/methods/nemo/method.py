@@ -217,6 +217,7 @@ class NeMo(OD3D_Method):
         score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
+        self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 
         if 'main' in datasets_val.keys():
             dataset_train_sub = datasets_train['labeled']
