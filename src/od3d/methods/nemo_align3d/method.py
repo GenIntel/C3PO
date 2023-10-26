@@ -399,8 +399,7 @@ class NeMo_Align3D(OD3D_Method):
         ref_meshes.rgb = ref_meshes.get_verts_ncds_cat_with_mesh_ids()
         src_meshes.rgb = src_meshes.get_verts_ncds_cat_with_mesh_ids()
 
-        aligned_path = dataset_src.path_preprocess.joinpath('aligned', self.config.aligned_name)
-        od3d.io.rm_dir(aligned_path)
+
 
         for cat_id, category in enumerate(categories):
             logger.info(f'category {category}')
@@ -419,75 +418,82 @@ class NeMo_Align3D(OD3D_Method):
             src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
 
             ref_category_instance_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
+            if self.config.use_only_first_reference:
+                ref_category_instance_ids = ref_category_instance_ids[:1]
+
             src_category_instance_ids = src_instance_ids[src_map_seq_to_cat == cat_id]
 
-            #if self.config.use_gt_src:
-            droid_slam_labeled_tform_droid_slam = ref_sequences[ref_category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
-            droid_slam_labeled_cuboid_tform_droid_slam_labeled = ref_sequences[ref_category_instance_ids[0]].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
-            droid_slam_labeled_cuboid_tform_droid_slam = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam_labeled, droid_slam_labeled_tform_droid_slam)
-            #else:
-            #    droid_slam_labeled_cuboid_tform_droid_slam = torch.eye(4).to(device=self.device)
+            for ref_instance_id_in_category, ref_instance_id in enumerate(ref_category_instance_ids):
+                aligned_name = f'{self.config.aligned_name}_r{ref_instance_id_in_category}'
+                aligned_path = dataset_src.path_preprocess.joinpath('aligned', aligned_name)
+                od3d.io.rm_dir(aligned_path)
 
-            ref_sequences[ref_category_instance_ids[0]].write_aligned_cuboid(aligned_name=self.config.aligned_name, cuboid=ref_sequences[ref_category_instance_ids[0]].droid_slam_labeled_cuboid)
+                #if self.config.use_gt_src:
+                droid_slam_labeled_tform_droid_slam = ref_sequences[ref_instance_id].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
+                droid_slam_labeled_cuboid_tform_droid_slam_labeled = ref_sequences[ref_instance_id].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
+                droid_slam_labeled_cuboid_tform_droid_slam = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam_labeled, droid_slam_labeled_tform_droid_slam)
+                #else:
+                #    droid_slam_labeled_cuboid_tform_droid_slam = torch.eye(4).to(device=self.device)
 
-            pts3d = []
-            pts3d_colors = []
+                ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_name, cuboid=ref_sequences[ref_instance_id].droid_slam_labeled_cuboid)
 
-            # pts3d.append(transf3d_broadcast(
-            #     pts3d=ref_sequences[ref_category_instance_ids[0]].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(
-            #         device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam))
-            #
-            # pts3d_colors.append(
-            #     ref_sequences[ref_category_instance_ids[0]].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(
-            #         device=self.device, dtype=dtype))
-            #
-            # ref_vertices_mask = ref_sequences_mesh_ids_for_verts == ref_category_instance_ids[0]
-            # ref_meshes.verts[ref_vertices_mask] = transf3d_broadcast(
-            #     pts3d=ref_meshes.get_verts_with_mesh_id(ref_category_instance_ids[0]),
-            #     transf4x4=droid_slam_labeled_cuboid_tform_droid_slam)
+                pts3d = []
+                pts3d_colors = []
 
-            for src_instance_id_in_category, src_instance_id in enumerate(src_category_instance_ids):
-                # prediction
-                droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][0, src_instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
-                # ground truth
-                # droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_cuboid_ref_tform_droid_slam_obj.to(device=self.device)
+                # pts3d.append(transf3d_broadcast(
+                #     pts3d=ref_sequences[ref_category_instance_ids[0]].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(
+                #         device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam))
+                #
+                # pts3d_colors.append(
+                #     ref_sequences[ref_category_instance_ids[0]].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(
+                #         device=self.device, dtype=dtype))
+                #
+                # ref_vertices_mask = ref_sequences_mesh_ids_for_verts == ref_category_instance_ids[0]
+                # ref_meshes.verts[ref_vertices_mask] = transf3d_broadcast(
+                #     pts3d=ref_meshes.get_verts_with_mesh_id(ref_category_instance_ids[0]),
+                #     transf4x4=droid_slam_labeled_cuboid_tform_droid_slam)
 
-                if accurate_sim[src_instance_id_in_category] or not self.config.aligned_store_only_similar:
-                    src_sequences[src_instance_id].write_aligned_droid_slam_tform_droid_slam(aligned_name=self.config.aligned_name, aligned_droid_slam_tform_droid_slam=droid_slam_labeled_cuboid_tform_droid_slam_instance)
+                for src_instance_id_in_category, src_instance_id in enumerate(src_category_instance_ids):
+                    # prediction
+                    droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][ref_instance_id_in_category, src_instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
+                    # ground truth
+                    # droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_cuboid_ref_tform_droid_slam_obj.to(device=self.device)
 
-                src_vertices_mask = src_sequences_mesh_ids_for_verts == src_instance_id
-                ref_vertices_mask = ref_sequences_mesh_ids_for_verts == ref_category_instance_ids[0]
+                    if accurate_sim[src_instance_id_in_category] or not self.config.aligned_store_only_similar:
+                        src_sequences[src_instance_id].write_aligned_droid_slam_tform_droid_slam(aligned_name=aligned_name, aligned_droid_slam_tform_droid_slam=droid_slam_labeled_cuboid_tform_droid_slam_instance)
 
-                dist_verts_ref = src_sequences[src_instance_id].get_dist_verts_mesh_feats_to_other_sequence(ref_sequences[ref_category_instance_ids[0]]).to(device=self.device, dtype=dtype)
-                dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
-                src_meshes.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes.get_verts_with_mesh_id(src_instance_id), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance)
-                src_meshes.rgb[src_vertices_mask] = ref_meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
+                    src_vertices_mask = src_sequences_mesh_ids_for_verts == src_instance_id
+                    ref_vertices_mask = ref_sequences_mesh_ids_for_verts == ref_instance_id
 
-                #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
-                #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][0, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
+                    dist_verts_ref = src_sequences[src_instance_id].get_dist_verts_mesh_feats_to_other_sequence(ref_sequences[ref_instance_id]).to(device=self.device, dtype=dtype)
+                    dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
+                    src_meshes.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes.get_verts_with_mesh_id(src_instance_id), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance)
+                    src_meshes.rgb[src_vertices_mask] = ref_meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
 
-                pts3d.append(transf3d_broadcast(pts3d=src_sequences[src_instance_id].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance))
+                    #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
+                    #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
 
-                pts3d_colors.append(src_sequences[src_instance_id].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype))
+                    pts3d.append(transf3d_broadcast(pts3d=src_sequences[src_instance_id].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance))
 
-            viewpoints_count = 2
-            category_meshes = src_meshes.get_meshes_with_ids(meshes_ids=src_category_instance_ids)
-            # ref_meshes.get_meshes_with_ids(meshes_ids=[ref_category_instance_ids[0]])
+                    pts3d_colors.append(src_sequences[src_instance_id].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype))
 
-            imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
-            from od3d.cv.visual.draw import add_boolean_table
-            if self.config.use_gt_src:
-                accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
-            else:
-                accurate_table = torch.stack(
-                    [accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
-            from od3d.cv.visual.crop import crop_white_border_from_img
-            for v in range(viewpoints_count):
-                img = crop_white_border_from_img(imgs[v])
-                img = add_boolean_table(img, table=accurate_table, text=['Label (PI/6)', 'Label (PI/18)', 'Sim.', 'Sim. Geo.', 'Sim. Appear.'])
-                results_visual = OD3D_Results()
-                results_visual[f'{category}'] = image_as_wandb_image(img, caption='blub')
-                results_visual.log_with_prefix('aligned')
+                viewpoints_count = 2
+                category_meshes = src_meshes.get_meshes_with_ids(meshes_ids=src_category_instance_ids)
+
+                imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
+                from od3d.cv.visual.draw import add_boolean_table
+                if self.config.use_gt_src:
+                    accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
+                else:
+                    accurate_table = torch.stack(
+                        [accurate_sim, accurate_sim_geo, accurate_sim_appear], dim=0)
+                from od3d.cv.visual.crop import crop_white_border_from_img
+                for v in range(viewpoints_count):
+                    img = crop_white_border_from_img(imgs[v])
+                    img = add_boolean_table(img, table=accurate_table, text=['Label (PI/6)', 'Label (PI/18)', 'Sim.', 'Sim. Geo.', 'Sim. Appear.'])
+                    results_visual = OD3D_Results()
+                    results_visual[f'{category}'] = image_as_wandb_image(img, caption='blub')
+                    results_visual.log_with_prefix('aligned')
 
 
 
