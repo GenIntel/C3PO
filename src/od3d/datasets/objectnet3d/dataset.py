@@ -41,13 +41,24 @@ class ObjectNet3D(OD3D_Dataset):
 
     def filter_list_frames_unique(self, list_frames_unique):
         list_frames_unique = super().filter_list_frames_unique(list_frames_unique)
+
         if self.filter_frames_categorical:
-            list_frames_unique_filtered = []
             logger.info('filtering frames categorical...')
-            for frame_name_unique in tqdm(list_frames_unique):
-                meta = ObjectNet3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=frame_name_unique)
-                if len(set(self.categories).intersection(set(meta.categories))) > 0:
-                    list_frames_unique_filtered.append(frame_name_unique)
+
+            allowed_frames_unique = []
+            allowed_subsets = set([f_unique.split('/')[0] for f_unique in list_frames_unique])
+            for subset in allowed_subsets:
+                for category in self.categories:
+                    logger.info(f'{subset}, {category}')
+                    allowed_frames_unique += self.get_subset_category_names_unique(subset=subset, category=category)
+            list_frames_unique_filtered = list(set.intersection(set(allowed_frames_unique), set(list_frames_unique)))
+
+            # for frame_name_unique in tqdm(list_frames_unique):
+            #     meta = ObjectNet3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=frame_name_unique)
+            #     if meta.category in self.categories: # filter with only first object's category
+            #         list_frames_unique_filtered.append(frame_name_unique)
+            #     #if len(set(self.categories).intersection(set(meta.categories))) > 0:
+            #     #    list_frames_unique_filtered.append(frame_name_unique)
             list_frames_unique = list_frames_unique_filtered
         return list_frames_unique
 
@@ -122,6 +133,11 @@ class ObjectNet3D(OD3D_Dataset):
                 remove_previous = config_preprocess.mask.get('remove_previous', False)
                 self.preprocess_masks(override=override, remove_previous=remove_previous)
 
+            if key == 'subset_category_names_unique' and config_preprocess.subset_category_names_unique.get('enabled', False):
+                override = config_preprocess.subset_category_names_unique.get('override', False)
+                remove_previous = config_preprocess.subset_category_names_unique.get('remove_previous', False)
+                self.preprocess_subset_category_names_unique(override=override, remove_previous=remove_previous)
+
     # def preprocess_cuboids(self, override=False, remove_previous=False):
     #     logger.info('preprocess cuboids...')
     #     perc_axis_coverage = 0.99
@@ -154,6 +170,41 @@ class ObjectNet3D(OD3D_Dataset):
     #
     #             fpath.parent.mkdir(parents=True, exist_ok=True)
     #             save_ply(fpath, verts=meshes.verts, faces=meshes.faces)
+
+    def get_subset_with_dict_nested_frames(self, dict_nested_frames):
+        return ObjectNet3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                           path_preprocess=self.path_preprocess, categories=self.categories,
+                           dict_nested_frames=dict_nested_frames, transform=self.transform,
+                           index_shift=self.index_shift, filter_frames_categorical=self.filter_frames_categorical)
+
+    def preprocess_subset_category_names_unique(self, override=False, remove_previous=False):
+        logger.info('preprocess subset_category_names_unique...')
+        dict_subset_category_names_unique = {}
+        if self.filter_frames_categorical:
+            msg = f'Preprocessing requires to not filter categorically. Set `filter_frames_categorical` to `False`'
+            raise Exception(msg)
+        for frame_id in tqdm(range(len(self))):
+            frame_meta = self.get_item(frame_id).meta
+            if frame_meta.subset not in dict_subset_category_names_unique.keys():
+                dict_subset_category_names_unique[frame_meta.subset] = {}
+            if frame_meta.category not in dict_subset_category_names_unique[frame_meta.subset]:
+                dict_subset_category_names_unique[frame_meta.subset][frame_meta.category] = []
+            dict_subset_category_names_unique[frame_meta.subset][frame_meta.category].append(frame_meta.name_unique)
+
+        for subset in dict_subset_category_names_unique.keys():
+            for category in dict_subset_category_names_unique[subset]:
+                fpath = self.path_preprocess.joinpath('subset_category_names_unique', f'{subset}_{category}.yaml')
+                if not fpath.exists() or override:
+                    od3d.io.write_list_as_yaml(fpath=fpath, _list=dict_subset_category_names_unique[subset][category])
+                else:
+                    logger.warning(f'not overriding {fpath}, set override flag if desired.')
+    def get_subset_category_names_unique(self, subset: str, category: str):
+        fpath = self.path_preprocess.joinpath('subset_category_names_unique', f'{subset}_{category}.yaml')
+        if not fpath.exists():
+            logger.warning('preprocess subset_category_names_unique first ...')
+            return []
+        names_unique = od3d.io.read_list_from_yaml(fpath)
+        return names_unique
 
     def preprocess_masks(self, override=False, remove_previous=False):
         logger.info('preprocess masks...')

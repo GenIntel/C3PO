@@ -159,6 +159,31 @@ def write_str_to_file(fpath: Path, text: str):
     with open(fpath, "w") as file:
         file.write(text)
 
+from typing import List
+import tempfile
+
+def write_dict_as_yaml(fpath: Path, _dict: Dict):
+    conf = OmegaConf.create(_dict)
+    fpath.parent.mkdir(exist_ok=True, parents=True)
+    with open(fpath, 'w') as fp: #  tempfile.NamedTemporaryFile()
+        OmegaConf.save(config=conf, f=fp.name)
+def read_dict_from_yaml(fpath: Path):
+    with open(fpath, 'r') as fp:
+        loaded = OmegaConf.load(fp.name)
+    return loaded
+
+def write_list_as_yaml(fpath: Path, _list: List[str]):
+    conf = OmegaConf.create(_list)
+    fpath.parent.mkdir(exist_ok=True, parents=True)
+    with open(fpath, 'w') as fp: #  tempfile.NamedTemporaryFile()
+        OmegaConf.save(config=conf, f=fp.name)
+
+def read_list_from_yaml(fpath: Path):
+    with open(fpath, 'r') as fp:
+        loaded = OmegaConf.load(fp.name)
+    return loaded
+
+
 def get_obj_from_config(*args, config: DictConfig, **kwargs):
     class_name_split = config.class_name.split('.')
     module_name = '.'.join(class_name_split[:-1])
