@@ -17,7 +17,7 @@ import numpy as np
 class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
     def __init__(self, device: torch.device='cpu', init_dict: Dict[str, Union[torch.Tensor, List]]=None):
         super().__init__()
-        self.mean_blocklist = ['label_gt', 'label_pred', 'rot_diff_rad', 'name_unique', 'item_id', 'cam_tform4x4_obj', 'label_names']
+        self.mean_blocklist = ['label_gt', 'label_pred', 'rot_diff_rad', 'name_unique', 'item_id', 'cam_tform4x4_obj', 'label_names', 'pi6_pr_vs_sim_geo_and_appear']
         self.log_blocklist = ['name_unique', 'item_id', 'cam_tform4x4_obj']
         self.device = device
 

@@ -362,15 +362,16 @@ class NeMo_Align3D(OD3D_Method):
                 category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category]
                 category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category]
 
+            results += category_results.mean()
             category_results_mean = category_results.add_prefix(category)
             category_results_mean = category_results_mean.mean()
             category_results_mean.log()
 
-            if self.config.use_gt_src:
-                category_results[f'rot_diff_rad'] = category_results[f'rot_diff_rad'][None,]
-            category_results[f'pose_sim_geo'] = category_results[f'pose_sim_geo'][None,]
-            category_results[f'pose_sim_appear'] = category_results[f'pose_sim_appear'][None,]
-            results += category_results
+            #if self.config.use_gt_src:
+            #    category_results[f'rot_diff_rad'] = category_results[f'rot_diff_rad'][None,]
+            #category_results[f'pose_sim_geo'] = category_results[f'pose_sim_geo'][None,]
+            #category_results[f'pose_sim_appear'] = category_results[f'pose_sim_appear'][None,]
+            #results += category_results_mean # category_results
             #
             # category_results_ref = OD3D_Results()
             # # excluding diagonal entries as these are predicted transformation between same instance
