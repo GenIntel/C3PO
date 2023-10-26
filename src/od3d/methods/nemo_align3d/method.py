@@ -399,7 +399,7 @@ class NeMo_Align3D(OD3D_Method):
         ref_meshes.rgb = ref_meshes.get_verts_ncds_cat_with_mesh_ids()
         src_meshes.rgb = src_meshes.get_verts_ncds_cat_with_mesh_ids()
 
-        aligned_path = datasets_train.path_preprocess.joinpath('aligned', self.config.aligned_name)
+        aligned_path = dataset_src.path_preprocess.joinpath('aligned', self.config.aligned_name)
         od3d.io.rm_dir(aligned_path)
 
         for cat_id, category in enumerate(categories):
