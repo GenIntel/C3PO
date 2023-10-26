@@ -3,6 +3,7 @@ class_name: ObjectNet3D
 
 modalities:
   - 'rgb'
+  - 'category'
   - 'mask'
   - 'cam_intr4x4'
   - 'cam_tform4x4_obj'
@@ -27,17 +28,24 @@ extract_meta:
   override: False
   remove_previous: False
 
+#categories:
+#  - 'car'
+
 #preprocess:
-#  cuboid:
-#    enabled: False
+#  subset_category_names_unique:
+#    enabled: True
 #    override: False
 #    remove_previous: False
 #  mask:
 #    enabled: False
 #    override: False
 #    remove_previous: False
+#  cuboid:
+#    enabled: False
+#    override: False
+#    remove_previous: False
 
-filter_frames_categorical: False
 
+filter_frames_categorical: True # for preprocessing subset_category_names_unique, set this to False
 
 path_cuboids: '${.path_preprocess}/cuboids'
