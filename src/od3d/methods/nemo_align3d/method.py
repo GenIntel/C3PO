@@ -411,14 +411,6 @@ class NeMo_Align3D(OD3D_Method):
         for cat_id, category in enumerate(categories):
             logger.info(f'category {category}')
 
-            # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6
-            if self.config.use_gt_src:
-                rot_diff_rad = results_diff_log_rot[category][0, :]
-                accurate_pi6 = rot_diff_rad < (math.pi / 6.)
-                accurate_pi18 = rot_diff_rad < (math.pi / 18.)
-            accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][0, :]) > 0.90
-            accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.60
-            accurate_sim = accurate_sim_geo * accurate_sim_appear
 
 
             ref_category_instance_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
@@ -429,6 +421,15 @@ class NeMo_Align3D(OD3D_Method):
 
             for ref_instance_id_in_category, ref_instance_id in enumerate(ref_category_instance_ids):
                 aligned_name = f'{self.config.aligned_name}_r{ref_instance_id_in_category}'
+
+                # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6
+                if self.config.use_gt_src:
+                    rot_diff_rad = results_diff_log_rot[category][ref_instance_id_in_category, :]
+                    accurate_pi6 = rot_diff_rad < (math.pi / 6.)
+                    accurate_pi18 = rot_diff_rad < (math.pi / 18.)
+                accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][ref_instance_id_in_category, :]) > 0.90
+                accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][ref_instance_id_in_category, :]) > 0.60
+                accurate_sim = accurate_sim_geo * accurate_sim_appear
 
                 #if self.config.use_gt_src:
                 droid_slam_labeled_tform_droid_slam = ref_sequences[ref_instance_id].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
@@ -455,6 +456,7 @@ class NeMo_Align3D(OD3D_Method):
                 #     pts3d=ref_meshes.get_verts_with_mesh_id(ref_category_instance_ids[0]),
                 #     transf4x4=droid_slam_labeled_cuboid_tform_droid_slam)
 
+                src_meshes_cloned = src_meshes.get_meshes_with_ids(clone=True)
                 for src_instance_id_in_category, src_instance_id in enumerate(src_category_instance_ids):
                     # prediction
                     droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam, all_pred_ref_tform_src[category][ref_instance_id_in_category, src_instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
@@ -469,8 +471,9 @@ class NeMo_Align3D(OD3D_Method):
 
                     dist_verts_ref = src_sequences[src_instance_id].get_dist_verts_mesh_feats_to_other_sequence(ref_sequences[ref_instance_id]).to(device=self.device, dtype=dtype)
                     dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
-                    src_meshes.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes.get_verts_with_mesh_id(src_instance_id), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance)
-                    src_meshes.rgb[src_vertices_mask] = ref_meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
+
+                    src_meshes_cloned.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes_cloned.get_verts_with_mesh_id(src_instance_id), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance)
+                    src_meshes_cloned.rgb[src_vertices_mask] = ref_meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
 
                     #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                     #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
@@ -480,7 +483,7 @@ class NeMo_Align3D(OD3D_Method):
                     pts3d_colors.append(src_sequences[src_instance_id].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype))
 
                 viewpoints_count = 2
-                category_meshes = src_meshes.get_meshes_with_ids(meshes_ids=src_category_instance_ids)
+                category_meshes = src_meshes_cloned.get_meshes_with_ids(meshes_ids=src_category_instance_ids)
 
                 imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
                 from od3d.cv.visual.draw import add_boolean_table

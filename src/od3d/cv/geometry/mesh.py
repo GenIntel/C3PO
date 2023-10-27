@@ -200,19 +200,21 @@ class Meshes(torch.nn.Module):
         super()._apply(fn)
         self.init_pt3d()
 
-    def get_meshes_with_ids(self, meshes_ids=None):
+    def get_meshes_with_ids(self, meshes_ids=None, clone=False):
         if meshes_ids == None:
             meshes_ids = list(range(len(self)))
-        verts = [self.get_verts_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
-        faces = [self.get_faces_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+
+        verts = [self.get_verts_with_mesh_id(mesh_id=mesh_id, clone=clone) for mesh_id in meshes_ids]
+        faces = [self.get_faces_with_mesh_id(mesh_id=mesh_id, clone=clone) for mesh_id in meshes_ids]
+
         if self.rgb is None:
             rgb = None
         else:
-            rgb = [self.get_rgb_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+            rgb = [self.get_rgb_with_mesh_id(mesh_id=mesh_id, clone=clone) for mesh_id in meshes_ids]
         if self.feats is None:
             feats = None
         else:
-            feats = [self.get_feats_with_mesh_id(mesh_id=mesh_id) for mesh_id in meshes_ids]
+            feats = [self.get_feats_with_mesh_id(mesh_id=mesh_id, clone=clone) for mesh_id in meshes_ids]
         return Meshes(verts=verts, faces=faces, rgb=rgb, feats=feats)
 
     def get_verts_ncds_with_mesh_id(self, mesh_id):
@@ -256,10 +258,17 @@ class Meshes(torch.nn.Module):
     def get_feats_from_faces_with_mesh_id(self, mesh_id):
         # return self.feats_from_faces[self.faces_counts_acc_from_0[mesh_id]: self.faces_counts_acc_from_0[mesh_id+1]]
         return self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)]
-    def get_rgb_with_mesh_id(self, mesh_id):
-        return self.rgb[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
-    def get_verts_with_mesh_id(self, mesh_id):
-        return self.verts[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
+    def get_rgb_with_mesh_id(self, mesh_id, clone=False):
+        if not clone:
+            return self.rgb[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
+        else:
+            return self.rgb[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id + 1]].clone()
+
+    def get_verts_with_mesh_id(self, mesh_id, clone=False):
+        if not clone:
+            return self.verts[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
+        else:
+            return self.verts[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id + 1]].clone()
 
     def get_mesh_ids_for_verts(self):
         mesh_ids = torch.LongTensor(size=(0,)).to(device=self.device)
@@ -267,11 +276,18 @@ class Meshes(torch.nn.Module):
             mesh_ids = torch.cat([mesh_ids, torch.LongTensor([mesh_id] * self.verts_counts[mesh_id]).to(device=self.device)], dim=0)
         return mesh_ids
 
-    def get_feats_with_mesh_id(self, mesh_id):
-        return self.feats[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
+    def get_feats_with_mesh_id(self, mesh_id, clone=False):
+        if not clone:
+            return self.feats[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]]
+        else:
+            return self.feats[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id + 1]].clone()
 
-    def get_faces_with_mesh_id(self, mesh_id):
-        return self.faces[self.faces_counts_acc_from_0[mesh_id]: self.faces_counts_acc_from_0[mesh_id+1]]
+    def get_faces_with_mesh_id(self, mesh_id, clone=False):
+        if not clone:
+            return self.faces[self.faces_counts_acc_from_0[mesh_id]: self.faces_counts_acc_from_0[mesh_id+1]]
+        else:
+            return self.faces[self.faces_counts_acc_from_0[mesh_id]: self.faces_counts_acc_from_0[mesh_id + 1]].clone()
+
     def get_faces_padded_with_mesh_id(self, mesh_id):
         return self.get_tensor_faces_with_pad(tensor=self.get_faces_with_mesh_id(mesh_id), mesh_id=mesh_id)
     def get_tensor_verts_with_pad(self, tensor, mesh_id):
