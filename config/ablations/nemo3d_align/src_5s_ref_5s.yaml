@@ -45,6 +45,6 @@ method:
     use_appear_argmin: False
     global_optimization_steps: 1
     categories: ${categories}
-    aligned_name: 'latest'
+    aligned_name: 'latest_5s_to_5s'
     aligned_store_only_similar: True
 

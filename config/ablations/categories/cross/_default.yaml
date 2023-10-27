@@ -1,28 +1,6 @@
 # @package _global_
-defaults:
-  - override /methods@method.nemo: nemo_incremental
 
-method:
-  nemo:
-    train:
-      val: False
-      split: sequences_separated # 'random' 'sequences_separated' 'seqences_shared'
-      epochs_to_next_test: 1
-      epochs: 10
-      incremental:
-        epoch_frames_count: 5000
-        decay_labeled: 0.5
-        enabled: True
-        sequences_labeled_count:
-        frames_count_max_per_sequence: # 20
-        pseudo_labels_update:
-          use_ground_truth: False
-          epochs_to_next_update: 1
-          count_new_labels_proposed: 10
-          count_new_labels_selected_max: 10
-          multiview_count: 4
-          sim_threshold: -1. # 0.1 # 0.6
-
+ablation_name: ${ablation_name_categories}
 
 val_datasets:
   pascal3d:

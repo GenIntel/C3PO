@@ -1,18 +1,18 @@
 # @package _global_
 defaults:
   - /ablations/categories/cross/_default
-  - /ablations/categories/cross/_add_pascal3d
+  #- /ablations/categories/cross/_add_pascal3d
   - /ablations/categories/cross/_add_objectnet3d
-  - /ablations/categories/cross/_add_co3dv1_10s_zsp_labeled
+  #- /ablations/categories/cross/_add_co3dv1_10s_zsp_labeled
 
-ablation_name: cat1_car
+ablation_name_categories: cat1_suitcase
 
 categories:
 #  - bicycle
 #  - truck
 #  - train
 #  - teddybear
-  - car
+#  - car
 #  - bus
 #  - motorcycle
 #  - keyboard
@@ -33,5 +33,5 @@ categories:
 #  - bottle
 #  - couch
 #  - cup
-#  - suitcase
+  - suitcase
 #  - tv

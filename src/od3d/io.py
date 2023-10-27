@@ -67,13 +67,16 @@ def rm_dir(path: Path):
     except Exception as e:
         logger.warning(e)
 
-def load_hierarchical_config(benchmark="defaults", platform="local", ablation=None, overrides=[]):
+def load_hierarchical_config(benchmark="defaults", platform="local", ablations=[], overrides=[]):
     config_dir_rel = "../../config"
     with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):
-        if ablation is None:
-            cfg = compose(config_name=benchmark, overrides=["platform=" + platform] + overrides)
-        else:
-            cfg = compose(config_name=benchmark, overrides=["+ablations=" + ablation, "platform=" + platform] + overrides)
+        overrides = [f"+ablations/{Path(ablation).parent}={Path(ablation).stem}" for ablation in ablations] + ["platform=" + platform] + overrides
+        cfg = compose(config_name=benchmark, overrides=overrides)
+
+        #if ablations is None:
+        #    cfg = compose(config_name=benchmark, overrides=["platform=" + platform] + overrides)
+        #else:
+        #    cfg = compose(config_name=benchmark, overrides=["+ablations=" + ablation, "platform=" + platform] + overrides)
     return cfg
 
 def read_config_intern(rfpath: Path, benchmark="defaults", platform="local", overrides=[]):

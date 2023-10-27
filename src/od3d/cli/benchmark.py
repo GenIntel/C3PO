@@ -499,13 +499,24 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
     else:
         cfgs = []
         # create one config per ablation
-        ablation_dir = ablations_root_dir.joinpath(ablation)
-        for ablation_file_fpath in ablation_dir.iterdir():
-            if ablation_file_fpath.is_dir():
-                continue
-            ablation_fpath_rel = ablation_file_fpath.relative_to(ablations_root_dir).with_suffix('')
-            if not ablation_fpath_rel.name.startswith("_"):
-                cfgs.append(od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform, ablation=str(ablation_fpath_rel)))
+        ablation_dirs = [ablations_root_dir.joinpath(a) for a in ablation.split(',')]
+        #ablation_dir = ablations_root_dir.joinpath(ablation)
+
+        ablation_fpaths_rel = []
+        for ablation_dir in ablation_dirs:
+            ablation_fpaths_rel.append([])
+            for ablation_file_fpath in ablation_dir.iterdir():
+                if ablation_file_fpath.is_dir():
+                    continue
+                ablation_fpath_rel = ablation_file_fpath.relative_to(ablations_root_dir).with_suffix('')
+                if not ablation_fpath_rel.name.startswith("_"):
+                    ablation_fpaths_rel[-1].append(ablation_fpath_rel)
+        import itertools
+        combinations_ablation_fpaths_rel = list(itertools.product(*ablation_fpaths_rel))
+        for combination_ablation_fpaths_rel in combinations_ablation_fpaths_rel:
+            cfg = od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform, ablations=combination_ablation_fpaths_rel)
+            cfg.ablation_name = '_'.join([cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
+            cfgs.append(cfg)
 
     # create one config per method
     methods_cfgs = []

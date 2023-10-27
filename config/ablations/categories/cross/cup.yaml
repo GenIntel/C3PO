@@ -5,7 +5,7 @@ defaults:
   - /ablations/categories/cross/_add_objectnet3d
   #- /ablations/categories/cross/_add_co3dv1_10s_zsp_labeled
 
-ablation_name: cat1_microwave
+ablation_name_categories: cat1_cup
 
 categories:
 #  - bicycle
@@ -29,10 +29,9 @@ categories:
 #  - book
 #  - backpack
 #  - cellphone # from cellphone on, no zsp categories
-  - microwave
 #  - bench
 #  - bottle
 #  - couch
-#  - cup
+  - cup
 #  - suitcase
 #  - tv
