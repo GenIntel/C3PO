@@ -1,7 +1,18 @@
 # @package _global_
 defaults:
+  - /ablations/categories/cross/_default
+  #- /ablations/categories/cross/_add_pascal3d
+  - /ablations/categories/cross/_add_objectnet3d
+  - /ablations/categories/cross/_add_co3dv1_10s_zsp_labeled
   - override /methods@method.nemo: nemo_incremental
 
+ablation_name: incr_cat1_keyboard
+
+#self:
+#  config:
+#    train:
+#      incremental:
+#        decay_labeled:
 method:
   nemo:
     train:
@@ -23,19 +34,31 @@ method:
           multiview_count: 4
           sim_threshold: -1. # 0.1 # 0.6
 
-
-val_datasets:
-  pascal3d:
-    skip: True
-  objectnet3d:
-    skip: True
-  co3d_zsp:
-    skip: True
-
-test_datasets:
-  pascal3d:
-    skip: True
-  objectnet3d:
-    skip: True
-  co3d_zsp:
-    skip: True
+categories:
+#  - bicycle
+#  - truck
+#  - train
+#  - teddybear
+#  - car
+#  - bus
+#  - motorcycle
+  - keyboard
+#  - handbag
+#  - remote
+#  - airplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+#  - chair
+#  - laptop
+#  - book
+#  - backpack
+#  - cellphone # from cellphone on, no zsp categories
+#  - bench
+#  - bottle
+#  - couch
+#  - cup
+#  - suitcase
+#  - tv

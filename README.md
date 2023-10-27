@@ -114,6 +114,7 @@ This leads to the `cam_tform4x4_obj` for a camera looking straight at the front 
    [0, 1,  0, +dist],  
    [0,  0,  0,     0],
 ]
+This transformation can be understood as `+270` or `-90` degrees rotation around the `x` axis.
 
 Open3d uses as default `cam_tform4x4_obj`:   
 [    [1,  0,  0,     0],  

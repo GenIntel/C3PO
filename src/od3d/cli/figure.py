@@ -12,9 +12,9 @@ from od3d.datasets.co3d import CO3D
 from od3d.cv.visual.show import show_scene
 import torch
 
-from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4_from_transl3d, tform4x4
+from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4_from_transl3d, tform4x4, get_spherical_uniform_tform4x4
 from od3d.datasets.co3d.enum import PCL_SOURCES, CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.mesh import Meshes, Mesh
 from typing import List
 
 @app.command()
@@ -22,24 +22,46 @@ def align3d():
     logging.basicConfig(level=logging.INFO)
     device = 'cuda:0'
     dtype = torch.float
-    co3d = CO3D.create_by_name('co3dv1_10s_zsp_aligned') # 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+    co3d = CO3D.create_by_name('co3d_50s_no_zsp_aligned') # 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
     categories = co3d.categories
     sequences = co3d.get_sequences()
     sequences_unique_names = [seq.name_unique for seq in sequences]
     instances_count = len(sequences)
     map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in sequences_unique_names])
-    categories_count = len(categories)
-    instances_count_per_category = [(map_seq_to_cat == c).sum().item() for c in range(categories_count)]
     instance_ids = torch.LongTensor(list(range(instances_count)))
 
-    mesh_source = CUBOID_SOURCES.DEFAULT
-    meshes = Meshes.load_from_meshes([seq.get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device) for seq in sequences], device=device)
-    sequences_mesh_ids_for_verts = meshes.get_mesh_ids_for_verts()
-
-    rand_category_id = 10
-    rand_category = categories[rand_category_id]
+    category = 'car'
+    rand_category_id = categories.index(category) # 'car', 'chair',
     rand_category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
-    rand_category_rand_instance_ids = random.choice(rand_category_instance_ids)
+    rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=2)
+
+    rand_category_rand_instance_ids = [45, 42]
+    logger.info(f'chosen category is {category}')
+    logger.info(f'chosen ids are {rand_category_rand_instance_ids}')
+
+    mesh_source = CUBOID_SOURCES.DEFAULT
+    import math
+    uniform_objs_tform_obj = get_spherical_uniform_tform4x4(azim_steps=5, azim_max=math.pi - math.pi / 5, elev_min=-math.pi / 2, elev_max=math.pi / 2, elev_steps=3, theta_min=0., theta_max=0., theta_steps=1)
+    mesh1 = sequences[rand_category_rand_instance_ids[0]].get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device)
+    mesh2 = sequences[rand_category_rand_instance_ids[1]].get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device)
+    meshes = [mesh1]
+    tform_count = len(uniform_objs_tform_obj)
+    for t in range(tform_count):
+        uniform_obj_tform_obj = uniform_objs_tform_obj[t]
+        uniform_obj_tform_obj[:3, 3] = 0.
+        uniform_obj_tform_obj[:3, 0] = 1.
+        uniform_obj_tform_obj[:3, 2] = 1. * t
+
+        mesh = Mesh(verts=transf3d_broadcast(pts3d=mesh2.verts.to(device=device, dtype=dtype), transf4x4=uniform_obj_tform_obj),
+                    faces=mesh2.faces, rgb=mesh2.rgb)
+        meshes.append(mesh)
+
+    viewpoints_count = 2
+    show_scene(pts3d=[], pts3d_colors=[], device=device,
+               meshes=meshes,
+               meshes_add_translation=False, pts3d_add_translation=False,
+               return_visualization=False, viewpoints_count=viewpoints_count)
+
 
     mesh1 = None
     mesh2 = None

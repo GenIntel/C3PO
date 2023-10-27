@@ -1,7 +1,7 @@
 import time
 from typing import List
 from od3d.methods.method import OD3D_Method
-from od3d.datasets.dataset import OD3D_Dataset
+from od3d.datasets.dataset import OD3D_Dataset, OD3D_Frame, OD3D_Frames
 from od3d.datasets.co3d.dataset import CO3D
 from omegaconf import DictConfig
 import pytorch3d.transforms
@@ -46,6 +46,44 @@ class SequencePseudoLabel():
     obj_tform4x4_cuboid_front: torch.Tensor
     sim: float
 
+from torch.utils.data import Dataset
+
+
+class SiameseDataset(Dataset):
+    def __init__(self, datasets: List[OD3D_Dataset], datasets_mix: List[float], dataset_len: int, datasets_pseudo_labels: List):
+        self.datasets = datasets
+        self.modalities = datasets[0].modalities
+        self.datasets_lens = torch.Tensor([len(dataset) for dataset in self.datasets])
+        self.datasets_mix = datasets_mix
+        self.dataset_len = dataset_len
+        self.item_id_to_dataset_id = torch.multinomial(torch.Tensor(datasets_mix), num_samples=dataset_len, replacement=True)
+        self.item_id_to_dataset_item_id = (torch.rand(dataset_len) * self.datasets_lens[self.item_id_to_dataset_id]).to(int)
+        self.datasets_pseudo_labels = datasets_pseudo_labels
+
+        # self.train_dict_category_sequences_pseudo_labels[batch.category[b]][batch.sequence_name[b]].obj_tform4x4_cuboid_front.to(device=batch.cam_tform4x4_obj.device))
+    def __len__(self):
+        return self.dataset_len  # length of the data
+    def __getitem__(self, idx):
+        dataset_id = self.item_id_to_dataset_id[idx]
+        item_id = self.item_id_to_dataset_item_id[idx]
+
+        frame: OD3D_Frame = self.datasets[dataset_id][item_id]
+        if self.datasets_pseudo_labels[dataset_id] is not None:
+            device = frame.cam_tform4x4_obj.device
+            frame.cam_tform4x4_obj = tform4x4(frame.cam_tform4x4_obj, self.datasets_pseudo_labels[dataset_id][frame.category][frame.sequence.name].obj_tform4x4_cuboid_front.to(device=device))
+
+        frame.item_id = idx
+        return frame
+
+    def collate_fn(self, frames: List[OD3D_Frame], device='cpu', dtype=torch.float32):
+        frames = OD3D_Frames.get_frames_from_list(frames, modalities=self.modalities, dtype=dtype, device=device)
+        return frames
+
+    def get_subset_with_item_ids(self, item_ids):
+        dataset = SiameseDataset(datasets=self.datasets, datasets_mix=self.datasets_mix, dataset_len=len(item_ids), datasets_pseudo_labels=self.datasets_pseudo_labels)
+        dataset.item_id_to_dataset_id = self.item_id_to_dataset_id[item_ids]
+        dataset.item_id_to_dataset_item_id = self.item_id_to_dataset_item_id[item_ids]
+        return dataset
 
 class NeMo_Incremental(NeMo):
     def __init__(
@@ -66,7 +104,8 @@ class NeMo_Incremental(NeMo):
         if self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed >= len(train_dict_category_sequences_unlabeled_unrolled):
             train_dict_category_sequences_pseudo_labeled_proposed = OD3D_Meta.rollup_flattened_frames(train_dict_category_sequences_unlabeled_unrolled)
         else:
-            train_dict_category_sequences_pseudo_labeled_proposed = OD3D_Meta.rollup_flattened_frames(random.sample(train_dict_category_sequences_unlabeled_unrolled, k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed))
+            train_dict_category_sequences_pseudo_labeled_proposed = OD3D_Meta.rollup_flattened_frames(random.sample(train_dict_category_sequences_unlabeled_unrolled,
+                                                                                                                    k=self.config.train.incremental.pseudo_labels_update.count_new_labels_proposed))
 
         dataset_update = dataset_train.get_subset_by_sequences(dict_category_sequences=train_dict_category_sequences_pseudo_labeled_proposed,
                                                                frames_count_max_per_sequence=self.config.train.incremental.pseudo_labels_update.multiview_count)
@@ -104,13 +143,14 @@ class NeMo_Incremental(NeMo):
                         train_dict_category_sequences_pseudo_labels[batch.category[0]] = {}
                     if batch.category[0] not in train_dict_category_sequences_pseudo_labeled.keys():
                         train_dict_category_sequences_pseudo_labeled[batch.category[0]] = []
-                    train_dict_category_sequences_pseudo_labels[batch.category[0]][batch.sequence_name[0]] = SequencePseudoLabel(obj_tform4x4_cuboid_front=obj_tform4x4_cuboid_front, sim=sim)
+                    train_dict_category_sequences_pseudo_labels[batch.category[0]][batch.sequence_name[0]] = SequencePseudoLabel(obj_tform4x4_cuboid_front=obj_tform4x4_cuboid_front.detach().cpu(), sim=sim)
                     train_dict_category_sequences_pseudo_labeled[batch.category[0]].append(batch.sequence_name[0])
 
         train_dict_category_sequences_pseudo_labeled = OD3D_Meta.unroll_nested_metas(train_dict_category_sequences_pseudo_labeled)
 
         logger.info(f'labeled {len(train_dict_category_sequences_pseudo_labeled)} sequences.')
-        train_dict_category_sequences_pseudo_labeled = OD3D_Meta.rollup_flattened_frames(sorted(train_dict_category_sequences_pseudo_labeled, key=lambda cat_seq: train_dict_category_sequences_pseudo_labels[cat_seq.split('/')[0]][cat_seq.split('/')[1]].sim, reverse=True)[:self.config.train.incremental.pseudo_labels_update.count_new_labels_selected_max])
+        train_dict_category_sequences_pseudo_labeled = OD3D_Meta.rollup_flattened_frames(sorted(train_dict_category_sequences_pseudo_labeled,
+                                                                                                key=lambda cat_seq: train_dict_category_sequences_pseudo_labels[cat_seq.split('/')[0]][cat_seq.split('/')[1]].sim, reverse=True)[:self.config.train.incremental.pseudo_labels_update.count_new_labels_selected_max])
 
         self.train_dict_category_sequences_pseudo_labeled = train_dict_category_sequences_pseudo_labeled
         self.train_dict_category_sequences_pseudo_labels = train_dict_category_sequences_pseudo_labels
@@ -125,28 +165,32 @@ class NeMo_Incremental(NeMo):
 
         results.log_with_prefix(prefix=f'pseudo_labels/{dataset_update.name}')
 
+
     def train(self, datasets_train: Dict[str, CO3D], datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
-
+        self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 
         if 'main' in datasets_val.keys():
-            dataset_train_sub = datasets_train['labeled']
+            dataset_labeled = datasets_train['labeled']
         else:
-            dataset_train_sub, dataset_val_sub = datasets_train['labeled'].get_split(fraction1=1. - self.config.train.val_fraction,
+            dataset_labeled, dataset_val_sub = datasets_train['labeled'].get_split(fraction1=1.-self.config.train.val_fraction,
                                                                                      fraction2=self.config.train.val_fraction,
                                                                                      split=self.config.train.split)
             datasets_val['main'] = dataset_val_sub
 
+        dataset_unlabeled = datasets_train['unlabeled']
+        dataset_labeled.transform = self.transform_train
+        dataset_unlabeled.transform = self.transform_train
 
-        self.train_dict_category_sequences_labeled: Dict[str, List[str]] = {}
+        #self.train_dict_category_sequences_labeled: Dict[str, List[str]] = {}
         self.train_dict_category_sequences_unlabeled: Dict[str, List[str]] = {}
 
         self.train_dict_category_sequences_pseudo_labeled: Dict[str, List[str]] = {}
         self.train_dict_category_sequences_pseudo_labels: Dict[str, Dict[str, SequencePseudoLabel]] = {}
-        for category in datasets_train['labeled'].dict_nested_frames.keys():
-            self.train_dict_category_sequences_labeled[category] = list(dataset_train_sub.dict_nested_frames[category].keys())
+        #for category in datasets_train['labeled'].dict_nested_frames.keys():
+        #    self.train_dict_category_sequences_labeled[category] = list(dataset_train_sub.dict_nested_frames[category].keys())
 
         for category in datasets_train['unlabeled'].dict_nested_frames.keys():
             self.train_dict_category_sequences_unlabeled[category] = list(datasets_train['unlabeled'].dict_nested_frames[category].keys())
@@ -168,17 +212,21 @@ class NeMo_Incremental(NeMo):
                     self.save_checkpoint(path_checkpoint=self.path_checkpoint)
 
             if self.config.train.incremental.enabled and epoch % self.config.train.incremental.pseudo_labels_update.epochs_to_next_update == 0:
-                self.update_pseudo_labels(dataset_train=datasets_train['unlabeled'])
+                self.update_pseudo_labels(dataset_train=dataset_unlabeled)
 
-            self.train_dict_category_sequences_epoch = OD3D_Meta.rollup_flattened_frames(OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_labeled) + OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_pseudo_labeled))
-            train_dataset_sub_sub = dataset_train_sub.get_subset_by_sequences(dict_category_sequences=self.train_dict_category_sequences_epoch,
-                                                                              frames_count_max_per_sequence=self.config.train.incremental.frames_count_max_per_sequence)
+            self.train_dict_category_sequences_epoch = OD3D_Meta.rollup_flattened_frames(OD3D_Meta.unroll_nested_metas(self.train_dict_category_sequences_pseudo_labeled))
 
-            results_epoch = self.train_epoch(dataset=train_dataset_sub_sub)
+            dataset_pseudo_labeled = dataset_unlabeled.get_subset_by_sequences(dict_category_sequences=self.train_dict_category_sequences_epoch,
+                                                                               frames_count_max_per_sequence=self.config.train.incremental.frames_count_max_per_sequence)
+            decay_labeled = self.config.train.incremental.decay_labeled ** epoch
+            train_datset_sub_sub = SiameseDataset(datasets=[dataset_labeled, dataset_pseudo_labeled], datasets_mix=[decay_labeled, 1.0-decay_labeled],
+                                                  dataset_len=self.config.train.incremental.epoch_frames_count, datasets_pseudo_labels=[None, self.train_dict_category_sequences_pseudo_labels])
+            results_epoch = self.train_epoch(dataset=train_datset_sub_sub)
             results_epoch.log_with_prefix('train')
 
         self.load_checkpoint(path_checkpoint=self.path_checkpoint)
 
+    """
     def train_batch(self, batch) -> OD3D_Results:
         for b in range(len(batch)):
             if self.config.train.incremental.enabled:
@@ -186,22 +234,23 @@ class NeMo_Incremental(NeMo):
                     batch.cam_tform4x4_obj[b] = tform4x4(batch.cam_tform4x4_obj[b],
                                                          self.train_dict_category_sequences_pseudo_labels[batch.category[b]][batch.sequence_name[b]].obj_tform4x4_cuboid_front.to(device=batch.cam_tform4x4_obj.device))
         return super().train_batch(batch=batch)
+    """
 
-
+    """
     def inference_batch_multiview(self, batch, return_samples_with_sim=True):
         results = OD3D_Results()
         B = len(batch)
 
-        """
-        # these parameters are used in prev. version
-        batch.cam_tform4x4_obj[:, 2, 3] = 5. * 6. # 5. * 6.
-        batch.cam_tform4x4_obj[:, 0, 3] = 0.
-        batch.cam_tform4x4_obj[:, 1, 3] = 0.
-        batch.cam_intr4x4[:, 0, 0] = 3000.
-        batch.cam_intr4x4[:, 1, 1] = 3000.
-        batch.cam_intr4x4[:, 0, 2] = batch.size[1] / 2.
-        batch.cam_intr4x4[:, 1, 2] = batch.size[0] / 2.
-        """
+        
+        ##  these parameters are used in prev. version
+        # batch.cam_tform4x4_obj[:, 2, 3] = 5. * 6. # 5. * 6.
+        # batch.cam_tform4x4_obj[:, 0, 3] = 0.
+        # batch.cam_tform4x4_obj[:, 1, 3] = 0.
+        # batch.cam_intr4x4[:, 0, 0] = 3000.
+        # batch.cam_intr4x4[:, 1, 1] = 3000.
+        # batch.cam_intr4x4[:, 0, 2] = batch.size[1] / 2.
+        # batch.cam_intr4x4[:, 1, 2] = batch.size[0] / 2.
+        
 
         time_loaded = time.time()
         with torch.no_grad():
@@ -348,6 +397,10 @@ class NeMo_Incremental(NeMo):
         results['name_unique'] = batch.name_unique
 
         return results
+    """
+
+
+
 
 
     """

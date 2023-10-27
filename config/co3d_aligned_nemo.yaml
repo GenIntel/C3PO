@@ -3,6 +3,7 @@ defaults:
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: co3d
   - datasets@train_datasets.labeled: co3d_50s_no_zsp_aligned # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
+  - datasets@train_datasets.unlabeled: co3d_50s_no_zsp # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
   - datasets@val_datasets.main: co3d_5s_no_zsp_labeled
   - datasets@val_datasets.co3d_zsp: co3dv1_10s_zsp_labeled
   - datasets@val_datasets.pascal3d: pascal3d_val
@@ -95,6 +96,8 @@ method:
 train_datasets:
   labeled:
     aligned_name: ${aligned_name}
+    categories: ${categories}
+  unlabeled:
     categories: ${categories}
 
 val_datasets:

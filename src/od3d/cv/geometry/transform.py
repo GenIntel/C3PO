@@ -132,6 +132,28 @@ def transf4x4_from_pos_and_theta(pos, theta):
     #return transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
 
 
+def get_spherical_uniform_tform4x4(azim_min=-math.pi, azim_max=math.pi, azim_steps=5, elev_min=-math.pi/2, elev_max=math.pi/2, elev_steps=5, theta_min=-math.pi/2, theta_max=math.pi/2, theta_steps=5, device='cpu'):
+    azim = torch.linspace(start=azim_min, end=azim_max, steps=azim_steps).to(device=device)  # 12
+    elev = torch.linspace(start=elev_min, end=elev_max, steps=elev_steps).to(device=device)  # start=-torch.pi / 6, end=torch.pi / 3, steps=4
+    theta = torch.linspace(start=theta_min, end=theta_max, steps=theta_steps).to(device=device)  # -torch.pi / 6, end=torch.pi / 6, steps=3
+
+    # dist = torch.linspace(start=eval(config_sample.uniform.dist.min), end=eval(config_sample.uniform.dist.max), steps=config_sample.uniform.dist.steps).to(
+    #    device=self.device)
+    dist = torch.linspace(start=1., end=1., steps=1).to(device=device)
+
+    azim_shape = azim.shape
+    elev_shape = elev.shape
+    theta_shape = theta.shape
+    dist_shape = dist.shape
+    in_shape = azim_shape + elev_shape + theta_shape + dist_shape
+    azim = azim[:, None, None, None].expand(in_shape).reshape(-1)
+    elev = elev[None, :, None, None].expand(in_shape).reshape(-1)
+    theta = theta[None, None, :, None].expand(in_shape).reshape(-1)
+    dist = dist[None, None, None, :].expand(in_shape).reshape(-1)
+    cams_multiview_tform4x4_cuboid = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+
+    return cams_multiview_tform4x4_cuboid
+
 def get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=1, dist: float=1., device=None, dtype=None):
     if viewpoints_count == 1:
         # front:

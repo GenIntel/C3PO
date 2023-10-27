@@ -111,45 +111,45 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None, 
     #logger.info(tabulate(rows, headers=cols, tablefmt='github',  floatfmt=".3f")) # 'github', 'tsv'
     #logger.info(tabulate(rows, headers=cols, tablefmt='html',  floatfmt=".3f")) # 'github', 'tsv'
 
-    cols_renames = {
-        'name': "Run",
-        'test/pascal3d_test/pose/acc_pi6': "Acc. Pi/6. [%]",
-        'test/pascal3d_test/pose/acc_pi18': "Acc. Pi/18. [%]",
-        'test/pascal3d_test/pose/err_median': "Median [deg.]",
-        'test/pascal3d_test/pose/err_mean': "Mean [deg.]",
-        'test/pascal3d_test/time_pose': 'Inference Duration [s]',
-        'test/co3d_5s_test/pose/acc_pi6': "Acc. Pi/6. [%]",
-        'test/co3d_5s_test/pose/acc_pi18': "Acc. Pi/18. [%]",
-        'test/co3d_5s_test/pose/err_median': "Median [deg.]",
-        'test/co3d_5s_test/pose/err_mean': "Mean [deg.]",
-        'test/co3d_5s_test/time_pose': 'Duration [s]',
-        'test/co3d_50s_test/pose/acc_pi6': "Acc. Pi/6. [%]",
-        'test/co3d_50s_test/pose/acc_pi18': "Acc. Pi/18. [%]",
-        'test/co3d_50s_test/pose/err_median': "Median [deg.]",
-        'test/co3d_50s_test/pose/err_mean': "Mean [deg.]",
-        'test/co3d_50s_test/time_pose': 'Inference Duration [s]',
-        'test/co3d/pose/acc_pi6': "Acc. Pi/6. [%]",
-        'test/co3d/pose/acc_pi18': "Acc. Pi/18. [%]",
-        'test/co3d/pose/err_median': "Median [deg.]",
-        'test/co3d/pose/err_mean': "Mean [deg.]",
-        'test/co3d/time_pose': 'Inference Duration [s]',
-    }
-
-    cols_scales = {
-        'test/pascal3d_test/pose/acc_pi6': 100.,
-        'test/pascal3d_test/pose/acc_pi18': 100.,
-        'test/co3d_5s_test/pose/acc_pi6': 100.,
-        'test/co3d_5s_test/pose/acc_pi18': 100.,
-        'test/co3d_50s_test/pose/acc_pi6': 100.,
-        'test/co3d_50s_test/pose/acc_pi18': 100.,
-        'test/co3d/pose/acc_pi6': 100.,
-        'test/co3d/pose/acc_pi18': 100.,
-    }
-
-    for col in cols_scales.keys():
-        if col in df:
-            df[col] = df[col] * cols_scales[col]
-    df = df.rename(columns=cols_renames)
+    # cols_renames = {
+    #     'name': "Run",
+    #     'test/pascal3d_test/pose/acc_pi6': "Acc. Pi/6. [%]",
+    #     'test/pascal3d_test/pose/acc_pi18': "Acc. Pi/18. [%]",
+    #     'test/pascal3d_test/pose/err_median': "Median [deg.]",
+    #     'test/pascal3d_test/pose/err_mean': "Mean [deg.]",
+    #     'test/pascal3d_test/time_pose': 'Inference Duration [s]',
+    #     'test/co3d_5s_test/pose/acc_pi6': "Acc. Pi/6. [%]",
+    #     'test/co3d_5s_test/pose/acc_pi18': "Acc. Pi/18. [%]",
+    #     'test/co3d_5s_test/pose/err_median': "Median [deg.]",
+    #     'test/co3d_5s_test/pose/err_mean': "Mean [deg.]",
+    #     'test/co3d_5s_test/time_pose': 'Duration [s]',
+    #     'test/co3d_50s_test/pose/acc_pi6': "Acc. Pi/6. [%]",
+    #     'test/co3d_50s_test/pose/acc_pi18': "Acc. Pi/18. [%]",
+    #     'test/co3d_50s_test/pose/err_median': "Median [deg.]",
+    #     'test/co3d_50s_test/pose/err_mean': "Mean [deg.]",
+    #     'test/co3d_50s_test/time_pose': 'Inference Duration [s]',
+    #     'test/co3d/pose/acc_pi6': "Acc. Pi/6. [%]",
+    #     'test/co3d/pose/acc_pi18': "Acc. Pi/18. [%]",
+    #     'test/co3d/pose/err_median': "Median [deg.]",
+    #     'test/co3d/pose/err_mean': "Mean [deg.]",
+    #     'test/co3d/time_pose': 'Inference Duration [s]',
+    # }
+    #
+    # cols_scales = {
+    #     'test/pascal3d_test/pose/acc_pi6': 100.,
+    #     'test/pascal3d_test/pose/acc_pi18': 100.,
+    #     'test/co3d_5s_test/pose/acc_pi6': 100.,
+    #     'test/co3d_5s_test/pose/acc_pi18': 100.,
+    #     'test/co3d_50s_test/pose/acc_pi6': 100.,
+    #     'test/co3d_50s_test/pose/acc_pi18': 100.,
+    #     'test/co3d/pose/acc_pi6': 100.,
+    #     'test/co3d/pose/acc_pi18': 100.,
+    # }
+    #
+    # for col in cols_scales.keys():
+    #     if col in df:
+    #         df[col] = df[col] * cols_scales[col]
+    # df = df.rename(columns=cols_renames)
 
 
     return df
