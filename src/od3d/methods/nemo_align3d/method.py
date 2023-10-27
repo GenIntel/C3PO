@@ -399,7 +399,14 @@ class NeMo_Align3D(OD3D_Method):
         ref_meshes.rgb = ref_meshes.get_verts_ncds_cat_with_mesh_ids()
         src_meshes.rgb = src_meshes.get_verts_ncds_cat_with_mesh_ids()
 
+        ### VISUALIZATIONS
+        ref_instance_ids = torch.LongTensor(list(range(ref_instances_count)))
+        src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
 
+        for ref_instance_id_in_category in range(max(ref_instances_count_per_category)):
+            aligned_name = f'{self.config.aligned_name}_r{ref_instance_id_in_category}'
+            aligned_path = dataset_src.path_preprocess.joinpath('aligned', aligned_name)
+            od3d.io.rm_dir(aligned_path)
 
         for cat_id, category in enumerate(categories):
             logger.info(f'category {category}')
@@ -413,9 +420,6 @@ class NeMo_Align3D(OD3D_Method):
             accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][0, :]) > 0.60
             accurate_sim = accurate_sim_geo * accurate_sim_appear
 
-            ### VISUALIZATIONS
-            ref_instance_ids = torch.LongTensor(list(range(ref_instances_count)))
-            src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
 
             ref_category_instance_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
             if self.config.use_only_first_reference:
@@ -425,8 +429,6 @@ class NeMo_Align3D(OD3D_Method):
 
             for ref_instance_id_in_category, ref_instance_id in enumerate(ref_category_instance_ids):
                 aligned_name = f'{self.config.aligned_name}_r{ref_instance_id_in_category}'
-                aligned_path = dataset_src.path_preprocess.joinpath('aligned', aligned_name)
-                od3d.io.rm_dir(aligned_path)
 
                 #if self.config.use_gt_src:
                 droid_slam_labeled_tform_droid_slam = ref_sequences[ref_instance_id].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
