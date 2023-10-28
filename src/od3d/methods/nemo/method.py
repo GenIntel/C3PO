@@ -109,6 +109,7 @@ class NeMo(OD3D_Method):
         # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
         self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
         self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes)
+        logger.info(f'loading meshes from following fpaths: {self.fpaths_meshes}...')
         # self.meshes.show()
         self.verts_count_max = self.meshes.verts_counts_max
         self.mem_verts_feats_count = len(config.categories) * self.verts_count_max
@@ -357,7 +358,7 @@ class NeMo(OD3D_Method):
         xy = torch.stack(
             torch.meshgrid(torch.arange(W, device=self.device), torch.arange(H, device=self.device),
                            indexing='xy'), dim=0)  # HxW
-        prob_noise = (1. - 1. * resize(feats2d_net_mask, scale_factor=1. / self.down_sample_rate)).flatten(1)
+        prob_noise = (1. - 1. * resize(feats2d_net_mask, scale_factor=1. / self.down_sample_rate)).abs().flatten(1)
         prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
         noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise)].permute(1, 2, 0)
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
@@ -636,16 +637,14 @@ class NeMo(OD3D_Method):
 
             results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,]) / B
 
-            cams_multiview_tform4x4_obj, cams_multiview_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
-                                                                                   cam_intr4x4=batch.cam_intr4x4[:1],
-                                                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj[:1],
-                                                                                   feats2d_net=feats2d_net[:1],
-                                                                                   categories_ids=pred_class_ids[:1],
-                                                                                   feats2d_net_mask=feats2d_net_mask[:1])
-            # multiview adaption
-            objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(batch.cam_tform4x4_obj[:1])[:, None], cams_multiview_tform4x4_obj)
-            b_cams_multiview_tform4x4_obj = tform4x4_broadcast(batch.cam_tform4x4_obj[:, None], objs_multiview_tform4x4_cuboid_front)
-            b_cams_multiview_intr4x4 = cams_multiview_intr4x4.expand(*b_cams_multiview_tform4x4_obj.shape)
+            b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
+                                                                                   cam_intr4x4=batch.cam_intr4x4, #[:1],
+                                                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj, #[:1],
+                                                                                   feats2d_net=feats2d_net, #[:1],
+                                                                                   categories_ids=pred_class_ids, #[:1],
+                                                                                   feats2d_net_mask=feats2d_net_mask, #[:1],
+                                                                                   multiview=True)
+
 
             #  OPTION A: Use 2d gradient of rendered features
             sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
@@ -667,6 +666,7 @@ class NeMo(OD3D_Method):
 
             mesh_cam_loss_min_val, mesh_cam_loss_min_id = mesh_multiple_cams_loss.min(dim=1)
 
+            objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(batch.cam_tform4x4_obj[:1])[:, None], b_cams_multiview_tform4x4_obj)
             obj_tform4x4_cuboid_front = objs_multiview_tform4x4_cuboid_front[0, mesh_cam_loss_min_id[0]]
 
             #cam_tform4x4_obj = b_cams_multiview_tform4x4_obj[:, mesh_cam_loss_min_id].permute(2, 3, 0, 1).diagonal(
@@ -1177,79 +1177,114 @@ class NeMo(OD3D_Method):
             return sim
 
     def get_samples(self, config_sample: DictConfig, cam_intr4x4: torch.Tensor, cam_tform4x4_obj: torch.Tensor,
-                    feats2d_net: torch.Tensor, categories_ids: torch.Tensor, feats2d_net_mask: torch.Tensor=None):
-        B = len(feats2d_net)
-        if config_sample.method == 'uniform':
-            azim = torch.linspace(start=eval(config_sample.uniform.azim.min), end=eval(config_sample.uniform.azim.max), steps=config_sample.uniform.azim.steps).to(
-                device=self.device)  # 12
-            elev = torch.linspace(start=eval(config_sample.uniform.elev.min), end=eval(config_sample.uniform.elev.max), steps=config_sample.uniform.elev.steps).to(
-                device=self.device)  # start=-torch.pi / 6, end=torch.pi / 3, steps=4
-            theta = torch.linspace(start=eval(config_sample.uniform.theta.min), end=eval(config_sample.uniform.theta.max),
-                                   steps=config_sample.uniform.theta.steps).to(
-                device=self.device)  # -torch.pi / 6, end=torch.pi / 6, steps=3
+                    feats2d_net: torch.Tensor, categories_ids: torch.Tensor, feats2d_net_mask: torch.Tensor=None, multiview=False):
 
-            #dist = torch.linspace(start=eval(config_sample.uniform.dist.min), end=eval(config_sample.uniform.dist.max), steps=config_sample.uniform.dist.steps).to(
-            #    device=self.device)
-            dist = torch.linspace(start=1., end=1., steps=1).to(device=self.device)
+        if multiview:
+            b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=config_sample,
+                                                                                       cam_intr4x4=cam_intr4x4[:1],
+                                                                                       cam_tform4x4_obj=cam_tform4x4_obj[
+                                                                                                        :1],
+                                                                                       feats2d_net=feats2d_net[:1],
+                                                                                       categories_ids=categories_ids[
+                                                                                                      :1],
+                                                                                       feats2d_net_mask=feats2d_net_mask[
+                                                                                                        :1])
+
+            # multiview adaption
+            if config_sample.method == 'uniform':
+                pass
+            elif config_sample.method == 'epnp3d2d':
+                pass
+            else:
+                raise NotImplementedError
+
+            # note: not alignment of droid slam may include scale, therefore remove this scale.
+            # note: projection does not change as we scale the depth z to the object as well
+            _scale = cam_tform4x4_obj[:1, 2, 3] / b_cams_multiview_tform4x4_obj[:, 2, 3]
+            b_cams_multiview_tform4x4_obj[:, :3] = b_cams_multiview_tform4x4_obj[:, :3] * _scale
+
+            objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj[:1])[:, None],
+                                                                      b_cams_multiview_tform4x4_obj)
+            b_cams_multiview_tform4x4_obj = tform4x4_broadcast(cam_tform4x4_obj[:, None],
+                                                               objs_multiview_tform4x4_cuboid_front)
+            b_cams_multiview_intr4x4 = b_cams_multiview_intr4x4.expand(*b_cams_multiview_tform4x4_obj.shape)
+        else:
+
+            B = len(feats2d_net)
+            if config_sample.method == 'uniform':
+                azim = torch.linspace(start=eval(config_sample.uniform.azim.min), end=eval(config_sample.uniform.azim.max), steps=config_sample.uniform.azim.steps).to(
+                    device=self.device)  # 12
+                elev = torch.linspace(start=eval(config_sample.uniform.elev.min), end=eval(config_sample.uniform.elev.max), steps=config_sample.uniform.elev.steps).to(
+                    device=self.device)  # start=-torch.pi / 6, end=torch.pi / 3, steps=4
+                theta = torch.linspace(start=eval(config_sample.uniform.theta.min), end=eval(config_sample.uniform.theta.max),
+                                       steps=config_sample.uniform.theta.steps).to(
+                    device=self.device)  # -torch.pi / 6, end=torch.pi / 6, steps=3
+
+                #dist = torch.linspace(start=eval(config_sample.uniform.dist.min), end=eval(config_sample.uniform.dist.max), steps=config_sample.uniform.dist.steps).to(
+                #    device=self.device)
+                dist = torch.linspace(start=1., end=1., steps=1).to(device=self.device)
 
 
-            azim_shape = azim.shape
-            elev_shape = elev.shape
-            theta_shape = theta.shape
-            dist_shape = dist.shape
-            in_shape = azim_shape + elev_shape + theta_shape + dist_shape
-            azim = azim[:, None, None, None].expand(in_shape).reshape(-1)
-            elev = elev[None, :, None, None].expand(in_shape).reshape(-1)
-            theta = theta[None, None, :, None].expand(in_shape).reshape(-1)
-            dist = dist[None, None, None, :].expand(in_shape).reshape(-1)
-            cams_multiview_tform4x4_cuboid = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
+                azim_shape = azim.shape
+                elev_shape = elev.shape
+                theta_shape = theta.shape
+                dist_shape = dist.shape
+                in_shape = azim_shape + elev_shape + theta_shape + dist_shape
+                azim = azim[:, None, None, None].expand(in_shape).reshape(-1)
+                elev = elev[None, :, None, None].expand(in_shape).reshape(-1)
+                theta = theta[None, None, :, None].expand(in_shape).reshape(-1)
+                dist = dist[None, None, None, :].expand(in_shape).reshape(-1)
+                cams_multiview_tform4x4_cuboid = transf4x4_from_spherical(azim=azim, elev=elev, theta=theta, dist=dist)
 
-            C = len(cams_multiview_tform4x4_cuboid)
+                C = len(cams_multiview_tform4x4_cuboid)
 
-            b_cams_multiview_tform4x4_obj = cams_multiview_tform4x4_cuboid[None,].repeat(B, 1, 1, 1)
+                b_cams_multiview_tform4x4_obj = cams_multiview_tform4x4_cuboid[None,].repeat(B, 1, 1, 1)
 
-            # assumption 1: distance translation to object is known
-            #b_cams_multiview_tform4x4_obj[:, :, 2, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
-            # logger.info(f'dist {batch.cam_tform4x4_obj[:, 2, 3]}')
-            # assumption 2: translation to object is known
-            b_cams_multiview_tform4x4_obj[:, :, :3, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]
+                # assumption 1: distance translation to object is known
+                #b_cams_multiview_tform4x4_obj[:, :, 2, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, 2, 3]
+                # logger.info(f'dist {batch.cam_tform4x4_obj[:, 2, 3]}')
+                # assumption 2: translation to object is known
+                b_cams_multiview_tform4x4_obj[:, :, :3, 3] = cam_tform4x4_obj[:, None].repeat(1, C, 1, 1)[:, :, :3, 3]
 
-            b_cams_multiview_intr4x4 = cam_intr4x4[:, None].repeat(1, C, 1, 1)
+                b_cams_multiview_intr4x4 = cam_intr4x4[:, None].repeat(1, C, 1, 1)
 
-        elif config_sample.method == 'epnp3d2d':
+            elif config_sample.method == 'epnp3d2d':
 
-            nearest_verts3d, nearest_verts2d, prob_well_corresp = self.get_nearest_corresp2d3d(feats2d_net=feats2d_net,
-                                                                                               meshes_ids=categories_ids,
-                                                                                               feats2d_net_mask=feats2d_net_mask)
-            H, W = feats2d_net.shape[2:]
-            prob_well_corresp = prob_well_corresp.flatten(1)
-            if (prob_well_corresp.sum(dim=-1) == 0).any():
-                logger.warning(f"No texture similarity is larger than the clutter similarity")
-            prob_well_corresp[prob_well_corresp.sum(dim=-1) == 0] = 1.
+                nearest_verts3d, nearest_verts2d, prob_well_corresp = self.get_nearest_corresp2d3d(feats2d_net=feats2d_net,
+                                                                                                   meshes_ids=categories_ids,
+                                                                                                   feats2d_net_mask=feats2d_net_mask)
+                H, W = feats2d_net.shape[2:]
+                prob_well_corresp = prob_well_corresp.flatten(1)
+                if (prob_well_corresp.sum(dim=-1) == 0).any():
+                    logger.warning(f"No texture similarity is larger than the clutter similarity")
+                prob_well_corresp[prob_well_corresp.sum(dim=-1) == 0] = 1.
 
-            K = config_sample.epnp3d2d.count_cams
-            N = config_sample.epnp3d2d.count_pts
+                K = config_sample.epnp3d2d.count_cams
+                N = config_sample.epnp3d2d.count_pts
 
-            masks_in_ids = torch.multinomial(prob_well_corresp, num_samples=K * N).reshape(-1, K, N)
+                masks_in_ids = torch.multinomial(prob_well_corresp, num_samples=K * N).reshape(-1, K, N)
 
-            masks_in = torch.zeros(size=(B, K, H * W),
-                                   device=self.device, dtype=torch.bool)
-            for b in range(B):
-                for k in range(K):
-                    masks_in[b, k, masks_in_ids[b, k]] = True
-            masks_in = masks_in.reshape(B, K, H, W)
-            b_cams_multiview_tform4x4_obj = batchwise_fit_se3_to_corresp_3d_2d_and_masks(masks_in=masks_in,
-                                                                                         pts1=nearest_verts3d,
-                                                                                         pxl2=nearest_verts2d,
-                                                                                         proj_mat=cam_intr4x4[
-                                                                                                  :, :2,
-                                                                                                  :3] / self.down_sample_rate,
-                                                                                         method="cpu-epnp")
-            b_cams_multiview_intr4x4 = cam_intr4x4[:, None].repeat(1, K, 1, 1)
-            b_cams_multiview_tform4x4_obj[b_cams_multiview_tform4x4_obj.flatten(2).isinf().any(dim=2), :,
-            :] = torch.eye(4, device=b_cams_multiview_tform4x4_obj.device)
-            b_cams_multiview_tform4x4_obj[(b_cams_multiview_tform4x4_obj[:, :, 3, :3] != 0.).any(dim=-1), :,
-            :] = torch.eye(4, device=b_cams_multiview_tform4x4_obj.device)
+                masks_in = torch.zeros(size=(B, K, H * W),
+                                       device=self.device, dtype=torch.bool)
+                for b in range(B):
+                    for k in range(K):
+                        masks_in[b, k, masks_in_ids[b, k]] = True
+                masks_in = masks_in.reshape(B, K, H, W)
+                b_cams_multiview_tform4x4_obj = batchwise_fit_se3_to_corresp_3d_2d_and_masks(masks_in=masks_in,
+                                                                                             pts1=nearest_verts3d,
+                                                                                             pxl2=nearest_verts2d,
+                                                                                             proj_mat=cam_intr4x4[
+                                                                                                      :, :2,
+                                                                                                      :3] / self.down_sample_rate,
+                                                                                             method="cpu-epnp")
+                b_cams_multiview_intr4x4 = cam_intr4x4[:, None].repeat(1, K, 1, 1)
+                b_cams_multiview_tform4x4_obj[b_cams_multiview_tform4x4_obj.flatten(2).isinf().any(dim=2), :,
+                :] = torch.eye(4, device=b_cams_multiview_tform4x4_obj.device)
+                b_cams_multiview_tform4x4_obj[(b_cams_multiview_tform4x4_obj[:, :, 3, :3] != 0.).any(dim=-1), :,
+                :] = torch.eye(4, device=b_cams_multiview_tform4x4_obj.device)
+
+            else:
+                raise NotImplementedError
 
         return b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4
 

@@ -943,8 +943,8 @@ class CO3D_Sequence():
             #from od3d.cv.visual.show import show_scene
             #show_scene(pts3d=[obj_cams_traj_a[50:], obj_cams_traj_b[50:]])
 
-            from od3d.cv.geometry.fit.tform4x4 import fit_tform4x4_with_matches
-            a_src_tform_b_src = fit_tform4x4_with_matches(pts=obj_cams_traj_b[obj_cams_traj_mask], pts_ref=obj_cams_traj_a[obj_cams_traj_mask], estimate_scale=estimate_scale)
+            from od3d.cv.geometry.fit.tform4x4 import fit_tform4x4_with_matches3d3d
+            a_src_tform_b_src = fit_tform4x4_with_matches3d3d(pts=obj_cams_traj_b[obj_cams_traj_mask], pts_ref=obj_cams_traj_a[obj_cams_traj_mask], estimate_scale=estimate_scale)
 
             fpath.parent.mkdir(parents=True, exist_ok=True)
             torch.save(a_src_tform_b_src.detach().cpu(), fpath)

@@ -41,7 +41,7 @@ def align3d():
 
     mesh_source = CUBOID_SOURCES.DEFAULT
     import math
-    uniform_objs_tform_obj = get_spherical_uniform_tform4x4(azim_steps=5, azim_max=math.pi - math.pi / 5, elev_min=-math.pi / 2, elev_max=math.pi / 2, elev_steps=3, theta_min=0., theta_max=0., theta_steps=1)
+    uniform_objs_tform_obj = get_spherical_uniform_tform4x4(azim_steps=3, azim_max=math.pi - math.pi / 3, elev_min=-math.pi / 2, elev_max=-math.pi / 2, elev_steps=1, theta_min=0., theta_max=0., theta_steps=1)
     mesh1 = sequences[rand_category_rand_instance_ids[0]].get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device)
     mesh2 = sequences[rand_category_rand_instance_ids[1]].get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device)
     meshes = [mesh1]
@@ -49,10 +49,10 @@ def align3d():
     for t in range(tform_count):
         uniform_obj_tform_obj = uniform_objs_tform_obj[t]
         uniform_obj_tform_obj[:3, 3] = 0.
-        uniform_obj_tform_obj[:3, 0] = 1.
-        uniform_obj_tform_obj[:3, 2] = 1. * t
+        uniform_obj_tform_obj[0, 3] = 1.
+        uniform_obj_tform_obj[2, 3] = 1. * (t - tform_count // 2)
 
-        mesh = Mesh(verts=transf3d_broadcast(pts3d=mesh2.verts.to(device=device, dtype=dtype), transf4x4=uniform_obj_tform_obj),
+        mesh = Mesh(verts=transf3d_broadcast(pts3d=mesh2.verts.to(device=device, dtype=dtype), transf4x4=uniform_obj_tform_obj.to(device=device)),
                     faces=mesh2.faces, rgb=mesh2.rgb)
         meshes.append(mesh)
 

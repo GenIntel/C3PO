@@ -15,6 +15,19 @@ sequences_count_max_per_category: 50
 #    enabled: True
 #    override: False
 
+#frames_count_max_per_sequence: 1
+#modalities:
+#    - 'size'
+#    - 'category'
+#    - 'cam_intr4x4'
+#    - 'cam_tform4x4_obj'
+#    - 'category'
+#    - 'rgb'
+#    - 'mask'
+#    - 'sequence_name'
+#    - 'sequence'
+#    - 'mesh'
+
 cuboid_source: 'default' # 'default' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
 cam_tform_obj_source: 'droid_slam' # 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
 

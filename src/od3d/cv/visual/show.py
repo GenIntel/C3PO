@@ -251,13 +251,16 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     if return_visualization is False and fpath is None:
         if os.environ.get('DISPLAY'):
             open3d.visualization.draw(geometries)
-            #open3d.visualization.draw_plotly(geometries)
+            #geometries_list = [geometry['geometry'] for geometry in geometries]
+            #open3d.visualization.draw_plotly(geometries_list, mesh_show_wireframe=False)
         else:
             logger.warning('could not visualize with open3d, because env DISPLAY not set, try `export DISPLAY=:0.0;`')
             return
     else:
         if os.environ.get('DISPLAY'):
             vis = o3d.visualization.Visualizer()
+            #opt = vis.get_render_option()
+            #opt.background_color = np.asarray([0, 0, 0])
             vis.create_window(visible=False) #, height=720, width=1280)
 
             geometries_vertices_orig = []

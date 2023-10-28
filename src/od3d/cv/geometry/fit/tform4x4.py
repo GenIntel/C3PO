@@ -8,7 +8,7 @@ from od3d.cv.geometry.transform import transf3d_broadcast
 from od3d.cv.geometry.transform import transf3d_broadcast
 
 
-def fit_tform4x4_with_matches(pts: torch.Tensor, pts_ref: torch.Tensor, estimate_scale=True):
+def fit_tform4x4_with_matches3d3d(pts: torch.Tensor, pts_ref: torch.Tensor, estimate_scale=True):
     """
     Args:
         pts (torch.Tensor): ...xNxF
@@ -28,7 +28,6 @@ def fit_tform4x4_with_matches(pts: torch.Tensor, pts_ref: torch.Tensor, estimate
 
     pts_ref_tform4x4_pts = pts_ref_tform4x4_pts.reshape(*pts.shape[:-2], 4, 4)
     return pts_ref_tform4x4_pts
-
 
 def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor):
     """
@@ -53,15 +52,17 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
     pts_ref_sampled = batched_index_select(index=pts_ref_ids.flatten(-2), input=pts_ref).view(pts_ref_ids.shape + (-1,))
 
     ## start single batch dimension (= flatten proposals)
+    #
+    # S = corresponding_points_alignment(pts_sampled.view(-1, S, F), pts_ref_sampled.view(-1, S, F), weights=None,
+    #                                    estimate_scale=True)
+    #
+    # pts_ref_tform4x4_pts = torch.zeros(size=(pts_sampled.shape[:-2].numel(), 4, 4)).to(
+    #     device=device)
+    # pts_ref_tform4x4_pts[..., 3, 3] = 1.
+    # pts_ref_tform4x4_pts[..., :3, :3] = S.R.permute(0, 2, 1) * S.s[..., None, None]
+    # pts_ref_tform4x4_pts[..., :3, 3] = S.T
 
-    S = corresponding_points_alignment(pts_sampled.view(-1, S, F), pts_ref_sampled.view(-1, S, F), weights=None,
-                                       estimate_scale=True)
-
-    pts_ref_tform4x4_pts = torch.zeros(size=(pts_sampled.shape[:-2].numel(), 4, 4)).to(
-        device=device)
-    pts_ref_tform4x4_pts[..., 3, 3] = 1.
-    pts_ref_tform4x4_pts[..., :3, :3] = S.R.permute(0, 2, 1) * S.s[..., None, None]
-    pts_ref_tform4x4_pts[..., :3, 3] = S.T
+    pts_ref_tform4x4_pts = fit_tform4x4_with_matches3d3d(pts=pts_sampled, pts_ref=pts_ref_sampled, estimate_scale=True)
 
     pts_ref_tform_pts_sampled = transf3d_broadcast(pts3d=pts_sampled, transf4x4=pts_ref_tform4x4_pts[:, None])
 
