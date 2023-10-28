@@ -96,8 +96,7 @@ def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, con
         metric_df_std_over_refs = metric_df.groupby(COLUMN_CATEGORY)[metric].std(numeric_only=False) * metric_scale
         metric_df_std_over_refs[COLUMN_CATEGORY_MEAN] = metric_df_std_over_refs.mean()
         metric_df = pd.DataFrame({'mean': metric_df_mean_over_refs, 'std': metric_df_std_over_refs}).reset_index()
-        metric_df[COLUMN_INDEX] = 0
-        metric_df = metric_df.pivot(index=COLUMN_INDEX, columns=COLUMN_CATEGORY, values=['mean', 'std'])
+        metric_df = metric_df.set_index(COLUMN_CATEGORY).transpose()
         metrics_dfs.append(metric_df)
 
     return metrics_dfs
@@ -109,8 +108,8 @@ def pose_pi6_categories_separate():
     COLUMN_ACC_PI6 = "Acc. Pi/6. [%]"
     logging.basicConfig(level=logging.INFO)
     #import wandb
-    categories = od3d.io.read_config_intern(Path('datasets/categories/cross.yaml'))
-
+    categories28 = od3d.io.read_config_intern(Path('datasets/categories/cross.yaml'))
+    categories20 = od3d.io.read_config_intern(Path('datasets/categories/zsp.yaml'))
     from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
     from od3d.datasets.pascal3d.enum import MAP_CATEGORIES_OD3D_TO_PASCAL3D
     #categories_co3d = [MAP_CATEGORIES_OD3D_TO_CO3D[cat] for cat in categories]
@@ -120,17 +119,87 @@ def pose_pi6_categories_separate():
     # 08-14_10-02-12_CO3D_NeMo_use_mask_rgb_and_object_slurm
     # 08-14_09-05-31_CO3D_NeMo_moving_average_slurm
     # 08-11_20-47-23_CO3D_NeMo_cross_entropy_bank_loss_gradient_slurm
+    # voge:    bed shelf     calculator cellphone computer cabinet        guitar iron knife oven      pen pot rifle slipper stove toilet tub wheelchair
+    # starmap: bed bookshelf calculator cellphone computer filing cabinet guitar iron knife microwave pen pot rifle slipper stove toilet tub wheelchair
+                # aero bike boat bottle bus car chair table mbike sofa train tv mean
+    TABLE_CATEGORIES_OBJECTNET3D_3 = ['cellphone', 'toilet', 'microwave', 'mean (3)']
+    TABLE_CATEGORIES_OBJECTNET3D_23 = [
+        'cellphone', 'toilet', 'microwave', 'airplane', 'backpack', 'bench', 'bicycle', 'bottle', 'bus', 'car',
+        'cellphone', 'chair', 'couch', 'cup', 'hairdryer', 'keyboard', 'laptop', 'microwave', 'motorcycle',
+        'mouse', 'remote', 'suitcase', 'toaster', 'toilet', 'train', 'tv', 'mean (23)'
+    ]
+    TABLE_CATEGORIES_CO3D_20 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'mean (20)']
+    TABLE_CATEGORIES_CO3D_28 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'cellphone', 'microwave', 'bench', 'bottle', 'couch', 'cup', 'suitcase', 'tv', 'mean (28)']
 
+    TABLE_CATEGORIES_ZSP = ['bicycle', 'hydrant', 'motorcycle', 'teddybear', 'toaster', 'mean (20)']
+    TABLE_CATEGORIES_YOLO = ['backpack', 'car', 'chair', 'keyboard', 'laptop', 'motorcycle', 'mean (20)'] # # B’pack Car Chair Keyboard Laptop M’cycle
+    TABLE_CATEGORIES_5S = ['mean (20)', 'mean (28)']
+    TABLE_CATEGORIES_PASCAL3D = ['airplane', 'bicycle', 'bottle', 'bus', 'car', 'chair', 'motorcycle', 'couch', 'train', 'tv', 'mean (10)']
     age_in_hours = 48
     configs = []
+
+    DATASET_PASCAL3D = 'pascal3d'
+    DATASET_CO3D_20 = 'co3d_20'
+    DATASET_CO3D_28 = 'co3d_28'
+    DATASET_OBJECTNET3D = 'objectnet3d'
+
+    metrics_dataset = [DATASET_PASCAL3D, DATASET_OBJECTNET3D, DATASET_CO3D_28, DATASET_CO3D_20]
     metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/objectnet3d_test/pose/acc_pi6', 'test/co3d_5s_no_zsp_labeled/pose/acc_pi6', 'test/co3dv1_10s_zsp_labeled/pose/acc_pi6']
+
+    #categories = [
+    #]
     metrics_scales = [100, 100, 100, 100]
     metrics_names = ['PASCAL3D [%]', 'ObjectNet3D [%]', 'CO3D 5s [%]', 'CO3D ZSP 10s [%]']
+    name_partial = '_CO3D_NeMo_ref'
+    name_partial = '_CO3D_NeMo_Incremental_ref'
+    metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales, age_in_hours=age_in_hours, configs=configs, name_partial=name_partial)
+    for m, metric_df in enumerate(metrics_dfs):
+        if metrics_dataset[m] == DATASET_PASCAL3D:
+            logger.info('PASCAL3D')
+            metric_df[TABLE_CATEGORIES_PASCAL3D[-1]] = [metric_df[TABLE_CATEGORIES_PASCAL3D[:-1]].loc['mean'].mean(),
+                                                        metric_df[TABLE_CATEGORIES_PASCAL3D[:-1]].loc['std'].mean()]
 
-    metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales, age_in_hours=age_in_hours, configs=configs, name_partial='_CO3D_NeMo_ref')
-    for metric_df in metrics_dfs:
-        #logger.info(metric_df.to_latex(float_format=".2f"))
-        logger.info(tabulate(metric_df, headers='keys', tablefmt='latex', floatfmt=".2f"))
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_PASCAL3D], headers='keys', tablefmt='latex', floatfmt=".2f"))
+        elif metrics_dataset[m] == DATASET_OBJECTNET3D:
+            logger.info('ObjectNet3D')
+            metric_df[TABLE_CATEGORIES_OBJECTNET3D_3[-1]] = [metric_df[TABLE_CATEGORIES_OBJECTNET3D_3[:-1]].loc['mean'].mean(),
+                                                             metric_df[TABLE_CATEGORIES_OBJECTNET3D_3[:-1]].loc['std'].mean()]
+
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_OBJECTNET3D_3], headers='keys', tablefmt='latex', floatfmt=".2f"))
+
+            metric_df[TABLE_CATEGORIES_OBJECTNET3D_23[-1]] = [metric_df[TABLE_CATEGORIES_OBJECTNET3D_23[:-1]].loc['mean'].mean(),
+                                                                metric_df[TABLE_CATEGORIES_OBJECTNET3D_23[:-1]].loc['std'].mean()]
+
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_OBJECTNET3D_23], headers='keys', tablefmt='latex', floatfmt=".2f"))
+
+        elif metrics_dataset[m] == DATASET_CO3D_20:
+            logger.info('CO3D 20')
+
+            metric_df[TABLE_CATEGORIES_CO3D_20[-1]] = [metric_df[TABLE_CATEGORIES_CO3D_20[:-1]].loc['mean'].mean(),
+                                                       metric_df[TABLE_CATEGORIES_CO3D_20[:-1]].loc['std'].mean()]
+            logger.info('Dataset: ZSP, Categories: ZSP')
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_ZSP], headers='keys', tablefmt='latex', floatfmt=".2f"))
+            logger.info('Dataset: ZSP, Categories: YOLO')
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_YOLO], headers='keys', tablefmt='latex', floatfmt=".2f"))
+            logger.info('Dataset: ZSP, Categories: 20')
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_CO3D_20], headers='keys', tablefmt='latex', floatfmt=".2f"))
+
+        elif metrics_dataset[m] == DATASET_CO3D_28:
+            metric_df[TABLE_CATEGORIES_CO3D_20[-1]] = [metric_df[TABLE_CATEGORIES_CO3D_20[:-1]].loc['mean'].mean(),
+                                                       metric_df[TABLE_CATEGORIES_CO3D_20[:-1]].loc['std'].mean()]
+            metric_df[TABLE_CATEGORIES_CO3D_28[-1]] = [metric_df[TABLE_CATEGORIES_CO3D_28[:-1]].loc['mean'].mean(),
+                                                       metric_df[TABLE_CATEGORIES_CO3D_28[:-1]].loc['std'].mean()]
+
+            logger.info('Dataset: Ours, Categories: ZSP')
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_ZSP], headers='keys', tablefmt='latex', floatfmt=".2f"))
+            logger.info('Dataset: Ours, Categories: YOLO')
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_YOLO], headers='keys', tablefmt='latex', floatfmt=".2f"))
+            logger.info('Dataset: Ours, Categories: 28')
+            logger.info(tabulate(metric_df[TABLE_CATEGORIES_CO3D_28], headers='keys', tablefmt='latex', floatfmt=".2f"))
+
+        else:
+            #logger.info(metric_df.to_latex(float_format=".2f"))
+            logger.info(tabulate(metric_df, headers='keys', tablefmt='latex', floatfmt=".2f"))
 
 """
 @app.command()
