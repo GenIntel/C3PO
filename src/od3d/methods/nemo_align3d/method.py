@@ -436,16 +436,18 @@ class NeMo_Align3D(OD3D_Method):
                 accurate_sim = accurate_sim_geo * accurate_sim_appear
 
                 #if self.config.use_gt_src:
-                if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
-                    droid_slam_labeled_cuboid_tform_droid_slam = inv_tform4x4(ref_sequences[ref_instance_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=dtype))
+                if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
+                    droid_slam_labeled_cuboid_tform_droid_slam = inv_tform4x4(ref_sequences[ref_category_instance_ids[0]].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=dtype))
+                    droid_slam_labeled_cuboid = ref_sequences[ref_category_instance_ids[0]].droid_slam_labeled_cuboid
                 else:
                     droid_slam_labeled_tform_droid_slam = ref_sequences[ref_instance_id].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
                     droid_slam_labeled_cuboid_tform_droid_slam_labeled = ref_sequences[ref_instance_id].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
                     droid_slam_labeled_cuboid_tform_droid_slam = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam_labeled, droid_slam_labeled_tform_droid_slam)
+                    droid_slam_labeled_cuboid = ref_sequences[ref_instance_id].droid_slam_labeled_cuboid
                 #else:
                 #    droid_slam_labeled_cuboid_tform_droid_slam = torch.eye(4).to(device=self.device)
 
-                ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_name, cuboid=ref_sequences[ref_instance_id].droid_slam_labeled_cuboid)
+                ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_name, cuboid=droid_slam_labeled_cuboid)
 
                 pts3d = []
                 pts3d_colors = []
