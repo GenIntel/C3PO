@@ -94,7 +94,7 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
     return pts_ref_tform4x4_pts
 
 
-def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False, use_appear_argmin=False, dist_appear_weight=0.5):
+def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False, use_appear_argmin=False, dist_appear_weight=0.5, score_perc=1.):
     """
     Args:
         pts (torch.Tensor): ...xNxF
@@ -179,13 +179,23 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
 
 
     proposal_dist_ref_appear = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_appearance)
+    proposal_dist_ref_appear = proposal_dist_ref_appear.nan_to_num(1., posinf=1., neginf=1.)
     proposal_dist_ref_geometry = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_geometry)
 
-    mask_finite = proposal_dist_ref_appear.isfinite()
-    proposal_dist_ref_appear_avg = (proposal_dist_ref_appear.nan_to_num(0., posinf=0., neginf=0.) * mask_finite).sum(dim=-1) / ((mask_finite).sum(dim=-1))
-    proposal_dist_ref_appear_avg = proposal_dist_ref_appear_avg.nan_to_num(1., posinf=1., neginf=1.)
+    proposal_scores_pointwise = -((1.-dist_appear_weight) * proposal_dist_ref_geometry + dist_appear_weight * proposal_dist_ref_appear)
 
-    proposal_dist_ref_geo_avg = proposal_dist_ref_geometry.mean(dim=-1)
+    N_score = int(proposal_scores_pointwise.shape[-1] * score_perc)
+    proposal_scores_pointwise_vals, proposal_scores_pointwise_ids = proposal_scores_pointwise.sort(dim=-1, descending=True)
+    proposal_scores = proposal_scores_pointwise_vals[..., :N_score].mean(dim=-1)
+    proposal_dist_ref_geo_avg = batched_index_select(input=proposal_dist_ref_geometry, index=proposal_scores_pointwise_ids)[..., :N_score].mean(dim=-1)
+    proposal_dist_ref_appear_avg = batched_index_select(input=proposal_dist_ref_appear, index=proposal_scores_pointwise_ids)[..., :N_score].mean(dim=-1)
+
+
+    # mask_finite = proposal_dist_ref_appear.isfinite()
+    # proposal_dist_ref_appear_avg = (proposal_dist_ref_appear.nan_to_num(1., posinf=1., neginf=1.).mean(dim=-1)) # * mask_finite).sum(dim=-1) / ((mask_finite).sum(dim=-1))
+    # proposal_dist_ref_appear_avg = proposal_dist_ref_appear_avg.nan_to_num(1., posinf=1., neginf=1.)
+    #
+    # proposal_dist_ref_geo_avg = proposal_dist_ref_geometry.mean(dim=-1)
 
     # did not show improvements
     #proposal_dist_ref_geo_avg = (proposal_dist_ref_geometry.nan_to_num(0., posinf=0., neginf=0.) * mask_finite).sum(dim=-1) / ((mask_finite).sum(dim=-1))
@@ -195,7 +205,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     # scores = -proposal_dist_ref.quantile(q=0.9, dim=-1) #  (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
     #scores = -proposal_dist_ref.mean(dim=-1)  # (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
 
-    proposal_scores = -((1.-dist_appear_weight) * proposal_dist_ref_geo_avg + dist_appear_weight * proposal_dist_ref_appear_avg)
+    #proposal_scores = -((1.-dist_appear_weight) * proposal_dist_ref_geo_avg + dist_appear_weight * proposal_dist_ref_appear_avg)
     if return_dists:
         return proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg
     else:

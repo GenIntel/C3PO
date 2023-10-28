@@ -1,0 +1,8 @@
+# @package _global_
+
+ablation_name: ransac_score_perc50
+
+method:
+  nemo:
+    ransac:
+      score_perc: 0.5

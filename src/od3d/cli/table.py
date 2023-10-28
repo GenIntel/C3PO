@@ -79,6 +79,7 @@ def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, con
     COLUMN_CATEGORY = "category"
     COLUMN_REFERENCE = "ref"
     COLUMN_CATEGORY_MEAN = "mean"
+    COLUMN_INDEX = "index"
     df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours,
                                      name_regex=f'.*{name_partial}([0-9]*)_cat1_([a-z]*)_slurm', name_regex_groups=[COLUMN_REFERENCE, COLUMN_CATEGORY], filter_runs_with_metrics=False)
     metrics_dfs = []
@@ -95,6 +96,8 @@ def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, con
         metric_df_std_over_refs = metric_df.groupby(COLUMN_CATEGORY)[metric].std(numeric_only=False) * metric_scale
         metric_df_std_over_refs[COLUMN_CATEGORY_MEAN] = metric_df_std_over_refs.mean()
         metric_df = pd.DataFrame({'mean': metric_df_mean_over_refs, 'std': metric_df_std_over_refs}).reset_index()
+        metric_df[COLUMN_INDEX] = 0
+        metric_df = metric_df.pivot(index=COLUMN_INDEX, columns=COLUMN_CATEGORY, values=['mean', 'std'])
         metrics_dfs.append(metric_df)
 
     return metrics_dfs

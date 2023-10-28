@@ -1,0 +1,8 @@
+# @package _global_
+
+ablation_name: ransac_samples2000
+
+method:
+  nemo:
+    ransac:
+      samples: 2000
