@@ -37,7 +37,7 @@ class ObjectNet3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjsMixin, OD3D_FrameMetaMe
             annotation = scipy.io.loadmat(fpath_annotation)
 
 
-            rfpath_rgb = path_raw.joinpath(rfpath_images, name + '.JPEG')
+            rfpath_rgb = rfpath_images.joinpath(name + '.JPEG')
 
             name = annotation['record']['filename'][0][0][0].split('.')[0]
 
