@@ -1,3 +1,4 @@
+import numpy
 import pandas
 import typer
 import od3d.io
@@ -39,7 +40,7 @@ def get_nested_value(data, key):
             return None  # Key not found
     return value
 
-def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None, name_partial_ban=None):
+def get_dataframe(configs=[], metrics=[], name_regex=None, name_regex_groups=[], age_in_hours=None, name_partial_ban=None, filter_runs_with_metrics=True):
     logging.basicConfig(level=logging.INFO)
     import wandb
     config = od3d.io.load_hierarchical_config()
@@ -61,24 +62,29 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None, 
             runs))
         #logger.info('after filtering timestamp...')
         #logger.info(runs)
+        logger.info(f'after timestamp {len(runs)}')
 
 
-    if name_partial is not None:
-        runs = list(filter(lambda run: name_partial in run.name, runs))
-        #logger.info('after filtering name partial...')
+    if name_regex is not None:
+        #runs_names_regex_matches = [re.match(name_regex, run.name) for run in runs]
+        #runs = [runs[i] if len(runs_names_regex_matches[i].groups()) >= len(name_regex_groups) else None for i in range(len(runs))]
+        runs = list(filter(lambda run: re.match(name_regex, run.name) and len(re.match(name_regex, run.name).groups()) >= len(name_regex_groups), runs))
+        logger.info(f'after filtering name regex {len(runs)}')
         #logger.info(runs)
 
     if name_partial_ban is not None:
         for n in name_partial_ban:
             runs = list(filter(lambda run: n not in run.name, runs))
         #logger.info('after filtering name partial ban...')
+        logger.info(f'after filtering name partial ban {len(runs)}')
         #logger.info(runs)
 
-    if metrics is not None:
+    if filter_runs_with_metrics and metrics is not None:
         #logger.info(metrics)
         #for run in runs:
         #    logger.info(list(run.summary.keys()))
         runs = list(filter(lambda run: all([metric in list(run.summary.keys()) for metric in metrics]), runs))
+        logger.info(f'after filtering metrics {len(runs)}')
         #logger.info('after filtering metrics...')
         #logger.info(runs)
 
@@ -94,17 +100,26 @@ def get_dataframe(configs=[], metrics=[], name_partial=None, age_in_hours=None, 
             for config in configs:
                 row.append(get_nested_value(json_config, key=config))
             for metric in metrics:
-                row.append(run_summary[metric])
+                if metric in run_summary:
+                    row.append(run_summary[metric])
+                else:
+                    row.append(numpy.nan)
+            if name_regex is not None:
+                re_matched_groups = re.match(name_regex, run.name).groups()
+                for i, name_regex_group in enumerate(name_regex_groups):
+                    row.append(re_matched_groups[i])
+            else:
+                name_regex_groups = []
 
             rows.append(row)
         except Exception as e:
 
             logger.warning(f'skipping run {run.name} due to {e}')
-    logger.info(rows)
+    # logger.info(rows)
 
     #cols = ['name'] + metrics
 
-    cols = ['name'] + configs + metrics
+    cols = ['name'] + configs + metrics + name_regex_groups
 
     df = pd.DataFrame(rows, columns=cols)
 

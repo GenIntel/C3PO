@@ -74,29 +74,62 @@ def ablation_dist():
     logger.info(tabulate(df, headers='keys', tablefmt='latex',  floatfmt=".1f")) # 'github', 'tsv', 'latex', 'latex_raw'
 
 from typing import List
-def get_categorical_results_from_multiple_runs(run_name_partial: str, metric: str, metric_name: str, age_in_hours: float, configs=[]):
+def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, configs=[], name_partial='_CO3D_NeMo_ref', metrics_scales=None):
     rows = []
+    COLUMN_CATEGORY = "category"
+    COLUMN_REFERENCE = "ref"
+    COLUMN_CATEGORY_MEAN = "mean"
+    df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours,
+                                     name_regex=f'.*{name_partial}([0-9]*)_cat1_([a-z]*)_slurm', name_regex_groups=[COLUMN_REFERENCE, COLUMN_CATEGORY], filter_runs_with_metrics=False)
+    metrics_dfs = []
+    for m, metric in enumerate(metrics):
+        if metrics_scales is not None and len(metrics_scales) > m:
+            metric_scale = metrics_scales[m]
+        else:
+            metric_scale = 1.
+        metric_df = df[df[metric].notnull()]
+        metric_df = metric_df[[metric, COLUMN_CATEGORY, COLUMN_REFERENCE]]
+        metric_df = metric_df.drop_duplicates(subset=[COLUMN_CATEGORY, COLUMN_REFERENCE], keep="first")
+        metric_df_mean_over_refs = metric_df.groupby(COLUMN_CATEGORY)[metric].mean(numeric_only=False) * metric_scale
+        metric_df_mean_over_refs[COLUMN_CATEGORY_MEAN] = metric_df_mean_over_refs.mean()
+        metric_df_std_over_refs = metric_df.groupby(COLUMN_CATEGORY)[metric].std(numeric_only=False) * metric_scale
+        metric_df_std_over_refs[COLUMN_CATEGORY_MEAN] = metric_df_std_over_refs.mean()
+        metric_df = pd.DataFrame({'mean': metric_df_mean_over_refs, 'std': metric_df_std_over_refs}).reset_index()
+        metrics_dfs.append(metric_df)
 
-    COLUMN_RUN = "name"
-    COLUMN_INDEX = '_index'
-    # CO3Dv1_NeMo, metrics
-    pascal3d_nemo_name_partial = 'CO3D_NeMo_cat1_'
-    pascal3d_nemo_metrics = [metric]  # ['test/pascal3d_test/pose/acc_pi6']
-    pascal3d_nemo_columns_map = {}
-    pascal3d_nemo_columns_map[pascal3d_nemo_metrics[-1]] = metric_name
-    pascal3d_nemo_df = get_dataframe(configs=configs, metrics=pascal3d_nemo_metrics, age_in_hours=age_in_hours,
-                                     name_partial=pascal3d_nemo_name_partial)
-    pascal3d_nemo_df = pascal3d_nemo_df.rename(columns=pascal3d_nemo_columns_map)
-    # _CO3D_NeMo_cat1_
-    pascal3d_nemo_df[COLUMN_RUN] = [re.match(f'.*{run_name_partial}([a-z]*)_', row_name).groups()[0] for row_name in
-                                    pascal3d_nemo_df[COLUMN_RUN]]
-    pascal3d_nemo_df = pascal3d_nemo_df.drop_duplicates(subset=COLUMN_RUN, keep="first")
-    # pascal3d_nemo_df[metric_name].mean()
-    pascal3d_nemo_df[COLUMN_INDEX] = 0
-    pascal3d_nemo_df = pascal3d_nemo_df.pivot(index=COLUMN_INDEX, columns=COLUMN_RUN, values=metric_name).reset_index().drop( [COLUMN_INDEX], axis=1)
-    pascal3d_nemo_df['avg'] = pascal3d_nemo_df.mean(axis=1)
-    pascal3d_nemo_df['metric_name'] = metric_name
-    return pascal3d_nemo_df
+    return metrics_dfs
+
+# def get_categorical_and
+
+@app.command()
+def pose_pi6_categories_separate():
+    COLUMN_ACC_PI6 = "Acc. Pi/6. [%]"
+    logging.basicConfig(level=logging.INFO)
+    #import wandb
+    categories = od3d.io.read_config_intern(Path('datasets/categories/cross.yaml'))
+
+    from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
+    from od3d.datasets.pascal3d.enum import MAP_CATEGORIES_OD3D_TO_PASCAL3D
+    #categories_co3d = [MAP_CATEGORIES_OD3D_TO_CO3D[cat] for cat in categories]
+    #categories_pascal3d = [MAP_CATEGORIES_OD3D_TO_PASCAL3D[cat] for cat in categories]
+    #config = od3d.io.load_hierarchical_config()
+
+    # 08-14_10-02-12_CO3D_NeMo_use_mask_rgb_and_object_slurm
+    # 08-14_09-05-31_CO3D_NeMo_moving_average_slurm
+    # 08-11_20-47-23_CO3D_NeMo_cross_entropy_bank_loss_gradient_slurm
+
+    age_in_hours = 48
+    configs = []
+    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/objectnet3d_test/pose/acc_pi6', 'test/co3d_5s_no_zsp_labeled/pose/acc_pi6', 'test/co3dv1_10s_zsp_labeled/pose/acc_pi6']
+    metrics_scales = [100, 100, 100, 100]
+    metrics_names = ['PASCAL3D [%]', 'ObjectNet3D [%]', 'CO3D 5s [%]', 'CO3D ZSP 10s [%]']
+
+    metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales, age_in_hours=age_in_hours, configs=configs, name_partial='_CO3D_NeMo_ref')
+    for metric_df in metrics_dfs:
+        #logger.info(metric_df.to_latex(float_format=".2f"))
+        logger.info(tabulate(metric_df, headers='keys', tablefmt='latex', floatfmt=".2f"))
+
+"""
 @app.command()
 def pose_pi6_categories_separate():
     COLUMN_ACC_PI6 = "Acc. Pi/6. [%]"
@@ -174,6 +207,7 @@ def pose_pi6_categories_separate():
     logger.info(tabulate(df, headers='keys', tablefmt='latex',  floatfmt=".3f")) # 'github', 'tsv', 'latex', 'latex_raw'
     # logger.info('\n' + my_df.to_csv(sep='\t', index=False, float_format="%.3f"))
     #logger.info('\n' + my_df.to_csv(sep=',', index=False, float_format="%.3f"))
+"""
 
 @app.command()
 def pose_pi6_categories():
