@@ -39,16 +39,28 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
     Returns:
         tform4x4 (torch.Tensor): ...xPx4x4
     """
+    batch_dims = pts.shape[:-2]
     N, F = pts.shape[-2:]
+    R = pts_ref.shape[-2]
     P, S = pts_ids.shape[-2:]
     device=pts.device
 
     # ...xPxSxF
     pts_sampled = batched_index_select(index=pts_ids.flatten(-2), input=pts).view(pts_ids.shape + (-1,))
+
     # ...xPxSxR
     dist_sampled = batched_index_select(index=pts_ids.flatten(-2), input=dist_ref).view(pts_ids.shape + (-1,))
-
+    # nearest neighbor correspondences
     pts_ref_ids = dist_sampled.argmin(dim=-1)
+    dist_sampled_ref, pts_ref_ids = dist_sampled.min(dim=-1)
+
+    dist_sampled_ref_inf_mask = dist_sampled_ref == torch.inf
+    pts_ref_ids[dist_sampled_ref_inf_mask] = (torch.rand(size=(dist_sampled_ref_inf_mask.sum(),)) * R).to(dtype=int, device=device)
+
+    # random correspondences, worse results
+    #pts_ref_sample_probs = torch.ones(size=batch_dims + (P, R)).to(device=device)
+    #pts_ref_ids = torch.multinomial(pts_ref_sample_probs.view(-1, R), num_samples=S).view(batch_dims + (P, S))
+
     pts_ref_sampled = batched_index_select(index=pts_ref_ids.flatten(-2), input=pts_ref).view(pts_ref_ids.shape + (-1,))
 
     ## start single batch dimension (= flatten proposals)

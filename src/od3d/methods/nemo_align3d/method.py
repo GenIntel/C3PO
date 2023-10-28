@@ -252,8 +252,6 @@ class NeMo_Align3D(OD3D_Method):
                                 dist_src_ref = torch.cat([src_sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
                                     ref_sequences[_ref_mesh_id]).to(device=self.device, dtype=dtype) for _ref_mesh_id in ref_mesh_ids], dim=-1)
 
-                                # remove infinities is highly important
-                                # dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
                                 # division by two to normalize to 0. - 1.
                                 dist_src_ref = dist_src_ref / 2.
 
@@ -290,8 +288,7 @@ class NeMo_Align3D(OD3D_Method):
 
                                 dist_src_ref = src_sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
                                     ref_sequences[ref_mesh_id]).to(device=self.device, dtype=dtype)
-                                # remove infinities is highly important
-                                #dist_src_ref[~dist_src_ref.isfinite()] = dist_src_ref[dist_src_ref.isfinite()].max()
+
                                 # division by two to normalize to 0. - 1.
                                 dist_src_ref = dist_src_ref / 2.
 
