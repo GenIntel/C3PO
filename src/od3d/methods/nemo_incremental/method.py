@@ -156,7 +156,7 @@ class NeMo_Incremental(NeMo):
         self.train_dict_category_sequences_pseudo_labels = train_dict_category_sequences_pseudo_labels
 
         results_visual = self.get_results_visual(results_epoch=results, dataset=dataset_update,
-                                                 config_visualize=self.config.test.visualize)
+                                                 config_visualize=self.config.test.visualize, filter_name_unique=False)
         results = results.mean()
         results += results_visual
 

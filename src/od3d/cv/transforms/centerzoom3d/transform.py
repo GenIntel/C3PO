@@ -55,11 +55,15 @@ class CenterZoom3D(OD3D_Transform):
             if self.scale is not None:
                 logger.warning('For CenterZoom3D `scale` and `scale_with_mask` are not None. Only using `scale_with_mask`.')
 
-            if frame.mask.sum() > 0.:
+            mask = frame.mask > 0
+            if mask.sum() > 0.:
                 from od3d.cv.geometry.grid import get_pxl2d
-                mask_pxl2d = get_pxl2d(H=frame.mask.shape[1], W=frame.mask.shape[2], dtype=float, device=frame.mask.device)
-                mask_H = mask_pxl2d[:, 1].max() - mask_pxl2d[:, 1].min()
-                mask_W = mask_pxl2d[:, 0].max() - mask_pxl2d[:, 0].min()
+                mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
+                mask_pxl2d = mask_pxl2d[mask[0] > 0.5]
+                # this automatic scales to fit the cropped image
+                mask_H = int(max(mask_pxl2d[:, 1].max() - center2d[1], center2d[1]-mask_pxl2d[:, 1].min()) * 2)
+                mask_W = int(max(mask_pxl2d[:, 0].max() - center2d[0], center2d[0]-mask_pxl2d[:, 0].min()) * 2)
+
             else:
                 logger.warning('For CenterZoom3D using `scale_with_mask` despite mask has only zeros. Setting mask width and height to image width and height.')
                 mask_H = self.H
@@ -70,8 +74,8 @@ class CenterZoom3D(OD3D_Transform):
             if self.scale_with_mask is not None:
                 logger.warning('For CenterZoom3D `scale_with_mask` is not None, but frame.mask is None. Ignoring `scale_with_mask`')
             # this automatic scales to fit the cropped image
-            centered_frame_H = int(max(abs(frame.H - center2d[1]), abs(center2d[1])) * 2)
-            centered_frame_W = int(max(abs(frame.W - center2d[0]), abs(center2d[0])) * 2)
+            centered_frame_H = int(max(frame.H - center2d[1], center2d[1]) * 2)
+            centered_frame_W = int(max(frame.W - center2d[0], center2d[0]) * 2)
             scale = min(self.H / centered_frame_H, self.W / centered_frame_W)
 
             if self.scale is not None:

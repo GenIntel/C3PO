@@ -360,7 +360,7 @@ class NeMo(OD3D_Method):
                            indexing='xy'), dim=0)  # HxW
         prob_noise = (1. - 1. * resize(feats2d_net_mask, scale_factor=1. / self.down_sample_rate)).abs().flatten(1)
         prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
-        noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise)].permute(1, 2, 0)
+        noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise, replacement=True)].permute(1, 2, 0)
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
         vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
         net_feats = sample_pxl2d_pts(feats2d_net, pxl2d=torch.cat([vts2d, noise2d], dim=1))
@@ -638,12 +638,12 @@ class NeMo(OD3D_Method):
             results['time_class'] = torch.Tensor([time_pred_class - time_pred_net_feats2d,]) / B
 
             b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
-                                                                                   cam_intr4x4=batch.cam_intr4x4, #[:1],
-                                                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj, #[:1],
-                                                                                   feats2d_net=feats2d_net, #[:1],
-                                                                                   categories_ids=pred_class_ids, #[:1],
-                                                                                   feats2d_net_mask=feats2d_net_mask, #[:1],
-                                                                                   multiview=True)
+                                                                                       cam_intr4x4=batch.cam_intr4x4, #[:1],
+                                                                                       cam_tform4x4_obj=batch.cam_tform4x4_obj, #[:1],
+                                                                                       feats2d_net=feats2d_net, #[:1],
+                                                                                       categories_ids=pred_class_ids, #[:1],
+                                                                                       feats2d_net_mask=feats2d_net_mask, #[:1],
+                                                                                       multiview=True)
 
 
             #  OPTION A: Use 2d gradient of rendered features
@@ -652,7 +652,8 @@ class NeMo(OD3D_Method):
                                                      cam_intr4x4=b_cams_multiview_intr4x4,
                                                      categories_ids=pred_class_ids,
                                                      broadcast_batch_and_cams=True,
-                                                     feats2d_net_mask=feats2d_net_mask, pre_rendered=False)
+                                                     feats2d_net_mask=feats2d_net_mask,
+                                                     pre_rendered=False)
 
             sim = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
 
@@ -735,7 +736,7 @@ class NeMo(OD3D_Method):
 
         return results
 
-    def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_visualize: DictConfig):
+    def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_visualize: DictConfig, filter_name_unique=True):
         results = OD3D_Results()
 
         count_best = config_visualize.count_best
@@ -762,7 +763,7 @@ class NeMo(OD3D_Method):
             logger.warning(f'Could not find a suitable rank metric in results {results_epoch.keys()}')
             return results
 
-        if 'name_unique' in results_epoch.keys() and len(results_epoch['name_unique']) > 0:
+        if filter_name_unique and 'name_unique' in results_epoch.keys() and len(results_epoch['name_unique']) > 0:
             # this only groups the ranked elements depending on their category / sequence etc.
             # https://stackoverflow.com/questions/51408344/pandas-dataframe-interleaved-reordering
             group_names = list(set(['/'.join(name_unique.split('/')[:-1]) for name_unique in results_epoch['name_unique']]))
@@ -1048,7 +1049,7 @@ class NeMo(OD3D_Method):
         nearest_verts2d = get_pxl2d_like(nearest_verts3d.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
 
         # H=sim_clutter.shape[1], W=sim_clutter.shape[2], dtype=sim_nearest_texture_verts.dtype, device=sim_nearest_texture_verts.device)[None,].expand()
-        prob_corresp2d3d = (sim_clutter < sim_texture) * sim_texture
+        prob_corresp2d3d = ((sim_texture + 1) / 2) * (1-((sim_clutter+1)/ 2)) #  (sim_clutter < sim_texture) * sim_texture
         prob_corresp2d3d *= feats2d_net_mask
 
         return nearest_verts3d, nearest_verts2d, prob_corresp2d3d
@@ -1162,14 +1163,33 @@ class NeMo(OD3D_Method):
             feats2d_rendered_clutter_mask = (feats2d_rendered.norm(dim=1) == 0.)[:, None]
             sim_texture_multiple_cams = torch.einsum('bchw,bchw->bhw', feats2d_net, feats2d_rendered)[:, None]
 
-        sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
-        sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
+        # note only for occlusions: either
+        # given feats2d_net_mask:
+        #   a) only use feats2d_net_mask inliers,
+        #   b) use feats2d_net_mask inliers plus clutter for outliers
+        # given non mask: use either
+        #   a) only inliers of rendered mask with maximum clutter/texture
+        #   b) inliers and outliers of rendered mask, both with maximum clutter/texture
 
-        if feats2d_net_mask is None:
-            sim = sim_pxl.flatten(2).mean(dim=-1)
+        # depcrecated?
+        #       sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
+        sim_pxl = sim_texture_multiple_cams
+
+        if feats2d_net_mask is not None:
+            feats2d_net_mask_clutter_bin = (feats2d_net_mask < 0.5).expand(*sim_pxl.shape)
+            sim_pxl[feats2d_net_mask_clutter_bin] = sim_clutter.expand(*sim_pxl.shape)[feats2d_net_mask_clutter_bin]
+            sim_pxl[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask]
+
         else:
-            sim_pxl *= feats2d_net_mask
-            sim = sim_pxl.flatten(2).sum(dim=-1) / (feats2d_net_mask.flatten(2).sum(dim=-1) + 1e-10)
+            sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
+
+        # depcrecated?
+        # if feats2d_net_mask is None:
+        #     sim = sim_pxl.flatten(2).mean(dim=-1)
+        # else:
+        #     sim_pxl *= feats2d_net_mask
+        #     sim = sim_pxl.flatten(2).sum(dim=-1) / (feats2d_net_mask.flatten(2).sum(dim=-1) + 1e-10)
+        sim = sim_pxl.flatten(2).mean(dim=-1)
 
         if return_sim_pxl:
             return sim, sim_pxl
@@ -1192,22 +1212,66 @@ class NeMo(OD3D_Method):
 
             # multiview adaption
             if config_sample.method == 'uniform':
-                pass
+                from od3d.cv.geometry.transform import proj3d2d_broadcast
+                # this only works in multiview
+                assert (categories_ids ==categories_ids[0]).all()
+
+                B = len(cam_tform4x4_obj)
+                H = feats2d_net.shape[-2]
+                W = feats2d_net.shape[-1]
+                device= cam_tform4x4_obj.device
+                mesh_verts3d = self.meshes.get_verts_with_mesh_id(categories_ids[0])  # self.meshes.verts2d(cams_tform4x4_obj=cam_tform4x4_obj, cams_intr4x4=cam_intr4x4)
+                mesh_pxl2d = proj3d2d_broadcast(mesh_verts3d[None].expand(B, *mesh_verts3d.shape), proj4x4=tform4x4(cam_intr4x4, cam_tform4x4_obj)[:, None])
+                cx = cam_intr4x4[:, 0, 2]
+                cy = cam_intr4x4[:, 1, 2]
+                #fx = cam_intr4x4[:, 0, 0]
+                #fy = cam_intr4x4[:, 1, 1]
+                mesh_bbox_x_max = mesh_pxl2d[:, :, 0].max(dim=1).values.clamp(0, W-1) - cx
+                mesh_bbox_x_min = mesh_pxl2d[:, :, 0].min(dim=1).values.clamp(0, W-1) - cx
+                mesh_bbox_y_max = mesh_pxl2d[:, :, 1].max(dim=1).values.clamp(0, H-1) - cy
+                mesh_bbox_y_min = mesh_pxl2d[:, :, 1].min(dim=1).values.clamp(0, H-1) - cy           #meshes_bbox =
+
+                from od3d.cv.geometry.grid import get_pxl2d
+
+                mask_bbox_x_max = torch.ones(size=(B,)).to(device=device) * (W - 1) -cx
+                mask_bbox_x_min = torch.ones(size=(B,)).to(device=device) * 0 - cx
+                mask_bbox_y_max = torch.ones(size=(B,)).to(device=device) * (H - 1) -cy
+                mask_bbox_y_min = torch.ones(size=(B,)).to(device=device) * 0 - cy
+                if feats2d_net_mask is not None:
+                    mask = feats2d_net_mask > 0.5
+                    mask_pxl2d = get_pxl2d(H=feats2d_net_mask.shape[-2], W=feats2d_net_mask.shape[-1], dtype=float, device=feats2d_net_mask.device)
+                    mask_pxl2d = mask_pxl2d[None, None].expand(*feats2d_net_mask.shape, 2) * self.down_sample_rate
+                    for b in range(B):
+                        mask_bbox_x_max[b] = mask_pxl2d[b][mask[b]][0].max() -cx[b]
+                        mask_bbox_x_min[b] = mask_pxl2d[b][mask[b]][0].min() -cx[b]
+                        mask_bbox_y_max[b] = mask_pxl2d[b][mask[b]][1].max() -cy[b]
+                        mask_bbox_y_min[b] = mask_pxl2d[b][mask[b]][1].min() -cy[b]
+                # B x 4
+                scales = torch.stack([mask_bbox_x_max / mesh_bbox_x_max, mask_bbox_x_min / mesh_bbox_x_min, mask_bbox_y_max / mesh_bbox_y_max, mask_bbox_y_min / mesh_bbox_y_min], dim=-1)
+                    # torch.masked_select(input=mask_pxl2d, mask=feats2d_net_mask > 0.5)
+                _scale = scales.max()[None, None]
+
             elif config_sample.method == 'epnp3d2d':
-                pass
+                # note: not alignment of droid slam may include scale, therefore remove this scale.
+                # note: projection does not change as we scale the depth z to the object as well
+                _scale = cam_tform4x4_obj[:1, None, 2, 3] / (b_cams_multiview_tform4x4_obj[:, :, 2, 3] + 1e-10)
+
             else:
                 raise NotImplementedError
 
-            # note: not alignment of droid slam may include scale, therefore remove this scale.
-            # note: projection does not change as we scale the depth z to the object as well
-            _scale = cam_tform4x4_obj[:1, None, 2, 3] / b_cams_multiview_tform4x4_obj[:, :, 2, 3]
+
             b_cams_multiview_tform4x4_obj[:, :, :3] = b_cams_multiview_tform4x4_obj[:, :, :3] * _scale[:, :, None, None]
 
-            objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj[:1, :3] / _scale)[:, None],
+            cam_tform4x4_obj_scaled = cam_tform4x4_obj[:, None].clone().expand(cam_tform4x4_obj.shape[0], *b_cams_multiview_tform4x4_obj.shape[1:]).clone()
+            #cam_tform4x4_obj_scaled[:, :, :3] = cam_tform4x4_obj_scaled[:, :, :3] / (_scale[:, :, None, None] + 1e-10)
+            objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj_scaled[:1]),
                                                                       b_cams_multiview_tform4x4_obj)
-            b_cams_multiview_tform4x4_obj = tform4x4_broadcast(cam_tform4x4_obj[:, None],
+            b_cams_multiview_tform4x4_obj = tform4x4_broadcast(cam_tform4x4_obj_scaled,
                                                                objs_multiview_tform4x4_cuboid_front)
             b_cams_multiview_intr4x4 = b_cams_multiview_intr4x4.expand(*b_cams_multiview_tform4x4_obj.shape)
+
+            #from od3d.cv.visual.show import show_scene
+            #show_scene(cams_tform4x4_world=b_cams_multiview_tform4x4_obj[:, :10].reshape(-1, 4, 4), cams_intr4x4=b_cams_multiview_intr4x4[:, :10].reshape(-1, 4, 4))
         else:
 
             B = len(feats2d_net)

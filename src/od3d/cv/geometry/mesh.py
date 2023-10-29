@@ -391,7 +391,7 @@ class Meshes(torch.nn.Module):
             Args:
                 cams_tform4x4_obj (torch.Tensor): Bx4x4
                 cams_intr4x4 (torch.Tensor): Bx4x4
-                imgs_sizes (torch.Tensor): Bx2 / 2
+                imgs_sizes (torch.Tensor): Bx2 / 2 (height, width)
                 mesh_ids (list): len(mesh_ids) == B
 
             Returns:
@@ -648,6 +648,7 @@ class Meshes(torch.nn.Module):
 
 
     def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
+        # imgs_size: (height, width)
         dtype = cams_tform4x4_obj.dtype
         device = cams_tform4x4_obj.device
 

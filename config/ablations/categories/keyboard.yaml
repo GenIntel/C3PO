@@ -1,0 +1,89 @@
+# @package _global_
+defaults:
+  - /ablations/categories/cross/_default
+  - /ablations/categories/cross/_add_pascal3d
+  - /ablations/categories/cross/_add_objectnet3d
+  - /ablations/categories/cross/_add_co3dv1_10s_zsp_labeled
+  - override /methods@method.nemo: nemo_incremental
+
+ablation_name_nemo3d_align_aligned_refs: ref0
+ablation_name_categories: cat1_bicycle
+
+ablation_name: ${ablation_name_nemo3d_align_aligned_refs}_${ablation_name_categories}
+#ablation_name: ${ablation_name_nemo3d_align_aligned_refs}
+#ablation_name: ${ablation_name_categories}
+method:
+  nemo:
+    num_noise: 5 # 5
+    test:
+      transform:
+        class_name: CenterZoom3D
+        W: 512
+        H: 512
+        scale:
+        scale_with_mask: 1.
+        center_rel_shift_xy:
+          - -0.
+          - -0.
+    inference:
+      use_mask_object: True
+      sample:
+        method: uniform # epnp3d2d uniform
+        epnp3d2d:
+          count_cams: 100
+          count_pts: 4
+      refine:
+        enabled: True
+        dims_detached: [0, 1, 2] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
+    train:
+      use_mask_object: True
+      val: True
+      split: sequences_separated # 'random' 'sequences_separated' 'seqences_shared'
+      epochs_to_next_test: 1
+      epochs: 10
+      incremental:
+        epoch_frames_count: 5000
+        decay_labeled: 0.5
+        enabled: True
+        sequences_labeled_count:
+        frames_count_max_per_sequence: # 20
+        pseudo_labels_update:
+          use_ground_truth: False
+          epochs_to_next_update: 1
+          count_new_labels_proposed: 10
+          count_new_labels_selected_max: 10
+          multiview_count: 4
+          sim_threshold: -1. # 0.1 # 0.6
+
+#aligned_name_ref: ''
+aligned_name_ref: 'r0'
+aligned_name: 50_to_1_${aligned_name_ref} # 'all_to_one_13_10_23' 'all_to_one_12_10_23'
+
+categories:
+  - bicycle
+#  - truck
+#  - train
+#  - teddybear
+#  - car
+#  - bus
+#  - motorcycle
+#  - keyboard
+#  - handbag
+#  - remote
+#  - airplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+#  - chair
+#  - laptop
+#  - book
+#  - backpack
+#  - cellphone # from cellphone on, no zsp categories
+#  - bench
+#  - bottle
+#  - couch
+#  - cup
+#  - suitcase
+#  - tv

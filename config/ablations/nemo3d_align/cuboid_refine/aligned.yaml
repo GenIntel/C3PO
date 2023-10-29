@@ -1,0 +1,19 @@
+# @package _global_
+
+ablation_name_nemo3d_align_cuboid_refine: aligned
+ablation_name: ${ablation_name_nemo3d_align_cuboid_refine}
+
+method:
+  nemo:
+    train:
+      epochs: 10
+    test:
+      transform:
+        class_name: CenterZoom3D
+        W: 512
+        H: 512
+        scale:
+        scale_with_mask: 1.
+        center_rel_shift_xy:
+          - -0.
+          - -0.

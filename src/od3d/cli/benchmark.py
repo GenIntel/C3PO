@@ -551,7 +551,8 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 
     current_branch = Repository('.').head.shorthand  # 'master'
 
-    for method_cfg in methods_cfgs:
+
+    for i, method_cfg in enumerate(methods_cfgs):
         with open_dict(method_cfg):
             if method_cfg.get('branch', None) is None:
                 method_cfg.branch = current_branch
@@ -573,7 +574,10 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         elif method_cfg.platform.link == 'slurm':
             bench_single_method_slurm(method_cfg)
 
-        time.sleep(5)
+            if (i+1) % 30 == 0:
+                time.sleep(60 * 60)
+
+        time.sleep(10)
 
 
 
