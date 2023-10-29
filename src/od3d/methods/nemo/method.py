@@ -1203,7 +1203,7 @@ class NeMo(OD3D_Method):
             _scale = cam_tform4x4_obj[:1, None, 2, 3] / b_cams_multiview_tform4x4_obj[:, :, 2, 3]
             b_cams_multiview_tform4x4_obj[:, :, :3] = b_cams_multiview_tform4x4_obj[:, :, :3] * _scale[:, :, None, None]
 
-            objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj[:1])[:, None],
+            objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj[:1, :3] / _scale)[:, None],
                                                                       b_cams_multiview_tform4x4_obj)
             b_cams_multiview_tform4x4_obj = tform4x4_broadcast(cam_tform4x4_obj[:, None],
                                                                objs_multiview_tform4x4_cuboid_front)
