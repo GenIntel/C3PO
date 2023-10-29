@@ -1200,8 +1200,8 @@ class NeMo(OD3D_Method):
 
             # note: not alignment of droid slam may include scale, therefore remove this scale.
             # note: projection does not change as we scale the depth z to the object as well
-            _scale = cam_tform4x4_obj[:1, 2, 3] / b_cams_multiview_tform4x4_obj[:, 2, 3]
-            b_cams_multiview_tform4x4_obj[:, :3] = b_cams_multiview_tform4x4_obj[:, :3] * _scale
+            _scale = cam_tform4x4_obj[:1, None, 2, 3] / b_cams_multiview_tform4x4_obj[:, :, 2, 3]
+            b_cams_multiview_tform4x4_obj[:, :, :3] = b_cams_multiview_tform4x4_obj[:, :, :3] * _scale[:, :, None, None]
 
             objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj[:1])[:, None],
                                                                       b_cams_multiview_tform4x4_obj)
