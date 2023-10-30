@@ -2,11 +2,60 @@
 
 #--build-arg ssh_prv_key="$(cat ~/.ssh/id_rsa)" --build-arg ssh_pub_key="$(cat ~/.ssh/id_rsa.pub)" --squash
 #--build-arg UID=$(id -u) --build-arg GID=$(id -g)
+
+# docker run  --gpus all -p 5000:5000 -it limpbot/zsp:v1
+# docker run  --gpus all -p 5000:5000 -t limpbot/zsp:v1
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+
+# Set arguments and env variables
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV NVIDIA_VISIBLE_DIVICES all
+ENV NVIDIA_DRIVER_CAPABILITIES graphics,utility,compute
+
+# Fetch nvidia signing keys
+RUN apt-key del 7fa2af80
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
 
 RUN apt-get update -y
 RUN apt-get upgrade -y
+# Install ubuntu base packages
+RUN apt-get update && apt install -y --no-install-recommends \
+    software-properties-common \
+    apt-utils \
+    dbus-x11 \
+    libglvnd0 \
+    libgl1 \
+    libglx0 \
+    libegl1 \
+    libxext6 \
+    libx11-6 \
+    libgl1-mesa-dev \
+    libglew-dev
+
+
+RUN apt-get update && apt install -y --no-install-recommends \
+    build-essential \
+    libboost-all-dev \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    ninja-build
+
+# Installing required utilities
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    ssh \
+    unzip \
+    vim \
+    wget \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+
 RUN apt-get install wget -y
+RUN apt-get install git -y
 
 WORKDIR /root
 
@@ -18,50 +67,57 @@ RUN wget \
 
 ENV PATH="/root/miniconda3/bin:${PATH}"
 
-# Install Droid SLAM dependencies
-RUN conda install python=3.9
+## prioritize 'conda-forge' channel
+#RUN conda install -f environment.yml
+RUN conda config --add channels conda-forge
 
+## update existing packages to use 'conda-forge' channel
+RUN conda update -n base --all
 
-#RUN apt-get install git -y
+## install 'mamba'
+RUN conda install -n base mamba
 
-ADD . /root/zsp
+RUN conda init
+RUN mamba init
 
 WORKDIR /root/zsp/
+ADD environment.yml /root/zsp
 
 RUN wget https://dl.fbaipublicfiles.com/dino/dino_deitsmall8_pretrain/dino_deitsmall8_pretrain.pth
 
-##ADD ~/.ssh/id_rsa /root/.ssh/id_rsa
-##
-#RUN mkdir -p /root/.ssh
-#RUN chmod 0700 /root/.ssh
-#RUN echo "$ssh_prv_key"
-#
-#RUN echo "SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s" > /root/.ssh/known_hosts
-#
-### Add the keys and set permissions
-#RUN echo "$ssh_prv_key" > /root/.ssh/id_rsa
-#RUN echo "$ssh_pub_key" > /root/.ssh/id_rsa.pub
-#RUN chmod 600 /root/.ssh/id_rsa
-#RUN chmod 600 /root/.ssh/id_rsa.pub
-#
-##RUN  echo "    IdentityFile ~/.ssh/id_rsa" >> /etc/ssh/ssh_config
-#RUN echo "Host remotehost\n\tStrictHostKeyChecking no\n"  >> /etc/ssh/ssh_config
-##RUN echo "Host remotehost\n\tStrictHostKeyChecking no\n"  >> /home/user/.ssh/config
-#
-#RUN git clone git@github.com:limpbot/zero-shot-pose.git
-#
-## Remove SSH keys
-#RUN rm -rf /root/.ssh/
+RUN mamba env create -f environment.yml
 
-RUN conda env create -f environment.yml
+ENV PATH /root/miniconda3/envs/zsp/bin:$PATH
+RUN echo "source activate zsp" > ~/.bashrc
 
-RUN conda activate zsp
+RUN pip install torch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1
 
 RUN pip install 'pillow<7'
 
 RUN pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
-RUN pip install Flask
+#RUN apt install -y python3-pip python3-dev build-essential libssl-dev libffi-dev python3-setuptools
+#RUN pip install wheel
+#RUN export LD_LIBRARY="$LD_LIBRARY_PATH:/root/miniconda3/lib"
+RUN pip install Flask # uwsgi #  flask
+
+#RUN apt-get -y install python3-urllib3
+#RUN pip install urllib3 --upgrade
+
+ADD . /root/zsp
+RUN pip install -e .
+
+ENTRYPOINT ["env", "FLASK_APP=flask_server.py", "python", "-m", "flask", "run", "--host=0.0.0.0"]
+#ENTRYPOINT ["env", "FLASK_APP=flask_server_test.py", "python", "-m", "flask", "run", "--host=0.0.0.0"]
 
 
-ENTRYPOINT ["FLASK_ENV=development", "FLASK_APP=flask.py", "flask", "run"]
+# use this for interactive container
+#ENTRYPOINT [ "/bin/bash" ]
+
+# env FLASK_APP=flask_server_test.py python -m flask run --host=0.0.0.0
+
+# ENTRYPOINT ["FLASK_ENV=development", "FLASK_APP=flask_server.py", "flask", "run"]
+# FLASK_ENV=development FLASK_APP=flask_server_test.py flask run
+# FLASK_ENV=development FLASK_APP=flask_server.py flask run
+
+# env FLASK_APP=flask_server.py python -m flask run
