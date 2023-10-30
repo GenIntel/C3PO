@@ -1,0 +1,54 @@
+defaults:
+  - logger: wandb
+  - methods@method.zsp: zsp
+  - datasets@train_datasets.src: co3dv1_10s_zsp_labeled #  co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
+  - datasets@train_datasets.labeled: co3dv1_10s_zsp_labeled # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
+  - datasets@val_datasets.main:
+  - datasets@test_datasets.co3d: co3dv1_10s_zsp_labeled # co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
+  - platform@platform_local: local
+  - datasets@texture_dataset: dtd
+  - platform: local
+
+categories:
+  - bicycle
+  - truck
+  - train
+  - teddybear
+  - car
+  - bus
+  - motorcycle
+  - keyboard
+  - handbag
+  - remote
+  - airplane
+  - toilet
+  - hairdryer
+  - mouse
+  - toaster
+  - hydrant
+  - chair
+  - laptop
+  - book
+  - backpack
+
+metrics:
+  - metricA
+  - metricB
+
+train_datasets:
+  src:
+    categories: ${categories}
+  labeled:
+    categories: ${categories}
+
+val_datasets:
+  main:
+    categories: ${categories}
+
+test_datasets:
+  co3d:
+    categories: ${categories}
+
+
+train: True
+test: True

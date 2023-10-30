@@ -58,6 +58,10 @@ FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@
 
 `docker build -f third_party/envs/DROID-SLAM/Dockerfile -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g) third_party/envs/DROID-SLAM`
 
+3. ZSP
+
+`docker build -f third_party/envs/Zero-Shot-Pose/Dockerfile -t limpbot/zsp:v1 third_party/zero-shot-pose`
+
 ### Dataset 
 
 For each dataset there are three steps required to set it up

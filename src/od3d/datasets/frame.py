@@ -525,7 +525,7 @@ class OD3D_Frame():
 
     @property
     def fpath_depth(self):
-        raise self.path_raw.joinpath(self.meta.rfpath_depth)
+        return self.path_raw.joinpath(self.meta.rfpath_depth)
 
     @property
     def depth(self):

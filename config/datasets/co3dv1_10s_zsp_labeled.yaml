@@ -5,17 +5,19 @@ name: co3dv1_10s_zsp_labeled
 
 #frames_count_max_per_sequence: 3
 ###
-#modalities:
-#    - 'size'
-#    - 'category'
-#    - 'cam_intr4x4'
-#    - 'cam_tform4x4_obj'
-#    - 'category'
-#    - 'rgb'
-#    - 'mask'
-#    - 'sequence_name'
-#    - 'sequence'
-#    - 'mesh'
+modalities:
+    - 'size'
+    - 'category'
+    - 'cam_intr4x4'
+    - 'cam_tform4x4_obj'
+    - 'category'
+    - 'rgb'
+    - 'mask'
+    - 'sequence_name'
+    - 'sequence'
+    - 'depth'
+    - 'depth_mask'
+    # - 'mesh'
 
 sequences_require_gt_pose: True
 

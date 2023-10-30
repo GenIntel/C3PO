@@ -295,6 +295,10 @@ class CO3D_Frame(OD3D_Frame):
             self._depth = read_co3d_depth_image(self.fpath_depth) * self.meta.depth_scale
         return self._depth
 
+    @depth.setter
+    def depth(self, value: torch.Tensor):
+            self._depth = value
+
     @property
     def fpath_mesh(self):
         return self.sequence.fpath_mesh

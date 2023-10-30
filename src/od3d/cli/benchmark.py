@@ -528,14 +528,18 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                     ablation_fpaths_rel[-1].append(ablation_fpath_rel)
         import itertools
         combinations_ablation_fpaths_rel = list(itertools.product(*ablation_fpaths_rel))
-        for combination_ablation_fpaths_rel in combinations_ablation_fpaths_rel:
+        logger.info('loading hierarchical ablations...')
+        for i, combination_ablation_fpaths_rel in enumerate(combinations_ablation_fpaths_rel):
+            logger.info(f'{i} of {len(combinations_ablation_fpaths_rel)}')
             cfg = od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform, ablations=combination_ablation_fpaths_rel)
             cfg.ablation_name = '_'.join([cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
             cfgs.append(cfg)
 
     # create one config per method
+    logger.info('creating one config per method')
     methods_cfgs = []
-    for cfg in cfgs:
+    for i, cfg in enumerate(cfgs):
+        logger.info(f'{i} of {len(cfgs)}')
         methods_keys = cfg.method.keys()
         for key in methods_keys:
             method_cfg = cfg.copy()
@@ -551,8 +555,8 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 
     current_branch = Repository('.').head.shorthand  # 'master'
 
-
     for i, method_cfg in enumerate(methods_cfgs):
+        logger.info(f'{i} of {len(methods_cfgs)}')
         with open_dict(method_cfg):
             if method_cfg.get('branch', None) is None:
                 method_cfg.branch = current_branch

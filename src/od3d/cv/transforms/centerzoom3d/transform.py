@@ -55,11 +55,11 @@ class CenterZoom3D(OD3D_Transform):
             if self.scale is not None:
                 logger.warning('For CenterZoom3D `scale` and `scale_with_mask` are not None. Only using `scale_with_mask`.')
 
-            mask = frame.mask > 0
+            mask = frame.mask > 0.5
             if mask.sum() > 0.:
                 from od3d.cv.geometry.grid import get_pxl2d
                 mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
-                mask_pxl2d = mask_pxl2d[mask[0] > 0.5]
+                mask_pxl2d = mask_pxl2d[mask[0]]
                 # this automatic scales to fit the cropped image
                 mask_H = int(max(mask_pxl2d[:, 1].max() - center2d[1], center2d[1]-mask_pxl2d[:, 1].min()) * 2)
                 mask_W = int(max(mask_pxl2d[:, 0].max() - center2d[0], center2d[0]-mask_pxl2d[:, 0].min()) * 2)
@@ -101,6 +101,11 @@ class CenterZoom3D(OD3D_Transform):
         if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
             frame.mask, _ = crop(img=frame.mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
+        if OD3D_FRAME_MODALITIES.DEPTH in frame.modalities:
+            frame.depth, _ = crop(img=frame.depth, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
+
+        if OD3D_FRAME_MODALITIES.DEPTH_MASK in frame.modalities:
+            frame.depth, _ = crop(img=frame.depth_mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
         if self.apply_txtr:

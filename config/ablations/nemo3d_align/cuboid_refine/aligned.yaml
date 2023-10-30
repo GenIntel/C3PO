@@ -5,6 +5,16 @@ ablation_name: ${ablation_name_nemo3d_align_cuboid_refine}
 
 method:
   nemo:
+    inference:
+      use_mask_object: True
+      sample:
+        method: epnp3d2d # epnp3d2d uniform
+        epnp3d2d:
+          count_cams: 100
+          count_pts: 4
+      refine:
+        enabled: True
+        dims_detached: [] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
     train:
       epochs: 10
     test:
