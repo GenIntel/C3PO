@@ -1233,19 +1233,19 @@ class NeMo(OD3D_Method):
 
                 from od3d.cv.geometry.grid import get_pxl2d
 
-                mask_bbox_x_max = torch.ones(size=(B,)).to(device=device) * (W - 1) -cx
+                mask_bbox_x_max = torch.ones(size=(B,)).to(device=device) * (W - 1) * self.down_sample_rate -cx
                 mask_bbox_x_min = torch.ones(size=(B,)).to(device=device) * 0 - cx
-                mask_bbox_y_max = torch.ones(size=(B,)).to(device=device) * (H - 1) -cy
+                mask_bbox_y_max = torch.ones(size=(B,)).to(device=device) * (H - 1) * self.down_sample_rate -cy
                 mask_bbox_y_min = torch.ones(size=(B,)).to(device=device) * 0 - cy
                 if feats2d_net_mask is not None:
                     mask = feats2d_net_mask > 0.5
                     mask_pxl2d = get_pxl2d(H=feats2d_net_mask.shape[-2], W=feats2d_net_mask.shape[-1], dtype=float, device=feats2d_net_mask.device)
                     mask_pxl2d = mask_pxl2d[None, None].expand(*feats2d_net_mask.shape, 2) * self.down_sample_rate
                     for b in range(B):
-                        mask_bbox_x_max[b] = mask_pxl2d[b][mask[b]][0].max() -cx[b]
-                        mask_bbox_x_min[b] = mask_pxl2d[b][mask[b]][0].min() -cx[b]
-                        mask_bbox_y_max[b] = mask_pxl2d[b][mask[b]][1].max() -cy[b]
-                        mask_bbox_y_min[b] = mask_pxl2d[b][mask[b]][1].min() -cy[b]
+                        mask_bbox_x_max[b] = mask_pxl2d[b][mask[b]][:, 0].max() - cx[b]
+                        mask_bbox_x_min[b] = mask_pxl2d[b][mask[b]][:, 0].min() - cx[b]
+                        mask_bbox_y_max[b] = mask_pxl2d[b][mask[b]][:, 1].max() - cy[b]
+                        mask_bbox_y_min[b] = mask_pxl2d[b][mask[b]][:, 1].min() - cy[b]
                 # B x 4
                 scales = torch.stack([mask_bbox_x_max / mesh_bbox_x_max, mask_bbox_x_min / mesh_bbox_x_min, mask_bbox_y_max / mesh_bbox_y_max, mask_bbox_y_min / mesh_bbox_y_min], dim=-1)
                     # torch.masked_select(input=mask_pxl2d, mask=feats2d_net_mask > 0.5)
