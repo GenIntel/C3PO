@@ -105,7 +105,7 @@ class CenterZoom3D(OD3D_Transform):
             frame.depth, _ = crop(img=frame.depth, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
         if OD3D_FRAME_MODALITIES.DEPTH_MASK in frame.modalities:
-            frame.depth, _ = crop(img=frame.depth_mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
+            frame.depth_mask, _ = crop(img=frame.depth_mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
 
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
         if self.apply_txtr:
