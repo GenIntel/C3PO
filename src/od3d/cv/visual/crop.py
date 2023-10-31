@@ -44,7 +44,7 @@ def crop_white_border_from_img(img, crop_width=True, crop_height=True):
 
     return cropped_img
 
-def crop(img, H_out, W_out, center=None, scale=1., ctx=None):
+def crop(img, H_out, W_out, center=None, scale=1., ctx=None, mode="bilinear"):
     device = img.device
     dtype = img.dtype
     img_in_shape = img.shape[1:]
@@ -76,12 +76,12 @@ def crop(img, H_out, W_out, center=None, scale=1., ctx=None):
         pad_y_upper = -pad_in[3] if pad_in[3] > 0 else None
         img_padded[:, pad_in[2]:pad_y_upper, pad_in[0]:pad_x_upper] = img
         img_cropped = img_padded[:, bbox_in[1] + pad_in[2]: bbox_in[3] + pad_in[2], bbox_in[0] + pad_in[0]:bbox_in[2] + pad_in[0]]
-        img_out = resize(img_cropped, H_out=H_out, W_out=W_out)
+        img_out = resize(img_cropped, H_out=H_out, W_out=W_out, mode=mode)
         #logger.info(f'scale >= 1. out size: ({img_out.shape[1]}, {img_out.shape[2]})')
 
     # b) first resize then crop (preferred if scale < 1. -> pad on lower-resolution image)
     else:
-        img_res = resize(img, scale_factor=scale)
+        img_res = resize(img, scale_factor=scale, mode=mode)
         bbox_in_res = (bbox_in * scale).to(torch.long)
         bbox_in_res[3] = H_out + bbox_in_res[1]
         bbox_in_res[2] = W_out + bbox_in_res[0]
@@ -99,7 +99,7 @@ def crop(img, H_out, W_out, center=None, scale=1., ctx=None):
                                      math.ceil(pad_in[2] * scale),
                                      math.floor(W_out - 1 - pad_in[1] * scale),
                                      math.floor(H_out - 1 - pad_in[3] * scale)]).to(device)
-        ctx = resize(ctx, H_out=H_out, W_out=W_out)
+        ctx = resize(ctx, H_out=H_out, W_out=W_out, mode=mode)
         ctx[:, bbox_out[1]:bbox_out[3], bbox_out[0]:bbox_out[2]] = img_out[:, bbox_out[1]: bbox_out[3], bbox_out[0]:bbox_out[2]]
         img_out = ctx
 

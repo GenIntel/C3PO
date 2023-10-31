@@ -67,6 +67,27 @@ def rm_dir(path: Path):
     except Exception as e:
         logger.warning(e)
 
+from tqdm import tqdm
+def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", multiple_ablations=[], multiple_overrides=[]):
+    config_dir_rel = "../../config"
+    cfgs= []
+    with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):
+        for a, ablations in tqdm(enumerate(multiple_ablations)):
+            # logger.info(ablations)
+            if len(multiple_overrides) > a:
+                overrides = multiple_overrides[a]
+            else:
+                overrides = []
+            overrides = [f"+ablations/{Path(ablation).parent}={Path(ablation).stem}" for ablation in ablations] + [
+                "platform=" + platform] + overrides
+            cfg = compose(config_name=benchmark, overrides=overrides)
+            cfg.ablation_name = '_'.join(
+                [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
+            #logger.info(cfg.ablation_name)
+
+            cfgs.append(cfg)
+    return cfgs
+
 def load_hierarchical_config(benchmark="defaults", platform="local", ablations=[], overrides=[]):
     config_dir_rel = "../../config"
     with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):

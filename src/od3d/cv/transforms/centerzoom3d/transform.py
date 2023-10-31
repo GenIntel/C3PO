@@ -96,16 +96,16 @@ class CenterZoom3D(OD3D_Transform):
             center2d_shifted[0] += frame.W * self.center_rel_shift_xy[0]
             center2d_shifted[1] += frame.H * self.center_rel_shift_xy[1]
 
-        frame.mask_rgb, _ = crop(frame.mask_rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
+        frame.mask_rgb, _ = crop(frame.mask_rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode="nearest_v2")
 
         if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
-            frame.mask, _ = crop(img=frame.mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
+            frame.mask, _ = crop(img=frame.mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode="nearest_v2")
 
         if OD3D_FRAME_MODALITIES.DEPTH in frame.modalities:
-            frame.depth, _ = crop(img=frame.depth, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
+            frame.depth, _ = crop(img=frame.depth, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode="nearest_v2")
 
         if OD3D_FRAME_MODALITIES.DEPTH_MASK in frame.modalities:
-            frame.depth_mask, _ = crop(img=frame.depth_mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None)
+            frame.depth_mask, _ = crop(img=frame.depth_mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode="nearest_v2")
 
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
         if self.apply_txtr:
