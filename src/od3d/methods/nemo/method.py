@@ -1261,7 +1261,7 @@ class NeMo(OD3D_Method):
                 raise NotImplementedError
 
 
-            b_cams_multiview_tform4x4_obj[:, :, :3] = b_cams_multiview_tform4x4_obj[:, :, :3] * _scale[:, :, None, None]
+            b_cams_multiview_tform4x4_obj[:, :, :3, :3] = b_cams_multiview_tform4x4_obj[:, :, :3, :3] * _scale[:, :, None, None]
 
             cam_tform4x4_obj_scaled = cam_tform4x4_obj[:, None].clone().expand(cam_tform4x4_obj.shape[0], *b_cams_multiview_tform4x4_obj.shape[1:]).clone()
             #cam_tform4x4_obj_scaled[:, :, :3] = cam_tform4x4_obj_scaled[:, :, :3] / (_scale[:, :, None, None] + 1e-10)
