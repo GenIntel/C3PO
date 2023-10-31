@@ -20,6 +20,9 @@ import random
 import requests
 import pickle
 import io
+from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
+from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES
+from od3d.cv.metric.pose import get_pose_diff_in_rad
 
 class ZSP(OD3D_Method):
     def setup(self):
@@ -90,12 +93,6 @@ class ZSP(OD3D_Method):
             all_pred_ref_tform_src[category] = torch.zeros(
                 size=(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id], 4, 4)).to(
                 device=self.device, dtype=dtype)
-            all_pred_pose_dist_geo[category] = torch.zeros(
-                size=(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id])).to(
-                device=self.device, dtype=dtype)
-            all_pred_pose_dist_appear[category] = torch.zeros(
-                size=(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id])).to(
-                device=self.device, dtype=dtype)
 
         for cat_id, category in enumerate(categories):
             src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
@@ -105,6 +102,7 @@ class ZSP(OD3D_Method):
             ref_mesh_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
 
             for r, ref_mesh_id in enumerate(ref_mesh_ids):
+                logger.info(f'ref {r} out of {len(ref_mesh_ids)}')
                 ref_frames_N = len(ref_sequences[ref_mesh_id].frames_names)
                 ref_frames_S = 10
                 ref_frames_indices = np.linspace(0, ref_frames_N-1, ref_frames_S).astype(int)
@@ -128,29 +126,31 @@ class ZSP(OD3D_Method):
 
                     src_frames_N = len(src_sequences[src_mesh_id].frames_names)
 
-                    source_frame_index = random.choice(np.arange(src_frames_N))
+                    # source_frame_index = random.choice(np.arange(src_frames_N))
+                    source_frame_index = src_frames_N // 2
                     src_frame = self.transform_train(src_sequences[src_mesh_id].get_frame_by_index(source_frame_index))
-
-
 
                     bytes_io = io.BytesIO()
                     # data = {'img': batch.rgb, 'cam_tform4x4_obj': batch.cam_tform4x4_obj}
                     ref_image = torch.stack([src_frame.rgb], dim=0)
                     B = len(ref_image)
-                    ref_scalings = src_frame.size # torch.stack([src_frame.size], dim=0)
+                    ref_scalings = src_frame.size.clone() # torch.stack([src_frame.size], dim=0)
+                    ref_scalings[:] = 1.
                     ref_depth_map = torch.stack([src_frame.depth], dim=0)
                     ref_cam_intr = torch.stack([src_frame.cam_intr4x4], dim=0)
                     ref_cam_extr = torch.stack([src_frame.cam_tform4x4_obj], dim=0)
 
                     all_target_images = torch.stack([ref_frame.rgb for ref_frame in ref_frames], dim=0)[None,]
                     N_TGT = len(all_target_images)
-                    target_scalings = ref_frames[0].size # torch.stack([ref_frame.size for ref_frame in ref_frames], dim=0)[None,]
+                    target_scalings = ref_frames[0].size.clone() # torch.stack([ref_frame.size for ref_frame in ref_frames], dim=0)[None,]
+                    target_scalings[:] = 1.
                     target_depth_map = torch.stack([ref_frame.depth for ref_frame in ref_frames], dim=0)[None,]
                     target_cam_intr = torch.stack([ref_frame.cam_intr4x4 for ref_frame in ref_frames], dim=0)[None,]
                     target_cam_extr = torch.stack([ref_frame.cam_tform4x4_obj for ref_frame in ref_frames], dim=0)[None,]
+
                     data = {
-                        "ref_image": ref_image * 1.,
-                        "all_target_images": all_target_images * 1.,
+                        "ref_image": ref_image,
+                        "all_target_images": all_target_images,
                         "ref_scalings": ref_scalings,
                         "target_scalings": target_scalings,
                         "ref_depth_map": ref_depth_map,
@@ -163,71 +163,124 @@ class ZSP(OD3D_Method):
                     pickle.dump(data, bytes_io, pickle.HIGHEST_PROTOCOL)
                     bytes_io.seek(0)
                     resp = requests.post("http://127.0.0.1:5000/predict", files={"file": bytes_io})
+                    # all_pred_ref_tform_src = resp.json()['obj2_tform_obj1']
+                    pred_ref_tform_src = resp.json()['obj2_tform_obj1'][0]
+                    pred_ref_tform_src = torch.Tensor(pred_ref_tform_src).to(device=self.device)
+                    #scale = torch.linalg.norm(pred_ref_tform_src[..., :3, :3], dim=-1, keepdim=True)
+                    #logger.info(scale)
+                    #pred_ref_tform_src[..., :3, :] = pred_ref_tform_src[..., :3, :] / scale
+                    all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
-                    resp = requests.post("http://localhost:5000/predict", files={"file": bytes_io})
-                    print(resp.json())
-                    # resp: flask.Response =
+                    if self.config.use_gt_src:
+                        gt_ref_tform_src = tform4x4(
+                            inv_tform4x4(
+                                ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device,
+                                                                                   dtype=pred_ref_tform_src.dtype)),
+                            src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device,
+                                                                                              dtype=pred_ref_tform_src.dtype))
+                        #
+                        # if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
+                        #     gt_ref_tform_src = tform4x4(
+                        #         inv_tform4x4(ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device,
+                        #                                                                                        dtype=pred_ref_tform_src.dtype)),
+                        #         src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device,
+                        #                                                                           dtype=pred_ref_tform_src.dtype))
+                        # elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
+                        #     gt_ref_tform_src = tform4x4(
+                        #         inv_tform4x4(ref_sequences[ref_mesh_id].droid_slam_labeled_tform_droid_slam.to(
+                        #             device=self.device, dtype=pred_ref_tform_src.dtype)),
+                        #         src_sequences[src_mesh_id].droid_slam_labeled_tform_droid_slam.to(device=self.device,
+                        #                                                                           dtype=pred_ref_tform_src.dtype))
+                        # else:
+                        #     gt_ref_tform_src = torch.eye(4).to(device=self.device)
+                        #     logger.warning('No gt available ')
+                        diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
+                        logger.info(diff_rot_angle_rad)
+                        results_diff_log_rot[category][r, s] = diff_rot_angle_rad
 
+        results = OD3D_Results()
+        #results_ref = OD3D_Results()
+        for cat_id, category in enumerate(categories):
+            category_results = OD3D_Results()
+            exclude_diagonal = dataset_src.name == dataset_ref.name
 
+            if exclude_diagonal:
+                # excluding diagonal entries as these are predicted transformation between same instance
+                if self.config.use_gt_src:
+                    category_results[f'rot_diff_rad'] = results_diff_log_rot[category][
+                        torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1)
+                #category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][
+                #    torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1)
+                #category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][
+                #    torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1)
+            else:
+                if self.config.use_gt_src:
+                    category_results[f'rot_diff_rad'] = results_diff_log_rot[category]
+                #category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category]
+                #category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category]
 
-                    ref_image = data['ref_image'],
-                    all_target_images = data['all_target_images'],
-                    ref_scalings = data['ref_scalings'],
-                    target_scalings = data['target_scalings'],
-                    ref_depth_map = data['ref_depth_map'],
-                    target_depth_map = data['target_depth_map'],
-                    ref_cam_extr = data['ref_cam_extr'],
-                    target_cam_extr = data['target_cam_extr'],
-                    ref_cam_intr = data['ref_cam_intr'],
-                    target_cam_intr = data['target_cam_intr'],
+            results += category_results.mean()
+            category_results_mean = category_results.add_prefix(category)
+            category_results_mean = category_results_mean.mean()
+            category_results_mean.log()
+            logger.info(category_results_mean)
+            #if self.config.use_gt_src:
+            #    category_results[f'rot_diff_rad'] = category_results[f'rot_diff_rad'][None,]
+            #category_results[f'pose_sim_geo'] = category_results[f'pose_sim_geo'][None,]
+            #category_results[f'pose_sim_appear'] = category_results[f'pose_sim_appear'][None,]
+            #results += category_results_mean # category_results
+            #
+            # category_results_ref = OD3D_Results()
+            # # excluding diagonal entries as these are predicted transformation between same instance
+            # if self.config.use_gt_src:
+            #     category_results_ref[f'rot_diff_rad'] = results_diff_log_rot[category][0, 1:]
+            # category_results_ref[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][0, 1:]
+            # category_results_ref[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][0, 1:]
+            #
+            # results_ref += category_results_ref
+            # category_results_ref = category_results_ref.add_prefix(category)
+            # category_results_ref_mean = category_results_ref.mean()
+            # category_results_ref_mean.log_with_prefix(prefix=f'only_to_ref')
 
-                    # all_pred_ref_tform_src
-
-        logger.info('loading mesh feats...')
-        src_sequences_unique_names = [seq.name_unique for seq in src_sequences]
-        ref_sequences_unique_names = [seq.name_unique for seq in ref_sequences]
-        #sequences_unique_names = [seq.name_unique for seq in sequences]
-
-        src_map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in src_sequences_unique_names])
-        ref_map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in ref_sequences_unique_names])
-
-        categories_count = len(categories)
-
-        src_instances_count_per_category = [(src_map_seq_to_cat == c).sum().item() for c in range(categories_count)]
-        ref_instances_count_per_category = [(ref_map_seq_to_cat == c).sum().item() for c in range(categories_count)]
+        results_mean = results.mean()
+        #results_ref_mean = results_ref.mean()
+        results_mean.log()
+        logger.info(results_mean)
 
 
     def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
-        logger.info(f'test dataset {dataset.name}')
-
-        score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
-        score_ckpt_val = 0.
-        score_latest = 0.
-
-        dataset.transform = self.transform_test
-        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
-                                                 shuffle=False,
-                                                 collate_fn=dataset.collate_fn,
-                                                 num_workers=self.config.test.dataloader.num_workers,
-                                                 pin_memory=self.config.test.dataloader.pin_memory)
-
-        logger.info(f"Dataset contains {len(dataset)} frames.")
-
-        results_epoch = OD3D_Results()
-        for i, batch in tqdm(enumerate(iter(dataloader))):
-            batch.to(device=self.device)
-
-            results_batch = self.inference_batch(batch=batch)
-            results_epoch += results_batch
-
-        count_pred_frames = len(results_epoch['item_id'])
-        logger.info(f'Predicted {count_pred_frames} frames.')
-
-        #results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
-        #                                         config_visualize=self.config.test.visualize)
-        results_epoch = results_epoch.mean()
-        #results_epoch += results_visual
-        return results_epoch
+        pass
+        #
+        # logger.info(f'test dataset {dataset.name}')
+        #
+        # score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
+        # score_ckpt_val = 0.
+        # score_latest = 0.
+        #
+        # dataset.transform = self.transform_test
+        # dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
+        #                                          shuffle=False,
+        #                                          collate_fn=dataset.collate_fn,
+        #                                          num_workers=self.config.test.dataloader.num_workers,
+        #                                          pin_memory=self.config.test.dataloader.pin_memory)
+        #
+        # logger.info(f"Dataset contains {len(dataset)} frames.")
+        #
+        # results_epoch = OD3D_Results()
+        # for i, batch in tqdm(enumerate(iter(dataloader))):
+        #     batch.to(device=self.device)
+        #
+        #     results_batch = self.inference_batch(batch=batch)
+        #     results_epoch += results_batch
+        #
+        # count_pred_frames = len(results_epoch['item_id'])
+        # logger.info(f'Predicted {count_pred_frames} frames.')
+        #
+        # #results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
+        # #                                         config_visualize=self.config.test.visualize)
+        # results_epoch = results_epoch.mean()
+        # #results_epoch += results_visual
+        # return results_epoch
 
     def inference_batch(self, batch: OD3D_Frames):
         results = OD3D_Results()

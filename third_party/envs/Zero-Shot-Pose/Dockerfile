@@ -76,9 +76,14 @@ RUN conda update -n base --all
 
 ## install 'mamba'
 RUN conda install -n base mamba
+#RUN mamba init
+## Make RUN commands use `bash --login`:
+#SHELL ["/bin/bash", "--login", "-c"]
+#RUN conda init bash
+# Install Droid SLAM dependencies
+#RUN mamba install python=3.9
 
-RUN conda init
-RUN mamba init
+#RUN mamba install pytorch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1 cudatoolkit=11.3 -c pytorch -c conda-forge -y
 
 WORKDIR /root/zsp/
 ADD environment.yml /root/zsp
@@ -90,9 +95,29 @@ RUN mamba env create -f environment.yml
 ENV PATH /root/miniconda3/envs/zsp/bin:$PATH
 RUN echo "source activate zsp" > ~/.bashrc
 
-RUN pip install torch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1
+RUN mamba update -y pytorch3d -c pytorch3d
+# RUN conda activate zsp
+
 
 RUN pip install 'pillow<7'
+
+# RUN mamba install pytorch==1.9.1 torchvision==0.11.2 torchaudio==0.10.1 cudatoolkit=11.3 -c pytorch -c conda-forge -y
+
+# RUN conda activate zsp
+#RUN mamba install -y pytorch=1.13.0 torchvision pytorch-cuda=11.6 -c pytorch -c nvidia
+#RUN mamba install -y -c fvcore -c iopath -c conda-forge fvcore iopath
+#RUN mamba install -y -c bottler nvidiacub
+
+# RUN pip install torch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1
+#RUN pip install --pre torch torchvision torchaudio -f https://download.pytorch.org/whl/nightly/cu111/torch_nightly.html
+#RUN pip install torch torchvision torchaudio
+#RUN RUN conda install pytorch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1 cudatoolkit=11.3 -c pytorch -c conda-forge -y
+
+# RUN apt install libpng libjpeg
+# RUN apt install libpng12-0
+# -dev
+
+RUN pip install torch==2.0.1+cu118 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 RUN pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
@@ -112,7 +137,7 @@ ENTRYPOINT ["env", "FLASK_APP=flask_server.py", "python", "-m", "flask", "run", 
 
 
 # use this for interactive container
-#ENTRYPOINT [ "/bin/bash" ]
+# ENTRYPOINT [ "/bin/bash" ]
 
 # env FLASK_APP=flask_server_test.py python -m flask run --host=0.0.0.0
 
