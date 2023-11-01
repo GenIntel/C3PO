@@ -15,6 +15,7 @@ import torch
 # masked_scatter: input, mask, source -> return tensor with masked copy of source into target
 #   -> mask must be broadcastable for source and target
 
+# def batched_index_fill(input, index, dim=None):
 
 def batched_index_select(input, index, dim=None):
     """
@@ -56,6 +57,7 @@ def index_MD_to_1D(indexMD, inputMD, dims):
             index1D *= inputMD.shape[dims[m]]
         index1D += indexMD[..., m]
     return index1D
+
 
 def batched_indexMD_select(inputMD, indexMD, dims=None):
     """

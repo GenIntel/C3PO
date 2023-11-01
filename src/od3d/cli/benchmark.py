@@ -62,14 +62,14 @@ def get_dataframe(configs=[], metrics=[], name_regex=None, name_regex_groups=[],
             runs))
         #logger.info('after filtering timestamp...')
         #logger.info(runs)
-        logger.info(f'after timestamp {len(runs)}')
+        logger.info(f'after timestamp {len(runs)}, age in hours {age_in_hours}')
 
 
     if name_regex is not None:
         #runs_names_regex_matches = [re.match(name_regex, run.name) for run in runs]
         #runs = [runs[i] if len(runs_names_regex_matches[i].groups()) >= len(name_regex_groups) else None for i in range(len(runs))]
         runs = list(filter(lambda run: re.match(name_regex, run.name) and len(re.match(name_regex, run.name).groups()) >= len(name_regex_groups), runs))
-        logger.info(f'after filtering name regex {len(runs)}')
+        logger.info(f'after filtering name regex {len(runs)}, regex {name_regex}')
         #logger.info(runs)
 
     if name_partial_ban is not None:
@@ -177,8 +177,6 @@ def table():
     # 08-14_10-02-12_CO3D_NeMo_use_mask_rgb_and_object_slurm
     # 08-14_09-05-31_CO3D_NeMo_moving_average_slurm
     # 08-11_20-47-23_CO3D_NeMo_cross_entropy_bank_loss_gradient_slurm
-
-
 
     metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18', 'test/pascal3d_test/pose/err_median', 'test/pascal3d_test/pose/err_mean', 'test/pascal3d_test/time_pose']
     #metrics = ['test/co3d_5s_test/pose/acc_pi6', 'test/co3d_5s_test/pose/acc_pi18', 'test/co3d_5s_test/pose/err_median', 'test/co3d_5s_test/pose/err_mean', 'test/co3d_5s_test/time_pose']
@@ -520,6 +518,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         ablation_fpaths_rel = []
         for ablation_dir in ablation_dirs:
             ablation_fpaths_rel.append([])
+            logger.info(f'crwaling ablation directory {ablation_dir}')
             for ablation_file_fpath in ablation_dir.iterdir():
                 if ablation_file_fpath.is_dir():
                     continue
@@ -528,7 +527,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                     ablation_fpaths_rel[-1].append(ablation_fpath_rel)
         import itertools
         combinations_ablation_fpaths_rel = list(itertools.product(*ablation_fpaths_rel))
-        logger.info('loading hierarchical ablations...')
+        logger.info(f'loading {len(combinations_ablation_fpaths_rel)} hierarchical ablations...')
         cfgs = od3d.io.load_multiple_hierarchical_configs(benchmark=benchmark, platform=platform, multiple_ablations=combinations_ablation_fpaths_rel)
 
         #for i, combination_ablation_fpaths_rel in enumerate(tqdm(combinations_ablation_fpaths_rel)):
@@ -538,7 +537,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         #    cfgs.append(cfg)
 
     # create one config per method
-    logger.info('creating one config per method')
+    logger.info(f'creating one config per method for {len(cfgs)} configs')
     methods_cfgs = []
     for i, cfg in tqdm(enumerate(cfgs)):
         #logger.info(f'{i} of {len(cfgs)}')

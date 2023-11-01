@@ -83,7 +83,7 @@ def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", m
             cfg = compose(config_name=benchmark, overrides=overrides)
             cfg.ablation_name = '_'.join(
                 [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
-            #logger.info(cfg.ablation_name)
+            logger.info(cfg.ablation_name)
 
             cfgs.append(cfg)
     return cfgs

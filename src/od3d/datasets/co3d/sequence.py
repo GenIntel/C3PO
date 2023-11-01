@@ -928,6 +928,10 @@ class CO3D_Sequence():
         obj_cams_traj = inv_tform4x4(cams_tform_obj)[:, :3, 3]
         return obj_cams_traj
 
+    def get_a_src_scale_b_src(self, src_a: CAM_TFORM_OBJ_SOURCES, src_b: CAM_TFORM_OBJ_SOURCES, device='cpu'):
+        a_tform_b = self.get_a_src_tform_b_src(src_a=src_a, src_b=src_b, estimate_scale=True, device=device)
+        return a_tform_b[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+
     def get_a_src_tform_b_src(self, src_a: CAM_TFORM_OBJ_SOURCES, src_b: CAM_TFORM_OBJ_SOURCES, estimate_scale=True, device='cpu'):
         fpath = self.path_preprocess.joinpath('a_src_tform_b_src', f'{src_a}_tform_{src_b}', self.name_unique, f'{src_a}_tform_{src_b}.pt')
         if fpath.exists():

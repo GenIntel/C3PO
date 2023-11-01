@@ -81,7 +81,7 @@ def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, con
     COLUMN_CATEGORY_MEAN = "mean"
     COLUMN_INDEX = "index"
     df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours,
-                                     name_regex=f'.*{name_partial}ref([0-9]*)_cat1_([a-z]*).*', name_regex_groups=[COLUMN_CATEGORY, COLUMN_REFERENCE], filter_runs_with_metrics=False)
+                                     name_regex=f'.*{name_partial}ref([0-9]*)_cat1_([a-z]*).*', name_regex_groups=[COLUMN_REFERENCE, COLUMN_CATEGORY], filter_runs_with_metrics=False)
     metrics_dfs = []
     for m, metric in enumerate(metrics):
         if metrics_scales is not None and len(metrics_scales) > m:

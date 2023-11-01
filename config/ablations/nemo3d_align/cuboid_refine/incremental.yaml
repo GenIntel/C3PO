@@ -29,7 +29,6 @@ method:
         enabled: True
         dims_detached: [0, 1, 2] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
     train:
-
       use_mask_object: True
       val: True
       split: sequences_separated # 'random' 'sequences_separated' 'seqences_shared'

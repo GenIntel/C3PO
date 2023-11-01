@@ -1,6 +1,6 @@
 # @package _global_
 
-ablation_name_nemo3d_align_cuboid_refine: aligned
+ablation_name_nemo3d_align_cuboid_refine: aligned_uniform
 ablation_name: ${ablation_name_nemo3d_align_cuboid_refine}
 
 method:
@@ -8,7 +8,7 @@ method:
     inference:
       use_mask_object: True
       sample:
-        method: epnp3d2d # epnp3d2d uniform
+        method: uniform # epnp3d2d uniform
         epnp3d2d:
           count_cams: 100
           count_pts: 4
