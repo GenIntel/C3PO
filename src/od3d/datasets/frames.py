@@ -212,6 +212,16 @@ class OD3D_Frames():
 
             show_scene(pts3d=[pcl], pts3d_colors=[pts3d_colors])
 
+        if OD3D_FRAME_MODALITIES.DEPTH in self.modalities:
+            img = blend_rgb(img, self.depth[0])
+            # from od3d.cv.visual.show import show_scene
+            # from od3d.cv.geometry.transform import depth2pts3d_grid, transf3d_broadcast, inv_tform4x4
+            # pts3d_obj = depth2pts3d_grid(self.depth[0], cam_intr4x4=self.cam_intr4x4[0])[0].reshape(3, -1).permute(1, 0).to(torch.float)
+            # pts3d_obj = transf3d_broadcast(pts3d=pts3d_obj, transf4x4=inv_tform4x4(self.cam_tform4x4_obj[0]))
+            # show_scene(pts3d=[pts3d_obj],
+            #            cams_tform4x4_world=self.cam_tform4x4_obj[:1], cams_intr4x4=self.cam_intr4x4[:1],
+            #            cams_imgs=self.rgb[:1])
+
         if OD3D_FRAME_MODALITIES.MESH in self.modalities:
             # from od3d.cv.geometry.fit3d2d import fit_se3_to_corresp_3d_2d_and_masks
             cam_tform4x4_obj = self.cam_tform4x4_obj[:1]

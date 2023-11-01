@@ -12,8 +12,9 @@ import numpy as np
 from od3d.cv.geometry.transform import transf4x4_from_spherical
 from od3d.datasets.dataset import OD3D_Frames, OD3D_FRAME_MODALITIES
 from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL, PASCAL3D_CATEGORIES
-from od3d.cv.io import read_image, save_image_mask
+from od3d.cv.io import read_image, save_image_mask, write_depth_image, read_depth_image
 from od3d.cv.geometry.mesh import Mesh, Meshes
+from od3d.cv.geometry.mesh import Meshes, MESH_RENDER_MODALITIES
 
 from od3d.datasets.frame import OD3D_FrameMeta, \
     OD3D_FrameMetaMeshMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
@@ -320,6 +321,46 @@ class Pascal3DFrame(OD3D_Frame):
     @property
     def fpath_mesh(self):
         return self.path_meshes.parent.joinpath(self.meta.rfpath_mesh)
+
+
+    @property
+    def fpath_depth(self):
+        return self.path_preprocess.joinpath('depth', self.meta.name_unique + '.png')
+
+    @property
+    def depth(self):
+        if self._depth is None:
+            fpath = self.fpath_depth
+            if not fpath.exists():
+                self.preprocess_depth(override=True)
+            self._depth = read_depth_image(fpath)
+        return self._depth
+
+    @depth.setter
+    def depth(self, value: torch.Tensor):
+            self._depth = value
+
+    def preprocess_depth(self, override=False):
+        if not self.fpath_depth.exists() or override:
+            if torch.cuda.is_available():
+                device = 'cuda:0'
+            else:
+                device = 'cpu'
+            meshes = Meshes.load_from_meshes([self.mesh], device=device)
+            depth = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
+                                       cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
+                                       imgs_sizes=self.size.to(device=device), modality=MESH_RENDER_MODALITIES.DEPTH)[0]
+
+            write_depth_image(depth, path=self.fpath_depth)
+    @property
+    def depth_mask(self):
+        if self._depth_mask is None:
+            self._depth_mask = self.depth != 0.
+        return self._depth_mask
+
+    @depth_mask.setter
+    def depth_mask(self, value: torch.Tensor):
+            self._depth_mask = value
 
     @property
     def mesh(self):

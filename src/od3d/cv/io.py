@@ -8,6 +8,9 @@ import torch
 import wandb
 import open3d as o3d
 import numpy as np
+
+import cv2
+
 def read_pts3d_colors(fpath: Path):
     pcd = o3d.io.read_point_cloud(str(fpath))
     return torch.from_numpy(np.asarray(pcd.colors)).to(torch.float)
@@ -41,6 +44,24 @@ def read_co3d_depth_image(path: Path):
 
     img = transform(img)
     return img
+
+def read_depth_image(path: Path):
+    depth = cv2.imread(str(path), cv2.IMREAD_ANYDEPTH )
+    depth = torch.from_numpy(depth / 1000.)[None,]
+    return depth
+
+def write_depth_image(img: torch.Tensor, path: Path):
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    if img.dim() == 3:
+        depth = img[0]
+    else:
+        depth = img
+    depth = depth.clone().detach().cpu()
+    depth = depth.clamp(0, 65535.)
+    depth = depth * 1000
+    cv2.imwrite(str(path), depth.detach().cpu().numpy().astype(np.uint16))
+
 
 def save_image_mask(img: torch.Tensor, path: Path):
     transform = transforms.Compose([

@@ -132,7 +132,10 @@ class ObjectNet3D(OD3D_Dataset):
                 override = config_preprocess.mask.get('override', False)
                 remove_previous = config_preprocess.mask.get('remove_previous', False)
                 self.preprocess_masks(override=override, remove_previous=remove_previous)
-
+            if key == 'depth' and config_preprocess.depth.get('enabled', False):
+                override = config_preprocess.depth.get('override', False)
+                remove_previous = config_preprocess.mask.get('remove_previous', False)
+                self.preprocess_depths(override=override, remove_previous=remove_previous)
             if key == 'subset_category_names_unique' and config_preprocess.subset_category_names_unique.get('enabled', False):
                 override = config_preprocess.subset_category_names_unique.get('override', False)
                 remove_previous = config_preprocess.subset_category_names_unique.get('remove_previous', False)
@@ -211,6 +214,11 @@ class ObjectNet3D(OD3D_Dataset):
         for frame_id in tqdm(range(len(self))):
             frame = self.get_item(frame_id)
             frame.preprocess_mask(override=override)
+    def preprocess_depths(self, override=False, remove_previous=False):
+        logger.info('preprocess depths...')
+        for frame_id in tqdm(range(len(self))):
+            frame = self.get_item(frame_id)
+            frame.preprocess_depth(override=override)
 """
 class ObjectNet3D(Pascal3D):
 

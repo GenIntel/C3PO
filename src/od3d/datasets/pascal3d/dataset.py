@@ -150,6 +150,10 @@ class Pascal3D(OD3D_Dataset):
                 override = config_preprocess.mask.get('override', False)
                 remove_previous = config_preprocess.mask.get('remove_previous', False)
                 self.preprocess_masks(override=override, remove_previous=remove_previous)
+            elif key == 'depth' and config_preprocess.depth.get('enabled', False):
+                override = config_preprocess.depth.get('override', False)
+                remove_previous = config_preprocess.mask.get('remove_previous', False)
+                self.preprocess_depths(override=override, remove_previous=remove_previous)
 
     def preprocess_cuboids(self, override=False, remove_previous=False):
         logger.info('preprocess cuboids...')
@@ -190,6 +194,11 @@ class Pascal3D(OD3D_Dataset):
             frame = self.get_item(frame_id)
             frame.preprocess_mask(override=override)
 
+    def preprocess_depths(self, override=False, remove_previous=False):
+        logger.info('preprocess depths...')
+        for frame_id in tqdm(range(len(self))):
+            frame = self.get_item(frame_id)
+            frame.preprocess_depth(override=override)
     ##### DATASET PROPERTIES
 
     def get_item(self, item):

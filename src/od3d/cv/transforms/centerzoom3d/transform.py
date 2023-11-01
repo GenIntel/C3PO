@@ -9,17 +9,22 @@ from omegaconf import DictConfig
 from od3d.datasets.dtd import DTD
 import torchvision
 from od3d.cv.transforms.transform import OD3D_Transform
+from od3d.cv.geometry.grid import get_pxl2d
+from od3d.cv.geometry.grid import get_pxl2d
+
 
 class CenterZoom3D(OD3D_Transform):
     # resize types: fit to
-    def __init__(self, H, W, scale=None, center_rel_shift_xy=[0., 0.], apply_txtr=False, config: DictConfig = None, scale_with_mask=None, scale_with_dist=None):
+    def __init__(self, H, W, scale=None, center_rel_shift_xy=[0., 0.], apply_txtr=False, config: DictConfig = None, scale_with_mask=None, scale_with_dist=None, scale_with_pad=True, center_use_mask=False):
         super().__init__()
         self.center_rel_shift_xy = torch.Tensor(center_rel_shift_xy) if center_rel_shift_xy is not None else None
         self.H = H
         self.W = W
+        self.center_use_mask = center_use_mask
         self.scale = scale
         self.scale_with_mask = scale_with_mask
         self.scale_with_dist = scale_with_dist
+        self.scale_with_pad = scale_with_pad
         self.apply_txtr = apply_txtr
         if self.apply_txtr:
             self.dtd = DTD.create_from_config(config=config, transform=torchvision.transforms.Compose([]))
@@ -31,16 +36,22 @@ class CenterZoom3D(OD3D_Transform):
         if frame.cam_tform4x4_obj[2, 3] <= 0.:
             logger.warning(f"dist <= 0")
 
-        if self.center_rel_shift_xy is not None:
-            center2d = proj3d2d(torch.Tensor([0., 0., 0.]), proj4x4=frame.cam_proj4x4_obj)
-            if center2d[0] < -frame.W or center2d[1] < -frame.H or center2d[0] > 2 * frame.W or center2d[1] > 2 * frame.H:
-                logger.warning(f'center {center2d[0].item():.2f}, {center2d[1].item():.2f} far outside of frame {frame.W}, {frame.H}. Setting center to image center.')
-                center2d = frame.size.flip(dims=[0]) / 2
-            if center2d.isnan().any():
-                center2d = frame.size.flip(dims=[0]) / 2
-
+        if self.center_use_mask and (frame.mask > 0.5).sum() > 0:
+            mask = frame.mask > 0.5
+            mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
+            mask_pxl2d = mask_pxl2d[mask[0]]
+            # this automatic scales to fit the cropped image
+            center2d = (mask_pxl2d.min(dim=0).values + (mask_pxl2d.max(dim=0).values - mask_pxl2d.min(dim=0).values) / 2.).to(device=mask.device)
         else:
-            center2d = frame.size.flip(dims=[0]) / 2
+            if self.center_rel_shift_xy is not None:
+                center2d = proj3d2d(torch.Tensor([0., 0., 0.]), proj4x4=frame.cam_proj4x4_obj)
+                if center2d[0] < -frame.W or center2d[1] < -frame.H or center2d[0] > 2 * frame.W or center2d[1] > 2 * frame.H:
+                    logger.warning(f'center {center2d[0].item():.2f}, {center2d[1].item():.2f} far outside of frame {frame.W}, {frame.H}. Setting center to image center.')
+                    center2d = frame.size.flip(dims=[0]) / 2
+                if center2d.isnan().any():
+                    center2d = frame.size.flip(dims=[0]) / 2
+            else:
+                center2d = frame.size.flip(dims=[0]) / 2
 
         if self.scale_with_dist is not None:
             # note: this usage should become deprecated in the future.
@@ -57,7 +68,6 @@ class CenterZoom3D(OD3D_Transform):
 
             mask = frame.mask > 0.5
             if mask.sum() > 0.:
-                from od3d.cv.geometry.grid import get_pxl2d
                 mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
                 mask_pxl2d = mask_pxl2d[mask[0]]
                 # this automatic scales to fit the cropped image
@@ -69,16 +79,22 @@ class CenterZoom3D(OD3D_Transform):
                 mask_H = self.H
                 mask_W = self.W
 
-            scale = min((self.scale_with_mask * self.H) / mask_H, (self.W * self.scale_with_mask) / mask_W)
+            if self.scale_with_pad:
+                scale = min((self.scale_with_mask * self.H) / mask_H, (self.W * self.scale_with_mask) / mask_W)
+            else:
+                scale = max((self.scale_with_mask * self.H) / mask_H, (self.W * self.scale_with_mask) / mask_W)
         else:
             if self.scale_with_mask is not None:
                 logger.warning('For CenterZoom3D `scale_with_mask` is not None, but frame.mask is None. Ignoring `scale_with_mask`')
             # this automatic scales to fit the cropped image
             centered_frame_H = int(max(frame.H - center2d[1], center2d[1]) * 2)
             centered_frame_W = int(max(frame.W - center2d[0], center2d[0]) * 2)
-            scale = min(self.H / centered_frame_H, self.W / centered_frame_W)
+            if self.scale_with_pad:
+                scale = min(self.H / centered_frame_H, self.W / centered_frame_W)
+            else:
+                scale = max(self.H / centered_frame_H, self.W / centered_frame_W)
 
-            if self.scale is not None:
+        if self.scale is not None:
                 # scale = frame.cam_tform4x4_obj[2, 3] / self.dist
                 scale *= self.scale
 

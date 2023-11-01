@@ -33,34 +33,50 @@ def align3d():
     category = 'car'
     rand_category_id = categories.index(category) # 'car', 'chair',
     rand_category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
-    rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=2)
 
-    rand_category_rand_instance_ids = [45, 42]
-    logger.info(f'chosen category is {category}')
-    logger.info(f'chosen ids are {rand_category_rand_instance_ids}')
+    # # CALCULATING CATEGORICAL PCA
+    # category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+    # categorical_features = []
+    # for instance_id_in_category, instance_id in enumerate(category_instance_ids):
+    #     instance_feats = sequences[instance_id].feats
+    #
+    #     if isinstance(instance_feats, List):
+    #         categorical_features += torch.cat([vert_feats for vert_feats in instance_feats], dim=0)
+    #     else:
+    #         categorical_features.append(instance_feats)
+    # categorical_features = torch.stack(categorical_features, dim=0)
+    # _, _, categorical_pca_V = torch.pca_lowrank(categorical_features)
+    # sequences[category_instance_ids[0]].categorical_pca_V = categorical_pca_V
 
-    mesh_source = CUBOID_SOURCES.DEFAULT
-    import math
-    uniform_objs_tform_obj = get_spherical_uniform_tform4x4(azim_steps=3, azim_max=math.pi - math.pi / 3, elev_min=-math.pi / 2, elev_max=-math.pi / 2, elev_steps=1, theta_min=0., theta_max=0., theta_steps=1)
-    mesh1 = sequences[rand_category_rand_instance_ids[0]].get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device)
-    mesh2 = sequences[rand_category_rand_instance_ids[1]].get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device)
-    meshes = [mesh1]
-    tform_count = len(uniform_objs_tform_obj)
-    for t in range(tform_count):
-        uniform_obj_tform_obj = uniform_objs_tform_obj[t]
-        uniform_obj_tform_obj[:3, 3] = 0.
-        uniform_obj_tform_obj[0, 3] = 1.
-        uniform_obj_tform_obj[2, 3] = 1. * (t - tform_count // 2)
+    while True:
+        rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=2)
 
-        mesh = Mesh(verts=transf3d_broadcast(pts3d=mesh2.verts.to(device=device, dtype=dtype), transf4x4=uniform_obj_tform_obj.to(device=device)),
-                    faces=mesh2.faces, rgb=mesh2.rgb)
-        meshes.append(mesh)
+        rand_category_rand_instance_ids = [344, 322]#  344 349 337 334 322 324
+        logger.info(f'chosen category is {category}')
+        logger.info(f'chosen ids are {rand_category_rand_instance_ids}')
 
-    viewpoints_count = 2
-    show_scene(pts3d=[], pts3d_colors=[], device=device,
-               meshes=meshes,
-               meshes_add_translation=False, pts3d_add_translation=False,
-               return_visualization=False, viewpoints_count=viewpoints_count)
+        mesh_source = CUBOID_SOURCES.DEFAULT
+        import math
+        uniform_objs_tform_obj = get_spherical_uniform_tform4x4(azim_min =  -math.pi / 2 , azim_max=  + math.pi / 2, azim_steps=3, elev_min=-math.pi / 2, elev_max=-math.pi / 2, elev_steps=1, theta_min=0., theta_max=0., theta_steps=1)
+        mesh1 = sequences[rand_category_rand_instance_ids[0]].get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device)
+        mesh2 = sequences[rand_category_rand_instance_ids[1]].get_mesh(mesh_source=mesh_source, add_rgb_from_pca=True, device=device)
+        meshes = [mesh1]
+        tform_count = len(uniform_objs_tform_obj)
+        for t in range(tform_count):
+            uniform_obj_tform_obj = uniform_objs_tform_obj[t]
+            uniform_obj_tform_obj[:3, 3] = 0.
+            uniform_obj_tform_obj[0, 3] = 1.5
+            uniform_obj_tform_obj[2, 3] = 1. * (t - tform_count // 2)
+
+            mesh = Mesh(verts=transf3d_broadcast(pts3d=mesh2.verts.to(device=device, dtype=dtype), transf4x4=uniform_obj_tform_obj.to(device=device)),
+                        faces=mesh2.faces, rgb=mesh2.rgb)
+            meshes.append(mesh)
+
+        viewpoints_count = 2
+        show_scene(pts3d=[], pts3d_colors=[], device=device,
+                   meshes=meshes,
+                   meshes_add_translation=False, pts3d_add_translation=False,
+                   return_visualization=False, viewpoints_count=viewpoints_count)
 
 
     mesh1 = None
@@ -91,23 +107,24 @@ def teaser():
     sequences_mesh_ids_for_verts = meshes.get_mesh_ids_for_verts()
 
 
-    ## CALCULATING CATEGORICAL PCA
-    # categorical_features = {}
-    # categorical_pca_V = {}
-    # for cat_id, category in enumerate(categories):
-    #     logger.info(category)
-    #     category_instance_ids = instance_ids[map_seq_to_cat == cat_id]
-    #     categorical_features[category] = []
-    #     for instance_id_in_category, instance_id in enumerate(category_instance_ids):
-    #         instance_feats = sequences[instance_id].feats
-    #
-    #         if isinstance(instance_feats, List):
-    #             categorical_features[category] += torch.cat([vert_feats for vert_feats in instance_feats], dim=0)
-    #         else:
-    #             categorical_features[category].append(instance_feats)
-    #     categorical_features[category] = torch.stack(categorical_features[category], dim=0)
-    #     _, _, categorical_pca_V[category] = torch.pca_lowrank(categorical_features[category])
-    #     sequences[category_instance_ids[0]].categorical_pca_V = categorical_pca_V[category]
+    # CALCULATING CATEGORICAL PCA
+    logger.info('calculating categorical pca...')
+    categorical_features = {}
+    categorical_pca_V = {}
+    for cat_id, category in enumerate(categories):
+        logger.info(category)
+        category_instance_ids = instance_ids[map_seq_to_cat == cat_id]
+        categorical_features[category] = []
+        for instance_id_in_category, instance_id in enumerate(category_instance_ids):
+            instance_feats = sequences[instance_id].feats
+
+            if isinstance(instance_feats, List):
+                categorical_features[category] += torch.cat([vert_feats for vert_feats in instance_feats], dim=0)
+            else:
+                categorical_features[category].append(instance_feats)
+        categorical_features[category] = torch.stack(categorical_features[category], dim=0)
+        _, _, categorical_pca_V[category] = torch.pca_lowrank(categorical_features[category])
+        sequences[category_instance_ids[0]].categorical_pca_V = categorical_pca_V[category]
 
     ## SHOW SINGLE SEQUENCES
     # for sequence in sequences:

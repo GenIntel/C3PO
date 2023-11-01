@@ -335,6 +335,7 @@ class NeMo_Align3D(OD3D_Method):
                                 gt_ref_tform_src = torch.eye(4).to(device=self.device)
                                 logger.warning('No gt available ')
                             diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
+                            logger.info(diff_rot_angle_rad)
                             results_diff_log_rot[category][r, s] = diff_rot_angle_rad
 
 
@@ -414,8 +415,6 @@ class NeMo_Align3D(OD3D_Method):
 
         for cat_id, category in enumerate(categories):
             logger.info(f'category {category}')
-
-
 
             ref_category_instance_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
             if self.config.use_only_first_reference:

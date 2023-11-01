@@ -78,10 +78,10 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
 
     pts_ref_tform_pts_sampled = transf3d_broadcast(pts3d=pts_sampled, transf4x4=pts_ref_tform4x4_pts[:, None])
 
-    logger.info(
-        f'sampled geometrical error before transform: \n{(pts_sampled - pts_ref_sampled).norm(dim=-1).mean(dim=1).mean()}')
-    logger.info(
-        f'sampled geometrical error after transform: \n{(pts_ref_tform_pts_sampled - pts_ref_sampled).norm(dim=-1).mean(dim=1).mean()}')
+    ##logger.info(
+    #    f'sampled geometrical error before transform: \n{(pts_sampled - pts_ref_sampled).norm(dim=-1).mean(dim=1).mean()}')
+    #logger.info(
+    #    f'sampled geometrical error after transform: \n{(pts_ref_tform_pts_sampled - pts_ref_sampled).norm(dim=-1).mean(dim=1).mean()}')
 
     # problem of zeros is ill posed problem if from all 4 sampled points the nearest neighbor is the same.
     mask_pts_ref_tform4x4_pts_zeros = pts_ref_tform4x4_pts[:, :3, :3].flatten(1).sum(dim=-1) == 0.

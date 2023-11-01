@@ -178,16 +178,19 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 mesh_color =mesh_color.detach().cpu().numpy()
 
             mat_box = open3d.visualization.rendering.MaterialRecord()
+            #mat_box.shader = 'defaultUnlit'
             mat_box.shader = 'defaultLitTransparency'
             #mat_box.shader = 'defaultLitSSR'
+            alpha = 1.0
+            mat_box.base_reflectance = 0.
 
             if vertex_colors is None:
                 if len(mesh_color) == 4:
                     mat_box.base_color = [mesh_color[0], mesh_color[1], mesh_color[2], mesh_color[3]]
                 else:
-                    mat_box.base_color = [mesh_color[0], mesh_color[1], mesh_color[2], 0.9] # [0.467, 0.467, 0.467, 0.02]
+                    mat_box.base_color = [mesh_color[0], mesh_color[1], mesh_color[2], alpha] # [0.467, 0.467, 0.467, 0.02]
             else:
-                mat_box.base_color = [0.5, 0.5, 0.5, 0.9]  # [0.467, 0.467, 0.467, 0.02]
+                mat_box.base_color = [0.5, 0.5, 0.5, alpha]  # [0.467, 0.467, 0.467, 0.02]
 
 
             if meshes_as_wireframe:
@@ -250,7 +253,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
     if return_visualization is False and fpath is None:
         if os.environ.get('DISPLAY'):
-            open3d.visualization.draw(geometries)
+            open3d.visualization.draw(geometries, show_skybox=False, bg_color=[1., 1., 1., 1.], raw_mode=True)
             #geometries_list = [geometry['geometry'] for geometry in geometries]
             #open3d.visualization.draw_plotly(geometries_list, mesh_show_wireframe=False)
         else:

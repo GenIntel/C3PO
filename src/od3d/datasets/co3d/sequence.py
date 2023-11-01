@@ -1488,10 +1488,10 @@ class CO3D_Sequence():
             pca_V = self.categorical_pca_V.to(device=device)
             if isinstance(instance_feats, List):
                 verts_feats_pca = torch.stack(
-                    [torch.matmul(vert_feats.to(device=device), pca_V[:, :3]).mean(dim=0) for vert_feats in instance_feats], dim=0)
+                    [torch.matmul(vert_feats.to(device=device), pca_V[:, 3:6]).mean(dim=0) for vert_feats in instance_feats], dim=0)
             else:
-                verts_feats_pca = torch.matmul(instance_feats, pca_V[:, :3])
-            mesh.rgb = (verts_feats_pca.nan_to_num() + 1.) / 2.
+                verts_feats_pca = torch.matmul(instance_feats, pca_V[:, 3:6])
+            mesh.rgb = (verts_feats_pca.nan_to_num() + 0.5 ).clamp(0, 1)
         return mesh
 
     @property

@@ -14,7 +14,8 @@ import math
 from typing import List
 from omegaconf import OmegaConf
 from od3d.cv.io import read_image, save_image_mask
-from od3d.cv.geometry.mesh import Mesh, Meshes
+from od3d.cv.geometry.mesh import Mesh, Meshes, MESH_RENDER_MODALITIES
+from od3d.cv.io import read_depth_image, write_depth_image
 
 from od3d.datasets.objectnet3d.enum import OBJECTNET3D_SCALE_NORMALIZE_TO_REAL
 
@@ -192,10 +193,35 @@ class ObjectNet3D_Frame(OD3D_Frame):
             else:
                 device = 'cpu'
             meshes = Meshes.load_from_meshes([self.mesh], device=device)
-            mask = meshes.render_feats(cams_tform4x4_obj=self.meta.cam_tform4x4_obj[None,].to(device=device),
+            mask = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
                                        cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
                                        imgs_sizes=self.size.to(device=device), modality='mask')[0]
             save_image_mask(mask, path=self.fpath_mask)
+
+    @property
+    def fpath_depth(self):
+        return self.path_preprocess.joinpath('depth', self.meta.name_unique + '.png')
+    @property
+    def depth(self):
+        if self._depth is None:
+            fpath = self.fpath_depth
+            if not fpath.exists():
+                self.preprocess_depth()
+            self._depth = read_depth_image(fpath)
+        return self._depth
+
+    def preprocess_depth(self, override=False):
+        if not self.fpath_depth.exists() or override:
+            if torch.cuda.is_available():
+                device = 'cuda:0'
+            else:
+                device = 'cpu'
+            meshes = Meshes.load_from_meshes([self.mesh], device=device)
+            depth = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
+                                        cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
+                                        imgs_sizes=self.size.to(device=device), modality=MESH_RENDER_MODALITIES.DEPTH)[
+                0]
+            write_depth_image(depth, path=self.fpath_depth)
 
     @property
     def cam_tform4x4_obj(self):
@@ -230,5 +256,5 @@ class ObjectNet3D_Frame(OD3D_Frame):
     @property
     def mesh(self):
         if self._mesh is None:
-            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh)
+            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh, scale=OBJECTNET3D_SCALE_NORMALIZE_TO_REAL[self.category])
         return self._mesh
