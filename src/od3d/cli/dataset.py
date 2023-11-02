@@ -228,15 +228,19 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset, "+datasets@dtd=dtd"])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
-    import torchvision
-    # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
-    dataset.transform = SequentialTransform([
-        #RandomCenterZoom3D(H=640, W=800, dist=25., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=True, config=config.dtd),
-        CenterZoom3D(H=640, W=800, scale=1., center_rel_shift_xy=[0., 0.],
-                           apply_txtr=False, config=config.dtd),
+    # import torchvision
+    # # modalities = [OD3D_FRAME_MODALITIES(mod) for mod in config.dataset.modalities]
+    # dataset.transform = SequentialTransform([
+    #     #RandomCenterZoom3D(H=640, W=800, dist=25., center3d_min=[0., 0., 0.], center3d_max=[0., 0., 0.], apply_txtr=True, config=config.dtd),
+    #     CenterZoom3D(H=640, W=800, scale=1., center_rel_shift_xy=[0., 0.],
+    #                        apply_txtr=False, config=config.dtd),
+    #
+    # ]
+    # )
+    from od3d.cv.transforms.transform import OD3D_Transform
 
-    ]
-    )
+    dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom224')
+    #dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom896')
 
 
     """

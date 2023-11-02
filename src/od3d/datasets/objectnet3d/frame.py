@@ -210,6 +210,10 @@ class ObjectNet3D_Frame(OD3D_Frame):
             self._depth = read_depth_image(fpath)
         return self._depth
 
+    @depth.setter
+    def depth(self, value: torch.Tensor):
+            self._depth = value
+
     def preprocess_depth(self, override=False):
         if not self.fpath_depth.exists() or override:
             if torch.cuda.is_available():
@@ -222,6 +226,16 @@ class ObjectNet3D_Frame(OD3D_Frame):
                                         imgs_sizes=self.size.to(device=device), modality=MESH_RENDER_MODALITIES.DEPTH)[
                 0]
             write_depth_image(depth, path=self.fpath_depth)
+
+    @property
+    def depth_mask(self):
+        if self._depth_mask is None:
+            self._depth_mask = self.depth != 0.
+        return self._depth_mask
+
+    @depth_mask.setter
+    def depth_mask(self, value: torch.Tensor):
+            self._depth_mask = value
 
     @property
     def cam_tform4x4_obj(self):

@@ -15,7 +15,7 @@ from od3d.cv.geometry.grid import get_pxl2d
 
 class CenterZoom3D(OD3D_Transform):
     # resize types: fit to
-    def __init__(self, H, W, scale=None, center_rel_shift_xy=[0., 0.], apply_txtr=False, config: DictConfig = None, scale_with_mask=None, scale_with_dist=None, scale_with_pad=True, center_use_mask=False):
+    def __init__(self, H, W, scale=None, center_rel_shift_xy=[0., 0.], apply_txtr=False, config: DictConfig = None, scale_with_mask=None, scale_with_dist=None, scale_with_pad=True, center_use_mask=False, scale_selection='shorter'):
         super().__init__()
         self.center_rel_shift_xy = torch.Tensor(center_rel_shift_xy) if center_rel_shift_xy is not None else None
         self.H = H
@@ -25,9 +25,13 @@ class CenterZoom3D(OD3D_Transform):
         self.scale_with_mask = scale_with_mask
         self.scale_with_dist = scale_with_dist
         self.scale_with_pad = scale_with_pad
+        self.scale_selection = scale_selection # 'separate' # 'shorter' 'larger' 'separate'
         self.apply_txtr = apply_txtr
         if self.apply_txtr:
             self.dtd = DTD.create_from_config(config=config, transform=torchvision.transforms.Compose([]))
+        self.mode_rgb = "bilinear" # "bilinear" "nearest_v2"
+        self.mode_depth = "nearest_v2" # "bilinear" "nearest_v2"
+        self.mode_mask = "nearest_v2" # "bilinear" "nearest_v2""
 
     def __call__(self, frame: OD3D_Frame):
         # logger.info(f"Frame name {self.name}")
@@ -79,57 +83,68 @@ class CenterZoom3D(OD3D_Transform):
                 mask_H = self.H
                 mask_W = self.W
 
-            if self.scale_with_pad:
-                scale = min((self.scale_with_mask * self.H) / mask_H, (self.W * self.scale_with_mask) / mask_W)
+            if self.scale_selection == 'shorter':
+                scale = torch.Tensor([min((self.scale_with_mask * self.H) / mask_H, (self.W * self.scale_with_mask) / mask_W)])
+            elif self.scale_selection == 'larger':
+                scale = torch.Tensor([max((self.scale_with_mask * self.H) / mask_H, (self.W * self.scale_with_mask) / mask_W)])
+            elif self.scale_selection == 'separate':
+                scale = torch.Tensor([(self.W * self.scale_with_mask) / mask_W, (self.scale_with_mask * self.H) / mask_H])
             else:
-                scale = max((self.scale_with_mask * self.H) / mask_H, (self.W * self.scale_with_mask) / mask_W)
+                msg = f'Unexepcted scale selection type: {self.scale_selection}.'
+                raise Exception(msg)
         else:
             if self.scale_with_mask is not None:
                 logger.warning('For CenterZoom3D `scale_with_mask` is not None, but frame.mask is None. Ignoring `scale_with_mask`')
             # this automatic scales to fit the cropped image
             centered_frame_H = int(max(frame.H - center2d[1], center2d[1]) * 2)
             centered_frame_W = int(max(frame.W - center2d[0], center2d[0]) * 2)
-            if self.scale_with_pad:
-                scale = min(self.H / centered_frame_H, self.W / centered_frame_W)
+            if self.scale_selection == 'shorter':
+                scale = torch.Tensor([min(self.H / centered_frame_H, self.W / centered_frame_W)])
+            elif self.scale_selection == 'larger':
+                scale = torch.Tensor([max(self.H / centered_frame_H, self.W / centered_frame_W)])
+            elif self.scale_selection == 'separate':
+                scale = torch.Tensor([self.W / centered_frame_W, self.H / centered_frame_H])
             else:
-                scale = max(self.H / centered_frame_H, self.W / centered_frame_W)
+                msg = f'Unexepcted scale selection type: {self.scale_selection}.'
+                raise Exception(msg)
 
         if self.scale is not None:
                 # scale = frame.cam_tform4x4_obj[2, 3] / self.dist
                 scale *= self.scale
 
         # logger.info(f'scale = {scale}')
-        if scale < 0.01:
+        if scale.mean() < 0.01:
             logger.warning(f'Scale is < 0.01. Setting scale to 1.')
-            scale = 1.
+            scale[:] = 1.
 
-        if scale > 100.:
+        if scale.mean() > 100.:
             logger.warning(f'Scale is > 100. Setting scale to 1.')
-            scale = 1.
+            scale[:] = 1.
 
         center2d_shifted = center2d.clone()
         if self.center_rel_shift_xy is not None:
             center2d_shifted[0] += frame.W * self.center_rel_shift_xy[0]
             center2d_shifted[1] += frame.H * self.center_rel_shift_xy[1]
 
-        frame.mask_rgb, _ = crop(frame.mask_rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode="nearest_v2")
+
+        frame.mask_rgb, _ = crop(frame.mask_rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
 
         if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
-            frame.mask, _ = crop(img=frame.mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode="nearest_v2")
+            frame.mask, _ = crop(img=frame.mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
 
         if OD3D_FRAME_MODALITIES.DEPTH in frame.modalities:
-            frame.depth, _ = crop(img=frame.depth, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode="nearest_v2")
+            frame.depth, _ = crop(img=frame.depth, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_depth)
 
         if OD3D_FRAME_MODALITIES.DEPTH_MASK in frame.modalities:
-            frame.depth_mask, _ = crop(img=frame.depth_mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode="nearest_v2")
+            frame.depth_mask, _ = crop(img=frame.depth_mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
 
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
         if self.apply_txtr:
             frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale,
-                                                  ctx=self.dtd.get_random_item().rgb)
+                                                  ctx=self.dtd.get_random_item().rgb, mode=self.mode_rgb)
         else:
             frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale,
-                                                 ctx=None)
+                                                 ctx=None, mode=self.mode_rgb)
 
         frame.size[0:1] = self.H
         frame.size[1:2] = self.W
@@ -138,16 +153,17 @@ class CenterZoom3D(OD3D_Transform):
 
         if self.scale_with_dist is not None:
             # note: this usage should become deprecated in the future.
-            frame.cam_intr4x4[:2, :2] *= 1./scale
-            frame.cam_tform4x4_obj[2, 3] *= 1./scale
+            frame.cam_intr4x4[:2, :2] *= 1. / scale
+            frame.cam_tform4x4_obj[2, 3] *= 1. / scale
 
         if OD3D_FRAME_MODALITIES.BBOX in frame.modalities:
-            frame.bbox = frame.bbox * scale
+            # x_min, y_min, x_max, y_max
+            frame.bbox = (frame.bbox.reshape(2, 2) * scale[None,]).flatten()
             frame.bbox[[0, 2]] = frame.bbox[[0, 2]] + cam_crop_tform_cam[0, 2]
             frame.bbox[[1, 3]] = frame.bbox[[1, 3]] + cam_crop_tform_cam[1, 2]
 
         if OD3D_FRAME_MODALITIES.KPTS in frame.modalities:
-            frame.kpts2d_annot = frame.kpts2d_annot * scale
+            frame.kpts2d_annot = frame.kpts2d_annot * scale[None,]
             frame.kpts2d_annot = frame.kpts2d_annot + cam_crop_tform_cam[:2, 2]
 
         # assumption: depth of all image points is the same (which of course does only approximately holds)

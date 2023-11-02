@@ -105,8 +105,25 @@ def resize(
             x_out = torch.nn.functional.interpolate(x, size=(H_out, W_out), mode=mode)
 
     elif scale_factor != None:
-        H_out = int(H_in * scale_factor)
-        W_out = int(W_in * scale_factor)
+        if isinstance(scale_factor, float):
+            H_scale = scale_factor
+            W_scale = scale_factor
+        elif isinstance(scale_factor, torch.Tensor):
+            if scale_factor.numel() == 1:
+                H_scale = scale_factor.item()
+                W_scale = scale_factor.item()
+            elif scale_factor.numel() == 2:
+                W_scale = scale_factor[0]
+                H_scale = scale_factor[1]
+            else:
+                msg = f'Unexpected number of elements in scale tensor {scale_factor}.'
+                raise Exception(msg)
+        else:
+            msg = f'Unknown scale type {scale_factor}.'
+            raise Exception(msg)
+
+        H_out = int(H_in * H_scale)
+        W_out = int(W_in * W_scale)
         if mode != "nearest":
             if mode == "nearest_v2":
                 x_out = resize_nearest_v2(x, H_out=H_out, W_out=W_out, align_corners=align_corners)

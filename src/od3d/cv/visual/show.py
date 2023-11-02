@@ -353,13 +353,12 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
 
             width = int(cam_intr4x4[0, 2] * 2)
             height = int(cam_intr4x4[1, 2] * 2)
-
             cam_tform4x4_obj = cams_tform4x4_world[i]
 
             cam = open3d.geometry.LineSet.create_camera_visualization(view_width_px=width, view_height_px=height,
                                                                       intrinsic=cam_intr4x4[:3, :3].detach().cpu().numpy(),
                                                                       extrinsic=cam_tform4x4_obj.detach().cpu().numpy(),
-                                                                      scale=0.1)
+                                                                      scale=0.1 * cam_tform4x4_obj[2, 3])
 
 
             if cams_names is not None and len(cams_names) >= i+1 and cams_names[i] is not None:
@@ -380,13 +379,13 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
                     h_resize = 1.
                     w_resize = 1.
 
-                depth = open3d.geometry.Image(((torch.ones(size=cam_img.shape[1:]) * 0.1).cpu().detach().numpy() * 255).astype(np.uint8))
+                depth = open3d.geometry.Image(((torch.ones(size=cam_img.shape[1:]) * cam_tform4x4_obj[2, 3] * 0.1).cpu().detach().numpy() * 255).astype(np.uint8))
                 img = open3d.geometry.Image((cam_img.permute(1, 2, 0).contiguous().cpu().detach().numpy()).astype(np.uint8))
                 fx = cam_intr4x4[0, 0].item() * w_resize
                 fy = cam_intr4x4[1, 1].item() * h_resize
                 cx = cam_intr4x4[0, 2].item() * w_resize
                 cy = cam_intr4x4[1, 2].item() * h_resize
-                rgbd = open3d.geometry.RGBDImage.create_from_color_and_depth(color=img, depth=depth, depth_scale=1., depth_trunc=3, convert_rgb_to_intensity=False)
+                rgbd = open3d.geometry.RGBDImage.create_from_color_and_depth(color=img, depth=depth, depth_scale=1., depth_trunc=3 * cam_tform4x4_obj[2, 3], convert_rgb_to_intensity=False)
                 intrinsic = open3d.camera.PinholeCameraIntrinsic(w, h, fx, fy, cx, cy)
                 intrinsic.intrinsic_matrix = [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
                 cam = open3d.camera.PinholeCameraParameters()

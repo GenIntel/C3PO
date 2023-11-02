@@ -52,8 +52,28 @@ def crop(img, H_out, W_out, center=None, scale=1., ctx=None, mode="bilinear"):
     if center is None:
         center = [img_in_shape[1] // 2, img_in_shape[0] // 2]
 
-    bbox_in_shape_xhalf = 1. * (W_out / scale) / 2.
-    bbox_in_shape_yhalf = 1. * (H_out / scale) / 2.
+    if isinstance(scale, float):
+        H_scale = scale
+        W_scale = scale
+    elif isinstance(scale, torch.Tensor):
+        if scale.numel() == 1:
+            H_scale = scale.item()
+            W_scale = scale.item()
+        elif scale.numel() == 2:
+            W_scale = scale[0]
+            H_scale = scale[1]
+        else:
+            msg = f'Unexpected number of elements in scale tensor {scale}.'
+            raise Exception(msg)
+    else:
+        msg = f'Unknown scale type {scale}.'
+        raise Exception(msg)
+
+    scale_WH = torch.Tensor([W_scale, H_scale])
+    scale_avg = (W_scale + H_scale) / 2.
+
+    bbox_in_shape_xhalf = 1. * (W_out / W_scale) / 2.
+    bbox_in_shape_yhalf = 1. * (H_out / H_scale) / 2.
 
     #  x0", "y0", "x1", "y1"
     bbox_in = torch.LongTensor([math.floor(center[0] - bbox_in_shape_xhalf),
@@ -67,7 +87,7 @@ def crop(img, H_out, W_out, center=None, scale=1., ctx=None, mode="bilinear"):
 
     # two options:
     # a) first crop then resize (preferred if scale > 1. -> pad on lower-resolution image)
-    if scale >= 1.:
+    if scale_avg >= 1.:
         # img = torch.nn.functional.pad(img, pad=pad)
         img_padded = torch.zeros(
             size=img.shape[:-2] + torch.Size([img.shape[-2] + pad_in[2] + pad_in[3], img.shape[-1] + pad_in[0] + pad_in[1]]),
@@ -82,10 +102,10 @@ def crop(img, H_out, W_out, center=None, scale=1., ctx=None, mode="bilinear"):
     # b) first resize then crop (preferred if scale < 1. -> pad on lower-resolution image)
     else:
         img_res = resize(img, scale_factor=scale, mode=mode)
-        bbox_in_res = (bbox_in * scale).to(torch.long)
+        bbox_in_res = ((bbox_in.reshape(2, 2) * scale_WH[None, ]).flatten()).to(torch.long)
         bbox_in_res[3] = H_out + bbox_in_res[1]
         bbox_in_res[2] = W_out + bbox_in_res[0]
-        pad_in_res = (pad_in * scale).to(torch.long)
+        pad_in_res = ((pad_in.reshape(2, 2) * scale_WH[:, None]).flatten()).to(torch.long)
         img_padded = torch.zeros(
             size=img_res.shape[:-2] + torch.Size(
                 [max(bbox_in_res[3], img_res.shape[1]) + pad_in_res[2] + 1, max(bbox_in_res[2], img_res.shape[2]) + pad_in_res[0] + 1]),
@@ -95,16 +115,16 @@ def crop(img, H_out, W_out, center=None, scale=1., ctx=None, mode="bilinear"):
                       bbox_in_res[0] + pad_in_res[0]:bbox_in_res[2] + pad_in_res[0]]
 
     if ctx is not None:
-        bbox_out = torch.LongTensor([math.ceil(pad_in[0] * scale),
-                                     math.ceil(pad_in[2] * scale),
-                                     math.floor(W_out - 1 - pad_in[1] * scale),
-                                     math.floor(H_out - 1 - pad_in[3] * scale)]).to(device)
+        bbox_out = torch.LongTensor([math.ceil(pad_in[0] * W_scale),
+                                     math.ceil(pad_in[2] * H_scale),
+                                     math.floor(W_out - 1 - pad_in[1] * W_scale),
+                                     math.floor(H_out - 1 - pad_in[3] * H_scale)]).to(device)
         ctx = resize(ctx, H_out=H_out, W_out=W_out, mode=mode)
         ctx[:, bbox_out[1]:bbox_out[3], bbox_out[0]:bbox_out[2]] = img_out[:, bbox_out[1]: bbox_out[3], bbox_out[0]:bbox_out[2]]
         img_out = ctx
 
-    cam_crop_tform_cam = torch.Tensor([[scale, 0., -bbox_in[0] * scale, 0.],
-                                       [0., scale, -bbox_in[1] * scale, 0.],
+    cam_crop_tform_cam = torch.Tensor([[W_scale, 0., -bbox_in[0] * W_scale, 0.],
+                                       [0., H_scale, -bbox_in[1] * H_scale, 0.],
                                        [0., 0., 1., 0.],
                                        [0., 0., 0., 1.]]).to(device=device, dtype=torch.float)
     return img_out, cam_crop_tform_cam
