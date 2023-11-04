@@ -55,6 +55,7 @@ class ZSP(OD3D_Method):
         dataset_ref: CO3D = datasets_train['labeled']
 
         categories = dataset_src.categories
+        self.categories = categories
 
         src_sequences = dataset_src.get_sequences()
         ref_sequences = dataset_ref.get_sequences()
@@ -353,10 +354,10 @@ class ZSP(OD3D_Method):
                     # excluding diagonal entries as these are predicted transformation between same instance
                     if self.config.use_gt_src:
                         category_results[f'rot_diff_rad'] = results_diff_log_rot[category][
-                            torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1)
+                            torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1).permute(1, 0)
                 else:
                     if self.config.use_gt_src:
-                        category_results[f'rot_diff_rad'] = results_diff_log_rot[category]
+                        category_results[f'rot_diff_rad'] = results_diff_log_rot[category].permute(1, 0)
 
                 results += category_results.mean()
                 category_results_mean = category_results.add_prefix(category)
@@ -525,7 +526,15 @@ class ZSP(OD3D_Method):
             logger.info(diff_rot_angle_rad)
             all_rot_diff_rad.append(diff_rot_angle_rad)
 
-        results['rot_diff_rad'] = torch.stack(all_rot_diff_rad, dim=0)
+        # r x b
+        all_rot_diff_rad = torch.stack(all_rot_diff_rad, dim=0)
+        results['rot_diff_rad'] = all_rot_diff_rad.permute(1, 0)
+        for b in range(B):
+            prefix = f"{self.categories[batch.label[b].item()]}_"
+            if f'{prefix}rot_diff_rad' not in results.keys():
+                results[f'{prefix}rot_diff_rad'] = all_rot_diff_rad.T[b][None,]  # [] torch.stack(all_rot_diff_rad, dim=0).permute(1, 0)
+            else:
+                results[f'{prefix}rot_diff_rad'] = torch.cat([results[f'{prefix}rot_diff_rad'], all_rot_diff_rad.T[b][None,]], dim=0)
 
         results['label_gt'] = batch.label
         #results['label_pred'] = pred_class_ids

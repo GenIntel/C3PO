@@ -355,16 +355,16 @@ class NeMo_Align3D(OD3D_Method):
                 # excluding diagonal entries as these are predicted transformation between same instance
                 if self.config.use_gt_src:
                     category_results[f'rot_diff_rad'] = results_diff_log_rot[category][
-                        torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1)
+                        torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1).permute(1, 0)
                 category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][
-                    torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1)
+                    torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1).permute(1, 0)
                 category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][
-                    torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1)
+                    torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1).permute(1, 0)
             else:
                 if self.config.use_gt_src:
-                    category_results[f'rot_diff_rad'] = results_diff_log_rot[category]
-                category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category]
-                category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category]
+                    category_results[f'rot_diff_rad'] = results_diff_log_rot[category].permute(1, 0)
+                category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category].permute(1, 0)
+                category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category].permute(1, 0)
 
             results += category_results.mean()
             category_results_mean = category_results.add_prefix(category)

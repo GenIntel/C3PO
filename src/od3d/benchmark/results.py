@@ -77,20 +77,23 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                 res[f'pose/{prefix_saved}acc_pi6'] = (rot_diff_rad < math.pi / 6.).to(dtype=float).mean()
                 res[f'pose/{prefix_saved}acc_pi12'] = (rot_diff_rad < math.pi / 12.).to(dtype=float).mean()
                 res[f'pose/{prefix_saved}acc_pi18'] = (rot_diff_rad < math.pi / 18.).to(dtype=float).mean()
-                if rot_diff_rad.dim() == 3:
+
+                if rot_diff_rad.dim() == 2:
                     res[f'pose/{prefix_saved}acc_pi6_std'] = (rot_diff_rad < math.pi / 6.).to(
-                        dtype=float).mean(dim=-1).std(dim=-1).mean(dim=-1)
+                        dtype=float).mean(dim=0).std(dim=-1)
                     res[f'pose/{prefix_saved}acc_pi12_std'] = (rot_diff_rad < math.pi / 12.).to(
-                        dtype=float).mean(dim=-1).std(dim=-1).mean(dim=-1)
+                        dtype=float).mean(dim=0).std(dim=-1)
                     res[f'pose/{prefix_saved}acc_pi18_std'] = (rot_diff_rad < math.pi / 18.).to(
-                        dtype=float).mean(dim=-1).std(dim=-1).mean(dim=-1)
-                elif rot_diff_rad.dim() == 2:
-                    res[f'pose/{prefix_saved}acc_pi6_std'] = (rot_diff_rad < math.pi / 6.).to(
-                        dtype=float).mean(dim=-1).std(dim=0)
-                    res[f'pose/{prefix_saved}acc_pi12_std'] = (rot_diff_rad < math.pi / 12.).to(
-                        dtype=float).mean(dim=-1).std(dim=0)
-                    res[f'pose/{prefix_saved}acc_pi18_std'] = (rot_diff_rad < math.pi / 18.).to(
-                        dtype=float).mean(dim=-1).std(dim=0)
+                        dtype=float).mean(dim=0).std(dim=-1)
+                else:
+                    logger.warning(f'Unexpected dimensions of rot_diff_rad {rot_diff_rad.dim()}')
+                # if rot_diff_rad.dim() == 3:
+                #     res[f'pose/{prefix_saved}acc_pi6_std'] = (rot_diff_rad < math.pi / 6.).to(
+                #         dtype=float).mean(dim=-1).std(dim=-1).mean(dim=-1)
+                #     res[f'pose/{prefix_saved}acc_pi12_std'] = (rot_diff_rad < math.pi / 12.).to(
+                #         dtype=float).mean(dim=-1).std(dim=-1).mean(dim=-1)
+                #     res[f'pose/{prefix_saved}acc_pi18_std'] = (rot_diff_rad < math.pi / 18.).to(
+                #         dtype=float).mean(dim=-1).std(dim=-1).mean(dim=-1)
 
                 res[f'pose/{prefix_saved}err_median'] = 180 / math.pi * rot_diff_rad.median()
                 res[f'pose/{prefix_saved}err_mean'] = 180 / math.pi * rot_diff_rad.mean()

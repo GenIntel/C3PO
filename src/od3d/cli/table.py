@@ -200,19 +200,31 @@ def pose_pi6_categories_separate():
 
     ###### FROM SINGLE RUNS
     metrics = ['pose/prefix/CATEGORY_acc_pi6']
+    metrics = ['test/pascal3d_test/pose/prefix/CATEGORY_acc_pi6']
+    metrics = ['test/objectnet3d_test/pose/prefix/CATEGORY_acc_pi6']
+
     metrics_dataset = [DATASET_CO3D_20]
     metrics_dataset = [DATASET_CO3D_28]
+    metrics_dataset = [DATASET_PASCAL3D]
+    metrics_dataset = [DATASET_OBJECTNET3D]
+
     metrics_scales = [100]
     categories = TABLE_CATEGORIES_CO3D_20[:-1]
     categories = TABLE_CATEGORIES_CO3D_28[:-1]
+    #categories = TABLE_CATEGORIES_PASCAL3D[:-1]
+    #categories = TABLE_CATEGORIES_OBJECTNET3D_23[:-1]
+    categories = TABLE_CATEGORIES_OBJECTNET3D_3[:-1]
 
     map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
     map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
-
+    #map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_PASCAL3D]
+    #map_od3d_to_datasets = None
 
     name_partial = '_CO3Dv1_NeMo_Align3D_'
     name_partial = '_CO3D_NeMo_Align3D_'
     name_partial = '11-02_00-32-29_CO3D_ZSP_src_5s_ref_5s_local'
+    name_partial = '11-02_22-00-14_CO3D_ZSP_z_cross_pascal3d_objectnet3d_local'
+    #name_partial = '11-03_08-26-52_CO3D_ZSP_src_5s_ref_5s_local'
     metrics_dfs = get_categorical_results_from_single_runs(metrics=metrics, categories=categories, age_in_hours=age_in_hours, name_partial=name_partial, metrics_scales=metrics_scales, map_od3d_to_datasets=map_od3d_to_datasets)
 
 
