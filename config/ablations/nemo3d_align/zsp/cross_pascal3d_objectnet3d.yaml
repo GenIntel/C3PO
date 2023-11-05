@@ -83,12 +83,12 @@ train_datasets:
 
 test_datasets:
   pascal3d:
-    subset_fraction: 1.
+    subset_fraction: 0.1
     skip: False
     categories: ${categories}
     modalities: ${modalities_pascal3d_objectnet3d}
   objectnet3d:
-    subset_fraction: 1.
+    subset_fraction: 0.1
     skip: False
     categories: ${categories}
     modalities: ${modalities_pascal3d_objectnet3d}
