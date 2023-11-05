@@ -20,7 +20,7 @@ def zsp():
 @app.command()
 def zsp_run(gpus: str = typer.Option('all', '-g', '--gpus')):
     logging.basicConfig(level=logging.INFO)
-    cmd = f'docker run --gpus {gpus} -p 5000:5000 -it limpbot/zsp:v1'
+    cmd = f'docker run --gpus {gpus} -p 5000:5000 -t limpbot/zsp:v1'
     run_cmd(cmd=cmd, logger=logger, live=True)
 
 @app.command()
