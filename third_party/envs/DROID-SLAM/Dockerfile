@@ -120,15 +120,25 @@ RUN conda install -c conda-forge suitesparse -y
 
 # Clone repository
 WORKDIR /home/appuser/
+#RUN echo "BLUB"
 #RUN git clone --recursive https://github.com/pytholic/DROID-SLAM.git
-RUN git clone --recursive https://github.com/limpbot/DROID-SLAM.git
+#RUN git clone --recursive https://github.com/limpbot/DROID-SLAM.git
 
 WORKDIR /home/appuser/DROID-SLAM
+USER root
+RUN chown -R appuser:appuser /home/appuser/DROID-SLAM
+USER appuser
+RUN gdown https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh
+
+ADD . /home/appuser/DROID-SLAM
+
+USER root
+RUN chown -R appuser:appuser /home/appuser/DROID-SLAM
+USER appuser
 
 # Install extensions
 RUN python setup.py install
 
-RUN gdown https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh
 
 ENV STRIDE="1"
 ENV RPATH_OUT="seq"
