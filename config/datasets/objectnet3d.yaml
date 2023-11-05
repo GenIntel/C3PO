@@ -31,19 +31,23 @@ extract_meta:
 #categories:
 #  - 'car'
 
-#preprocess:
-#  subset_category_names_unique:
-#    enabled: True
-#    override: False
-#    remove_previous: False
-#  mask:
-#    enabled: False
-#    override: False
-#    remove_previous: False
-#  cuboid:
-#    enabled: False
-#    override: False
-#    remove_previous: False
+preprocess:
+  subset_category_names_unique:
+    enabled: False
+    override: False
+    remove_previous: False
+  mask:
+    enabled: False
+    override: False
+    remove_previous: False
+  depth:
+    enabled: False
+    override: False
+    remove_previous: False
+  cuboid:
+    enabled: False
+    override: False
+    remove_previous: False
 
 
 filter_frames_categorical: True # for preprocessing subset_category_names_unique, set this to False

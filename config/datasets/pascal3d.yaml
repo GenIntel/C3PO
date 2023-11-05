@@ -10,6 +10,7 @@ modalities:
     - 'cam_tform4x4_obj'
     - 'size'
     - 'bbox'
+    - 'depth'
     # - 'mesh'
 
 url_pascal3d_raw: ftp://cs.stanford.edu/cs/cvgl/PASCAL3D+_release1.1.zip
@@ -52,6 +53,10 @@ preprocess:
     override: False
     remove_previous: False
   mask:
+    enabled: False
+    override: False
+    remove_previous: False
+  depth:
     enabled: False
     override: False
     remove_previous: False
