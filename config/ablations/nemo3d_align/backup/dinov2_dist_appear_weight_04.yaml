@@ -1,7 +1,0 @@
-# @package _global_
-
-ablation_name: dinov2_dist_appear_weight_04
-
-method:
-  nemo:
-    dist_appear_weight: 0.4

@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - /ablations/nemo3d_align/dist_weight/_default
+
+ablation_name_nemo3d_align_dist_weight: dist_appear_weight_08
+
+method:
+  nemo:
+    dist_appear_weight: 0.8

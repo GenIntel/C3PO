@@ -94,7 +94,7 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
     return pts_ref_tform4x4_pts
 
 
-def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False, use_appear_argmin=False, dist_appear_weight=0.5, score_perc=1.):
+def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor, return_dists=False, use_appear_argmin=False, cyclic_weight_temp=1., dist_appear_weight=0.5, score_perc=1.):
     """
     Args:
         pts (torch.Tensor): ...xNxF
@@ -176,9 +176,8 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     ref_cyclic_dist = (pts_ref - pts_ref[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1, p=norm_p)
     cyclic_dist_avg = (src_cyclic_dist[:, None] + ref_cyclic_dist[None,]) / 2.
     cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape)
-    alpha = 1
     dist_ref_appearance = (dist_ref_geometry.clone() / (dist_ref_geo_max))
-    dist_ref_appearance_weight = torch.exp(-alpha * cyclic_dist_avg / dist_ref_geo_max)
+    dist_ref_appearance_weight = torch.exp(- (1./cyclic_weight_temp) * cyclic_dist_avg / dist_ref_geo_max)
     dist_ref_appearance_weight = dist_ref_appearance_weight / dist_ref_appearance_weight.flatten(-2).mean(dim=-1)[..., None, None]
     dist_ref_appearance = dist_ref_appearance_weight * dist_ref_appearance
 

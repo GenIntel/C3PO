@@ -43,6 +43,7 @@ method:
       score_perc: 1.
     use_gt_src: True
     use_only_first_reference: False
+    cyclic_weight_temp: 1.
     dist_appear_weight: 0.5
     use_appear_argmin: False
     global_optimization_steps: 1
