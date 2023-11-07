@@ -54,3 +54,13 @@ end of file reading mesh
 #cp ${CUDNN}/include/cudnn*.h ${CUDA_HOME}/include
 #cp ${CUDNN}/lib/libcudnn* ${CUDA_HOME}/lib64
 #chmod a+r ${CUDA_HOME}/include/cudnn*.h ${CUDA_HOME}/lib64/libcudnn*
+
+# BUG 6
+
+wrong cuda device
+
+CUDA_DEVICE_ORDER=PCI_BUS_ID
+CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES
+export CUDA_DEVICE_ORDER
+if CUDA_DEVICE_ORDER is not set, 

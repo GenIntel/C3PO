@@ -96,9 +96,14 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                cams_imgs: Union[torch.Tensor, List[torch.Tensor]]=None,
                cams_names: List[str]=None,
                cams_imgs_resize: bool = True,
+               cams_imgs_depth_scale: float = 0.2,
+               cams_show_wireframe: bool =True,
                pts3d: Union[torch.Tensor, List[torch.Tensor]]=None,
                pts3d_names: List[str]=None,
                pts3d_colors: Union[torch.Tensor, List]=None,
+               lines3d: Union[torch.Tensor, List[torch.Tensor]] = None,
+               lines3d_names: List[str] = None,
+               lines3d_colors: Union[torch.Tensor, List] = None,
                meshes: Union[Meshes, List[Mesh]]=None,
                meshes_names: List[str]=None,
                meshes_colors: Union[torch.Tensor, List]=None,
@@ -109,7 +114,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                viewpoints_count=1,
                dtype=torch.float,
                device='cpu',
-               meshes_as_wireframe=False):
+               meshes_as_wireframe=False,
+               crop_white_border=False):
     """
     Args:
         cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
@@ -118,7 +124,10 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
         cams_names: (List[str]): (P,)
         pts3d (Union[torch.Tensor, List[torch.Tensor]]): PxNx3 or List(Npx3)
         pts3d_names (List[str]): (P,)
-        pts3d_colors (Union[torch.Tensor, List]): Px3 or List(3)
+        pts3d_colors (Union[torch.Tensor, List]): Px2x3 or List(3)
+        lines3d (Union[torch.Tensor, List[torch.Tensor]]): PxNx2x3 or List(Npx2x3)
+        lines3d_names (List[str]): (P,)
+        lines3d_colors (Union[torch.Tensor, List]): Px2x3 or List(3)
         meshes (Meshes)
         meshes_names (List[str]): (M,)
         meshes_colors (Union[torch.Tensor, List]): Mx3 or List(3)
@@ -126,6 +135,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     Returns:
         -
     """
+
 
     geometries = []
     meshes_x_offsets = []
@@ -178,11 +188,11 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 mesh_color =mesh_color.detach().cpu().numpy()
 
             mat_box = open3d.visualization.rendering.MaterialRecord()
-            #mat_box.shader = 'defaultUnlit'
-            mat_box.shader = 'defaultLitTransparency'
+            mat_box.shader = 'defaultUnlit'
+            #mat_box.shader = 'defaultLitTransparency'
             #mat_box.shader = 'defaultLitSSR'
-            alpha = 1.0
-            mat_box.base_reflectance = 0.
+            alpha = 0.5
+            # mat_box.base_reflectance = 0.
 
             if vertex_colors is None:
                 if len(mesh_color) == 4:
@@ -207,7 +217,31 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             #vertices: open3d.cpu.pybind.utility.Vector3dVector,
             #triangles: open3d.cpu.pybind.utility.Vector3iVector
 
+    if lines3d is not None:
+        for i, lines3d_i in enumerate(lines3d):
+            lines3d_i_o3d = open3d.geometry.LineSet()
+            # N x 2 x 3
+            _lines3d_i = lines3d_i.clone()
+            _lines3d_i_pts3d = _lines3d_i.reshape(-1, 3)
+            lines3d_i_o3d.points = o3d.utility.Vector3dVector(_lines3d_i_pts3d.detach().cpu().numpy())
+            _lines3d_i_pts3d_ids = torch.arange(len(_lines3d_i_pts3d)).reshape(-1, 2)
+            lines3d_i_o3d.lines = o3d.utility.Vector2iVector(_lines3d_i_pts3d_ids.detach().cpu().numpy())
 
+            if lines3d_colors is not None and len(lines3d_colors) >= i+1 and lines3d_colors[i] is not None:
+                lines3d_i_color = lines3d_colors[i]
+            else:
+                lines3d_i_color = get_colors(len(lines3d))[i]
+
+            if isinstance(lines3d_i_color, list) or lines3d_i_color.dim() == 1:
+                lines3d_i_o3d.paint_uniform_color((lines3d_i_color[0], lines3d_i_color[1], lines3d_i_color[2]))
+            else:
+                lines3d_i_o3d.colors = o3d.utility.Vector3dVector(lines3d_i_color.detach().cpu().numpy())
+            if lines3d_names is not None and len(lines3d_names) >= i+1 and lines3d_names[i] is not None:
+                lines3d_i_name = lines3d_names[i]
+            else:
+                lines3d_i_name = f'lines3d_{i}'
+
+            geometries.append({'name': lines3d_i_name, 'geometry': lines3d_i_o3d})
     if pts3d is not None:
         x_offset = 0.
         for i, pts3d_i in enumerate(pts3d):
@@ -222,7 +256,10 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 else:
                     x_offset_delta_current = 1.1 * (-_pts3d_i[:, 0].min()).clamp(min=0.)
                     x_offset += x_offset_delta_current
-                x_offset_delta_next = 1.1 * (_pts3d_i[:, 0].max())
+                if _pts3d_i[:, 0].numel() == 0:
+                    x_offset_delta_next = 0.
+                else:
+                    x_offset_delta_next = 1.1 * (_pts3d_i[:, 0].max())
                 _pts3d_i[:, 0] += x_offset
                 x_offset += x_offset_delta_next
             pts3d_i_o3d.points = open3d.utility.Vector3dVector(_pts3d_i.detach().cpu().numpy())
@@ -244,10 +281,12 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             geometries.append({'name': pts3d_i_name, 'geometry': pts3d_i_o3d})
 
     o3d_geometries_for_cams = get_o3d_geometries_for_cams(cams_tform4x4_world=cams_tform4x4_world,
-                                                            cams_intr4x4=cams_intr4x4,
-                                                            cams_imgs=cams_imgs,
-                                                            cams_names=cams_names,
-                                                            cams_imgs_resize=cams_imgs_resize)
+                                                          cams_intr4x4=cams_intr4x4,
+                                                          cams_imgs=cams_imgs,
+                                                          cams_names=cams_names,
+                                                          cams_imgs_resize=cams_imgs_resize,
+                                                          cams_imgs_depth_scale=cams_imgs_depth_scale,
+                                                          cams_show_wireframe=cams_show_wireframe)
     for o3d_geometry_for_cam in o3d_geometries_for_cams:
         geometries.append(o3d_geometry_for_cam)
 
@@ -262,9 +301,12 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     else:
         if os.environ.get('DISPLAY'):
             vis = o3d.visualization.Visualizer()
-            #opt = vis.get_render_option()
-            #opt.background_color = np.asarray([0, 0, 0])
+
             vis.create_window(visible=False) #, height=720, width=1280)
+
+            opt = vis.get_render_option()
+            #opt.background_color = np.asarray([0, 0, 0])
+            opt.mesh_show_back_face = True
 
             geometries_vertices_orig = []
 
@@ -274,6 +316,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                     geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].points)).clone().to(device=device, dtype=dtype))
                 elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
                     geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].vertices)).clone().to(device=device, dtype=dtype))
+                elif isinstance(geometry['geometry'], open3d.geometry.LineSet):
+                    geometries_vertices_orig.append(torch.from_numpy(np.asarray(geometry['geometry'].points)).clone().to(device=device, dtype=dtype))
                 else:
                     geometries_vertices_orig.append(None)
                 #vis.update_geometry(geometry['geometry'])
@@ -303,15 +347,22 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                                 geometry['geometry'].points = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
                             elif isinstance(geometry['geometry'], open3d.geometry.TriangleMesh):
                                 geometry['geometry'].vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+                            elif isinstance(geometry['geometry'], open3d.geometry.LineSet):
+                                geometry['geometry'].points = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
                             vis.update_geometry(geometry['geometry'])
 
                     vis.update_renderer()
                     img = vis.capture_screen_float_buffer(do_render=True)
                     img = torch.from_numpy(np.array(img)).permute(2, 0, 1)
+                    if crop_white_border:
+                        from od3d.cv.visual.crop import crop_white_border_from_img
+                        img = crop_white_border_from_img(img, resize_to_orig=True)
                     imgs.append(img)
 
                 if viewpoints_count == 1:
                     imgs = imgs[0]
+                else:
+                    imgs = torch.stack(imgs, dim=0)
                 return imgs
             else:
                 vis.capture_screen_image(str(fpath))
@@ -330,7 +381,9 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
                cams_intr4x4: Union[torch.Tensor, List[torch.Tensor]]=None,
                cams_imgs: Union[torch.Tensor, List[torch.Tensor]]=None,
                cams_names: List[str]=None,
-               cams_imgs_resize: bool = True):
+               cams_imgs_resize: bool = True,
+                cams_imgs_depth_scale: float = 0.2,
+               cams_show_wireframe: bool = True):
     """
     Args:
         cams_tform4x4_world (Union[torch.Tensor, List[torch.Tensor]]): (Cx4x4) or List(4x4)
@@ -353,20 +406,22 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
 
             width = int(cam_intr4x4[0, 2] * 2)
             height = int(cam_intr4x4[1, 2] * 2)
-            cam_tform4x4_obj = cams_tform4x4_world[i]
-
-            cam = open3d.geometry.LineSet.create_camera_visualization(view_width_px=width, view_height_px=height,
-                                                                      intrinsic=cam_intr4x4[:3, :3].detach().cpu().numpy(),
-                                                                      extrinsic=cam_tform4x4_obj.detach().cpu().numpy(),
-                                                                      scale=0.1 * cam_tform4x4_obj[2, 3])
-
+            cam_tform4x4_obj = cams_tform4x4_world[i].detach().cpu().numpy()
 
             if cams_names is not None and len(cams_names) >= i+1 and cams_names[i] is not None:
                 cam_name = cams_names[i]
             else:
                 cam_name = f'cam{i}'
 
-            geometries.append({'name': cam_name, 'geometry': cam})
+            if cams_show_wireframe:
+                cam = open3d.geometry.LineSet.create_camera_visualization(view_width_px=width, view_height_px=height,
+                                                                          intrinsic=cam_intr4x4[:3, :3].detach().cpu().numpy(),
+                                                                          extrinsic=cam_tform4x4_obj,
+                                                                          scale=cams_imgs_depth_scale * cam_tform4x4_obj[2, 3])
+
+
+
+                geometries.append({'name': cam_name, 'geometry': cam})
 
             if cams_imgs is not None and len(cams_imgs) > i:
                 h, w = cams_imgs[i].shape[1:]
@@ -379,7 +434,7 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
                     h_resize = 1.
                     w_resize = 1.
 
-                depth = open3d.geometry.Image(((torch.ones(size=cam_img.shape[1:]) * cam_tform4x4_obj[2, 3] * 0.1).cpu().detach().numpy() * 255).astype(np.uint8))
+                depth = open3d.geometry.Image(((torch.ones(size=cam_img.shape[1:]) * cam_tform4x4_obj[2, 3] * cams_imgs_depth_scale).cpu().detach().numpy() * 255).astype(np.uint8))
                 img = open3d.geometry.Image((cam_img.permute(1, 2, 0).contiguous().cpu().detach().numpy()).astype(np.uint8))
                 fx = cam_intr4x4[0, 0].item() * w_resize
                 fy = cam_intr4x4[1, 1].item() * h_resize
@@ -523,6 +578,11 @@ def imgs_to_img(rgbs):
         rgb = torch.cat((rgbs, img_placeholder), dim=0)
 
         rgb = rgb.reshape(GH, GW, C, H, W)
+    elif len(rgbs_shape) == 3:
+        GH = 1
+        GW = 1
+        C, H, W = rgbs_shape
+        rgb = rgbs.clone()[None, None]
     else:
         logger.error('Visualize imgs requires the input rgb tensor to have 4 (KxCxHxW) or 5 (GHxGWxCxHxW) dimensions')
         raise NotImplementedError
@@ -582,16 +642,31 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
 
 
 def get_img_from_plot(ax, fig, axis_off=True):
-
+    try:
+        count_axes = len(ax)
+        single_axes = False
+    except TypeError:
+        count_axes = 1
+        single_axes = True
     # Image from plot
     if axis_off:
-        ax.axis('off')
-        # To remove the huge white borders
-        ax.margins(0)
+        if single_axes:
+            ax.axis('off')
+            # To remove the huge white borders
+            ax.margins(0)
+        else:
+            for ax_single in ax:
+                ax_single.axis('off')
+                # To remove the huge white borders
+                ax_single.margins(0)
         fig.tight_layout(pad=0)
     else:
         fig.tight_layout(pad=1)
-        ax.margins(1)
+        if single_axes:
+            ax.margins(1)
+        else:
+            for ax_single in ax:
+                ax_single.margins(1)
 
     fig.canvas.draw()
     image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)

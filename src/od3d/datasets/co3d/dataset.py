@@ -136,6 +136,7 @@ class CO3D(OD3D_Dataset):
                     frames_count_max_per_sequence=frames_count_max_per_sequence,
                     dict_nested_frames=dict_nested_frames,
                     cam_tform_obj_source=self.cam_tform_obj_source,
+                    pcl_source=self.pcl_source,
                     cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift,
                     aligned_name=self.aligned_name,
                     mesh_name=self.mesh_name)
@@ -185,7 +186,7 @@ class CO3D(OD3D_Dataset):
         return CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
                     path_preprocess=self.path_preprocess, categories=self.categories,
                     dict_nested_frames=dict_nested_frames,
-                    cam_tform_obj_source=self.cam_tform_obj_source,
+                    cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
                     cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name,
                     mesh_name=self.mesh_name)
 
@@ -193,14 +194,14 @@ class CO3D(OD3D_Dataset):
         co3d_subsetA = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
                             path_preprocess=self.path_preprocess, categories=self.categories,
                             dict_nested_frames=dict_nested_frames_subsetA,
-                            cam_tform_obj_source=self.cam_tform_obj_source,
+                            cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
                             cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name,
                             mesh_name=self.mesh_name)
 
         co3d_subsetB = CO3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
                             path_preprocess=self.path_preprocess, categories=self.categories,
                             dict_nested_frames=dict_nested_frames_subsetB,
-                            cam_tform_obj_source=self.cam_tform_obj_source,
+                            cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
                             cuboid_source=self.cuboid_source, transform=self.transform, index_shift=self.index_shift, aligned_name=self.aligned_name,
                             mesh_name=self.mesh_name)
 
@@ -271,7 +272,7 @@ class CO3D(OD3D_Dataset):
         return CO3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                           meta=frame_meta, modalities=self.modalities, categories=self.categories,
                           cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source,
-                          aligned_name=self.aligned_name, mesh_name=self.mesh_name)
+                          aligned_name=self.aligned_name, mesh_name=self.mesh_name, pcl_source=self.pcl_source,)
 
     def get_sequences(self):
         seqs = []
@@ -285,7 +286,8 @@ class CO3D(OD3D_Dataset):
         return CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                              meta=sequence_meta, modalities=self.modalities, categories=self.categories, aligned_name=self.aligned_name,
                              mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
-                             cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source, mesh_name=self.mesh_name)
+                             cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
+                             mesh_name=self.mesh_name)
 
     def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, require_gt_pose, count_max_per_category, sequences_require_mesh, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
         logger.info("filtering frames...")
@@ -477,6 +479,9 @@ class CO3D(OD3D_Dataset):
                 override = config_preprocess.cuboid_avg.get('override', False)
                 remove_previous = config_preprocess.cuboid_avg.get('remove_previous', False)
                 self.preprocess_cuboid_avg(override=override, remove_previous=remove_previous)
+            elif key == 'droid_slam' and config_preprocess.droid_slam.get('enabled', False):
+                override = config_preprocess.droid_slam.get('override', False)
+                self.preprocess_droid_slams(override=override)
             elif key == 'mesh' and config_preprocess.mesh.get('enabled', False):
                 override = config_preprocess.mesh.get('override', False)
                 self.preprocess_meshs(override=override)
@@ -500,6 +505,16 @@ class CO3D(OD3D_Dataset):
                 sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
                 sequence.preprocess_mesh(override=override)
 
+    def preprocess_droid_slams(self, override=False, remove_previous=False):
+        logger.info("preprocess meshs...")
+
+        for category, sequences_names in self.dict_category_sequences_names.items():
+            for sequence_name in sequences_names:
+                logger.info(f"preprocess droid slam, sequence {sequence_name}")
+                sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
+                sequence.preprocess_droid_slam(override=override)
+
+
     def preprocess_pcls(self, override=False, remove_previous=False):
         logger.info("preprocess pcls...")
 
@@ -507,7 +522,7 @@ class CO3D(OD3D_Dataset):
             for sequence_name in sequences_names:
                 logger.info(f"preprocess pcls, sequence {sequence_name}")
                 sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
-                sequence.preprocess_pcl_clean(override=override)
+                sequence.preprocess_pcl(override=override)
 
     def preprocess_cuboids(self, override=False, remove_previous=False):
         logger.info("preprocess cuboids...")

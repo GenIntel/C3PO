@@ -141,14 +141,14 @@ class CO3Dv1(CO3D):
         return CO3Dv1_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                                meta=sequence_meta, modalities=self.modalities, categories=self.categories,
                                mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
-                               cam_tform_obj_source=self.cam_tform_obj_source,
+                               cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
                                aligned_name=self.aligned_name, mesh_name=self.mesh_name)
 
     def get_frame_by_meta(self, frame_meta: CO3D_FrameMeta):
         return CO3Dv1_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                           meta=frame_meta, modalities=self.modalities, categories=self.categories,
                           cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source,
-                          aligned_name=self.aligned_name, mesh_name=self.mesh_name)
+                          aligned_name=self.aligned_name, mesh_name=self.mesh_name, pcl_source=self.pcl_source)
 
 class CO3Dv1_Frame(CO3D_Frame):
 
@@ -163,7 +163,7 @@ class CO3Dv1_Frame(CO3D_Frame):
                                            path_meta=self.path_meta, meta=sequence_meta, modalities=self.modalities,
                                            categories=self.all_categories, cam_tform_obj_source=self.cam_tform_obj_source,
                                            aligned_name=self.aligned_name, mesh_name=self.mesh_name,
-                                           cuboid_source=self.cuboid_source)
+                                           cuboid_source=self.cuboid_source, pcl_source=self.pcl_source)
         return self._sequence
 
 class CO3Dv1_Sequence(CO3D_Sequence):

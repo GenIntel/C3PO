@@ -359,14 +359,48 @@ def reproj2d3d(pxl2d, proj4x4_inv):
     return pts3d_reproj
 
 def depth2pts3d_grid(depth, cam_intr4x4):
+    #  depth: ...x1xHxW
+    #  cam_intr: ...x4x4
     device = cam_intr4x4.device
     dtype = cam_intr4x4.dtype
     H, W = depth.shape[-2:]
     pxl2d = torch.stack(torch.meshgrid(torch.arange(W), torch.arange(H), indexing='xy'), dim=-1).to(device=device, dtype=dtype)
-
-    pts3d_homog = reproj2d3d_broadcast(pxl2d[(None, ) * (cam_intr4x4.dim() - 2)], proj4x4_inv=cam_intr4x4[..., None, None, :, :].inverse()).transpose(-2, -1).transpose(-3, -2)
-    pts3d = pts3d_homog[(None, ) * (depth.dim() - 3)] * depth[..., None, :, :]
+    # pxl2d[(None, ) * (cam_intr4x4.dim() - 2)] # legacy code, do not use for not broadcasting cam intr...
+    pts3d_homog = reproj2d3d_broadcast(pxl2d, proj4x4_inv=cam_intr4x4[..., None, None, :, :].inverse()).transpose(-2, -1).transpose(-3, -2)
+    shape_first_dims = torch.broadcast_shapes(depth.shape[:-3], cam_intr4x4.shape[:-2])
+    pts3d = pts3d_homog.expand(*shape_first_dims, 3, H, W) * depth.expand(*shape_first_dims, 1, H, W)
     return pts3d
+
+from od3d.cv.differentiation.gradient import calc_batch_gradients
+def depth2normals_grid(depth, cam_intr4x4, shift=1):
+    # depth: ...x1xHxW
+    # cam_intr: ...x4x4
+    device = depth.device
+    dtype = depth.dtype
+
+    fx = cam_intr4x4[..., 0, 0]
+    fy = cam_intr4x4[..., 1, 1]
+
+    dz_dpx, dz_dpy = calc_batch_gradients(depth, pad_zeros=True, shift=shift)
+    dpx_dx = fx[..., None, None, None] / (shift * depth)
+    dpy_dy = fy[..., None, None, None] / (shift * depth)
+    dz_dx = dz_dpx * dpx_dx
+    dz_dy = dz_dpy * dpy_dy
+    dz_dx = dz_dx.nan_to_num(0., neginf=0., posinf=0.)
+    dz_dy = dz_dy.nan_to_num(0., neginf=0., posinf=0.)
+    normals = torch.zeros(size=depth.shape[:-3] + (3,) + depth.shape[-2:]).to(dtype=dtype, device=device)
+    normals[..., 2, :, :] = -1.
+    normals[..., 0:1, :, :] = dz_dx
+    normals[..., 1:2, :, :] = dz_dy
+    normals = torch.nn.functional.normalize(normals, dim=-3)
+    return normals
+
+    # pxl2d = torch.stack(torch.meshgrid(torch.arange(W), torch.arange(H), indexing='xy'), dim=-1).to(device=device, dtype=dtype)
+    # # pxl2d[(None, ) * (cam_intr4x4.dim() - 2)] # legacy code, do not use for not broadcasting cam intr...
+    # pts3d_homog = reproj2d3d_broadcast(pxl2d, proj4x4_inv=cam_intr4x4[..., None, None, :, :].inverse()).transpose(-2, -1).transpose(-3, -2)
+    # shape_first_dims = torch.broadcast_shapes(depth.shape[:-3], cam_intr4x4.shape[:-2])
+    # pts3d = pts3d_homog.expand(*shape_first_dims, 3, H, W) * depth.expand(*shape_first_dims, 1, H, W)
+    # return pts3d
 
 def transf3d_broadcast(pts3d, transf4x4):
     shape_first_dims = torch.broadcast_shapes(pts3d.shape[:-1], transf4x4.shape[:-2])

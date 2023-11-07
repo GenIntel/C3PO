@@ -5,7 +5,9 @@ defaults:
   - override /datasets@val_datasets.main:
   - override /datasets@test_datasets.co3d: co3d_5s_no_zsp_labeled # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
 
-ablation_name: src_5s_ref_5s
+ablation_name_nemo3d_align: src_5s_ref_5s
+ablation_name: $ablation_name_nemo3d_align_zsp
+
 
 categories:
   - bicycle
@@ -39,9 +41,12 @@ categories:
 
 method:
   nemo:
+    ransac:
+      samples: 1000
+      score_perc: 0.7
     use_gt_src: True
     use_only_first_reference: False
-    dist_appear_weight: 0.5
+    dist_appear_weight: 0.6
     use_appear_argmin: False
     global_optimization_steps: 1
     categories: ${categories}

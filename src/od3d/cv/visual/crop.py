@@ -6,7 +6,7 @@ from od3d.cv.visual.resize import resize
 from od3d.cv.visual.show import show_img
 
 
-def crop_white_border_from_img(img, crop_width=True, crop_height=True):
+def crop_white_border_from_img(img, crop_width=True, crop_height=True, resize_to_orig=False, white_pad=0):
     """
     Args:
         img: 3xHxW
@@ -42,6 +42,19 @@ def crop_white_border_from_img(img, crop_width=True, crop_height=True):
                      min_coords[1]: max_coords[1] + 1,
                      ]
 
+    if white_pad > 0:
+        cropped_img = torch.nn.functional.pad(cropped_img, [white_pad, white_pad, white_pad, white_pad], value=1.)
+
+    if resize_to_orig:
+        H_cropped, W_cropped = cropped_img.shape[-2:]
+        H_scale = H / H_cropped
+        W_scale = W / W_cropped
+        scale = min(H_scale, W_scale)
+        cropped_img = resize(cropped_img, scale_factor=scale)
+        H_cropped, W_cropped = cropped_img.shape[-2:]
+        cropped_img_padded = torch.ones_like(img)
+        cropped_img_padded[:, :H_cropped, :W_cropped] = cropped_img[:, :H_cropped, :W_cropped]
+        cropped_img = cropped_img_padded
     return cropped_img
 
 def crop(img, H_out, W_out, center=None, scale=1., ctx=None, mode="bilinear"):

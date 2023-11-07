@@ -1,6 +1,6 @@
 import logging
 logger = logging.getLogger(__name__)
-from od3d.cv.select import batched_index_select
+from od3d.cv.select import batched_index_select, batched_index_fill
 import torch
 from od3d.cv.select import batched_indexMD_select
 from pytorch3d.ops.points_alignment import corresponding_points_alignment
@@ -110,15 +110,16 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     device = pts.device
 
     proposal_tform_pts = transf3d_broadcast(pts3d=pts[None,], transf4x4=tform4x4[:, None])
+    norm_p = 1
 
     # PxNxR
     # dist_ref_geometry = (proposal_tform_pts[:, :, None] - pts_ref[None, None,]).norm(dim=-1)
-    dist_ref_geometry = torch.cdist(proposal_tform_pts, pts_ref[None,], p=1)  #
-    dist_ref_geo_max = torch.cdist(pts_ref[None,], pts_ref[None,], p=1).max()  #
+    dist_ref_geometry = torch.cdist(proposal_tform_pts, pts_ref[None,], p=norm_p)  #
+    dist_ref_geo_max = torch.cdist(pts_ref[None,], pts_ref[None,], p=norm_p).max()  #
 
     #if (~dist_ref_geometry.isfinite()).any():
     #    logger.warning(f'There are some infinite vlaues in dist geometry. WHY?')
-    dist_ref_geometry = dist_ref_geometry / dist_ref_geo_max
+
 
     if not use_appear_argmin:
         # PxN
@@ -167,8 +168,25 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
 
     # PxNxR
-    dist_ref_appearance = dist_ref[None,].expand(*dist_ref_geometry.shape)
-    #dist_ref_total = dist_ref_geometry + dist_ref[None,]  # + dist_ref_geometry.mean(dim=-1).mean(dim=-1)[:, None, None]
+    # dist_ref_appearance = dist_ref[None,].expand(*dist_ref_geometry.shape)
+
+    argmin_ref_from_src = dist_ref.argmin(dim=-1)  # N,
+    argmin_src_from_ref = dist_ref.argmin(dim=-2)  # R,
+    src_cyclic_dist = (pts - pts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1, p=norm_p)
+    ref_cyclic_dist = (pts_ref - pts_ref[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1, p=norm_p)
+    cyclic_dist_avg = (src_cyclic_dist[:, None] + ref_cyclic_dist[None,]) / 2.
+    cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape)
+    alpha = 1
+    dist_ref_appearance = (dist_ref_geometry.clone() / (dist_ref_geo_max))
+    dist_ref_appearance_weight = torch.exp(-alpha * cyclic_dist_avg / dist_ref_geo_max)
+    dist_ref_appearance_weight = dist_ref_appearance_weight / dist_ref_appearance_weight.flatten(-2).mean(dim=-1)[..., None, None]
+    dist_ref_appearance = dist_ref_appearance_weight * dist_ref_appearance
+
+    # cyclic_dist_avg = cyclic_dist_avg / dist_ref_geo_max
+    # dist_ref_geometry = (dist_ref_geometry / dist_ref_geo_max).clamp(0, 1)
+    # dist_ref_appearance = ((dist_ref_geometry.clone() / (cyclic_dist_avg + 0.1)) / 10.).clamp(0, 1)
+    dist_ref_geometry = (dist_ref_geometry.clone() / (dist_ref_geo_max))
+    #dist_ref_geometry = dist_ref_appearance
 
     # forward+backward nn
     proposal_pts_nn_id_2D = torch.cat([proposal_tform_pts_nn_ref_id_2D, proposal_tform_pts_ref_nn_pts_id_2D], dim=1)
@@ -179,17 +197,23 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
 
 
     proposal_dist_ref_appear = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_appearance)
-    proposal_dist_ref_appear = proposal_dist_ref_appear.nan_to_num(1., posinf=1., neginf=1.)
     proposal_dist_ref_geometry = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_geometry)
+
+    proposal_dist_ref_appear = proposal_dist_ref_appear.nan_to_num(1., posinf=1., neginf=1.)
+
+    proposal_dist_ref_appear_pointwise_vals, proposal_dist_ref_appear_pointwise_ids = proposal_dist_ref_appear.sort(dim=-1, descending=False)
+    N_score = int(proposal_dist_ref_appear.shape[-1] * score_perc)
+    proposal_dist_ref_appear = batched_index_fill(input=proposal_dist_ref_appear, value=0.,  index=proposal_dist_ref_appear_pointwise_ids[..., N_score:])
 
     proposal_scores_pointwise = -((1.-dist_appear_weight) * proposal_dist_ref_geometry + dist_appear_weight * proposal_dist_ref_appear)
 
-    N_score = int(proposal_scores_pointwise.shape[-1] * score_perc)
-    proposal_scores_pointwise_vals, proposal_scores_pointwise_ids = proposal_scores_pointwise.sort(dim=-1, descending=True)
-    proposal_scores = proposal_scores_pointwise_vals[..., :N_score].mean(dim=-1)
-    proposal_dist_ref_geo_avg = batched_index_select(input=proposal_dist_ref_geometry, index=proposal_scores_pointwise_ids)[..., :N_score].mean(dim=-1)
-    proposal_dist_ref_appear_avg = batched_index_select(input=proposal_dist_ref_appear, index=proposal_scores_pointwise_ids)[..., :N_score].mean(dim=-1)
+    proposal_scores = proposal_scores_pointwise.mean(dim=-1)
+    #proposal_scores = proposal_scores_pointwise_vals[..., :N_score].mean(dim=-1)
 
+    proposal_dist_ref_geo_avg = proposal_dist_ref_geometry.mean(dim=-1)
+    proposal_dist_ref_appear_avg = proposal_dist_ref_appear.mean(dim=-1)
+    #proposal_dist_ref_geo_avg = batched_index_select(input=proposal_dist_ref_geometry, index=proposal_scores_pointwise_ids)[..., :].mean(dim=-1)
+    #proposal_dist_ref_appear_avg = batched_index_select(input=proposal_dist_ref_appear, index=proposal_scores_pointwise_ids)[..., :].mean(dim=-1)
 
     # mask_finite = proposal_dist_ref_appear.isfinite()
     # proposal_dist_ref_appear_avg = (proposal_dist_ref_appear.nan_to_num(1., posinf=1., neginf=1.).mean(dim=-1)) # * mask_finite).sum(dim=-1) / ((mask_finite).sum(dim=-1))

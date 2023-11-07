@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import torch.utils.data
 from typing import List
 import numpy as np
-from od3d.datasets.co3d.enum import CO3D_FRAME_TYPES
+from od3d.datasets.co3d.enum import CO3D_FRAME_TYPES, PCL_SOURCES
 
 from od3d.datasets.frame import OD3D_FrameMeta, \
     OD3D_FrameMetaSequenceMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
@@ -247,7 +247,8 @@ class CO3D_Frame(OD3D_Frame):
                  modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
                  cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
-                 aligned_name:str=None, mesh_name:str='default'):
+                 pcl_source: PCL_SOURCES=PCL_SOURCES.CO3D,
+                 aligned_name:str=None, mesh_name: str='default'):
         super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
 
         self.meta = meta
@@ -255,6 +256,7 @@ class CO3D_Frame(OD3D_Frame):
         self._sequence = None
         self.cam_tform_obj_source = cam_tform_obj_source
         self.aligned_name = aligned_name
+        self.pcl_source = pcl_source
         self.cuboid_source = cuboid_source
         self.mesh_name = mesh_name
         # the following variables can be configured dynamically
@@ -285,7 +287,7 @@ class CO3D_Frame(OD3D_Frame):
             self._sequence = CO3D_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                                            path_meta=self.path_meta, meta=sequence_meta, modalities=self.modalities,
                                            categories=self.all_categories, cam_tform_obj_source=self.cam_tform_obj_source,
-                                           aligned_name=self.aligned_name, mesh_name=self.mesh_name,
+                                           aligned_name=self.aligned_name, mesh_name=self.mesh_name, pcl_source=self.pcl_source,
                                            cuboid_source=self.cuboid_source)
         return self._sequence
 
@@ -310,6 +312,10 @@ class CO3D_Frame(OD3D_Frame):
     @property
     def fpath_cam_tform4x4_obj_droid_slam(self):
         return self.path_preprocess.joinpath('cam_tform4x4_obj', 'droid_slam', self.name_unique + '.pt')
+
+    @property
+    def fpath_cam_tform4x4_pcl(self):
+        return self.path_preprocess.joinpath('cam_tform4x4_obj', self.pcl_source, self.name_unique + '.pt')
 
     @property
     def cam_tform4x4_obj(self):
@@ -381,6 +387,8 @@ class CO3D_Frame(OD3D_Frame):
             else:
                 logger.warning(f'missing CO3Dv1 fpath to meta {fpath_metav1}')
                 _cam_tform4x4_obj = torch.ones(size=(4, 4)) * torch.nan
+        elif cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.PCL:
+            _cam_tform4x4_obj = torch.load(self.fpath_cam_tform4x4_pcl).detach().cpu()
         else:
             _cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
             if cam_tform_obj_source != CAM_TFORM_OBJ_SOURCES.CO3D:

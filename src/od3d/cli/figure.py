@@ -17,6 +17,10 @@ from od3d.datasets.co3d.enum import PCL_SOURCES, CUBOID_SOURCES, CAM_TFORM_OBJ_S
 from od3d.cv.geometry.mesh import Meshes, Mesh
 from typing import List
 
+from od3d.cv.visual.show import show_imgs, get_img_from_plot, show_img
+from od3d.cv.visual.crop import crop_white_border_from_img
+import matplotlib.pyplot as plt
+from od3d.cv.visual.resize import resize
 @app.command()
 def align3d():
     logging.basicConfig(level=logging.INFO)
@@ -91,25 +95,23 @@ def align3d():
         for t in range(P):
             uniform_obj_tform_obj = uniform_objs_tform_obj[t]
             uniform_obj_tform_obj[:3, 3] = 0.
-            uniform_obj_tform_obj[0, 3] = 1.5
-            uniform_obj_tform_obj[2, 3] = 1. * (t - P // 2)
+            uniform_obj_tform_obj[0, 3] = 1. # shift in x
+            uniform_obj_tform_obj[2, 3] = -1. * (t - P // 2) # shift in z
             mesh2_verts = transf3d_broadcast(pts3d=mesh2.verts.to(device=device, dtype=dtype), transf4x4=uniform_obj_tform_obj.to(device=device))
             mesh = Mesh(verts=mesh2_verts,
                         faces=mesh2.faces, rgb=mesh2.rgb)
             meshes.append(mesh)
-            t_lines = torch.stack([mesh2_verts[pts_ids], pts1[pts1_ids]], dim=-1).permute(0, 1, 3, 2)
+            t_lines = torch.stack([mesh2_verts[pts_ids[t]], pts1[pts1_ids[t]]], dim=-1).permute(0, 2, 1)
             lines.append(t_lines)
 
-        imgs= show_scene(pts3d=[], pts3d_colors=[], device=device,
+        imgs= show_scene(pts3d=[], pts3d_colors=[], device=device, lines3d=lines,
                          meshes=meshes,
                          meshes_add_translation=False, pts3d_add_translation=False,
                          return_visualization=True, viewpoints_count=1, crop_white_border=True)
-        #show_imgs(imgs, height=640, width=1280)
 
+        imgs = crop_white_border_from_img(imgs, white_pad=30)
         H, W = imgs.shape[-2:]
-        from od3d.cv.visual.show import show_imgs, get_img_from_plot
-        import matplotlib.pyplot as plt
-        from od3d.cv.visual.resize import resize
+        # show_imgs(imgs, height=640, width=1280)
 
         fig, ax = plt.subplots(P, 1)
         for p in range(P):
@@ -117,17 +119,106 @@ def align3d():
             y = [proposal_dist_ref_geo_avg[p].item(), proposal_dist_ref_appear_avg[p].item()]
             bar_labels = ['geometry', 'appearance']
             bar_colors = ['tab:blue', 'tab:green']
-            ax[p].bar(x, y, label=bar_labels, color=bar_colors)
+            ax[p].bar(x, y, label=bar_labels, color=bar_colors,  width=0.8)
             ax[p].set_ylabel(None) # 'distance'
             ax[p].set_title('')
             ax[p].set_ylim([0., 1.])
+            ax[p].set_xlim([-0.5, 1.5])
+
             # ax[p].legend(title='Distance')
 
         img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
         img = resize(img, scale_factor=H/img.shape[-2])
         total_imgs = torch.cat([imgs* 255, img], dim=-1)
+        show_img(total_imgs, height=640, width=1280, fpath='method_align3d.png')
+        show_img(total_imgs, height=640, width=1280)
 
-        show_imgs(total_imgs, height=640, width=1280)
+@app.command()
+def mv_pose():
+    logging.basicConfig(level=logging.INFO)
+    device = 'cuda'
+    dtype = torch.float
+    co3d = CO3D.create_by_name('co3d_5s_no_zsp_aligned') #co3d_5s_no_zsp_labeled 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+    categories = co3d.categories
+    sequences = co3d.get_sequences()
+    sequences_unique_names = [seq.name_unique for seq in sequences]
+    instances_count = len(sequences)
+    map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in sequences_unique_names])
+    instance_ids = torch.LongTensor(list(range(instances_count)))
+
+    category = 'bicycle'
+    rand_category_id = categories.index(category) # 'car', 'chair',
+    rand_category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+
+    # # CALCULATING CATEGORICAL PCA
+    # category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+    # categorical_features = []
+    # for instance_id_in_category, instance_id in enumerate(category_instance_ids):
+    #     instance_feats = sequences[instance_id].feats
+    #
+    #     if isinstance(instance_feats, List):
+    #         categorical_features += torch.cat([vert_feats for vert_feats in instance_feats], dim=0)
+    #     else:
+    #         categorical_features.append(instance_feats)
+    # categorical_features = torch.stack(categorical_features, dim=0)
+    # _, _, categorical_pca_V = torch.pca_lowrank(categorical_features)
+    # sequences[category_instance_ids[0]].categorical_pca_V = categorical_pca_V
+
+    while True:
+        samples_count = 5
+        rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=samples_count)
+        seq1 = sequences[rand_category_rand_instance_ids[0]]
+        cams_imgs = []
+        cams_intr4x4 = []
+        cams_tform4x4_obj = []
+        for s in range(samples_count):
+            seq = sequences[rand_category_rand_instance_ids[s]]
+            frames_ids = torch.arange(seq.frames_count)[::50]
+            frames = seq.get_frames(frames_ids=frames_ids)
+            _cams_imgs = torch.stack([frame.rgb for frame in frames], dim=0).to(device=device)
+            _cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
+            _cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
+            cams_imgs += [cam_img.to(device=device) for cam_img in _cams_imgs]
+            cams_intr4x4.append(_cams_intr4x4)
+            cams_tform4x4_obj.append(_cams_tform4x4_obj)
+
+        cams_intr4x4 = torch.cat(cams_intr4x4, dim=0).to(device=device)
+        cams_tform4x4_obj = torch.cat(cams_tform4x4_obj, dim=0).to(device=device)
+
+        #pts3d = seq1.get_pcl(pcl_source=seq1.pcl_source)
+        #pts3d_colors = seq1.get_pcl_colors(pcl_source=seq1.pcl_source)
+        from od3d.cv.visual.show import show_scene
+        mesh = Meshes.load_from_meshes([seq1.get_mesh(mesh_source=CUBOID_SOURCES.ALIGNED)], device=device)
+        mesh.rgb = mesh.get_verts_ncds_cat_with_mesh_ids()
+        #pts3d = transf3d_broadcast(pts3d=pts3d.to(device=device, dtype=dtype),
+        #                           transf4x4=seq1.droid_slam_aligned_tform_droid_slam.to(device=device))
+        # meshes=mesh,
+
+        cams_imgs_depth_scale=0.2
+        viewpoints_count = 5
+        logger.info('rendering real images...')
+        imgs_real = show_scene(meshes=mesh, cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=viewpoints_count, return_visualization=True, crop_white_border=True, cams_imgs_depth_scale=cams_imgs_depth_scale, cams_show_wireframe=False)
+        # frames_ids = torch.arange(seq1.frames_count)[::50]
+        # frames = seq1.get_frames(frames_ids=frames_ids)
+        # cams_imgs = torch.stack([frame.rgb for frame in frames], dim=0).to(device=device)
+        # cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
+        # cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
+        from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+
+        logger.info('rendering rendered images...')
+        cams_imgs_rendered = []
+        for c, cam_img in enumerate(cams_imgs):
+            img_size = torch.Tensor(list(cams_imgs[c].shape[-2:]))
+            cams_imgs_rendered.append(255 * mesh.render_feats(cams_tform4x4_obj=cams_tform4x4_obj[c:c+1], cams_intr4x4=cams_intr4x4[c:c+1], imgs_sizes=img_size, broadcast_batch_and_cams=False, modality=MESH_RENDER_MODALITIES.RGB)[0])
+
+        imgs_rendered = show_scene(meshes=mesh, cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs_rendered, viewpoints_count=viewpoints_count, return_visualization=True, crop_white_border=True, cams_imgs_depth_scale=cams_imgs_depth_scale, cams_show_wireframe=False)
+
+        for i in range(viewpoints_count):
+            img_real = crop_white_border_from_img(imgs_real[i], white_pad=30)
+            img_rendered = crop_white_border_from_img(imgs_rendered[i], white_pad=30)
+            img_rendered = resize(img_rendered, scale_factor=img_real.shape[-2]/img_rendered.shape[-2])
+            logger.info('writing img...')
+            show_imgs(torch.cat([img_real, img_rendered], dim=-1), height=640, width=1280, fpath=f'mv_pose_{i}.png')
 
 @app.command()
 def teaser():

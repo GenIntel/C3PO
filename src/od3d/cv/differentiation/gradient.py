@@ -4,10 +4,10 @@ import torch
 def calc_batch_gradients(batch, shift=1, pad_zeros=False):
     # batch: torch.tensor: BxCxHxW
     # shift = 1 + margin
-    batch_grad_x = batch[:, :, :, shift:] - batch[:, :, :, :-shift]
+    batch_grad_x = batch[..., :, shift:] - batch[..., :, :-shift]
     # B x 2 x H x W-shift
 
-    batch_grad_y = batch[:, :, shift:, :] - batch[:, :, :-shift, :]
+    batch_grad_y = batch[..., shift:, :] - batch[..., :-shift, :]
     # B x 2 x H-shift x W
 
     if pad_zeros:

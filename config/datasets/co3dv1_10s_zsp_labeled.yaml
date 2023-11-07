@@ -3,29 +3,47 @@ defaults:
 
 name: co3dv1_10s_zsp_labeled
 
+
+preprocess:
+  label:
+    enabled: False
+    override: False
+  droid_slam:
+    enabled: False
+    override: False
+  pcl:
+    enabled: False
+    override: False
+    remove_previous: False
+  mesh:
+    enabled: False
+    override: False
+
+cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
+cam_tform_obj_source: 'pcl' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
+mesh_name: 'alpha500' # 'convex500', 'voxel500' 'poisson500', 'alpha500'
+pcl_source: 'co3d_clean'
+
 #frames_count_max_per_sequence: 3
 ###
-modalities:
-    - 'size'
-    - 'category'
-    - 'cam_intr4x4'
-    - 'cam_tform4x4_obj'
-    - 'category'
-    - 'rgb'
-    - 'mask'
-    - 'sequence_name'
-    - 'sequence'
-    - 'depth'
-    - 'depth_mask'
-    # - 'mesh'
+#modalities:
+#    - 'size'
+#    - 'category'
+#    - 'cam_intr4x4'
+#    - 'cam_tform4x4_obj'
+#    - 'category'
+#    - 'rgb'
+#    - 'mask'
+#    - 'sequence_name'
+#    - 'sequence'
+#    - 'depth'
+#    - 'depth_mask'
+#    - 'mesh'
 
 sequences_require_gt_pose: True
 
-cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
-cam_tform_obj_source: 'droid_slam_zsp_labeled' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
-
-# categories:
-#  - bicycle
+categories:
+  - bicycle
 #  - toytruck
 #  - toytrain
 #  - teddybear

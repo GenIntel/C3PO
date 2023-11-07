@@ -43,6 +43,8 @@ dependencies = [
     "pygit2",
     "seaborn",
     "open3d",
+    "numba",
+    "pycuda",
 ]
 
 dynamic = ["version"]

@@ -1,6 +1,6 @@
 class_name: CenterZoom3D
-W: 224
-H: 224
+W: 896
+H: 896
 scale:
 scale_with_mask: 1.
 scale_selection: 'separate' # 'shorter' 'larger' 'separate'

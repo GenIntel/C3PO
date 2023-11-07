@@ -17,12 +17,18 @@ export CUDA_HOME
 export LD_LIBRARY_PATH
 export FORCE_CUDA
 export TORCH_CUDA_ARCH_LIST
+
 (./misc/software/cuda/add_environment_cuda11.7.sh)
 
 pip install setuptools wheel --upgrade
 pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu117
 
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+
+Packages require CUDA_HOME path  
+- pytorch3d
+- pycuda
+
 
 1. From local
 

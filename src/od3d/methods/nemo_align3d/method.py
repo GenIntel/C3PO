@@ -55,6 +55,9 @@ from pathlib import Path
 from od3d.io import read_json
 from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
 from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES
+from od3d.datasets.co3d.enum import PCL_SOURCES
+from od3d.cv.geometry.transform import transf3d_broadcast, transf3d
+
 
 class VISUAL_MODALITIES(str, ExtEnum):
     PRED_VERTS_NCDS_IN_RGB = 'pred_verts_ncds_in_rgb'
@@ -231,6 +234,7 @@ class NeMo_Align3D(OD3D_Method):
 
                 for r, ref_mesh_id in enumerate(ref_mesh_ids):
                     for s, src_mesh_id in enumerate(src_mesh_ids):
+                        # src_sequences[src_mesh_id].show(show_imgs=True)
                         src_vertices_mask = src_sequences_mesh_ids_for_verts == src_mesh_id
                         #src_vertices = torch.arange(src_vertices_count).to(device=self.device)[src_vertices_mask]
                         pts_src = src_meshes.verts[src_vertices_mask].clone()
@@ -245,7 +249,6 @@ class NeMo_Align3D(OD3D_Method):
                                 #ref_vertices_mask = self.sequences_mesh_ids_for_verts == ref_mesh_id
                                 #pts = self.meshes.verts.clone().detach()
                                 #pts_ref = pts[ref_vertices_mask].clone()
-                                from od3d.cv.geometry.transform import transf3d_broadcast, transf3d
                                 # TODO: reference points from multiple point clouds have different scale and therefore problematic to fit with correspondences over multiple points
                                 pts_ref = torch.cat([transf3d_broadcast(pts3d=ref_meshes.verts[ref_sequences_mesh_ids_for_verts == _ref_mesh_id].clone(), transf4x4=all_pred_ref_tform_src[category][0, _r]) for _r, _ref_mesh_id in enumerate(ref_mesh_ids)], dim=0)
 
@@ -331,6 +334,17 @@ class NeMo_Align3D(OD3D_Method):
                                     inv_tform4x4(ref_sequences[ref_mesh_id].droid_slam_labeled_tform_droid_slam.to(
                                     device=self.device, dtype=pred_ref_tform_src.dtype)),
                                     src_sequences[src_mesh_id].droid_slam_labeled_tform_droid_slam.to(device=self.device, dtype=pred_ref_tform_src.dtype))
+
+                            elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D or \
+                                    (dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.PCL and
+                                     (dataset_src.pcl_source == PCL_SOURCES.CO3D or dataset_src.pcl_source == PCL_SOURCES.CO3D_CLEAN)):
+                                gt_ref_tform_src = tform4x4(
+                                    inv_tform4x4(
+                                        ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(
+                                            device=self.device,
+                                            dtype=pred_ref_tform_src.dtype)),
+                                    src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device,
+                                                                                                  dtype=pred_ref_tform_src.dtype))
                             else:
                                 gt_ref_tform_src = torch.eye(4).to(device=self.device)
                                 logger.warning('No gt available ')
@@ -395,8 +409,7 @@ class NeMo_Align3D(OD3D_Method):
         logger.info(results_mean)
         #results_ref_mean.log_with_prefix(prefix='only_to_ref')
 
-        from od3d.cv.geometry.transform import transf3d_broadcast
-        from od3d.datasets.co3d.enum import PCL_SOURCES
+
         # if r == 0:
         #    verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=pred_ref_tform_src)
         #    self.meshes.verts[src_vertices] = verts
@@ -438,15 +451,27 @@ class NeMo_Align3D(OD3D_Method):
                 if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
                     droid_slam_labeled_cuboid_tform_droid_slam = inv_tform4x4(ref_sequences[ref_category_instance_ids[0]].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device, dtype=dtype))
                     droid_slam_labeled_cuboid = ref_sequences[ref_category_instance_ids[0]].droid_slam_labeled_cuboid
-                else:
+                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_name,
+                                                                        cuboid=droid_slam_labeled_cuboid)
+                elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
                     droid_slam_labeled_tform_droid_slam = ref_sequences[ref_instance_id].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
                     droid_slam_labeled_cuboid_tform_droid_slam_labeled = ref_sequences[ref_instance_id].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype, device=self.device)
                     droid_slam_labeled_cuboid_tform_droid_slam = tform4x4(droid_slam_labeled_cuboid_tform_droid_slam_labeled, droid_slam_labeled_tform_droid_slam)
                     droid_slam_labeled_cuboid = ref_sequences[ref_instance_id].droid_slam_labeled_cuboid
+                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_name,
+                                                                        cuboid=droid_slam_labeled_cuboid)
+                elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D or \
+                     (dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.PCL and
+                     (dataset_src.pcl_source == PCL_SOURCES.CO3D or dataset_src.pcl_source == PCL_SOURCES.CO3D_CLEAN)):
+                    droid_slam_labeled_cuboid_tform_droid_slam = inv_tform4x4(ref_sequences[ref_category_instance_ids[0]].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device, dtype=dtype))
+                    logger.warning('aligned cuboid does not exist.')
+                else:
+                    msg = f' {dataset_src.cam_tform_obj_source}'
+                    raise Exception(msg)
                 #else:
                 #    droid_slam_labeled_cuboid_tform_droid_slam = torch.eye(4).to(device=self.device)
 
-                ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_name, cuboid=droid_slam_labeled_cuboid)
+
 
                 pts3d = []
                 pts3d_colors = []
@@ -486,9 +511,9 @@ class NeMo_Align3D(OD3D_Method):
                     #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                     #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
 
-                    pts3d.append(transf3d_broadcast(pts3d=src_sequences[src_instance_id].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance))
+                    pts3d.append(transf3d_broadcast(pts3d=src_sequences[src_instance_id].get_pcl().to(device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance))
 
-                    pts3d_colors.append(src_sequences[src_instance_id].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=self.device, dtype=dtype))
+                    pts3d_colors.append(src_sequences[src_instance_id].get_pcl_colors().to(device=self.device, dtype=dtype))
 
                 viewpoints_count = 2
                 category_meshes = src_meshes_cloned.get_meshes_with_ids(meshes_ids=src_category_instance_ids)

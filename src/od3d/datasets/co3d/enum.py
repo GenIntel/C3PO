@@ -4,6 +4,7 @@ from od3d.datasets.enum import OD3D_CATEGORIES
 
 class CAM_TFORM_OBJ_SOURCES(str, ExtEnum):
     CO3D = 'co3d'
+    PCL = 'pcl'
     CO3DV1 = 'co3dv1'
     FIRST_FRAME = 'first_frame'
     FRONT_FRAME = 'front_frame'
@@ -46,6 +47,7 @@ class REDUCE_TYPES(str, ExtEnum):
 
 class PCL_SOURCES(str, ExtEnum):
     CO3D = 'co3d'
+    CO3D_CLEAN = 'co3d_clean'
     DROID_SLAM = 'droid_slam'
     DROID_SLAM_CLEAN = 'droid_slam_clean'
 

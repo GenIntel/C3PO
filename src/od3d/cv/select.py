@@ -15,7 +15,33 @@ import torch
 # masked_scatter: input, mask, source -> return tensor with masked copy of source into target
 #   -> mask must be broadcastable for source and target
 
-# def batched_index_fill(input, index, dim=None):
+def batched_index_fill(input, value, index, dim=None):
+    """
+    Args:
+        input: B...x...xIx...
+        value: B...xN
+        dim (int): dimension of input which should be indexed (I)
+        index: B...xN
+    """
+
+    if dim is None:
+        dim = index.dim()-1
+
+    batch_dims = index.shape[:-1]
+    batch_dims_count = len(batch_dims)
+
+    views = batch_dims + torch.Size([1 if i != dim else -1 for i in range(batch_dims_count, input.dim())])
+    index = index.view(views)
+    if isinstance(value, torch.Tensor):
+        value = value.view(views)
+
+    expanse = batch_dims + torch.Size([input.shape[i] if i != dim else -1 for i in range(batch_dims_count, input.dim())]) #
+    index = index.expand(expanse)
+    if isinstance(value, torch.Tensor):
+        value = value.view(views)
+
+    return torch.scatter(input=input, index=index, value=value, dim=dim)
+
 
 def batched_index_select(input, index, dim=None):
     """
