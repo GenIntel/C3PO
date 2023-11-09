@@ -113,6 +113,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                return_visualization=False,
                viewpoints_count=1,
                dtype=torch.float,
+               H=1080,
+               W=1980,
                device='cpu',
                meshes_as_wireframe=False,
                crop_white_border=False):
@@ -188,8 +190,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 mesh_color =mesh_color.detach().cpu().numpy()
 
             mat_box = open3d.visualization.rendering.MaterialRecord()
-            mat_box.shader = 'defaultUnlit'
-            #mat_box.shader = 'defaultLitTransparency'
+            #mat_box.shader = 'defaultUnlit'
+            mat_box.shader = 'defaultLitTransparency'
             #mat_box.shader = 'defaultLitSSR'
             alpha = 0.5
             # mat_box.base_reflectance = 0.
@@ -302,7 +304,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
         if os.environ.get('DISPLAY'):
             vis = o3d.visualization.Visualizer()
 
-            vis.create_window(visible=False) #, height=720, width=1280)
+            vis.create_window(visible=False, height=H, width=W)
 
             opt = vis.get_render_option()
             #opt.background_color = np.asarray([0, 0, 0])
@@ -433,14 +435,14 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
                     cam_img = cams_imgs[i]
                     h_resize = 1.
                     w_resize = 1.
-
-                depth = open3d.geometry.Image(((torch.ones(size=cam_img.shape[1:]) * cam_tform4x4_obj[2, 3] * cams_imgs_depth_scale).cpu().detach().numpy() * 255).astype(np.uint8))
+                depth_scale = (cams_imgs_depth_scale * cam_tform4x4_obj[2, 3])  #  * 10 * cam_tform4x4_obj[2, 3]
+                depth = open3d.geometry.Image(((torch.ones(size=cam_img.shape[1:])).cpu().detach().numpy() * 255).astype(np.uint8))
                 img = open3d.geometry.Image((cam_img.permute(1, 2, 0).contiguous().cpu().detach().numpy()).astype(np.uint8))
                 fx = cam_intr4x4[0, 0].item() * w_resize
                 fy = cam_intr4x4[1, 1].item() * h_resize
                 cx = cam_intr4x4[0, 2].item() * w_resize
                 cy = cam_intr4x4[1, 2].item() * h_resize
-                rgbd = open3d.geometry.RGBDImage.create_from_color_and_depth(color=img, depth=depth, depth_scale=1., depth_trunc=3 * cam_tform4x4_obj[2, 3], convert_rgb_to_intensity=False)
+                rgbd = open3d.geometry.RGBDImage.create_from_color_and_depth(color=img, depth=depth, depth_scale=1/depth_scale , depth_trunc=3 * depth_scale , convert_rgb_to_intensity=False)
                 intrinsic = open3d.camera.PinholeCameraIntrinsic(w, h, fx, fy, cx, cy)
                 intrinsic.intrinsic_matrix = [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
                 cam = open3d.camera.PinholeCameraParameters()
@@ -611,10 +613,13 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
     if normalize:
         rgb = (rgb -rgb.min()) / (rgb.max() - rgb.min())
 
-    if width is not None:
+    if width is not None and height is not None:
+        orig_width = rgb.size(2)
+        orig_height = rgb.size(1)
+        scale_factor = min(width / orig_width, height / orig_width)
+    elif width is not None:
         orig_width = rgb.size(2)
         scale_factor = width / orig_width
-
     elif height is not None:
         orig_height = rgb.size(1)
         scale_factor = height / orig_height
@@ -641,7 +646,7 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
         return cv2.waitKey(duration)
 
 
-def get_img_from_plot(ax, fig, axis_off=True):
+def get_img_from_plot(ax, fig, axis_off=True, margins=1, pad=1):
     try:
         count_axes = len(ax)
         single_axes = False
@@ -653,20 +658,20 @@ def get_img_from_plot(ax, fig, axis_off=True):
         if single_axes:
             ax.axis('off')
             # To remove the huge white borders
-            ax.margins(0)
+            ax.margins(margins)
         else:
             for ax_single in ax:
                 ax_single.axis('off')
                 # To remove the huge white borders
-                ax_single.margins(0)
-        fig.tight_layout(pad=0)
+                ax_single.margins(margins)
+        fig.tight_layout(pad=pad)
     else:
-        fig.tight_layout(pad=1)
+        fig.tight_layout(pad=pad)
         if single_axes:
-            ax.margins(1)
+            ax.margins(margins)
         else:
             for ax_single in ax:
-                ax_single.margins(1)
+                ax_single.margins(margins)
 
     fig.canvas.draw()
     image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)

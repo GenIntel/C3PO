@@ -35,6 +35,8 @@ def align3d():
     instance_ids = torch.LongTensor(list(range(instances_count)))
 
     category = 'chair'
+    category = 'bicycle'
+
     rand_category_id = categories.index(category) # 'car', 'chair',
     rand_category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
 
@@ -55,16 +57,16 @@ def align3d():
     while True:
         rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=2)
 
-        # rand_category_rand_instance_ids = [22, 23]#  344 349 337 334 322 324
+        rand_category_rand_instance_ids = [3, 4]#  344 349 337 334 322 324
         logger.info(f'chosen category is {category}')
         logger.info(f'chosen ids are {rand_category_rand_instance_ids}')
 
         mesh_source = CUBOID_SOURCES.DEFAULT
         import math
-        uniform_objs_tform_obj = get_spherical_uniform_tform4x4(azim_min = -math.pi / 2 , azim_max= + math.pi / 2, azim_steps=3,
-                                                                elev_min=-math.pi / 2, elev_max=-math.pi / 2,
-                                                                elev_steps=1, theta_min=0., theta_max=0., theta_steps=1).to(device=device)
-        P = len(uniform_objs_tform_obj)
+        #uniform_objs_tform_obj = get_spherical_uniform_tform4x4(azim_min = -math.pi / 2 , azim_max= + math.pi / 2, azim_steps=5,
+        #                                                        elev_min=-math.pi / 2, elev_max=-math.pi / 2,
+        #                                                        elev_steps=1, theta_min=0., theta_max=0., theta_steps=1).to(device=device)
+        P = 4
 
         seq1 = sequences[rand_category_rand_instance_ids[0]]
         seq2 = sequences[rand_category_rand_instance_ids[1]]
@@ -89,7 +91,19 @@ def align3d():
         # sequences[rand_category_rand_instance_ids[0]]
         uniform_objs_tform_obj = fit_tform4x4(pts=pts2, pts_ref=pts1, pts_ids=pts_ids, dist_ref=dist_2_1)
 
-        proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg = score_tform4x4_fit(pts=pts2, pts_ref=pts1, tform4x4=uniform_objs_tform_obj, dist_ref=dist_2_1, return_dists=True, score_perc=0.7)
+        _, proposal_dist_ref_geo_avg, proposal_dist_src_ref_2d_ids, proposal_dist_src_ref_weights = score_tform4x4_fit(pts=pts2, pts_ref=pts1, tform4x4=uniform_objs_tform_obj, dist_ref=dist_2_1, return_dists=True, return_weights=True, cyclic_weight_temp=0.7)
+
+        from od3d.cv.select import batched_index_fill
+        #mesh1_weights = torch.zeros_like(mesh1.rgb[:, :1])
+        #mesh1_weights = batched_index_fill(input=mesh1_weights.permute(1, 0).repeat(3, 1), value=proposal_dist_src_ref_weights,  index=proposal_dist_src_ref_2d_ids[:, :, 1]).permute(1, 0)
+        #mesh1_weights = mesh1_weights.mean(dim=1, keepdim=True)
+        #mesh1_weights = mesh1_weights / mesh1_weights.max(dim=0, keepdim=True).values
+        #mesh1.rgb *= mesh1_weights
+
+        mesh2_weights = torch.zeros_like(mesh2.rgb[:, :1])
+        mesh2_weights = batched_index_fill(input=mesh2_weights.permute(1, 0).repeat(P, 1), value=proposal_dist_src_ref_weights,  index=proposal_dist_src_ref_2d_ids[:, :, 0]).permute(1, 0)
+        mesh2_weights = mesh2_weights / mesh2_weights.max(dim=0, keepdim=True).values
+
         meshes = [mesh1]
         lines = []
         for t in range(P):
@@ -98,9 +112,20 @@ def align3d():
             uniform_obj_tform_obj[0, 3] = 1. # shift in x
             uniform_obj_tform_obj[2, 3] = -1. * (t - P // 2) # shift in z
             mesh2_verts = transf3d_broadcast(pts3d=mesh2.verts.to(device=device, dtype=dtype), transf4x4=uniform_obj_tform_obj.to(device=device))
+
+            #uniform_obj_tform_obj = torch.eye(4).to(device=device)
+            uniform_obj_tform_obj[:3, 3] = 0.
+            uniform_obj_tform_obj[0, 3] = 1.5  # shift in x
+            uniform_obj_tform_obj[2, 3] = -1. * (t - P // 2)  # shift in z
+            mesh2_weights_verts = transf3d_broadcast(pts3d=mesh2.verts.to(device=device, dtype=dtype), transf4x4=uniform_obj_tform_obj.to(device=device))
+            mesh2_weights_rgb = torch.ones_like(mesh2.rgb)
+            mesh2_weights_rgb *= mesh2_weights[:, t:t+1].clamp(0, 1)
             mesh = Mesh(verts=mesh2_verts,
                         faces=mesh2.faces, rgb=mesh2.rgb)
+            mesh_weights = Mesh(verts=mesh2_weights_verts,
+                        faces=mesh2.faces, rgb=mesh2_weights_rgb)
             meshes.append(mesh)
+            meshes.append(mesh_weights)
             t_lines = torch.stack([mesh2_verts[pts_ids[t]], pts1[pts1_ids[t]]], dim=-1).permute(0, 2, 1)
             lines.append(t_lines)
 
@@ -113,25 +138,27 @@ def align3d():
         H, W = imgs.shape[-2:]
         # show_imgs(imgs, height=640, width=1280)
 
-        fig, ax = plt.subplots(P, 1)
+        fig, ax = plt.subplots(P, 1, figsize=(2, 5))
         for p in range(P):
-            x = ['geometry', 'appearance']
-            y = [proposal_dist_ref_geo_avg[p].item(), proposal_dist_ref_appear_avg[p].item()]
-            bar_labels = ['geometry', 'appearance']
-            bar_colors = ['tab:blue', 'tab:green']
-            ax[p].bar(x, y, label=bar_labels, color=bar_colors,  width=0.8)
+            x = [''] #, 'appearance']
+            y = [proposal_dist_ref_geo_avg[p].item()] #, proposal_dist_ref_geo_avg[p].item()]
+            bar_labels = ['geometry'] #, 'appearance']
+            bar_colors = ['tab:grey'] #, 'tab:green']
+            ax[p].bar(x, y, label=bar_labels, color=bar_colors,  width=0.02)
             ax[p].set_ylabel(None) # 'distance'
             ax[p].set_title('')
-            ax[p].set_ylim([0., 1.])
-            ax[p].set_xlim([-0.5, 1.5])
+            ax[p].set_xticks([], minor=False)
+            ax[p].set_yticks([], minor=False)
+            ax[p].set_ylim([0., proposal_dist_ref_geo_avg.max().item()* 1.1])
+            ax[p].set_xlim([-0.03, 0.03])
 
             # ax[p].legend(title='Distance')
 
         img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
         img = resize(img, scale_factor=H/img.shape[-2])
         total_imgs = torch.cat([imgs* 255, img], dim=-1)
-        show_img(total_imgs, height=640, width=1280, fpath='method_align3d.png')
-        show_img(total_imgs, height=640, width=1280)
+        show_img(total_imgs, height=1080, width=1980, fpath='method_align3d.png')
+        show_img(total_imgs, height=1080, width=1980)
 
 @app.command()
 def mv_pose():
@@ -294,14 +321,14 @@ def teaser():
         for instance_id_in_category, instance_id in enumerate(category_instance_ids):
 
             if instance_id_in_category == 0:
-                droid_slam_aligned_tform_droid_slam = sequences[instance_id].droid_slam_aligned_tform_droid_slam.to(
+                droid_slam_aligned_tform_droid_slam = sequences[instance_id].aligned_obj_tform_obj.to(
                     device=device, dtype=dtype)
                 pts3d_first = transf3d_broadcast(pts3d=sequences[instance_id].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(device=device, dtype=dtype),transf4x4=droid_slam_aligned_tform_droid_slam)
 
                 offset_y = offset_y_prev - pts3d_first[:, 1].min().item() * 1.2
                 offset_y_prev = offset_y + pts3d_first[:, 1].max().item() * 1.2
                 logger.info(f'category {category} offset {offset_y}')
-            droid_slam_aligned_tform_droid_slam = sequences[instance_id].droid_slam_aligned_tform_droid_slam.to(device=device, dtype=dtype)
+            droid_slam_aligned_tform_droid_slam = sequences[instance_id].aligned_obj_tform_obj.to(device=device, dtype=dtype)
 
             offset_aligned_tform_aligned = tform4x4_from_transl3d(torch.Tensor([offset_x * instance_id_in_category, offset_y, 0.]).to(device=device, dtype=dtype))
 

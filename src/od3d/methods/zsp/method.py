@@ -93,10 +93,10 @@ class ZSP(OD3D_Method):
 
             # this ensures that we first label the axis, which are required later to fit the cuboid
             droid_slam_labeled_tform_droid_slam = ref_sequences[
-                ref_category_instance_ids[0]].droid_slam_labeled_tform_droid_slam.to(dtype=dtype, device=self.device)
+                ref_category_instance_ids[0]].labeled_obj_tform_obj.to(dtype=dtype, device=self.device)
             droid_slam_labeled_cuboid_tform_droid_slam_labeled = ref_sequences[
-                ref_category_instance_ids[0]].droid_slam_labeled_cuboid_tform_droid_slam_labeled.to(dtype=dtype,
-                                                                                                    device=self.device)
+                ref_category_instance_ids[0]].labeled_cuboid_obj_tform_labeled_obj.to(dtype=dtype,
+                                                                                      device=self.device)
 
             results_diff_log_rot[category] = torch.zeros(
                 size=(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id])).to(
@@ -326,10 +326,10 @@ class ZSP(OD3D_Method):
                                                                                                   dtype=pred_ref_tform_src.dtype))
                         elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
                             gt_ref_tform_src = tform4x4(
-                                inv_tform4x4(ref_sequences[ref_mesh_id].droid_slam_labeled_tform_droid_slam.to(
+                                inv_tform4x4(ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(
                                     device=self.device, dtype=pred_ref_tform_src.dtype)),
-                                src_sequences[src_mesh_id].droid_slam_labeled_tform_droid_slam.to(device=self.device,
-                                                                                                  dtype=pred_ref_tform_src.dtype))
+                                src_sequences[src_mesh_id].labeled_obj_tform_obj.to(device=self.device,
+                                                                                    dtype=pred_ref_tform_src.dtype))
                         elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D:
                             gt_ref_tform_src = tform4x4(
                                 inv_tform4x4(

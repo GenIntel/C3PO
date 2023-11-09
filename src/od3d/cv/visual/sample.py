@@ -2,7 +2,7 @@ import torch
 import logging
 logger = logging.getLogger(__name__)
 
-def sample_pxl2d_pts(x, pxl2d, padding_mode='zeros'):
+def sample_pxl2d_pts(x, pxl2d, padding_mode='zeros', padding_value=1.):
     """
     Args:
         x (torch.Tensor): CxHxW / BxCxHxW
@@ -37,7 +37,7 @@ def sample_pxl2d_pts(x, pxl2d, padding_mode='zeros'):
     # input: (B, C, Hin​, Win​) and grid: (1, Hout​, Wout​, 2)
     # output: (B, C, Hin, Win
     # TODO: delete float(), which is required for 16-bit precision (if pytorch version > 1.7.1 it might be fixed)
-    if padding_mode == 'ones':
+    if padding_mode == 'value' or padding_mode == 'ones':
         _padding_mode = 'zeros'
     else:
         _padding_mode = padding_mode
@@ -50,9 +50,9 @@ def sample_pxl2d_pts(x, pxl2d, padding_mode='zeros'):
     )[:, :, 0]
     x_sampled = x_sampled.permute(0, 2, 1)
 
-    if padding_mode == 'ones':
+    if padding_mode == 'value' or padding_mode == 'ones':
         mask_outside_of_grid = (pxl2d_normalized[:, :, 0] < -1.) + (pxl2d_normalized[:, :, 1] < -1.) + (pxl2d_normalized[:, :, 0] > 1.) + (pxl2d_normalized[:, :, 1] > 1.)
-        x_sampled[mask_outside_of_grid] = 1.
+        x_sampled[mask_outside_of_grid] = padding_value
 
     if not pxl2d_batched and not x_batched:
         x_sampled = x_sampled[0]

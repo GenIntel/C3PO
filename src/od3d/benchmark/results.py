@@ -194,7 +194,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         thresholds_every = int(thresholdsLength // 10) + 1
         for i in range(0, thresholdsLength, thresholds_every):
             if np.isfinite(recall[i]) and np.isfinite(precision[i]):
-                display.ax_.plot(recall[i], precision[i], "o", label=f"sim >= {thresholds[i]:.2f}", color=colorMap(i / thresholdsLength))
+                display.ax_.plot(recall[i], precision[i], "o", label=f"sim >= {thresholds[i]:.3f}", color=colorMap(i / thresholdsLength))
 
         display.ax_.set_xlabel('Recall')
         display.ax_.set_ylabel('Precision')

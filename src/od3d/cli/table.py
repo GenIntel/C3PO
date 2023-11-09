@@ -9,12 +9,13 @@ app = typer.Typer()
 from od3d.cli.benchmark import get_dataframe
 from tabulate import tabulate
 import re
+from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
+from od3d.datasets.objectnet3d.enum import MAP_CATEGORIES_OD3D_TO_OBJECTNET3D, MAP_CATEGORIES_OBJECTNET3D_TO_OD3D
 
 @app.command()
 def ablation_dist():
     # CO3Dv1_NeMo, metrics
 
-    from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
     categories = od3d.io.read_config_intern(Path('datasets/categories/zsp.yaml'))
 
     align3d_1on1_name_partial = 'NeMo_Align3D_'
@@ -101,9 +102,9 @@ def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, con
 
     return metrics_dfs
 
-def get_categorical_results_from_single_runs(metrics, categories, age_in_hours: float, configs=[], name_partial='_CO3D_NeMo_ref', metrics_scales=None, map_od3d_to_datasets=None):
+def get_categorical_results_from_single_runs(metrics_templates, categories, age_in_hours: float, configs=[], name_partial='_CO3D_NeMo_ref', metrics_scales=None, map_od3d_to_datasets=None):
     metrics_df = []
-    for m, metric in enumerate(metrics):
+    for m, metric in enumerate(metrics_templates):
         columns_map = {}
         metrics = []  # ['pose/acc_pi6', 'pose/acc_pi6_std']
         columns_std = []
@@ -147,8 +148,8 @@ def get_categorical_results_from_single_runs(metrics, categories, age_in_hours: 
 TABLE_CATEGORIES_OBJECTNET3D_3 = ['cellphone', 'toilet', 'microwave', 'mean (3)']
 TABLE_CATEGORIES_OBJECTNET3D_23 = [
     'cellphone', 'toilet', 'microwave', 'airplane', 'backpack', 'bench', 'bicycle', 'bottle', 'bus', 'car',
-    'cellphone', 'chair', 'couch', 'cup', 'hairdryer', 'keyboard', 'laptop', 'microwave', 'motorcycle',
-    'mouse', 'remote', 'suitcase', 'toaster', 'toilet', 'train', 'tv', 'mean (23)'
+    'chair', 'couch', 'cup', 'hairdryer', 'keyboard', 'laptop', 'motorcycle',
+    'mouse', 'remote', 'suitcase', 'toaster', 'train', 'tv', 'mean (23)'
 ]
 TABLE_CATEGORIES_CO3D_20 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'mean (20)']
 TABLE_CATEGORIES_CO3D_28 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'cellphone', 'microwave', 'bench', 'bottle', 'couch', 'cup', 'suitcase', 'tv', 'mean (28)']
@@ -185,7 +186,7 @@ def pose_pi6_categories_separate():
     from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
 
 
-    age_in_hours = 72 # 17
+    age_in_hours = 100 # 17
     configs = []
 
     # ###### FROM MULTIPLE RUNS
@@ -201,7 +202,7 @@ def pose_pi6_categories_separate():
     ###### FROM SINGLE RUNS
     metrics = ['pose/prefix/CATEGORY_acc_pi6']
     metrics = ['test/pascal3d_test/pose/prefix/CATEGORY_acc_pi6']
-    #metrics = ['test/objectnet3d_test/pose/prefix/CATEGORY_acc_pi6']
+    metrics = ['test/objectnet3d_test/pose/prefix/CATEGORY_acc_pi6']
 
     metrics_dataset = [DATASET_CO3D_20]
     metrics_dataset = [DATASET_CO3D_28]
@@ -211,13 +212,14 @@ def pose_pi6_categories_separate():
     metrics_scales = [100]
     categories = TABLE_CATEGORIES_CO3D_20[:-1]
     categories = TABLE_CATEGORIES_CO3D_28[:-1]
-    categories = TABLE_CATEGORIES_PASCAL3D[:-1]
+    #categories = TABLE_CATEGORIES_PASCAL3D[:-1]
     #categories = TABLE_CATEGORIES_OBJECTNET3D_23[:-1]
     #categories = TABLE_CATEGORIES_OBJECTNET3D_3[:-1]
 
     map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
     map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
-    #map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_PASCAL3D]
+    map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_PASCAL3D]
+    #map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_OBJECTNET3D]
     #map_od3d_to_datasets = None
 
     name_partial = '_CO3Dv1_NeMo_Align3D_'
@@ -226,7 +228,7 @@ def pose_pi6_categories_separate():
     name_partial = '11-02_22-00-14_CO3D_ZSP_z_cross_pascal3d_objectnet3d_local'
     name_partial = '11-05_17-18-19_CO3D_ZSP_z_cross_pascal3d_objectnet3d_local'
     #name_partial = '11-03_08-26-52_CO3D_ZSP_src_5s_ref_5s_local'
-    metrics_dfs = get_categorical_results_from_single_runs(metrics=metrics, categories=categories, age_in_hours=age_in_hours, name_partial=name_partial, metrics_scales=metrics_scales, map_od3d_to_datasets=map_od3d_to_datasets)
+    metrics_dfs = get_categorical_results_from_single_runs(metrics_templates=metrics, categories=categories, age_in_hours=age_in_hours, name_partial=name_partial, metrics_scales=metrics_scales, map_od3d_to_datasets=map_od3d_to_datasets)
 
 
     for m, metric_df in enumerate(metrics_dfs):

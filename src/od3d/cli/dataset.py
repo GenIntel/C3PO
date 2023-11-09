@@ -239,7 +239,14 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     # )
     from od3d.cv.transforms.transform import OD3D_Transform
 
-    dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom224')
+    sequences = dataset.get_sequences()
+    for seq in sequences:
+        logger.info(seq.name_unique)
+        seq.show(show_imgs=True)
+    #dataset.transform = OD3D_Transform.create_by_name('centerzoom512')
+    dataset.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+
+    #dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom224')
     #dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom896')
 
 

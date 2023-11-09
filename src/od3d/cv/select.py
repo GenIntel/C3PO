@@ -38,9 +38,45 @@ def batched_index_fill(input, value, index, dim=None):
     expanse = batch_dims + torch.Size([input.shape[i] if i != dim else -1 for i in range(batch_dims_count, input.dim())]) #
     index = index.expand(expanse)
     if isinstance(value, torch.Tensor):
-        value = value.view(views)
+        value = value.expand(expanse)
 
-    return torch.scatter(input=input, index=index, value=value, dim=dim)
+    return torch.scatter(input=input, index=index, src=value, dim=dim)
+
+def batched_indexMD_fill(inputMD, indexMD, value, dims=None):
+    """
+    Args:
+        input: B...x...xI1x...xI2...
+        dims (List[int]): dimensions of input which should be filled [I1, ..., IM]
+        indexMD: B...xNxM
+        valueMD: B...xN
+    Returns:
+        out: B...xNx...
+    """
+
+    batch_dims = indexMD.shape[:-2]
+    batch_dims_count = len(batch_dims)
+
+    if dims is None:
+        dims = batch_dims_count + torch.arange(indexMD.shape[-1])
+
+    assert(len(dims) == indexMD.shape[-1])
+
+    M = len(dims)
+    non_batch_non_index_dims_count = inputMD.dim() - batch_dims_count - M
+
+    index1D = index_MD_to_1D(indexMD, inputMD, dims)
+
+    input_permutation_MD_to_1D = torch.LongTensor([i for i in range(batch_dims_count)])
+    input_permutation_MD_to_1D = torch.cat([input_permutation_MD_to_1D, torch.LongTensor([d for d in dims])])
+    input_permutation_MD_to_1D = torch.cat([input_permutation_MD_to_1D, torch.LongTensor([i for i in set(list(range(inputMD.dim())))-set(input_permutation_MD_to_1D.tolist())])])
+    input1D_shape = batch_dims + (-1,)
+    if non_batch_non_index_dims_count > 0:
+        input1D_shape += torch.Size([inputMD.shape[i] for i in input_permutation_MD_to_1D[-non_batch_non_index_dims_count:]])
+    input1D = inputMD.permute(*input_permutation_MD_to_1D).view(input1D_shape)
+
+    out1D = batched_index_fill(input=input1D, index=index1D, value=value)
+
+    return out1D
 
 
 def batched_index_select(input, index, dim=None):
@@ -83,6 +119,8 @@ def index_MD_to_1D(indexMD, inputMD, dims):
             index1D *= inputMD.shape[dims[m]]
         index1D += indexMD[..., m]
     return index1D
+
+
 
 
 def batched_indexMD_select(inputMD, indexMD, dims=None):

@@ -19,6 +19,7 @@ import os
 from od3d.cv.geometry.transform import plane4d_to_tform4x4, tform4x4_from_transl3d
 import numpy as np
 from od3d.cv.visual.resize import resize
+from od3d.io import read_dict_from_yaml, write_dict_as_yaml
 
 import torch.utils.data
 import od3d.io
@@ -40,11 +41,10 @@ from od3d.cv.visual.show import show_img
 from od3d.cv.io import load_ply, save_ply
 
 
-from od3d.cv.geometry.transform import proj3d2d_broadcast
 from od3d.cv.visual.sample import sample_pxl2d_pts
 
 from od3d.cv.geometry.points_alignment import get_pca_tform_world
-from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4, inv_tform4x4
+from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4, inv_tform4x4, proj3d2d_broadcast
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.geometry.points_alignment import icp
 from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
@@ -60,7 +60,7 @@ from od3d.cv.geometry.transform import depth2pts3d_grid, depth2normals_grid
 import re
 from od3d.cv.visual.show import show_scene
 
-
+from od3d.cv.geometry.fit.rays_center3d import fit_rays_center3d
 
 @dataclass
 class CO3D_SequenceMeta(OD3D_SequenceMeta):
@@ -112,8 +112,8 @@ class CO3D_Sequence():
 
     def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, meta: CO3D_SequenceMeta,
                  modalities: List[OD3D_FRAME_MODALITIES], categories: List[str],
-                 cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
-                 cuboid_source=CUBOID_SOURCES.KPTS2D_ORIENT_AND_PCL.value,
+                 cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D.value,
+                 cuboid_source=CUBOID_SOURCES.DEFAULT.value,
                  mesh_feats_type=FEATURE_TYPES.DINOV2_AVG.value,
                  dist_verts_mesh_feats_reduce_type=REDUCE_TYPES.MIN.value,
                  pcl_source=PCL_SOURCES.CO3D.value,
@@ -142,6 +142,7 @@ class CO3D_Sequence():
         self._front_name = None
         self._cuboid_front_tform4x4_obj = None
         self._cuboid = None
+        self._meta_ext = None
 
         if torch.cuda.is_available():
             self.device = 'cuda:0'
@@ -707,7 +708,7 @@ class CO3D_Sequence():
 
             pts3d = random_sampling(pts3d, pts3d_max_count=pts3d_max_count * 3)
             pts3d = voxel_downsampling(pts3d, K=pts3d_max_count)
-            pts3d_prob = torch.ones(size=(pts3d.shape[0], 1), device=pts3d.device, dtype=pts3d.dtype)
+            pts3d_prob = torch.zeros(size=(pts3d.shape[0], 1), device=pts3d.device, dtype=pts3d.dtype)
 
             if torch.cuda.is_available():
                 pts3d = pts3d.to(device='cuda:0')
@@ -754,20 +755,26 @@ class CO3D_Sequence():
         return self.path_preprocess.joinpath('dist_verts_mesh_feats', self.pcl_source, self.mesh_name, self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, self.name_unique, sequence.name_unique, 'dist_verts_mesh_feats.pt')
 
 
-    def get_pcl_clean_with_masks(self, pcl, masks, cams_proj4x4_obj, pts3d_prob_thresh=0.6, pts3d_count_min=10, pts3d_max_count=20000, return_mask=False):
+    def get_pcl_clean_with_masks(self, pcl, masks, cams_tform4x4_obj, cams_intr4x4, pts3d_prob_thresh=0.6, pts3d_count_min=10, pts3d_max_count=20000, return_mask=False):
+        """
+        Args:
 
+        Returns:
+
+        """
+        #cams_proj4x4_obj = tform4x4(cams_intr4x4, cams_tform4x4_obj)
         pcl_sampled, mask_pcl = random_sampling(pcl, pts3d_max_count=pts3d_max_count, return_mask=True)
 
-        pts3d_prob = torch.ones(size=(pcl_sampled.shape[0], 1), device=pcl.device, dtype=pcl.dtype)
-
-        pxl2d = proj3d2d_broadcast(pts3d=pcl_sampled, proj4x4=cams_proj4x4_obj[:, None])
-        pts3d_prob += sample_pxl2d_pts(masks, pxl2d=pxl2d, padding_mode='zeros').sum(dim=0)
-
+        pts3d_prob = torch.zeros(size=(pcl_sampled.shape[0], 1), device=pcl.device, dtype=pcl.dtype)
+        cam_tform_pts3d = transf3d_broadcast(pts3d=pcl_sampled, transf4x4=cams_tform4x4_obj[:, None])
+        pxl2d = proj3d2d_broadcast(pts3d=cam_tform_pts3d, proj4x4=cams_intr4x4[:, None])
+        pts3d_prob += ((cam_tform_pts3d[:, :, 2:] > 0.) * sample_pxl2d_pts(masks, pxl2d=pxl2d, padding_mode='value', padding_value=0.)).sum(dim=0)
         pts3d_prob = pts3d_prob / len(masks)
         mask_pcl[mask_pcl == True] *= pts3d_prob[..., 0] > pts3d_prob_thresh
         pcl_clean = pcl[mask_pcl]
 
         if len(pcl_clean) < pts3d_count_min:
+            logger.warning(f'less than {pts3d_count_min} in cleaned pcl {self.name_unique}')
             pcl_clean, mask_pcl = random_sampling(pcl, pts3d_max_count=pts3d_count_min, return_mask=True)
 
         if not return_mask:
@@ -790,7 +797,7 @@ class CO3D_Sequence():
                        path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                        categories=[CO3D_CATEGORIES(self.category).value],
                        dict_nested_frames={self.category: {self.name: None}},
-                       cam_tform_obj_source=self.cam_tform_obj_source,
+                       cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.PCL,
                        pcl_source=self.pcl_source,
                        cuboid_source=self.cuboid_source,
                        mesh_feats_type=self.mesh_feats_type,
@@ -825,6 +832,11 @@ class CO3D_Sequence():
 
         meshes = Meshes.load_from_meshes([self.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT)], device=device)
         dataset.transform = transform
+
+        ## DEBUG BLOCK START
+        #cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(CAM_TFORM_OBJ_SOURCES.PCL)
+        #show_scene(meshes=meshes, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs )
+        ## DEBUG BLOCK END
 
         meshes_verts_aggregated_features = [torch.zeros((0, feature_dim), device='cpu')] * meshes.verts.shape[0]
         vertices_count = len(meshes_verts_aggregated_features)
@@ -974,7 +986,6 @@ class CO3D_Sequence():
         return self._pcl_clean
 
     def get_trajectory(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES):
-
         frames = [self.get_frame_by_name(frame_name) for frame_name in self.frames_names]
         cams_tform_obj = [f.get_cam_tform4x4_obj(cam_tform_obj_source=cam_tform_obj_source) for f in frames]
         cams_tform_obj = torch.stack(cams_tform_obj, dim=0)
@@ -985,28 +996,34 @@ class CO3D_Sequence():
         a_tform_b = self.get_a_src_tform_b_src(src_a=src_a, src_b=src_b, estimate_scale=True, device=device)
         return a_tform_b[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
 
+    def get_fpath_a_src_tform_b_src(self, src_a: CAM_TFORM_OBJ_SOURCES, src_b: CAM_TFORM_OBJ_SOURCES):
+        fpath = self.path_preprocess.joinpath('a_src_tform_b_src', f'{src_a}_{self.pcl_source}_tform_{src_b}_{self.pcl_source}', self.name_unique, f'tform.pt')
+        return fpath
+
     def get_a_src_tform_b_src(self, src_a: CAM_TFORM_OBJ_SOURCES, src_b: CAM_TFORM_OBJ_SOURCES, estimate_scale=True, device='cpu'):
-        fpath = self.path_preprocess.joinpath('a_src_tform_b_src', f'{src_a}_tform_{src_b}', self.name_unique, f'{src_a}_tform_{src_b}.pt')
+        fpath = self.get_fpath_a_src_tform_b_src(src_a=src_a, src_b=src_b)
         if fpath.exists():
             a_src_tform_b_src = torch.load(fpath).to(device=device)
         else:
-            obj_cams_traj_a = self.get_trajectory(cam_tform_obj_source=src_a).to(device=device)
-            obj_cams_traj_b = self.get_trajectory(cam_tform_obj_source=src_b).to(device=device)
-            obj_cams_traj_mask = (~obj_cams_traj_a.isnan().any(dim=-1)) * (~obj_cams_traj_b.isnan().any(dim=-1))
+            if src_a == src_b:
+                a_src_tform_b_src = torch.eye(4).to(device=device)
+            else:
+                obj_cams_traj_a = self.get_trajectory(cam_tform_obj_source=src_a).to(device=device)
+                obj_cams_traj_b = self.get_trajectory(cam_tform_obj_source=src_b).to(device=device)
+                obj_cams_traj_mask = (~obj_cams_traj_a.isnan().any(dim=-1)) * (~obj_cams_traj_b.isnan().any(dim=-1))
 
-            if obj_cams_traj_mask.sum() < 4:
-                msg = f'could not calculate a tform b due to missing trajectory points'
-                raise NotImplementedError(msg=msg)
-            #from od3d.cv.visual.show import show_scene
-            #show_scene(pts3d=[obj_cams_traj_a[50:], obj_cams_traj_b[50:]])
+                if obj_cams_traj_mask.sum() < 4:
+                    msg = f'could not calculate a tform b due to missing trajectory points'
+                    raise NotImplementedError(msg=msg)
+                #from od3d.cv.visual.show import show_scene
+                #show_scene(pts3d=[obj_cams_traj_a[50:], obj_cams_traj_b[50:]])
+                from od3d.cv.geometry.fit.tform4x4 import fit_tform4x4_with_matches3d3d
+                a_src_tform_b_src = fit_tform4x4_with_matches3d3d(pts=obj_cams_traj_b[obj_cams_traj_mask], pts_ref=obj_cams_traj_a[obj_cams_traj_mask], estimate_scale=estimate_scale)
 
-            from od3d.cv.geometry.fit.tform4x4 import fit_tform4x4_with_matches3d3d
-            a_src_tform_b_src = fit_tform4x4_with_matches3d3d(pts=obj_cams_traj_b[obj_cams_traj_mask], pts_ref=obj_cams_traj_a[obj_cams_traj_mask], estimate_scale=estimate_scale)
-
-            fpath.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(a_src_tform_b_src.detach().cpu(), fpath)
-            del obj_cams_traj_a
-            del obj_cams_traj_b
+                fpath.parent.mkdir(parents=True, exist_ok=True)
+                torch.save(a_src_tform_b_src.detach().cpu(), fpath)
+                del obj_cams_traj_a
+                del obj_cams_traj_b
         return a_src_tform_b_src
     #    co3d_src_tform_src = tform4x4(
     #        inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)),
@@ -1041,6 +1058,13 @@ class CO3D_Sequence():
 
     def preprocess_pcl(self, override=False):
         fpath_pcl = self.get_fpath_pcl(self.pcl_source)
+
+        pts3d_count_min = 10
+        pts3d_max_count = 20000
+        pts3d_prob_thresh = 0.6
+
+
+
         if not override and fpath_pcl.exists():
             logger.warning(f'pcl already exists {fpath_pcl}')
             return
@@ -1090,13 +1114,9 @@ class CO3D_Sequence():
             # open3d.visualization.draw_geometries([o3d_pcl])
             ## DEBUG BLOCK END
 
-            pts3d_count_min = 10
-            pts3d_max_count = 20000
-            pts3d_prob_thresh = 0.6
-
             pts3d_clean, pts3d_clean_mask = self.get_pcl_clean_with_masks(pcl=pts3d, masks=partial_mask,
-                                                                          cams_proj4x4_obj=tform4x4(partial_cams_intr4x4,
-                                                                                         partial_cams_tform4x4_obj),
+                                                                          cams_intr4x4=partial_cams_intr4x4,
+                                                                          cams_tform4x4_obj=partial_cams_tform4x4_obj,
                                                                           pts3d_prob_thresh=pts3d_prob_thresh,
                                                                           pts3d_max_count=pts3d_max_count,
                                                                           pts3d_count_min=pts3d_count_min,
@@ -1128,6 +1148,18 @@ class CO3D_Sequence():
             pts3d_clean, pts3d_colors_clean, pts3d_normals_clean = read_pts3d_with_colors_and_normals(self.fpath_pcl_co3d, device=self.device)
             frames = self.get_frames()
             cams_tform4x4_obj = torch.stack([frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D) for frame in frames], dim=0).to(device=self.device)
+            mask = torch.stack([frame.mask for frame in frames], dim=0).to(device=self.device)
+            cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=self.device)
+            pts3d_clean, pts3d_clean_mask = self.get_pcl_clean_with_masks(pcl=pts3d_clean, masks=mask,
+                                                                          cams_intr4x4=cams_intr4x4,
+                                                                          cams_tform4x4_obj=cams_tform4x4_obj,
+                                                                          pts3d_prob_thresh=pts3d_prob_thresh,
+                                                                          pts3d_max_count=pts3d_max_count,
+                                                                          pts3d_count_min=pts3d_count_min,
+                                                                          return_mask=True)
+            pts3d_colors_clean = pts3d_colors_clean[pts3d_clean_mask]
+            pts3d_normals_clean = torch.zeros_like(pts3d_colors_clean) # pts3d_normals_clean[pts3d_clean_mask]
+            logger.warning('missing normals in CO3Dv2 this setting...')
 
         else:
             logger.warning(f'unexpected pcl source to preprocess {self.pcl_source}')
@@ -1141,8 +1173,12 @@ class CO3D_Sequence():
         ## DEBUG BLOCK START
         o3d_pcl = open3d.geometry.PointCloud()
         o3d_pcl.points = open3d.utility.Vector3dVector(pts3d_clean.detach().cpu().numpy())
-        o3d_pcl.normals = open3d.utility.Vector3dVector(
-            pts3d_normals_clean.detach().cpu().numpy())  # invalidate existing normals
+        if (pts3d_normals_clean == 0.).all():
+            o3d_pcl.estimate_normals()
+            pts3d_normals_clean = torch.from_numpy(np.array(o3d_pcl.normals)).to(device=pts3d_normals_clean.device, dtype=pts3d_normals_clean.dtype)
+        else:
+            o3d_pcl.normals = open3d.utility.Vector3dVector(
+                pts3d_normals_clean.detach().cpu().numpy())  # invalidate existing normals
         o3d_pcl.colors = open3d.utility.Vector3dVector(pts3d_colors_clean.detach().cpu().numpy())
         # open3d.visualization.draw_geometries([o3d_pcl])
         ## DEBUG BLOCK END
@@ -1200,13 +1236,13 @@ class CO3D_Sequence():
 
         ## DEBUG BLOCK START
         #open3d.visualization.draw_geometries([o3d_pcl])
-        scams = 30
-        frames = self.get_frames()
-        H, W = frames[0].H, frames[0].W
-        rgb = torch.stack([frame.rgb[:, :int(H * 0.9), :int(W * 0.9)] for frame in frames], dim=0).to(device=self.device)
-        cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=self.device)
-        cams_tform4x4_obj = torch.stack([frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.PCL) for frame in frames], dim=0).to(device=self.device)
-        show_scene(pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj[::scams], cams_intr4x4=cams_intr4x4[::scams], cams_imgs=rgb[::scams])
+        # scams = 30
+        # frames = self.get_frames()
+        # H, W = frames[0].H, frames[0].W
+        # rgb = torch.stack([frame.rgb[:, :int(H * 0.9), :int(W * 0.9)] for frame in frames], dim=0).to(device=self.device)
+        # cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=self.device)
+        # cams_tform4x4_obj = torch.stack([frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.PCL) for frame in frames], dim=0).to(device=self.device)
+        # show_scene(pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj[::scams], cams_intr4x4=cams_intr4x4[::scams], cams_imgs=rgb[::scams])
         ## DEBUG BLOCK END
 
         # #### OPTION 1: CONVEX HULL
@@ -1268,13 +1304,13 @@ class CO3D_Sequence():
         ## DEBUG BLOCK END
 
         ## DEBUG BLOCK START
-        scams = 30
-        frames = self.get_frames()
-        H, W = frames[0].H, frames[0].W
-        rgb = torch.stack([frame.rgb[:, :int(H * 0.9), :int(W * 0.9)] for frame in frames], dim=0).to(device=self.device)
-        cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=self.device)
-        cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=self.device)
-        show_scene(meshes=[obj_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj[::scams], cams_intr4x4=cams_intr4x4[::scams], cams_imgs=rgb[::scams])
+        # scams = 30
+        # frames = self.get_frames()
+        # H, W = frames[0].H, frames[0].W
+        # rgb = torch.stack([frame.rgb[:, :int(H * 0.9), :int(W * 0.9)] for frame in frames], dim=0).to(device=self.device)
+        # cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=self.device)
+        # cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=self.device)
+        # show_scene(meshes=[obj_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj[::scams], cams_intr4x4=cams_intr4x4[::scams], cams_imgs=rgb[::scams])
         # ## DEBUG BLOCK END
 
         obj_mesh.write_to_file(fpath=self.fpath_mesh)
@@ -1284,7 +1320,6 @@ class CO3D_Sequence():
 
         import numpy as np
         from od3d.cv.visual.show import show_scene
-        from od3d.cv.geometry.fit.rays_center3d import fit_rays_center3d
         from od3d.cv.geometry.fit.plane4d import fit_plane, score_plane4d_fit
         from od3d.cv.geometry.transform import plane4d_to_tform4x4, tform4x4_from_transl3d
         from od3d.cv.optimization.ransac import ransac
@@ -1389,11 +1424,13 @@ class CO3D_Sequence():
             return pts3d_raw[mask_pts3d_clean], mask_pts3d_clean
 
     @property
-    def fpath_droid_slam_axis_labeled(self):
-        return self.path_preprocess.joinpath('axis', 'droid_slam', self.category, self.name, 'axis.pt')
+    def fpath_pcl_axis_labeled(self):
+        return self.path_preprocess.joinpath('axis', self.pcl_source, self.category, self.name, 'axis.pt')
 
 
-    def get_cams(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES=CAM_TFORM_OBJ_SOURCES.DROID_SLAM, cams_count=5, show_imgs=True):
+    def get_cams(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES=None, cams_count=5, show_imgs=True):
+        if cam_tform_obj_source is None:
+            cam_tform_obj_source = self.cam_tform_obj_source
         cams_tform4x4_world = []
         cams_intr4x4 = []
         cams_imgs = []
@@ -1412,13 +1449,14 @@ class CO3D_Sequence():
                 cams_imgs.append(frame.rgb)
         return cams_tform4x4_world, cams_intr4x4, cams_imgs
 
-    def show(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES=None, pcl_source: PCL_SOURCES=None, cams_count=5, show_imgs=False):
-        meshes = []
+    def show(self, cam_tform_obj_source: CAM_TFORM_OBJ_SOURCES=None, pcl_source: PCL_SOURCES=None, cams_count=5, show_imgs=False, show_mesh=False):
+        meshes = None
         if cam_tform_obj_source is None:
             cam_tform_obj_source = self.cam_tform_obj_source
         if pcl_source is None:
             pcl_source = self.pcl_source
-            meshes = [self.mesh]
+            if show_mesh:
+                meshes = [self.mesh]
 
         cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(cam_tform_obj_source=cam_tform_obj_source, cams_count=cams_count, show_imgs=show_imgs)
         if not show_imgs:
@@ -1429,8 +1467,8 @@ class CO3D_Sequence():
         show_scene(meshes=meshes, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, pts3d=[pts3d], pts3d_colors=[pts3d_colors])
 
     @property
-    def droid_slam_axis_labeled(self):
-        fpath_axis_droid_slam = self.fpath_droid_slam_axis_labeled
+    def pcl_axis_labeled(self):
+        fpath_axis_droid_slam = self.fpath_pcl_axis_labeled
 
         if not fpath_axis_droid_slam.exists():
             logger.info(f'fpath_droid_slam_axis_labeled missing {fpath_axis_droid_slam}')
@@ -1441,7 +1479,7 @@ class CO3D_Sequence():
 
     def preprocess_label(self, override=False):
 
-        fpath_axis_droid_slam = self.fpath_droid_slam_axis_labeled
+        fpath_axis_droid_slam = self.fpath_pcl_axis_labeled
 
         if fpath_axis_droid_slam.exists() and not override:
             logger.info(f'Label axis already exists {fpath_axis_droid_slam}, override disabled.')
@@ -1455,78 +1493,58 @@ class CO3D_Sequence():
         frames_count = len(self.frames_names)
         for c in range(0, frames_count, frames_count // 4):
             frame = self.get_frame_by_index(c)
-            if self.cam_tform_obj_source is not CAM_TFORM_OBJ_SOURCES.CO3D or self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM:
-                cams_tform4x4_world.append(
-                    frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
-            else:
-                cams_tform4x4_world.append(
-                    frame.get_cam_tform4x4_obj(cam_tform_obj_source=self.cam_tform_obj_source))
+            cams_tform4x4_world.append(frame.get_cam_tform4x4_obj(cam_tform_obj_source=self.cam_tform_obj_source))
 
             cams_intr4x4.append(frame.cam_intr4x4)
             cams_imgs.append(frame.rgb)
 
         while True:
-            axis_droid_slam = label_axis_in_pcl(pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
-                                                pts3d_colors=self.get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
-                                                cams_tform4x4_world=cams_tform4x4_world,
-                                                cams_intr4x4=cams_intr4x4,
-                                                cams_imgs=cams_imgs)
+            axis_pcl = label_axis_in_pcl(pts3d=self.get_pcl(),
+                                         pts3d_colors=self.get_pcl_colors(),
+                                         cams_tform4x4_world=cams_tform4x4_world,
+                                         cams_intr4x4=cams_intr4x4,
+                                         cams_imgs=cams_imgs)
 
             from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
 
-            if axis_droid_slam is None or axis_droid_slam.shape != (3, 2, 3):
+            if axis_pcl is None or axis_pcl.shape != (3, 2, 3):
                 break
 
-            droid_slam_labeled_tform_droid_slam = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_droid_slam)
+            pcl_labeled_tform_pcl = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_pcl)
 
 
-            if (torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3]) - 1.).abs() <= 1e-5:
+            if (torch.linalg.det(pcl_labeled_tform_pcl[:3, :3]) - 1.).abs() <= 1e-5:
                 break
 
-            logger.warning(f'labeled determinant is not ~1, but {torch.linalg.det(droid_slam_labeled_tform_droid_slam[:3, :3])}')
+            logger.warning(f'labeled determinant is not ~1, but {torch.linalg.det(pcl_labeled_tform_pcl[:3, :3])}')
 
-        if axis_droid_slam is not None and axis_droid_slam.shape == (3, 2, 3):
+        if axis_pcl is not None and axis_pcl.shape == (3, 2, 3):
             logger.info(f'storing axis labeled, cuboid tform, and cuboid ')
-            torch.save(axis_droid_slam, f=fpath_axis_droid_slam)
+            torch.save(axis_pcl, f=fpath_axis_droid_slam)
 
-            self.fpath_droid_slam_labeled_tform_droid_slam.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(droid_slam_labeled_tform_droid_slam, self.fpath_droid_slam_labeled_tform_droid_slam)
+            self.fpath_labeled_obj_tform_obj.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(pcl_labeled_tform_pcl, self.fpath_labeled_obj_tform_obj)
 
             size = OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_CO3D_TO_OD3D[self.category]]
-            droid_slam_labeled_tform_pts3d = transf3d_broadcast(
-                pts3d=self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN),
-                transf4x4=droid_slam_labeled_tform_droid_slam)
-            droid_slam_labeled_cuboid, droid_slam_labeled_cuboid_tform_droid_slam_labeled = \
-                fit_cuboid_to_pts3d(pts3d=droid_slam_labeled_tform_pts3d, size=size, optimize_rot=False,
+            pcl_labeled_tform_pts3d = transf3d_broadcast(
+                pts3d=self.get_pcl(),
+                transf4x4=pcl_labeled_tform_pcl)
+            pcl_labeled_cuboid, pcl_labeled_cuboid_tform_pcl_labeled = \
+                fit_cuboid_to_pts3d(pts3d=pcl_labeled_tform_pts3d, size=size, optimize_rot=False,
                                     optimize_transl=True)
 
-            self.fpath_droid_slam_labeled_cuboid.parent.mkdir(parents=True, exist_ok=True)
-            droid_slam_labeled_cuboid.write_to_file(fpath=self.fpath_droid_slam_labeled_cuboid)
+            self.fpath_obj_labeled_cuboid.parent.mkdir(parents=True, exist_ok=True)
+            pcl_labeled_cuboid.write_to_file(fpath=self.fpath_obj_labeled_cuboid)
 
-            self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(droid_slam_labeled_cuboid_tform_droid_slam_labeled.detach().cpu(),
-                       f=self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled)
+            self.fpath_labeled_cuboid_obj_tform_labeled_obj.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(pcl_labeled_cuboid_tform_pcl_labeled.detach().cpu(),
+                       f=self.fpath_labeled_cuboid_obj_tform_labeled_obj)
         else:
             logger.info(f'not storing labeled axis.')
 
     @property
-    def fpath_droid_slam_labeled_tform_droid_slam(self):
-        return self.path_droid_slam_labeled_tform_droid_slam.joinpath(self.name_unique, 'tform.pt')
-
-    @property
-    def path_droid_slam_labeled_tform_droid_slam(self):
-        return self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_tform_droid_slam')
-
-    @property
-    def droid_slam_labeled_tform_droid_slam(self):
-        fpath_droid_slam_labeled_tform_droid_slam = self.fpath_droid_slam_labeled_tform_droid_slam
-        if not self.fpath_droid_slam_labeled_tform_droid_slam.exists():
-            logger.info(f'droid_slam_labeled_tform_droid_slam missing {fpath_droid_slam_labeled_tform_droid_slam}')
-            self.preprocess_label()
-
-        droid_slam_labeled_tform_droid_slam = torch.load(fpath_droid_slam_labeled_tform_droid_slam)
-
-        return droid_slam_labeled_tform_droid_slam
+    def fpath_labeled_obj_tform_obj(self):
+        return self.get_fpath_a_src_tform_b_src(src_a=CAM_TFORM_OBJ_SOURCES.LABELED, src_b=CAM_TFORM_OBJ_SOURCES.PCL)
 
     @property
     def path_zsp_labels(self):
@@ -1551,56 +1569,75 @@ class CO3D_Sequence():
 
 
     @property
-    def co3dv1_zsp_obj_tform_droid_slam_obj(self):
-        droid_slam_obj_tform_co3dv1_obj = self.get_a_src_tform_b_src(src_a=CAM_TFORM_OBJ_SOURCES.DROID_SLAM, src_b=CAM_TFORM_OBJ_SOURCES.CO3DV1)
-        co3dv1_zsp_obj_tform_droid_slam_obj = tform4x4(self.co3dv1_zsp_obj_tform_co3dv1_obj, inv_tform4x4(droid_slam_obj_tform_co3dv1_obj))
-        return co3dv1_zsp_obj_tform_droid_slam_obj
+    def labeled_obj_tform_obj(self):
+        fpath_pcl_labeled_tform_pcl = self.fpath_labeled_obj_tform_obj
+        if not self.fpath_labeled_obj_tform_obj.exists():
+            logger.info(f'pcl_labeled_tform_pcl missing {fpath_pcl_labeled_tform_pcl}')
+            self.preprocess_label()
+
+        pcl_labeled_tform_pcl = torch.load(fpath_pcl_labeled_tform_pcl)
+        return pcl_labeled_tform_pcl
+
 
     @property
-    def zsp_labeled_cuboid_ref_tform_droid_slam_obj(self):
+    def co3dv1_zsp_obj_tform_obj(self):
+        co3dv1_obj_tform_obj = self.get_a_src_tform_b_src(src_a=CAM_TFORM_OBJ_SOURCES.CO3DV1,
+                                                          src_b=self.cam_tform_obj_source)
+        co3dv1_zsp_obj_tform_obj = tform4x4(self.co3dv1_zsp_obj_tform_co3dv1_obj, co3dv1_obj_tform_obj)
+        return co3dv1_zsp_obj_tform_obj
+
+
+    @property
+    def zsp_labeled_cuboid_ref_tform_obj(self):
         ref_seq = self.sequence_ref_zsp
-        droid_slam_labeled_ref_tform_droid_slam_obj = tform4x4(ref_seq.droid_slam_labeled_cuboid_tform_droid_slam_labeled, tform4x4(ref_seq.droid_slam_labeled_tform_droid_slam, tform4x4(inv_tform4x4(ref_seq.co3dv1_zsp_obj_tform_droid_slam_obj), self.co3dv1_zsp_obj_tform_droid_slam_obj)))
+        zsp_labeled_cuboid_ref_tform_obj = tform4x4(ref_seq.labeled_cuboid_obj_tform_labeled_obj, tform4x4(ref_seq.labeled_obj_tform_obj, tform4x4(inv_tform4x4(ref_seq.co3dv1_zsp_obj_tform_obj), self.co3dv1_zsp_obj_tform_obj)))
         # note: as zsp does not offer scale, we cannot retrieve actual translation, therefore we use this pcl center
-        droid_slam_labeled_ref_tform_droid_slam_obj[:3, 3] = 0
-        droid_slam_labeled_ref_tform_droid_slam_obj[:3, 3] = -transf3d_broadcast(self.get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).mean(dim=0), transf4x4=droid_slam_labeled_ref_tform_droid_slam_obj)
-
-        return droid_slam_labeled_ref_tform_droid_slam_obj
-
-    @property
-    def fpath_droid_slam_labeled_cuboid(self):
-        return self.path_preprocess.joinpath('mesh', 'cuboid', self.name_unique, 'mesh.ply')
+        zsp_labeled_cuboid_ref_tform_obj[:3, 3] = 0
+        zsp_labeled_cuboid_ref_tform_obj[:3, 3] = -transf3d_broadcast(self.get_pcl().mean(dim=0), transf4x4=zsp_labeled_cuboid_ref_tform_obj)
+        return zsp_labeled_cuboid_ref_tform_obj
 
     @property
-    def droid_slam_labeled_cuboid(self):
-        fpath_droid_slam_labeled_cuboid = self.fpath_droid_slam_labeled_cuboid
+    def fpath_obj_labeled_cuboid(self):
+        return self.path_preprocess.joinpath('mesh', 'cuboid', self.pcl_source, self.name_unique, 'mesh.ply')
+
+    @property
+    def obj_labeled_cuboid(self):
+        fpath_droid_slam_labeled_cuboid = self.fpath_obj_labeled_cuboid
 
         if not fpath_droid_slam_labeled_cuboid.exists():
             logger.info(f'fpath_droid_slam_labeled_cuboid missing {fpath_droid_slam_labeled_cuboid}')
             self.preprocess_label(override=False)
 
-        droid_slam_labeled_cuboid = Meshes.load_from_files([fpath_droid_slam_labeled_cuboid])
-        return droid_slam_labeled_cuboid
+        labeled_cuboid = Meshes.load_from_files([fpath_droid_slam_labeled_cuboid])
+        return labeled_cuboid
+
+    #@property
+    #def fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
+    #    return self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_cuboid_tform_droid_slam_labeled', self.name_unique, 'tform.pt')
 
     @property
-    def fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
-        return self.path_preprocess.joinpath('a_src_tform_b_src', 'droid_slam_labeled_cuboid_tform_droid_slam_labeled', self.name_unique, 'tform.pt')
-    @property
-    def droid_slam_labeled_cuboid_tform_droid_slam_labeled(self):
-        fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled = self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled
+    def fpath_labeled_cuboid_obj_tform_labeled_obj(self):
+        return self.get_fpath_a_src_tform_b_src(src_a=CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID, src_b=CAM_TFORM_OBJ_SOURCES.LABELED)
 
+    @property
+    def labeled_cuboid_obj_tform_obj(self):
+        return tform4x4(self.labeled_cuboid_obj_tform_labeled_obj, self.labeled_obj_tform_obj)
+
+    @property
+    def labeled_cuboid_obj_tform_labeled_obj(self):
+        fpath_labeled_cuboid_obj_tform_labeled_obj = self.fpath_labeled_cuboid_obj_tform_labeled_obj
         #logger.info(f'fpath labeled cuboid {fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
-        if not fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.exists():
-            logger.info(f'fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled missing {fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled}')
+        if not fpath_labeled_cuboid_obj_tform_labeled_obj.exists():
+            logger.info(f'fpath_labeled_cuboid_obj_tform_labeled_obj missing {fpath_labeled_cuboid_obj_tform_labeled_obj}')
             self.preprocess_label(override=False)
 
-        droid_slam_labeled_cuboid_tform_droid_slam_labeled = torch.load(fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled)
+        labeled_cuboid_obj_tform_labeled_obj = torch.load(fpath_labeled_cuboid_obj_tform_labeled_obj)
+        return labeled_cuboid_obj_tform_labeled_obj
 
-        return droid_slam_labeled_cuboid_tform_droid_slam_labeled
-
-    def write_aligned_droid_slam_tform_droid_slam(self, aligned_droid_slam_tform_droid_slam: torch.Tensor, aligned_name: str):
-        fpath_tform_aligned = self.get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(aligned_name=aligned_name)
+    def write_aligned_obj_tform_obj(self, aligned_obj_tform_obj: torch.Tensor, aligned_name: str):
+        fpath_tform_aligned = self.get_fpath_aligned_obj_tform_obj_with_aligned_name(aligned_name=aligned_name)
         fpath_tform_aligned.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(aligned_droid_slam_tform_droid_slam.detach().cpu(), f=fpath_tform_aligned)
+        torch.save(aligned_obj_tform_obj.detach().cpu(), f=fpath_tform_aligned)
 
     def write_aligned_cuboid(self, cuboid: Meshes, aligned_name: str):
         fpath_mesh_aligned = self.path_preprocess.joinpath('aligned', aligned_name, 'mesh', self.category, 'mesh.ply')
@@ -1608,25 +1645,127 @@ class CO3D_Sequence():
         cuboid.write_to_file(fpath=fpath_mesh_aligned)
 
     @property
-    def droid_slam_aligned_tform_droid_slam(self):
-        fpath_tform_aligned = self.fpath_droid_slam_aligned_tform_droid_slam
+    def aligned_obj_tform_obj(self):
+        fpath_tform_aligned = self.fpath_aligned_obj_tform_obj
         droid_slam_aligned_tform_droid_slam = torch.load(fpath_tform_aligned).to('cpu')
         return droid_slam_aligned_tform_droid_slam
 
+
+    @property
+    def fpath_meta_ext(self):
+        return self.path_meta.joinpath('sequences_ext', self.name_unique, 'meta.yaml')
+
+    def write_meta_ext(self, key, value):
+        self.meta_ext[key] = value
+        write_dict_as_yaml(_dict=self.meta_ext, fpath=self.fpath_meta_ext)
+
+    @property
+    def meta_ext(self):
+        if self._meta_ext is None:
+            if self.fpath_meta_ext.exists():
+                self._meta_ext = read_dict_from_yaml(fpath=self.fpath_meta_ext)
+            else:
+                self._meta_ext = {}
+        return self._meta_ext
+    @property
+    def good_cam_movement(self):
+        name = f'{self.pcl_source}_good_cam_movement'
+        if name not in self.meta_ext:
+            device = 'cuda'
+            frames = self.get_frames()
+            frames_mask = torch.stack([frame.mask for frame in frames], dim=0).to(device=device)
+            frames_mask_coverage = frames_mask.flatten(1).mean(dim=-1).mean()
+
+            frames_cam_tform4x4_obj = torch.stack([frame.meta.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
+            frames_cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
+            frames_H = torch.Tensor([frame.H for frame in frames]).to(device=device)
+            frames_W = torch.Tensor([frame.W for frame in frames]).to(device=device)
+            frames_WH = torch.stack([frames_W, frames_H], dim=-1).to(device=device)
+
+            frames_cam_proj4x4_obj = tform4x4(frames_cam_intr4x4, frames_cam_tform4x4_obj)
+            center3d = fit_rays_center3d(cams_tform4x4_obj=frames_cam_tform4x4_obj)
+            center2d = proj3d2d_broadcast(proj4x4=frames_cam_proj4x4_obj, pts3d=center3d)
+            center2d_offset_small_acc = (((abs(center2d - (frames_WH / 2.)) / frames_WH) < 0.3).all(dim=-1) * 1.).mean()
+
+            viewpoints3d = inv_tform4x4(frames_cam_tform4x4_obj)[:, :3, 3] - center3d
+            viewpoints3d_norm = torch.nn.functional.normalize(viewpoints3d, dim=-1)
+            steps_dim = 5
+            viewpoints3d_uniform = torch.stack(torch.meshgrid(
+                torch.linspace(start=-1., end=1., steps=steps_dim, device=device),
+                torch.linspace(start=-1., end=1., steps=steps_dim, device=device),
+                torch.linspace(start=-1., end=1., steps=steps_dim, device=device), indexing='xy'), dim=-1).reshape(-1,
+                                                                                                                   3)
+            viewpoints3d_uniform = viewpoints3d_uniform[abs(viewpoints3d_uniform.norm(dim=-1) - 1) < (1. / steps_dim)]
+
+            dist_viewpoints_versus_uniform = torch.cdist(viewpoints3d_norm, viewpoints3d_uniform)
+            viewpoints_coverage = len(dist_viewpoints_versus_uniform.min(dim=-1).indices.unique()) / len(
+                viewpoints3d_uniform)
+
+            if viewpoints_coverage < 0.15:
+                logger.warning(f'did skip pcl {self.name} due too few viewpoints coverage {viewpoints_coverage}')
+                good_cam_movement = False
+            elif center2d_offset_small_acc < 0.8:
+                logger.warning(f'did skip pcl {self.name} due too small centering accuracy {center2d_offset_small_acc}')
+                good_cam_movement = False
+            elif frames_mask_coverage < 0.1:
+                logger.warning(f'did skip pcl {self.name} due too few mask coverage {frames_mask_coverage}')
+                good_cam_movement= False
+            else:
+                good_cam_movement = True
+            logger.info(f'viewpoints coverage {viewpoints_coverage}')
+            logger.info(f'centering accuracy {center2d_offset_small_acc}')
+            logger.info(f'mask coverage {frames_mask_coverage}')
+
+            # DEBUG BLOCK START
+            # from od3d.cv.visual.show import show_scene
+            # show_scene(pts3d=[viewpoints3d_uniform, viewpoints3d_norm])
+            # DEBUG BLOCK END
+
+            self.write_meta_ext(name, good_cam_movement)
+
+        else:
+            good_cam_movement = self.meta_ext[name]
+
+        if not good_cam_movement:
+            logger.warning(f'there is no {name} in {self.name_unique}.')
+
+        return good_cam_movement
+
+
+    @property
+    def no_missing_frames(self):
+        if 'no_missing_frames' not in self.meta_ext:
+            from od3d.datasets.frame import OD3D_Meta
+            frames_tstamps = torch.Tensor([OD3D_Meta.atoi(re.split(r'(\d+)', frame.meta.rfpath_rgb.stem)[-2]) for frame in self.get_frames()])
+            missing_frames = (~((frames_tstamps[1:] - frames_tstamps[:-1]) == 1)).sum().item()
+            no_missing_frames = missing_frames <= 3
+            self.write_meta_ext('no_missing_frames', no_missing_frames)
+
+        else:
+            no_missing_frames = self.meta_ext['no_missing_frames']
+
+        if not no_missing_frames:
+            logger.warning(f'there are more than 3 missing frames in {self.name_unique}.')
+
+        return no_missing_frames
     @property
     def gt_pose_available(self):
-        if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ALIGNED:
-            return self.fpath_droid_slam_aligned_tform_droid_slam.exists()
-        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
-            return self.fpath_droid_slam_labeled_cuboid_tform_droid_slam_labeled.exists()
+        if self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ALIGNED:
+            return self.fpath_aligned_obj_tform_obj.exists()
+        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
+            return self.fpath_labeled_obj_tform_obj.exists()
+        elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
+            return self.fpath_labeled_cuboid_obj_tform_labeled_obj.exists()
+        #elif self.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
+        #    return self.fpath_co
         else:
             return True
     @property
-    def fpath_droid_slam_aligned_tform_droid_slam(self):
-        return self.get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(aligned_name=self.aligned_name)
+    def fpath_aligned_obj_tform_obj(self):
+        return self.get_fpath_aligned_obj_tform_obj_with_aligned_name(aligned_name=self.aligned_name)
 
-    def get_fpath_droid_slam_aligned_tform_droid_slam_with_aligned_name(self, aligned_name: str):
-        return self.path_preprocess.joinpath('aligned', aligned_name, 'aligned_droid_slam_tform_droid_slam', self.name_unique, 'tform.pt')
+    def get_fpath_aligned_obj_tform_obj_with_aligned_name(self, aligned_name: str):
+        return self.path_preprocess.joinpath('aligned', aligned_name, 'aligned_obj_tform_obj', self.name_unique, 'tform.pt')
 
     @property
     def fpath_mesh(self):
@@ -1641,9 +1780,9 @@ class CO3D_Sequence():
         elif mesh_source == CUBOID_SOURCES.ZSP_REF_CUBOID: #  == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
             ref_seq = self.sequence_ref_zsp
             #_ = ref_seq.droid_slam_labeled_cuboid # leads to infinity loop
-            return ref_seq.fpath_droid_slam_labeled_cuboid
+            return ref_seq.fpath_obj_labeled_cuboid
         elif mesh_source == CUBOID_SOURCES.LABELED: # CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
-            return self.fpath_droid_slam_labeled_cuboid
+            return self.fpath_obj_labeled_cuboid
         else:
             return self.path_preprocess.joinpath('mesh', f'{self.pcl_source}', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
             #return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')

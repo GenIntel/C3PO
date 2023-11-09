@@ -3,19 +3,24 @@ from od3d.datasets.enum import OD3D_CATEGORIES
 
 
 class CAM_TFORM_OBJ_SOURCES(str, ExtEnum):
-    CO3D = 'co3d'
     PCL = 'pcl'
     CO3DV1 = 'co3dv1'
-    FIRST_FRAME = 'first_frame'
-    FRONT_FRAME = 'front_frame'
-    FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
-    KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
-    LIMITS3D = 'limits3d'
-    DROID_SLAM = 'droid_slam'
-    DROID_SLAM_ALIGNED = 'droid_slam_aligned'
-    DROID_SLAM_LABELED = 'droid_slam_labeled'
-    DROID_SLAM_ZSP = 'droid_slam_zsp'
-    DROID_SLAM_ZSP_LABELED = 'droid_slam_zsp_labeled'
+    CO3D = 'co3d'
+    LABELED = 'labeled'
+    LABELED_CUBOID = 'labeled_cuboid'
+    ALIGNED = 'aligned'
+    ZSP_LABELED = 'zsp_labeled'
+    ZSP_LABELED_CUBOID_REF = 'zsp_labeled_cuboid_ref'
+    # FIRST_FRAME = 'first_frame'
+    # FRONT_FRAME = 'front_frame'
+    # FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
+    # KPTS2D_ORIENT_AND_PCL = 'kpts2d_orient_and_pcl'
+    # LIMITS3D = 'limits3d'
+    # DROID_SLAM = 'droid_slam'
+    # DROID_SLAM_ALIGNED = 'droid_slam_aligned'
+    # DROID_SLAM_LABELED = 'droid_slam_labeled'
+    # DROID_SLAM_ZSP = 'droid_slam_zsp'
+    # DROID_SLAM_ZSP_LABELED = 'droid_slam_zsp_labeled'
 
 class CUBOID_SOURCES(str, ExtEnum):
     FRONT_FRAME_AND_PCL = 'front_frame_and_pcl'
@@ -63,7 +68,7 @@ class CO3D_FRAME_SPLITS(str, ExtEnum):
 
 ALLOW_LIST_FRAME_TYPES = [CO3D_FRAME_TYPES.DEV_KNOWN, CO3D_FRAME_TYPES.DEV_UNSEEN,
                          CO3D_FRAME_TYPES.TRAIN_KNOWN, CO3D_FRAME_TYPES.TRAIN_UNSEEN,
-                         CO3D_FRAME_TYPES.TEST_KNOWN]
+                         CO3D_FRAME_TYPES.TEST_KNOWN, CO3D_FRAME_TYPES.TEST_UNSEEN]
 
 class CO3D_CATEGORIES(str, ExtEnum):
     APPLE = "apple"
