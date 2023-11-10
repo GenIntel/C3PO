@@ -40,6 +40,7 @@ class CO3D(OD3D_Dataset):
                  sequences_require_pcl_score=-1000.1,
                  sequences_require_gt_pose=False,
                  sequences_require_good_cam_movement=False,
+                 sequences_require_no_missing_frames=True,
                  sequences_count_max_per_category=None,
                  sequences_require_mesh=False,
                  cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D.value,
@@ -77,6 +78,7 @@ class CO3D(OD3D_Dataset):
                                                                                sort_pcl_score=sequences_sort_pcl_score,
                                                                                require_pcl_score=sequences_require_pcl_score,
                                                                                require_good_cam_movement=sequences_require_good_cam_movement,
+                                                                               require_no_missing_frames=sequences_require_no_missing_frames,
                                                                                require_gt_pose=sequences_require_gt_pose,
                                                                                count_max_per_category=sequences_count_max_per_category,
                                                                                sequences_require_mesh=sequences_require_mesh,
@@ -291,7 +293,7 @@ class CO3D(OD3D_Dataset):
                              cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
                              mesh_name=self.mesh_name)
 
-    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, require_gt_pose, require_good_cam_movement, count_max_per_category, sequences_require_mesh, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
+    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], require_pcl, sort_pcl_score, require_pcl_score, require_gt_pose, require_no_missing_frames, require_good_cam_movement, count_max_per_category, sequences_require_mesh, dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
         logger.info("filtering frames...")
         if dict_nested_frames is not None:
             dict_nested_sequences = {}
@@ -337,7 +339,8 @@ class CO3D(OD3D_Dataset):
                 sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
                              in dict_nested_sequences[category]]
 
-                sequences = list(filter(lambda sequence: sequence.no_missing_frames, sequences))
+                if require_no_missing_frames:
+                    sequences = list(filter(lambda sequence: sequence.no_missing_frames, sequences))
 
                 if require_good_cam_movement:
                     sequences = list(filter(lambda sequence: sequence.good_cam_movement, sequences))

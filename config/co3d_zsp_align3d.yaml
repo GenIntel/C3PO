@@ -9,27 +9,27 @@ defaults:
   - datasets@texture_dataset: dtd
   - platform: local
 
-categories:
+categories: # bicycle hydrant motorcycle teddybear toaster
   - bicycle
-  - truck
-  - train
-  - teddybear
-  - car
-  - bus
+#  - truck
+#  - train
+#  - teddybear
+#  - car
+#  - bus
   - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - airplane
-  - toilet
-  - hairdryer
-  - mouse
-  - toaster
-  - hydrant
-  - chair
-  - laptop
-  - book
-  - backpack
+#  - keyboard
+#  - handbag
+#  - remote
+#  - airplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+#  - chair
+#  - laptop
+#  - book
+#  - backpack
 
 metrics:
   - metricA
@@ -49,6 +49,10 @@ test_datasets:
   co3d:
     categories: ${categories}
 
+method:
+  zsp:
+    use_gt_src: True
+    use_train_only_to_collect_target_data: False
 
 train: True
 test: True

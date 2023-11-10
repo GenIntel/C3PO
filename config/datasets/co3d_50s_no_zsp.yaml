@@ -5,9 +5,16 @@ name: co3d_50s_no_zsp
 
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
 #dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
-sequences_count_max_per_category: 50
+sequences_count_max_per_category: 20
+sequences_sort_pcl_score: False
 
-#preprocess:
+preprocess:
+  pcl:
+    enabled: True
+    override: True
+  mesh:
+    enabled: True
+    override: True
 #  label:
 #    enabled: True
 #    override: False
@@ -28,10 +35,11 @@ sequences_count_max_per_category: 50
 #    - 'sequence'
 #    - 'mesh'
 
-cuboid_source: 'default' # 'default' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
-cam_tform_obj_source: 'droid_slam' # 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
+cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
+cam_tform_obj_source: 'pcl' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
+pcl_source: 'co3d_clean' # 'co3d_clean' 'droid_slam_clean'
 
-sequences_require_mesh: True
+sequences_require_mesh: False
 sequences_require_pcl: True
 sequences_require_gt_pose: False
 
@@ -64,6 +72,7 @@ categories:
   - cup
   - suitcase
   - tv
+
 
 dict_nested_frames:
   hydrant:

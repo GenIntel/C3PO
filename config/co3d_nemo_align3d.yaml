@@ -41,10 +41,10 @@ method:
     ransac:
       samples: 1000
       score_perc: 1.
-    use_gt_src: True
     use_only_first_reference: False
-    cyclic_weight_temp: 1.
-    dist_appear_weight: 0.5
+    cyclic_weight_temp: 0.7
+    gt_cam_tform_obj_source: zsp_labeled
+    dist_appear_weight: 0.1
     use_appear_argmin: False
     global_optimization_steps: 1
     categories: ${categories}

@@ -41,6 +41,7 @@ extract_meta:
   override: False
   remove_previous: False
 
+
 preprocess:
   label:
     enabled: False
@@ -64,6 +65,7 @@ preprocess:
     override: False
     remove_previous: False
 
+#sequences_require_good_cam_movement: False
 #sequences_require_pcl: True # False
 #sequences_sort_pcl_score: False # False
 #sequences_count_max_per_category: None # None
@@ -92,6 +94,7 @@ dict_nested_frames_ban:
 #    '216_22796_47484':
 #    '216_22803_47496':
 #    '216_22797_47235':
+    '106_12674_24709': # broken colmap
   bicycle:
     '377_43836_87236': # two bicycles with inverse directions
 

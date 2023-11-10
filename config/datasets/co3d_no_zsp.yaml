@@ -1,28 +1,26 @@
 defaults:
   - co3d
 
-name: co3d_5s_no_zsp_labeled
+name: co3d_no_zsp
+
+sequences_count_max_per_category: 20
+sequences_sort_pcl_score: True
 
 preprocess:
-  label:
-    enabled: False
-    override: False
   pcl:
     enabled: False
     override: False
   mesh:
     enabled: False
     override: False
-  droid_slam:
-    enabled: False
-    override: False
-mesh_name: 'alpha500' # 'convex500', 'voxel500' 'poisson500', 'alpha500'
+  label:
+    enabled: True
+    override: True
+#  mesh:
+#    enabled: True
+#    override: False
 
-#mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'
-#dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
-sequences_count_max_per_category: 50
-
-#frames_count_max_per_sequence: 3
+#frames_count_max_per_sequence: 1
 #modalities:
 #    - 'size'
 #    - 'category'
@@ -35,283 +33,44 @@ sequences_count_max_per_category: 50
 #    - 'sequence'
 #    - 'mesh'
 
-#preprocess:
-#  mesh:
-#    enabled: True
-#    override: False
-#  label:
-#    enabled: True
-#    override: False
-
 cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
 cam_tform_obj_source: 'pcl' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
-pcl_source: 'droid_slam_clean' # 'co3d_clean' 'droid_slam_clean'
+pcl_source: 'co3d_clean' # 'co3d_clean' 'droid_slam_clean'
 
-# mesh_feats_type: 'M_dinov2_frozen_base_T_scale_mask_separate_centerzoom512_R_acc' # 'R_acc' # 'R_avg', 'R_avg_norm'
-
-
-#pcl_source: 'droid_slam_clean'
-#cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
-#cam_tform_obj_source: 'droid_slam_labeled' # 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
-
-sequences_require_mesh: False # True
-sequences_require_pcl: True # True
+sequences_require_good_cam_movement: True
+sequences_require_mesh: False
+sequences_require_pcl: True
 sequences_require_gt_pose: True
 
 categories:
-  - bicycle
-  - truck
-  - train
-  - teddybear
-  - car
-  - bus
-  - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - airplane
-  - toilet
-  - hairdryer
-  - mouse
-  - toaster
-  - hydrant
-  - chair
-  - laptop
-  - book
-  - backpack
-  - cellphone # from cellphone on, no zsp categories
-  - microwave
-  - bench
-  - bottle
-  - couch
-  - cup
-  - suitcase
-  - tv
-
-#categories:
-#  - microwave
-#
-#dict_nested_frames:
-#  microwave:
-#    '436_62252_123082':
-#frames_count_max_per_sequence: 5
-#
-#modalities:
-#  - 'size'
-#  - 'category'
-#  - 'cam_intr4x4'
-#  - 'cam_tform4x4_obj'
-#  - 'category'
-#  - 'rgb'
-#  - 'mask'
-#  - 'sequence_name'
-#  - 'sequence'
-#  - 'mesh'
-##  # - 'pcl'
-#
-#subset_fraction: 1.
-##
-#categories:
 #  - bicycle
-#  - toytruck
-#  - toytrain
+#  - truck
+#  - train
 #  - teddybear
 #  - car
-#  - toybus
-#  - motorcycle
+#  - bus
+  - motorcycle
 #  - keyboard
 #  - handbag
 #  - remote
-#  - toyplane
+#  - airplane
 #  - toilet
 #  - hairdryer
 #  - mouse
 #  - toaster
 #  - hydrant
 #  - chair
-#  - laptop
+  - laptop
 #  - book
 #  - backpack
-
-dict_nested_frames:
-  bicycle:
-    '108_12855_23322':
-    '108_12879_24911':
-    '149_16570_31735':
-    '169_18399_34807':
-    '187_20222_38901':
-  toytruck:
-    '104_12350_21857':
-    '111_13151_23925':
-    '111_13158_26123':
-    '152_16871_32354':
-    '162_17775_33274':
-  toytrain:
-    '104_12352_22039':
-    '121_14154_29434':
-    '139_15948_30968':
-    '152_16868_32210':
-    '172_18676_33964':
-    # '181_19579_35390': # not required
-  teddybear:
-    '34_1403_4393':
-    '34_1406_4637':
-    '34_1408_4344':
-    '34_1414_4425':
-    '101_11758_21048':
-  car:
-    '106_12651_23171':
-    '106_12655_23644':
-    '106_12657_23628':
-    '106_12658_23657':
-    '106_12675_24807':
-  toybus:
-    '104_12348_21852':
-    '111_13154_25988':
-    '121_14149_27577':
-    '121_14151_28967':
-    '121_14153_28986':
-  motorcycle:
-    '106_12659_23914':
-    '185_19993_39343':
-    '216_22846_49120':
-    '250_26753_53198':
-    '295_31399_59372':
-  keyboard:
-    '112_13253_22798':
-    '112_13283_23734':
-    '112_13291_24224':
-    '112_13308_25702':
-    '112_13317_27124':
-  handbag:
-    '20_698_1364':
-    '20_717_1427':
-    '20_718_1366':
-    '20_741_1434':
-    '20_743_1438':
-  remote:
-    '100_11550_20470':
-    '100_11561_21987':
-    '100_11562_22025':
-    '107_12749_23147':
-    '107_12752_22755':
-  toyplane:
-    '104_12349_21854':
-    '104_12351_22036':
-    '104_12353_22041':
-    '111_13148_23780':
-    '190_20485_38424':
-  toilet:
-    '105_12567_23172':
-    '105_12572_23512':
-    '105_12581_22166':
-    '105_12587_23771':
-    '105_12596_24925':
-    # '115_13552_28913': # not required
-  hairdryer:
-    '14_183_1084':
-    '14_195_840':
-    '14_199_776':
-    '20_704_1348':
-    '20_753_1525':
-  mouse:
-    '14_170_904':
-    '14_177_961':
-    '14_186_1026':
-    '14_189_1165':
-    '20_695_1450':
-    #'20_705_1417': # not required
-  toaster:
-    '14_162_875':
-    '14_194_1125':
-    '20_755_1515':
-    '20_779_1840':
-    '20_783_1995':
-  hydrant:
-    '106_12648_23157':
-    '106_12653_23216':
-    '106_12669_24034':
-    '106_12677_24990':
-    '106_12686_26118':
-    #'106_12687_26288': # not required
-  chair:
-    '101_11753_20727':
-    '106_12688_26450':
-    '108_12848_23561':
-    '108_12851_22786':
-    '108_12859_23648':
-    # '108_12863_22484':
-  laptop:
-    '112_13254_23155':
-    '112_13258_23186':
-    '112_13269_22712':
-    '112_13287_23940':
-    '122_14254_27531':
-  book:
-    '14_185_1105':
-    '14_187_757':
-    '102_11954_20711':
-    '102_11960_21289':
-    '102_11962_21291':
-  backpack:
-    '20_721_1326':
-    '20_732_1375':
-    '20_742_1437':
-    '20_747_1491':
-    '20_756_1512':
-  cellphone: # from cellphone on, no zsp categories
-    '112_13281_23674':
-    '112_13284_23744':
-    '112_13307_25700':
-    '122_14255_27579':
-    '122_14269_28111':
-    #'122_14270_28122': # not required
-  microwave:
-    '34_1470_4676':
-    '42_1993_6067':
-    '48_2719_7900':
-    '48_2735_7961':
-    '48_2738_8001':
-    # '48_2753_8230': # not required
-  bench:
-    '106_12654_23221':
-    '106_12699_27006':
-    '116_13649_27585':
-    '116_13658_28970':
-    '147_16372_32078':
-  bottle:
-    '34_1397_4376':
-    '34_1418_4363':
-    '34_1431_4507':
-    '34_1432_4568':
-    '34_1435_4403':
-  couch:
-    '105_12576_23188':
-    '105_12578_23230':
-    '105_12605_26413':
-    '146_16274_32399':
-    '146_16275_32402':
-  cup:
-    '12_100_593':
-    '14_164_1113':
-    '14_169_943':
-    '14_182_1006':
-    '20_685_1352':
-    # '20_686_1362': # not required
-  suitcase:
-    '14_159_751':
-    '14_172_997':
-    '20_736_1429':
-    '20_771_1825':
-    '28_969_2811':
-    # '28_982_2851': # not required
-  tv:
-    '28_940_2112':
-    '28_967_2810':
-    '28_984_2853':
-    '48_2742_8095':
-    '50_2968_8917':
-
+#  - cellphone # from cellphone on, no zsp categories
+#  - microwave
+#  - bench
+  - bottle
+  - couch
+#  - cup
+#  - suitcase
+#  - tv
 
 dict_nested_frames_ban:
   bicycle:

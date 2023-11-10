@@ -54,7 +54,7 @@ from functools import partial
 from pathlib import Path
 from od3d.io import read_json
 from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
-from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES
+from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES
 from od3d.datasets.co3d.enum import PCL_SOURCES
 from od3d.cv.geometry.transform import transf3d_broadcast, transf3d
 
@@ -159,8 +159,8 @@ class NeMo_Align3D(OD3D_Method):
         ref_instances_count_per_category = [(ref_map_seq_to_cat == c).sum().item() for c in range(categories_count)]
 
         logger.info('loading meshes...')
-        src_meshes = Meshes.load_from_meshes([seq.mesh for seq in src_sequences], device=self.device)
-        ref_meshes = Meshes.load_from_meshes([seq.mesh for seq in ref_sequences], device=self.device)
+        src_meshes = Meshes.load_from_meshes([seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT) for seq in src_sequences], device=self.device)
+        ref_meshes = Meshes.load_from_meshes([seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT) for seq in ref_sequences], device=self.device)
 
         # note: first get mesh to get DROID_SLAM tforms
         if self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED or self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
@@ -252,37 +252,34 @@ class NeMo_Align3D(OD3D_Method):
                                 pts_ref = torch.cat([transf3d_broadcast(pts3d=ref_meshes.verts[ref_sequences_mesh_ids_for_verts == _ref_mesh_id].clone(), transf4x4=all_pred_ref_tform_src[category][0, _r]) if _ref_mesh_id != src_mesh_id else torch.zeros((0, 3), device=self.device) for _r, _ref_mesh_id in enumerate(ref_mesh_ids)], dim=0)
 
                                 dist_src_ref = torch.cat([src_sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
-                                    ref_sequences[_ref_mesh_id]).to(device=self.device, dtype=dtype)  if _ref_mesh_id != src_mesh_id else torch.zeros((pts_src.shape[0], 0), device=self.device)  for _ref_mesh_id in ref_mesh_ids], dim=-1)
+                                    ref_sequences[_ref_mesh_id]).to(device=self.device, dtype=dtype) if _ref_mesh_id != src_mesh_id else torch.zeros((pts_src.shape[0], 0), device=self.device)  for _ref_mesh_id in ref_mesh_ids], dim=-1)
 
                                 logger.info(f'category: {category}, pts-src: {pts_src.shape}, pts-ref: {pts_ref.shape}')
 
                                 # division by two to normalize to 0. - 1.
                                 dist_src_ref = dist_src_ref / 2.
 
-                                if s != 0:
-                                    # four points required, otherwise rotation yields an ambiguity. like planes without normals
-                                    ref_tform4x4_src = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
-                                                                                            dist_ref=dist_src_ref),
-                                                              score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
-                                                                                 dist_ref=dist_src_ref,
-                                                                                 use_appear_argmin=self.config.use_appear_argmin,
-                                                                                 dist_appear_weight=self.config.dist_appear_weight,
-                                                                                 cyclic_weight_temp=self.config.cyclic_weight_temp,
-                                                                                 score_perc=self.config.ransac.score_perc),
-                                                              fits_count=self.config.ransac.samples,
-                                                              fit_pts_count=4)
-                                else:
-                                    ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
+                                # four points required, otherwise rotation yields an ambiguity. like planes without normals
+                                ref_tform4x4_src = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
+                                                                                        dist_ref=dist_src_ref),
+                                                          score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
+                                                                             dist_ref=dist_src_ref,
+                                                                             use_appear_argmin=self.config.use_appear_argmin,
+                                                                             dist_appear_weight=self.config.dist_appear_weight,
+                                                                             cyclic_weight_temp=self.config.cyclic_weight_temp,
+                                                                             score_perc=self.config.ransac.score_perc),
+                                                          fits_count=self.config.ransac.samples,
+                                                          fit_pts_count=4)
 
-                                pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src,
-                                                                                     tform4x4=ref_tform4x4_src[None,],
-                                                                                     pts_ref=pts_ref,
-                                                                                     dist_ref=dist_src_ref,
-                                                                                     return_dists=True,
-                                                                                     use_appear_argmin=self.config.use_appear_argmin,
-                                                                                     dist_appear_weight=self.config.dist_appear_weight,
-                                                                                     cyclic_weight_temp=self.config.cyclic_weight_temp,
-                                                                                     score_perc=self.config.ransac.score_perc)
+                                _, pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src,
+                                                                                        tform4x4=ref_tform4x4_src[None,],
+                                                                                        pts_ref=pts_ref,
+                                                                                        dist_ref=dist_src_ref,
+                                                                                        return_dists=True,
+                                                                                        use_appear_argmin=self.config.use_appear_argmin,
+                                                                                        dist_appear_weight=self.config.dist_appear_weight,
+                                                                                        cyclic_weight_temp=self.config.cyclic_weight_temp,
+                                                                                        score_perc=self.config.ransac.score_perc)
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
                                 pred_ref_tform_src = ref_tform4x4_src.clone()
@@ -302,21 +299,20 @@ class NeMo_Align3D(OD3D_Method):
                                 # division by two to normalize to 0. - 1.
                                 dist_src_ref = dist_src_ref / 2.
 
-                                if s != 0:
-                                    # four points required, otherwise rotation yields an ambiguity. like planes without normals
-                                    ref_tform4x4_src = ransac(pts=pts_src,
-                                                              fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
-                                                                               dist_ref=dist_src_ref),
-                                                              score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
-                                                                                 dist_ref=dist_src_ref,
-                                                                                 use_appear_argmin=self.config.use_appear_argmin,
-                                                                                 dist_appear_weight=self.config.dist_appear_weight,
-                                                                                 cyclic_weight_temp=self.config.cyclic_weight_temp,
-                                                                                 score_perc=self.config.ransac.score_perc),
-                                                              fits_count=self.config.ransac.samples, fit_pts_count=4)
-                                else:
-                                    ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
-                                pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src, tform4x4=ref_tform4x4_src[None,], pts_ref=pts_ref,
+                                # four points required, otherwise rotation yields an ambiguity. like planes without normals
+                                ref_tform4x4_src = ransac(pts=pts_src,
+                                                          fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
+                                                                           dist_ref=dist_src_ref),
+                                                          score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
+                                                                             dist_ref=dist_src_ref,
+                                                                             use_appear_argmin=self.config.use_appear_argmin,
+                                                                             dist_appear_weight=self.config.dist_appear_weight,
+                                                                             cyclic_weight_temp=self.config.cyclic_weight_temp,
+                                                                             score_perc=self.config.ransac.score_perc),
+                                                          fits_count=self.config.ransac.samples, fit_pts_count=4)
+                                #else:
+                                #    ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
+                                _, pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src, tform4x4=ref_tform4x4_src[None,], pts_ref=pts_ref,
                                                                                      dist_ref=dist_src_ref, return_dists=True,
                                                                                      use_appear_argmin=self.config.use_appear_argmin,
                                                                                      dist_appear_weight=self.config.dist_appear_weight,
@@ -330,7 +326,7 @@ class NeMo_Align3D(OD3D_Method):
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
 
-                        if self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED or self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+                        if self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
                             gt_ref_tform_src = tform4x4(
                                 inv_tform4x4(ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
                                src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
@@ -369,22 +365,23 @@ class NeMo_Align3D(OD3D_Method):
                     torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(
                     ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id] - 1).permute(1,
                                                                                                                     0)
-                #category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][
-                #   torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1).permute(1, 0)
-                #category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][
-                #    torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1).permute(1, 0)
+                category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][
+                   torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1).permute(1, 0)
+                category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][
+                    torch.eye(src_instances_count_per_category[cat_id]).to(device=self.device) == 0].reshape(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id]-1).permute(1, 0)
             else:
                 if self.config.gt_cam_tform_obj_source is not None:
                     category_results[f'rot_diff_rad'] = results_diff_log_rot[category].permute(1, 0)
                 category_results[f'sim'] = 1.0 - all_pred_pose_dist_geo[category].permute(1, 0)
-                #category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category].permute(1, 0)
-                #category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category].permute(1, 0)
+                category_results[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category].permute(1, 0)
+                category_results[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category].permute(1, 0)
 
             results += category_results # .mean()
             category_results_mean = category_results.add_prefix(category)
             category_results_mean = category_results_mean.mean()
             category_results_mean.log()
             logger.info(category_results_mean)
+
             #if self.config.use_gt_src:
             #    category_results[f'rot_diff_rad'] = category_results[f'rot_diff_rad'][None,]
             #category_results[f'pose_sim_geo'] = category_results[f'pose_sim_geo'][None,]
@@ -421,10 +418,11 @@ class NeMo_Align3D(OD3D_Method):
         ref_instance_ids = torch.LongTensor(list(range(ref_instances_count)))
         src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
 
-        for ref_instance_id_in_category in range(max(ref_instances_count_per_category)):
-            aligned_name = f'{self.config.aligned_name}_r{ref_instance_id_in_category}'
-            aligned_path = dataset_src.path_preprocess.joinpath('aligned', aligned_name)
-            od3d.io.rm_dir(aligned_path)
+        for suffix in ['', '_filtered', '_mesh', '_mesh_filtered']:
+            for ref_instance_id_in_category in range(max(ref_instances_count_per_category)):
+                aligned_name = f'{self.config.aligned_name}{suffix}/r{ref_instance_id_in_category}'
+                aligned_path = dataset_src.path_preprocess.joinpath('aligned', aligned_name)
+                od3d.io.rm_dir(aligned_path)
 
         for cat_id, category in enumerate(categories):
             logger.info(f'category {category}')
@@ -436,29 +434,44 @@ class NeMo_Align3D(OD3D_Method):
             src_category_instance_ids = src_instance_ids[src_map_seq_to_cat == cat_id]
 
             for ref_instance_id_in_category, ref_instance_id in enumerate(ref_category_instance_ids):
-                aligned_name = f'{self.config.aligned_name}_r{ref_instance_id_in_category}'
+                aligned_name = f'{self.config.aligned_name}/r{ref_instance_id_in_category}'
+                aligned_filtered_name = f'{self.config.aligned_name}_filtered/r{ref_instance_id_in_category}'
+                aligned_mesh_name = f'{self.config.aligned_name}_mesh/r{ref_instance_id_in_category}'
+                aligned_mesh_filtered_name = f'{self.config.aligned_name}_mesh_filtered/r{ref_instance_id_in_category}'
 
-                # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6
+                # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6 | 0.95 0.76
                 if self.config.gt_cam_tform_obj_source is not None:
                     rot_diff_rad = results_diff_log_rot[category][ref_instance_id_in_category, :]
                     accurate_pi6 = rot_diff_rad < (math.pi / 6.)
                     accurate_pi18 = rot_diff_rad < (math.pi / 18.)
-                accurate_sim = (1.0 - all_pred_pose_dist_geo[category][ref_instance_id_in_category, :]) > 0.93
+                accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][ref_instance_id_in_category, :]) > 0.95
                 # accurate_sim_geo
-                #accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][ref_instance_id_in_category, :]) > 0.60
-                #accurate_sim = accurate_sim_geo * accurate_sim_appear
+                accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][ref_instance_id_in_category, :]) > 0.76
+                accurate_sim = accurate_sim_geo * accurate_sim_appear
 
                 #if self.config.use_gt_src:
-                if self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED or self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+                if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
                     obj_labeled_cuboid_tform_obj = inv_tform4x4(
                         ref_sequences[ref_category_instance_ids[0]].co3dv1_zsp_obj_tform_obj.to(
                             device=self.device, dtype=dtype))
                     logger.warning('aligned cuboid does not exist.')
-                elif self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
+                elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
                     obj_labeled_cuboid_tform_obj = ref_sequences[ref_instance_id].labeled_cuboid_obj_tform_obj.to(dtype=dtype, device=self.device)
-                    labeled_cuboid = ref_sequences[ref_instance_id].obj_labeled_cuboid
+                    ref_aligned_mesh = Meshes.load_from_meshes([ref_sequences[ref_instance_id].get_mesh(CUBOID_SOURCES.DEFAULT)], device=self.device).get_meshes_with_ids(clone=True)
+                    ref_aligned_mesh.verts.data = transf3d_broadcast(pts3d=ref_aligned_mesh.verts, transf4x4=obj_labeled_cuboid_tform_obj)
+
+                    # Meshes.load_from_meshes([seq.mesh for seq in ref_sequences], device=self.device)
+                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_mesh_name,
+                                                                        cuboid=ref_aligned_mesh)
+                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_mesh_filtered_name,
+                                                                        cuboid=ref_aligned_mesh)
+
+
+                    aligned_cuboid = ref_sequences[ref_instance_id].obj_labeled_cuboid
                     ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_name,
-                                                                        cuboid=labeled_cuboid)
+                                                                        cuboid=aligned_cuboid)
+                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_filtered_name,
+                                                                        cuboid=aligned_cuboid)
                 else:
                     obj_labeled_cuboid_tform_obj = torch.eye(4).to(device=self.device)
                     if self.config.gt_cam_tform_obj_source is not None:
@@ -488,12 +501,19 @@ class NeMo_Align3D(OD3D_Method):
                 src_meshes_cloned = src_meshes.get_meshes_with_ids(clone=True)
                 for src_instance_id_in_category, src_instance_id in enumerate(src_category_instance_ids):
                     # prediction
-                    droid_slam_labeled_cuboid_tform_droid_slam_instance = tform4x4(obj_labeled_cuboid_tform_obj, all_pred_ref_tform_src[category][ref_instance_id_in_category, src_instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
+                    aligned_cuboid_tform_obj = tform4x4(obj_labeled_cuboid_tform_obj, all_pred_ref_tform_src[category][ref_instance_id_in_category, src_instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
+
                     # ground truth
                     # droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_cuboid_ref_tform_droid_slam_obj.to(device=self.device)
 
-                    if accurate_sim[src_instance_id_in_category] or not self.config.aligned_store_only_similar:
-                        src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_name, aligned_obj_tform_obj=droid_slam_labeled_cuboid_tform_droid_slam_instance)
+                    if accurate_sim[src_instance_id_in_category]:
+                        src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_filtered_name,
+                                                                                   aligned_obj_tform_obj=aligned_cuboid_tform_obj)
+                        src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_mesh_filtered_name,
+                                                                                   aligned_obj_tform_obj=aligned_cuboid_tform_obj)
+
+                    src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_name, aligned_obj_tform_obj=aligned_cuboid_tform_obj)
+                    src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_mesh_name, aligned_obj_tform_obj=aligned_cuboid_tform_obj)
 
                     src_vertices_mask = src_sequences_mesh_ids_for_verts == src_instance_id
                     ref_vertices_mask = ref_sequences_mesh_ids_for_verts == ref_instance_id
@@ -501,13 +521,13 @@ class NeMo_Align3D(OD3D_Method):
                     dist_verts_ref = src_sequences[src_instance_id].get_dist_verts_mesh_feats_to_other_sequence(ref_sequences[ref_instance_id]).to(device=self.device, dtype=dtype)
                     dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
 
-                    src_meshes_cloned.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes_cloned.get_verts_with_mesh_id(src_instance_id), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance)
+                    src_meshes_cloned.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes_cloned.get_verts_with_mesh_id(src_instance_id), transf4x4=aligned_cuboid_tform_obj)
                     src_meshes_cloned.rgb[src_vertices_mask] = ref_meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
 
                     #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                     #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
 
-                    pts3d.append(transf3d_broadcast(pts3d=src_sequences[src_instance_id].get_pcl().to(device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam_instance))
+                    pts3d.append(transf3d_broadcast(pts3d=src_sequences[src_instance_id].get_pcl().to(device=self.device, dtype=dtype), transf4x4=aligned_cuboid_tform_obj))
 
                     pts3d_colors.append(src_sequences[src_instance_id].get_pcl_colors().to(device=self.device, dtype=dtype))
 
@@ -517,19 +537,19 @@ class NeMo_Align3D(OD3D_Method):
                 imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
                 from od3d.cv.visual.draw import add_boolean_table
                 if self.config.gt_cam_tform_obj_source is not None:
-                    accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim], dim=0)
+                    accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim,  accurate_sim_geo, accurate_sim_appear], dim=0)
                 else:
                     accurate_table = torch.stack(
-                        [accurate_sim], dim=0) # , accurate_sim_geo, accurate_sim_appear
+                        [accurate_sim,  accurate_sim_geo, accurate_sim_appear], dim=0) # ,
                 from od3d.cv.visual.crop import crop_white_border_from_img
                 for v in range(viewpoints_count):
                     img = crop_white_border_from_img(imgs[v])
                     if self.config.gt_cam_tform_obj_source is not None:
                         img = add_boolean_table(img, table=accurate_table,
-                                                text=['Label (PI/6)', 'Label (PI/18)', 'Sim.'])
+                                                text=['Label (PI/6)', 'Label (PI/18)', 'Sim.', 'Sim. Geo.', 'Sim. App.'])
                     else:
                         img = add_boolean_table(img, table=accurate_table,
-                                                text=['Sim.'])
+                                                text=['Sim.', 'Sim. Geo.', 'Sim. App.'])
 
                     results_visual = OD3D_Results()
                     results_visual[f'{category}'] = image_as_wandb_image(img, caption='blub')

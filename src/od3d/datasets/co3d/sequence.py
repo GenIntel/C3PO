@@ -748,11 +748,18 @@ class CO3D_Sequence():
         return self.path_preprocess.joinpath('cuboids', self.cuboid_source, self.category, self.name + '.ply')
 
     @property
+    def path_mesh_feats(self):
+        return self.path_preprocess.joinpath('mesh_feats')
+    @property
     def fpath_mesh_feats(self):
-        return self.path_preprocess.joinpath('mesh_feats', self.pcl_source, self.mesh_name, self.mesh_feats_type, self.name_unique, 'mesh_feats.pt')
+        return self.path_mesh_feats.joinpath(self.pcl_source, self.mesh_name, self.mesh_feats_type, self.name_unique, 'mesh_feats.pt')
+
+    @property
+    def path_dist_verts_mesh_feats(self):
+        return self.path_preprocess.joinpath('dist_verts_mesh_feats')
 
     def get_fpath_dist_verts_mesh_feats(self, sequence):
-        return self.path_preprocess.joinpath('dist_verts_mesh_feats', self.pcl_source, self.mesh_name, self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, self.name_unique, sequence.name_unique, 'dist_verts_mesh_feats.pt')
+        return self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, self.mesh_name, self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, self.name_unique, sequence.name_unique, 'dist_verts_mesh_feats.pt')
 
 
     def get_pcl_clean_with_masks(self, pcl, masks, cams_tform4x4_obj, cams_intr4x4, pts3d_prob_thresh=0.6, pts3d_count_min=10, pts3d_max_count=20000, return_mask=False):
@@ -799,7 +806,7 @@ class CO3D_Sequence():
                        dict_nested_frames={self.category: {self.name: None}},
                        cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.PCL,
                        pcl_source=self.pcl_source,
-                       cuboid_source=self.cuboid_source,
+                       cuboid_source=CUBOID_SOURCES.DEFAULT,
                        mesh_feats_type=self.mesh_feats_type,
                        mesh_name=self.mesh_name)
 
@@ -1008,6 +1015,7 @@ class CO3D_Sequence():
             if src_a == src_b:
                 a_src_tform_b_src = torch.eye(4).to(device=device)
             else:
+                logger.info(f'preprocess for {self.name_unique} a_src_tform_b_src {src_a} tform {src_b}')
                 obj_cams_traj_a = self.get_trajectory(cam_tform_obj_source=src_a).to(device=device)
                 obj_cams_traj_b = self.get_trajectory(cam_tform_obj_source=src_b).to(device=device)
                 obj_cams_traj_mask = (~obj_cams_traj_a.isnan().any(dim=-1)) * (~obj_cams_traj_b.isnan().any(dim=-1))
@@ -1184,6 +1192,9 @@ class CO3D_Sequence():
         ## DEBUG BLOCK END
 
         # saving...
+        if fpath_pcl.exists():
+            self.remove_pcl_preprocess_dependent_files()
+
         fpath_pcl.parent.mkdir(parents=True, exist_ok=True)
         write_pts3d_with_colors_and_normals(fpath=fpath_pcl,
                                             pts3d=center3d_pts3d_clean.detach().cpu(),
@@ -1481,7 +1492,7 @@ class CO3D_Sequence():
 
         fpath_axis_droid_slam = self.fpath_pcl_axis_labeled
 
-        if fpath_axis_droid_slam.exists() and not override:
+        if fpath_axis_droid_slam.exists() and not override and self.fpath_labeled_obj_tform_obj.exists() and self.fpath_labeled_cuboid_obj_tform_labeled_obj.exists():
             logger.info(f'Label axis already exists {fpath_axis_droid_slam}, override disabled.')
             return
         fpath_axis_droid_slam.parent.mkdir(parents=True, exist_ok=True)
@@ -1493,14 +1504,18 @@ class CO3D_Sequence():
         frames_count = len(self.frames_names)
         for c in range(0, frames_count, frames_count // 4):
             frame = self.get_frame_by_index(c)
-            cams_tform4x4_world.append(frame.get_cam_tform4x4_obj(cam_tform_obj_source=self.cam_tform_obj_source))
-
+            cams_tform4x4_world.append(frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.PCL))
             cams_intr4x4.append(frame.cam_intr4x4)
             cams_imgs.append(frame.rgb)
 
         while True:
+            if self.fpath_labeled_obj_tform_obj.exists():
+                prev_axis = torch.load(self.fpath_labeled_obj_tform_obj)
+            else:
+                prev_axis = None
             axis_pcl = label_axis_in_pcl(pts3d=self.get_pcl(),
                                          pts3d_colors=self.get_pcl_colors(),
+                                         prev_labeled_pcl_tform_pcl=prev_axis,
                                          cams_tform4x4_world=cams_tform4x4_world,
                                          cams_intr4x4=cams_intr4x4,
                                          cams_imgs=cams_imgs)
@@ -1519,6 +1534,7 @@ class CO3D_Sequence():
             logger.warning(f'labeled determinant is not ~1, but {torch.linalg.det(pcl_labeled_tform_pcl[:3, :3])}')
 
         if axis_pcl is not None and axis_pcl.shape == (3, 2, 3):
+
             logger.info(f'storing axis labeled, cuboid tform, and cuboid ')
             torch.save(axis_pcl, f=fpath_axis_droid_slam)
 
@@ -1541,6 +1557,22 @@ class CO3D_Sequence():
                        f=self.fpath_labeled_cuboid_obj_tform_labeled_obj)
         else:
             logger.info(f'not storing labeled axis.')
+
+    def remove_pcl_preprocess_dependent_files(self):
+        logger.info('removing pcl dependent files...')
+        from glob import glob
+        paths = []
+        paths_mesh_feats = self.path_mesh_feats.joinpath(self.pcl_source, '*', '*', self.name_unique) #, 'mesh_feats.pt')
+        paths += glob(str(paths_mesh_feats))
+        paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, '*', '*', '*', self.name_unique, '*')
+        paths += glob(str(paths_dist_mesh_feats))
+        paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, '*', '*', '*', '*', '*', self.name_unique)
+        paths += glob(str(paths_dist_mesh_feats))
+        paths_meshs = self.path_preprocess.joinpath('mesh', f'{self.pcl_source}', '*', self.category, self.name)
+        paths += glob(str(paths_meshs))
+
+        for path in paths:
+            od3d.io.rm_dir(path)
 
     @property
     def fpath_labeled_obj_tform_obj(self):
@@ -1582,7 +1614,7 @@ class CO3D_Sequence():
     @property
     def co3dv1_zsp_obj_tform_obj(self):
         co3dv1_obj_tform_obj = self.get_a_src_tform_b_src(src_a=CAM_TFORM_OBJ_SOURCES.CO3DV1,
-                                                          src_b=self.cam_tform_obj_source)
+                                                          src_b=CAM_TFORM_OBJ_SOURCES.PCL)
         co3dv1_zsp_obj_tform_obj = tform4x4(self.co3dv1_zsp_obj_tform_co3dv1_obj, co3dv1_obj_tform_obj)
         return co3dv1_zsp_obj_tform_obj
 

@@ -110,6 +110,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     device = pts.device
 
     proposal_tform_pts = transf3d_broadcast(pts3d=pts[None,], transf4x4=tform4x4[:, None])
+
     norm_p = 1
 
     # PxNxR
@@ -168,9 +169,6 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.flip(dims=[-1])
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
 
-    # PxNxR
-    dist_ref_appearance = dist_ref[None,].expand(*dist_ref_geometry.shape)
-    dist_ref_appearance = dist_ref_appearance.nan_to_num(1., posinf=1., neginf=1.)
 
     argmin_ref_from_src = dist_ref.argmin(dim=-1)  # N,
     argmin_src_from_ref = dist_ref.argmin(dim=-2)  # R,
@@ -181,6 +179,17 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     # dist_ref_appearance = (dist_ref_geometry.clone() / (dist_ref_geo_max))
     dist_ref_appearance_weight = torch.exp(- (1./cyclic_weight_temp) * cyclic_dist_avg )
 
+
+    # PxNxR
+    #dist_ref_appearance = dist_ref[None,].expand(*dist_ref_geometry.shape)
+    #dist_ref_appearance = dist_ref_appearance.nan_to_num(1., posinf=1., neginf=1.)
+    ref_argmin_dist = (proposal_tform_pts[..., argmin_src_from_ref, :] - pts_ref[None,]).norm(dim=-1, p=norm_p)
+
+    src_argmin_dist = (proposal_tform_pts - pts_ref[argmin_ref_from_src][None,]).norm(dim=-1, p=norm_p)
+    dist_ref_appearance = ((src_argmin_dist[..., None,] / dist_ref_geo_max) + (ref_argmin_dist[..., None, :] / dist_ref_geo_max)).clone() / 2.
+
+    #logger.info(f'dist_ref_geometry: {dist_ref_geometry.shape}')
+    #logger.info(f'dist_ref_appearance: {dist_ref_appearance.shape}')
     #dist_ref_appearance_weight = dist_ref_appearance_weight / dist_ref_appearance_weight.flatten(-2).mean(dim=-1)[..., None, None]
     #dist_ref_appearance = dist_ref_appearance_weight * dist_ref_appearance
 
@@ -198,7 +207,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_dist_ref_geometry = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_geometry)
 
     proposal_dist_ref_appear_weight = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_appearance_weight)
-    proposal_dist_ref_appear_weight = proposal_dist_ref_appear_weight / proposal_dist_ref_appear_weight.mean(dim=-1, keepdim=True)
+    #proposal_dist_ref_appear_weight = proposal_dist_ref_appear_weight / proposal_dist_ref_appear_weight.mean(dim=-1, keepdim=True)
 
     proposal_dist_ref_appear = proposal_dist_ref_appear_weight * proposal_dist_ref_appear
     proposal_dist_ref_geometry = proposal_dist_ref_appear_weight * proposal_dist_ref_geometry
@@ -235,7 +244,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
 
     returns = (proposal_scores, )
     if return_dists:
-        returns += (proposal_dist_ref_geo_avg, )
+        returns += (proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg, )
     if return_weights:
         returns += (proposal_pts_nn_id_2D, proposal_dist_ref_appear_weight, )
     if len(returns) == 1:
