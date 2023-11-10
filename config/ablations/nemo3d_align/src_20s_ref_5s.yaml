@@ -10,34 +10,35 @@ ablation_name: $ablation_name_nemo3d_align_zsp
 
 
 categories:
-#  - bicycle
-#  - truck
-#  - train
-#  - teddybear
-#  - car
-#  - bus
+  - bicycle
+  - truck
+  - train
+  - teddybear
+  - car
+  - bus
   - motorcycle
-#  - keyboard
-#  - handbag
-#  - remote
-#  - airplane
-#  - toilet
-#  - hairdryer
-#  - mouse
-#  - toaster
-#  - hydrant
-#  - chair
+  - keyboard
+  - handbag
+  - remote
+  - airplane
+  - toilet
+  - hairdryer
+  - mouse
+  - toaster
+  - hydrant
+  - chair
   - laptop
-#  - book
-#  - backpack
+  - book
+  - backpack
 #  - cellphone # from cellphone on, no zsp categories
 #  - microwave
 #  - bench
-  - bottle
-  - couch
+#  - bottle
+#  - couch
 #  - cup
 #  - suitcase
 #  - tv
+
 
 method:
   nemo:

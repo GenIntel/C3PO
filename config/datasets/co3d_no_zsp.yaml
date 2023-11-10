@@ -3,7 +3,7 @@ defaults:
 
 name: co3d_no_zsp
 
-sequences_count_max_per_category: 20
+sequences_count_max_per_category: 10
 sequences_sort_pcl_score: True
 
 preprocess:
@@ -15,7 +15,7 @@ preprocess:
     override: False
   label:
     enabled: True
-    override: True
+    override: False
 #  mesh:
 #    enabled: True
 #    override: False
@@ -43,34 +43,34 @@ sequences_require_pcl: True
 sequences_require_gt_pose: True
 
 categories:
-#  - bicycle
-#  - truck
-#  - train
-#  - teddybear
-#  - car
-#  - bus
+  - bicycle
+  - truck
+  - train
+  - teddybear
+  - car
+  - bus
   - motorcycle
-#  - keyboard
-#  - handbag
-#  - remote
-#  - airplane
-#  - toilet
-#  - hairdryer
-#  - mouse
-#  - toaster
-#  - hydrant
-#  - chair
+  - keyboard
+  - handbag
+  - remote # question labels?
+  - airplane
+  - toilet
+  - hairdryer
+  - mouse #  question labels?
+  - toaster
+  - hydrant
+  - chair
   - laptop
-#  - book
-#  - backpack
-#  - cellphone # from cellphone on, no zsp categories
-#  - microwave
-#  - bench
+  - book
+  - backpack
+  - cellphone # from cellphone on, no zsp categories
+  - microwave
+  - bench
   - bottle
   - couch
-#  - cup
-#  - suitcase
-#  - tv
+  - cup
+  - suitcase
+  - tv
 
 dict_nested_frames_ban:
   bicycle:

@@ -40,7 +40,7 @@ pcl_source: 'co3d_clean' # 'co3d_clean' 'droid_slam_clean'
 sequences_require_good_cam_movement: True
 sequences_require_mesh: False
 sequences_require_pcl: True
-sequences_require_gt_pose: True
+sequences_require_gt_pose: False
 
 categories:
   - bicycle

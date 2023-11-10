@@ -50,7 +50,7 @@ def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
         num_pts_axis = 30
         pts3d_prev_axis = torch.zeros(3, num_pts_axis, 3)
         pts3d_prev_axis_colors = torch.zeros(3, num_pts_axis, 3)
-        pts3d_prev_axis_single = torch.linspace(-0.55, 0.55, num_pts_axis) * diameter
+        pts3d_prev_axis_single = torch.linspace(-0.0, 0.55, num_pts_axis) * diameter
         pts3d_prev_axis[0, :, 0] = pts3d_prev_axis_single
         pts3d_prev_axis[1, :, 1] = pts3d_prev_axis_single
         pts3d_prev_axis[2, :, 2] = pts3d_prev_axis_single

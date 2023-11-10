@@ -4,4 +4,4 @@ defaults:
 
 ablation_name_nemo3d_align_aligned_refs: ref2
 
-aligned_name_ref: 'r2'
+aligned_name_ref: '/r2'

@@ -11,33 +11,56 @@ from tabulate import tabulate
 import re
 from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
 from od3d.datasets.objectnet3d.enum import MAP_CATEGORIES_OD3D_TO_OBJECTNET3D, MAP_CATEGORIES_OBJECTNET3D_TO_OD3D
+# def get_categorical_and
+TABLE_CATEGORIES_OBJECTNET3D_3 = ['cellphone', 'toilet', 'microwave', 'mean (3)']
+TABLE_CATEGORIES_OBJECTNET3D_23 = [
+    'cellphone', 'toilet', 'microwave', 'airplane', 'backpack', 'bench', 'bicycle', 'bottle', 'bus', 'car',
+    'chair', 'couch', 'cup', 'hairdryer', 'keyboard', 'laptop', 'motorcycle',
+    'mouse', 'remote', 'suitcase', 'toaster', 'train', 'tv', 'mean (23)'
+]
+TABLE_CATEGORIES_CO3D_20 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'mean (20)']
+TABLE_CATEGORIES_CO3D_28 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'cellphone', 'microwave', 'bench', 'bottle', 'couch', 'cup', 'suitcase', 'tv', 'mean (28)']
+
+TABLE_CATEGORIES_ZSP = ['bicycle', 'hydrant', 'motorcycle', 'teddybear', 'toaster', 'mean (20)']
+TABLE_CATEGORIES_YOLO = ['backpack', 'car', 'chair', 'keyboard', 'laptop', 'motorcycle', 'mean (20)'] # # B’pack Car Chair Keyboard Laptop M’cycle
+TABLE_CATEGORIES_5S = ['mean (20)', 'mean (28)']
+TABLE_CATEGORIES_PASCAL3D = ['airplane', 'bicycle', 'bottle', 'bus', 'car', 'chair', 'motorcycle', 'couch', 'train', 'tv', 'mean (10)']
+
+DATASET_PASCAL3D = 'pascal3d'
+DATASET_CO3D_20 = 'co3d_20'
+DATASET_CO3D_28 = 'co3d_28'
+DATASET_OBJECTNET3D = 'objectnet3d'
 
 @app.command()
 def ablation_dist():
     # CO3Dv1_NeMo, metrics
 
     categories = od3d.io.read_config_intern(Path('datasets/categories/zsp.yaml'))
-
-    align3d_1on1_name_partial = 'NeMo_Align3D_'
+    categories = TABLE_CATEGORIES_CO3D_28[:-1]
+    categories = ['bottle', 'couch', 'motorcycle', 'laptop']
+    align3d_1on1_name_partial = '.*NeMo_Align3D_dist_cyc.*'
     align3d_1on1_metrics = ['pose/acc_pi6'] #, 'pose/acc_pi18']
     align3d_1on1_columns_map = {}
     align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = "Acc. Pi/6. [%]"
     #align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = "Acc. Pi/18. [%]"
-
-    age_in_hours = 200
+    age_in_hours = 10
     configs = ['ablation_name']
     #configs = ['method.dist_appear_weight']
     #align3d_1on1_columns_map['method.dist_appear_weight'] = 'Appear. Weight'
     align3d_1on1_columns_map['ablation_name'] = 'Name'
     for category in categories:
         align3d_1on1_metrics.append(f'pose/prefix/{MAP_CATEGORIES_OD3D_TO_CO3D[category]}_acc_pi6')
-        # align3d_1on1_metrics.append(f'pose/prefix/{MAP_CATEGORIES_OD3D_TO_CO3D[category]}_acc_pi18')
+        #align3d_1on1_metrics.append(f'pose/prefix/{MAP_CATEGORIES_OD3D_TO_CO3D[category]}_acc_pi18')
         align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = category
         #align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = category
 
-    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, age_in_hours=age_in_hours, name_partial=align3d_1on1_name_partial)
-    #align3d_1on1_df['ablation_name'] = align3d_1on1_df['ablation_name'].str
+    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, age_in_hours=age_in_hours, name_regex=align3d_1on1_name_partial)
+    align3d_1on1_df['ablation_name'] = align3d_1on1_df['ablation_name'].str
     align3d_1on1_df = align3d_1on1_df.rename(columns=align3d_1on1_columns_map)
+
+    max_index = align3d_1on1_df['pose/acc_pi6'].idxmax()
+    # Get the row with the maximum value in 'Column1'
+    max_row = align3d_1on1_df.loc[max_index]
 
     cols_dec = ["Acc. Pi/6. [%]", 'bicycle', 'hydrant', 'motorcycle', 'teddybear', 'toaster'] # , "Acc. Pi/18. [%]"
     align3d_1on1_df[cols_dec] *= 100.
@@ -54,6 +77,7 @@ def ablation_dist():
         'dino_vits8_acc',
         'dinov2_vitb14_acc',
         'dinov2_vits14_acc',
+
         # 'dinov2_dist_min',
         # 'dinov2_dist_avg',
         # 'dinov2_avg',
@@ -73,6 +97,7 @@ def ablation_dist():
 
     df = align3d_1on1_df[cols]
     logger.info(tabulate(df, headers='keys', tablefmt='latex',  floatfmt=".1f")) # 'github', 'tsv', 'latex', 'latex_raw'
+    logger.info(tabulate(align3d_1on1_df, headers='keys', tablefmt='latex',  floatfmt=".1f")) # 'github', 'tsv', 'latex', 'latex_raw'
 
 from typing import List
 def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, configs=[], name_partial='_CO3D_NeMo_', metrics_scales=None):
@@ -144,25 +169,6 @@ def get_categorical_results_from_single_runs(metrics_templates, categories, age_
         # metric_df = metric_df.set_index(COLUMN_CATEGORY).transpose()
     return metrics_df
 
-# def get_categorical_and
-TABLE_CATEGORIES_OBJECTNET3D_3 = ['cellphone', 'toilet', 'microwave', 'mean (3)']
-TABLE_CATEGORIES_OBJECTNET3D_23 = [
-    'cellphone', 'toilet', 'microwave', 'airplane', 'backpack', 'bench', 'bicycle', 'bottle', 'bus', 'car',
-    'chair', 'couch', 'cup', 'hairdryer', 'keyboard', 'laptop', 'motorcycle',
-    'mouse', 'remote', 'suitcase', 'toaster', 'train', 'tv', 'mean (23)'
-]
-TABLE_CATEGORIES_CO3D_20 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'mean (20)']
-TABLE_CATEGORIES_CO3D_28 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'cellphone', 'microwave', 'bench', 'bottle', 'couch', 'cup', 'suitcase', 'tv', 'mean (28)']
-
-TABLE_CATEGORIES_ZSP = ['bicycle', 'hydrant', 'motorcycle', 'teddybear', 'toaster', 'mean (20)']
-TABLE_CATEGORIES_YOLO = ['backpack', 'car', 'chair', 'keyboard', 'laptop', 'motorcycle', 'mean (20)'] # # B’pack Car Chair Keyboard Laptop M’cycle
-TABLE_CATEGORIES_5S = ['mean (20)', 'mean (28)']
-TABLE_CATEGORIES_PASCAL3D = ['airplane', 'bicycle', 'bottle', 'bus', 'car', 'chair', 'motorcycle', 'couch', 'train', 'tv', 'mean (10)']
-
-DATASET_PASCAL3D = 'pascal3d'
-DATASET_CO3D_20 = 'co3d_20'
-DATASET_CO3D_28 = 'co3d_28'
-DATASET_OBJECTNET3D = 'objectnet3d'
 
 @app.command()
 def pose_pi6_categories_separate():

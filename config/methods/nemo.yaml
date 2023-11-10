@@ -99,6 +99,7 @@ inference:
     use_mask_object: True
     sample:
       method: uniform # epnp3d2d uniform
+      uniform_multiview_rescale: True
       epnp3d2d:
         count_cams: 100
         count_pts: 4
