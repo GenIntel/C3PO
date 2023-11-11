@@ -49,9 +49,11 @@ class OD3D_Dataset(Dataset):
         return od3d_dataset
 
     @classmethod
-    def create_by_name(cls, name: str):
-        config = od3d.io.read_config_intern(rfpath=Path("datasets").joinpath(f"{name}.yaml"))
-        return cls.create_from_config(config)
+    def create_by_name(cls, name: str, config: dict = None):
+        config_loaded = od3d.io.read_config_intern(rfpath=Path("datasets").joinpath(f"{name}.yaml"))
+        if config is not None:
+            config_loaded = OmegaConf.merge(config_loaded, config)
+        return cls.create_from_config(config_loaded)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

@@ -21,6 +21,72 @@ from od3d.cv.visual.show import show_imgs, get_img_from_plot, show_img
 from od3d.cv.visual.crop import crop_white_border_from_img
 import matplotlib.pyplot as plt
 from od3d.cv.visual.resize import resize
+
+
+
+@app.command()
+def viewpoints():
+    logging.basicConfig(level=logging.INFO)
+    from od3d.datasets.pascal3d.dataset import Pascal3D
+    from od3d.datasets.objectnet3d.dataset import ObjectNet3D
+    from omegaconf.omegaconf import OmegaConf #  bottle, suitcase, cup, airplane, microwave, tv, train, hairdryer, remote
+    from od3d.cv.transforms.transform import OD3D_Transform
+    import torch.utils.data
+    from od3d.cv.geometry.transform import inv_tform4x4
+    from tqdm import tqdm
+
+    import open3d
+    bunny_data = open3d.data.BunnyMesh()
+    bunny_mesh_open3d = open3d.io.read_triangle_mesh(bunny_data.path)
+    bunny_mesh = Meshes.load_from_meshes([Mesh.from_o3d(bunny_mesh_open3d)])
+    bunny_rot = torch.eye(4)
+    bunny_rot = torch.Tensor(
+        [[0., 0., 1., 0.,],
+         [1., 0., 0., 0.,],
+         [0., 1., 0., 0.,],
+         [0., 0., 0., 1.,]])
+
+
+    bunny_mesh.verts.data = transf3d_broadcast(pts3d=bunny_mesh.verts, transf4x4=bunny_rot)
+    bunny_mesh.rgb = bunny_mesh.get_verts_ncds_cat_with_mesh_ids()
+    # 'bottle', 'train'
+    # 'bottle', 'suitcase', 'cup', 'microwave', 'tv', 'train', 'hairdryer', 'remote'
+    categories = ['bottle', 'train', 'airplane']
+    for category in categories:
+        logger.info(f'category: {category}')
+        config = {'categories': [category]}
+        #dataset = ObjectNet3D.create_by_name('objectnet3d_test', config=config)
+        dataset = Pascal3D.create_by_name('pascal3d_test', config=config)
+
+        dataset.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=10, shuffle=False, collate_fn=dataset.collate_fn, num_workers=4)
+        logging.info(f"Dataset contains {len(dataset)} frames.")
+        all_vpts = []
+        all_cams = []
+        cam_intr4x4 = None
+        for i, batch in tqdm(enumerate(dataloader)):
+            if torch.cuda.is_available():
+                batch.to(device='cuda:0')
+
+            cam_intr4x4 = batch.cam_intr4x4[0]
+            all_cams.append(batch.cam_tform4x4_obj)
+
+            vpts = inv_tform4x4(batch.cam_tform4x4_obj)[:, :3, 3]
+            all_vpts.append(vpts)
+
+        all_vpts = torch.cat(all_vpts, dim=0)
+        all_cams = torch.cat(all_cams, dim=0)
+        all_vpts = torch.nn.functional.normalize(all_vpts, dim=-1)
+        all_cams[:, :3, 3] = torch.nn.functional.normalize(all_cams[:, :3, 3], dim=-1)
+
+        #img = show_scene(pts3d=[all_vpts], return_visualization=True, viewpoints_count=1, crop_white_border=True)
+        imgs = show_scene(meshes=[bunny_mesh], cams_intr4x4=cam_intr4x4, cams_tform4x4_world=all_cams, return_visualization=True, viewpoints_count=3, crop_white_border=True, cams_imgs_depth_scale=0.05)
+        img = imgs[1] #  img.permute(1, 2, 0, 3).flatten(2)
+        #img = torch.cat(img, dim=-1)
+        img = crop_white_border_from_img(img, white_pad=20)
+        show_img(img, height=1080, width=1980, fpath=f'{dataset.name}_azimuth_{category}.png')
+
+
 @app.command()
 def align3d():
     logging.basicConfig(level=logging.INFO)
@@ -159,6 +225,7 @@ def align3d():
         total_imgs = torch.cat([imgs* 255, img], dim=-1)
         show_img(total_imgs, height=1080, width=1980, fpath='method_align3d.png')
         show_img(total_imgs, height=1080, width=1980)
+
 
 @app.command()
 def mv_pose():

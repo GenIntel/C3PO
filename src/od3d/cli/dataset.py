@@ -244,7 +244,8 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     #    logger.info(seq.name_unique)
     #    seq.show(show_imgs=True)
     #dataset.transform = OD3D_Transform.create_by_name('centerzoom512')
-    dataset.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+    # dataset.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+    dataset.transform = OD3D_Transform.create_by_name('scale_mask_shorter_1_centerzoom512')
 
     #dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom224')
     #dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom896')

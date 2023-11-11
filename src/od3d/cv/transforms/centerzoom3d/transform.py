@@ -15,7 +15,8 @@ from od3d.cv.geometry.grid import get_pxl2d
 
 class CenterZoom3D(OD3D_Transform):
     # resize types: fit to
-    def __init__(self, H, W, scale=None, center_rel_shift_xy=[0., 0.], apply_txtr=False, config: DictConfig = None, scale_with_mask=None, scale_with_dist=None, scale_with_pad=True, center_use_mask=False, scale_selection='shorter'):
+    def __init__(self, H, W, scale=None, center_rel_shift_xy=[0., 0.], apply_txtr=False, config: DictConfig = None,
+                 scale_with_mask=None, scale_with_dist=None, scale_with_pad=True, center_use_mask=False, scale_selection='shorter'):
         super().__init__()
         self.center_rel_shift_xy = torch.Tensor(center_rel_shift_xy) if center_rel_shift_xy is not None else None
         self.H = H
