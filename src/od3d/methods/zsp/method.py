@@ -53,8 +53,16 @@ class ZSP(OD3D_Method):
         self.target_data = None
 
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+        import os
+        cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+        if len(cuda_visible_devices) == 0:
+            cuda_visible_devices = 'all'
+        else:
+            cuda_visible_devices = f'{cuda_visible_devices}'
 
-        od3d.io.run_cmd('od3d docker zsp-run &', logger=logger, background=True)
+        torch.cuda.empty_cache()
+
+        od3d.io.run_cmd(f'od3d docker zsp-run --gpus {cuda_visible_devices} &', logger=logger, background=True)
         dataset_src: CO3D = datasets_train['src']
         dataset_ref: CO3D = datasets_train['labeled']
 
