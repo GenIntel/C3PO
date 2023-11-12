@@ -163,9 +163,11 @@ class NeMo_Align3D(OD3D_Method):
         ref_meshes = Meshes.load_from_meshes([seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT) for seq in ref_sequences], device=self.device)
 
         # note: first get mesh to get DROID_SLAM tforms
-        if self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED or self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+        if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
             for seq in src_sequences:
                 _ = seq.co3dv1_zsp_obj_tform_obj
+
+        if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
             for seq in ref_sequences:
                 _ = seq.co3dv1_zsp_obj_tform_obj
 
@@ -198,11 +200,12 @@ class NeMo_Align3D(OD3D_Method):
             ref_category_instance_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
 
             # this ensures that we first label the axis, which are required later to fit the cuboid
-            if self.config.gt_cam_tform_obj_source is not None and self.config.gt_cam_tform_obj_source != CAM_TFORM_OBJ_SOURCES.ZSP_LABELED :
+            if self.config.gt_cam_tform_obj_source is not None and (dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID):
                 _ = src_sequences[
                     src_category_instance_ids[0]].labeled_obj_tform_obj.to(dtype=dtype, device=self.device)
                 _ = src_sequences[
                     src_category_instance_ids[0]].labeled_cuboid_obj_tform_labeled_obj.to(dtype=dtype, device=self.device)
+            if self.config.gt_cam_tform_obj_source is not None and (dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID):
                 _ = ref_sequences[
                     ref_category_instance_ids[0]].labeled_obj_tform_obj.to(dtype=dtype, device=self.device)
                 _ = ref_sequences[
@@ -325,20 +328,36 @@ class NeMo_Align3D(OD3D_Method):
                                 #pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
-
-                        if self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
-                            gt_ref_tform_src = tform4x4(
-                                inv_tform4x4(ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
-                               src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
-                        elif self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
-                            gt_ref_tform_src = tform4x4(
-                                inv_tform4x4(ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(
-                                device=self.device, dtype=pred_ref_tform_src.dtype)),
-                                src_sequences[src_mesh_id].labeled_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
+                            ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)
+                        elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+                            ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)
                         else:
-                            gt_ref_tform_src = torch.eye(4).to(device=self.device)
-                            if self.config.gt_cam_tform_obj_source is not None:
-                                logger.warning('No gt available ')
+                            ref_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
+                            logger.warning('No gt available for reference.')
+
+                        if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
+                            src_labeled_obj_tform_obj = src_sequences[src_mesh_id].labeled_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)
+                        elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+                            src_labeled_obj_tform_obj = src_sequences[src_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)
+                        else:
+                            src_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
+                            logger.warning('No gt available for source.')
+
+                        gt_ref_tform_src = tform4x4(inv_tform4x4(ref_labeled_obj_tform_obj), src_labeled_obj_tform_obj)
+                        # if self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
+                        #     gt_ref_tform_src = tform4x4(
+                        #         inv_tform4x4(ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
+                        #        src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        # elif self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
+                        #     gt_ref_tform_src = tform4x4(
+                        #         inv_tform4x4(ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(
+                        #         device=self.device, dtype=pred_ref_tform_src.dtype)),
+                        #         src_sequences[src_mesh_id].labeled_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
+                        # else:
+                        #     gt_ref_tform_src = torch.eye(4).to(device=self.device)
+                        #     if self.config.gt_cam_tform_obj_source is not None:
+                        #         logger.warning('No gt available ')
                         diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
                         logger.info(diff_rot_angle_rad)
                         results_diff_log_rot[category][r, s] = diff_rot_angle_rad
@@ -453,6 +472,11 @@ class NeMo_Align3D(OD3D_Method):
                 if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
                     obj_labeled_cuboid_tform_obj = inv_tform4x4(
                         ref_sequences[ref_category_instance_ids[0]].co3dv1_zsp_obj_tform_obj.to(
+                            device=self.device, dtype=dtype))
+                    logger.warning('aligned cuboid does not exist.')
+                elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+                    obj_labeled_cuboid_tform_obj = inv_tform4x4(
+                        ref_sequences[ref_category_instance_ids[0]].zsp_labeled_cuboid_ref_tform_obj.to(
                             device=self.device, dtype=dtype))
                     logger.warning('aligned cuboid does not exist.')
                 elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:

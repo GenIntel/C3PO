@@ -401,7 +401,7 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
     if cams_tform4x4_world is not None and cams_intr4x4 is not None:
 
         for i in range(len(cams_tform4x4_world)):
-            if cams_intr4x4.dim() == 2:
+            if isinstance(cams_intr4x4, torch.Tensor) and cams_intr4x4.dim() == 2:
                 cam_intr4x4 = cams_intr4x4
             elif len(cams_intr4x4) == 1:
                 cam_intr4x4 = cams_intr4x4[0]

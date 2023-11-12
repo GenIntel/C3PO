@@ -4,7 +4,7 @@ defaults:
 name: objectnet3d_test
 class_name: ObjectNet3D
 
-
+#
 #modalities:
 #  - 'rgb'
 #  - 'category'
@@ -20,7 +20,7 @@ class_name: ObjectNet3D
 #  - 'meshs'
 #
 #categories:
-#  - bottle
+#  - cup
 #  - laptop
 #  - mouse
 #  - remote

@@ -52,14 +52,13 @@ metrics:
   - metricB
 
 aligned_name_ref: '/r0'
-aligned_name_suffix: ''
-aligned_name: 'zsp_20s_to_5s${aligned_name_suffix}${aligned_name_ref}'
+aligned_name_suffix: '_filtered'
+aligned_name: 'all_20s_to_5s${aligned_name_suffix}${aligned_name_ref}'
 
 method:
   nemo:
     inference:
       pre_rendered: False
-
       use_mask_object: True
 #      sample:
 #        uniform_multiview_rescale: False
@@ -90,6 +89,25 @@ method:
       dataloader:
         num_workers: 4
         batch_size: 12
+      transform:
+        class_name: SequentialTransform
+        transforms:
+          - class_name: RandomCenterZoom3D
+            apply_txtr: False
+            config: ${texture_dataset}
+            W: 512
+            H: 512
+            scale_with_mask: 1.
+            scale_selection: 'shorter' # 'shorter' 'larger' 'separate'
+            scale_min: 0.8
+            scale_max: 1.2
+            center_rel_shift_xy_min:
+              - -0.
+              - -0.
+            center_rel_shift_xy_max:
+              - +0.
+              - +0.
+          - class_name: RGB_Random
     test:
       transform:
         class_name: CenterZoom3D

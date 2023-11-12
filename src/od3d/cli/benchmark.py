@@ -579,7 +579,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         elif method_cfg.platform.link == 'slurm':
             bench_single_method_slurm(method_cfg)
 
-            if (i+1) % 30 == 0:
+            if (i+1) % 40 == 0:
                 time.sleep(60 * 60)
 
         time.sleep(10)

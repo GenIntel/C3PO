@@ -28,7 +28,8 @@ extract_meta:
   override: False
   remove_previous: False
 
-#categories:
+
+categories:
 #  - 'car'
 
 preprocess:
@@ -53,3 +54,6 @@ preprocess:
 filter_frames_categorical: True # for preprocessing subset_category_names_unique, set this to False
 
 path_cuboids: '${.path_preprocess}/cuboids'
+
+#dict_nested_frames:
+#  val:

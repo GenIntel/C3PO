@@ -46,6 +46,18 @@ def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
         pcd.colors = open3d.utility.Vector3dVector(pts3d_colors.detach().cpu().numpy())
 
     if prev_labeled_pcl_tform_pcl is not None:
+        from od3d.cv.geometry.transform import transf3d_broadcast, inv_tform4x4, tform4x4
+
+        # DEBUG START ADD ROTATION
+        # left_rot = torch.Tensor([
+        #     [0., 1., 0., 0.],
+        #     [-1., 0., 0., 0.],
+        #     [0., 0., 1., 0.],
+        #     [0., 0., 0., 1.],
+        # ]).to(device=prev_labeled_pcl_tform_pcl.device)
+        # prev_labeled_pcl_tform_pcl = tform4x4(left_rot, prev_labeled_pcl_tform_pcl)
+        # DEBUG END ADD ROTATION
+
         diameter = torch.cdist(pts3d, pts3d).max()
         num_pts_axis = 30
         pts3d_prev_axis = torch.zeros(3, num_pts_axis, 3)
@@ -54,7 +66,6 @@ def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
         pts3d_prev_axis[0, :, 0] = pts3d_prev_axis_single
         pts3d_prev_axis[1, :, 1] = pts3d_prev_axis_single
         pts3d_prev_axis[2, :, 2] = pts3d_prev_axis_single
-        from od3d.cv.geometry.transform import transf3d_broadcast, inv_tform4x4
         pts3d_prev_axis = transf3d_broadcast(pts3d=pts3d_prev_axis, transf4x4=inv_tform4x4(prev_labeled_pcl_tform_pcl))
         pts3d_prev_axis_colors[0, :, :] = torch.Tensor([1., 0., 0.])[None,].expand(num_pts_axis, 3)
         pts3d_prev_axis_colors[1, :, :] = torch.Tensor([0., 1., 0.])[None,].expand(num_pts_axis, 3)
@@ -83,13 +94,16 @@ def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
     pts3d_picked_ids = vis.get_picked_points()
 
     if len(pts3d_picked_ids) != 6:
-        logger.warning("Return none, because not exactly 6 points were selected")
-        return None
+        # if prev_labeled_pcl_tform_pcl is not None:
+        #     prev_axis_pts3d = prev_labeled_pcl_tform_pcl[:3, None, :3].expand(3, 2, 3).clone()
+        #     prev_axis_pts3d[:, 1] = 0.
+        #     logger.warning("Return prev axis, because not exactly 6 points were selected")
+        #     return prev_axis_pts3d
+        # else:
+           logger.warning("Return none, because not exactly 6 points were selected")
+           return None
 
-        #if prev_labeled_pcl_tform_pcl is not None:
-        #    logger.warning("Return prev axis, because not exactly 6 points were selected")
-        #    return prev_labeled_pcl_tform_pcl
-        #else:
+
 
     else:
         pts3d_picked = pts3d_selectable[pts3d_picked_ids]

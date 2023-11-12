@@ -27,6 +27,8 @@ pcl_source: 'co3d_clean'
 
 #frames_count_max_per_sequence: 3
 ###
+
+## note all modalities requried for zsp
 #modalities:
 #    - 'size'
 #    - 'category'
@@ -39,7 +41,7 @@ pcl_source: 'co3d_clean'
 #    - 'sequence'
 #    - 'depth'
 #    - 'depth_mask'
-#    - 'mesh'
+##    - 'mesh'
 
 sequences_require_gt_pose: False
 

@@ -104,14 +104,14 @@ def ablation_dist():
     logger.info(tabulate(align3d_1on1_df, headers='keys', tablefmt='latex',  floatfmt=".1f")) # 'github', 'tsv', 'latex', 'latex_raw'
 
 from typing import List
-def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, configs=[], name_partial='_CO3D_NeMo_', metrics_scales=None):
+def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, configs=[], name_regex=f'.*cat1_([a-z]*)_ref([0-9]*)_.*', metrics_scales=None):
     rows = []
     COLUMN_CATEGORY = "category"
     COLUMN_REFERENCE = "ref"
     COLUMN_CATEGORY_MEAN = "mean"
     COLUMN_INDEX = "index"
     df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours,
-                                     name_regex=f'.*{name_partial}cat1_([a-z]*)_ref([0-9]*)_.*', name_regex_groups=[COLUMN_CATEGORY, COLUMN_REFERENCE], filter_runs_with_metrics=False)
+                                     name_regex=name_regex, name_regex_groups=[COLUMN_CATEGORY, COLUMN_REFERENCE], filter_runs_with_metrics=False)
     metrics_dfs = []
     for m, metric in enumerate(metrics):
         if metrics_scales is not None and len(metrics_scales) > m:
@@ -122,6 +122,7 @@ def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, con
         metric_df = metric_df[[metric, COLUMN_CATEGORY, COLUMN_REFERENCE]]
         metric_df = metric_df.drop_duplicates(subset=[COLUMN_CATEGORY, COLUMN_REFERENCE], keep="first")
         metric_df_mean_over_refs = metric_df.groupby(COLUMN_CATEGORY)[metric].mean(numeric_only=False) * metric_scale
+        # metric_df.groupby(COLUMN_CATEGORY).count()
         metric_df_mean_over_refs[COLUMN_CATEGORY_MEAN] = metric_df_mean_over_refs.mean()
         metric_df_std_over_refs = metric_df.groupby(COLUMN_CATEGORY)[metric].std(numeric_only=False) * metric_scale
         metric_df_std_over_refs[COLUMN_CATEGORY_MEAN] = metric_df_std_over_refs.mean()
@@ -131,7 +132,7 @@ def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, con
 
     return metrics_dfs
 
-def get_categorical_results_from_single_runs(metrics_templates, categories, age_in_hours: float, configs=[], name_partial='_CO3D_NeMo_ref', metrics_scales=None, map_od3d_to_datasets=None):
+def get_categorical_results_from_single_runs(metrics_templates, categories, age_in_hours: float, configs=[], name_regex='.*_CO3D_NeMo_ref.*', metrics_scales=None, map_od3d_to_datasets=None):
     metrics_df = []
     for m, metric in enumerate(metrics_templates):
         columns_map = {}
@@ -157,7 +158,7 @@ def get_categorical_results_from_single_runs(metrics_templates, categories, age_
             columns_std.append(columns_map[metrics[-1]])
             columns_std_map[columns_map[metrics[-1]]] = category
 
-        df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_regex=f'.*{name_partial}.*')
+        df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_regex=name_regex)
         df = df.rename(columns=columns_map)
 
         if metrics_scales is not None and len(metrics_scales) > m:
@@ -200,51 +201,55 @@ def pose_pi6_categories_separate():
     configs = []
 
     # ###### FROM MULTIPLE RUNS
-    metrics_dataset = [DATASET_PASCAL3D, DATASET_OBJECTNET3D, DATASET_CO3D_28, DATASET_CO3D_20]
-    metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/objectnet3d_test/pose/acc_pi6', 'test/co3d_no_zsp_5s_labeled_ref/pose/acc_pi6', 'test/co3dv1_10s_zsp_labeled_cuboid_ref/pose/acc_pi6']
-    # metrics = ['test/pascal3d_test/pose/acc_pi18', 'test/objectnet3d_test/pose/acc_pi18', 'test/co3d_no_zsp_5s_labeled_ref/pose/acc_pi18', 'test/co3dv1_10s_zsp_labeled_cuboid_ref/pose/acc_pi18']
-
-    metrics_scales = [100, 100, 100, 100]
-    metrics_names = ['PASCAL3D [%]', 'ObjectNet3D [%]', 'CO3D 5s [%]', 'CO3D ZSP 10s [%]']
-    name_partial = '_CO3D_NeMo_'
-    #name_partial = '_CO3D_NeMo_Incremental_'
-    metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales, age_in_hours=age_in_hours, configs=configs, name_partial=name_partial)
+    # metrics_dataset = [DATASET_PASCAL3D, DATASET_OBJECTNET3D, DATASET_CO3D_28, DATASET_CO3D_20]
+    # metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/objectnet3d_test/pose/acc_pi6', 'test/co3d_no_zsp_5s_labeled_ref/pose/acc_pi6', 'test/co3dv1_10s_zsp_labeled_cuboid_ref/pose/acc_pi6']
+    # # metrics = ['test/pascal3d_test/pose/acc_pi18', 'test/objectnet3d_test/pose/acc_pi18', 'test/co3d_no_zsp_5s_labeled_ref/pose/acc_pi18', 'test/co3dv1_10s_zsp_labeled_cuboid_ref/pose/acc_pi18']
+    #
+    # metrics_scales = [100, 100, 100, 100]
+    # metrics_names = ['PASCAL3D [%]', 'ObjectNet3D [%]', 'CO3D 5s [%]', 'CO3D ZSP 10s [%]']
+    # name_partial = '_CO3D_NeMo_'
+    # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
+    # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_cuboid.*'
+    # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_.*'
+    # metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales, age_in_hours=age_in_hours, configs=configs, name_regex=name_regex)
 
     #
     # # ###### FROM SINGLE RUNS
-    # metrics = ['pose/prefix/CATEGORY_acc_pi6']
-    # #metrics = ['test/pascal3d_test/pose/prefix/CATEGORY_acc_pi6']
-    # #metrics = ['test/objectnet3d_test/pose/prefix/CATEGORY_acc_pi6']
-    #
-    # metrics_dataset = [DATASET_CO3D_20]
-    # #metrics_dataset = [DATASET_CO3D_28]
-    # # metrics_dataset = [DATASET_PASCAL3D]
-    # #metrics_dataset = [DATASET_OBJECTNET3D]
-    #
-    # metrics_scales = [100]
-    # categories = TABLE_CATEGORIES_CO3D_20[:-1]
-    # #categories = TABLE_CATEGORIES_CO3D_28[:-1]
-    # #categories = TABLE_CATEGORIES_PASCAL3D[:-1]
-    # #categories = TABLE_CATEGORIES_OBJECTNET3D_23[:-1]
-    # #categories = TABLE_CATEGORIES_OBJECTNET3D_3[:-1]
-    #
-    # map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
-    # map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
-    # # map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_PASCAL3D]
-    # #map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_OBJECTNET3D]
-    # #map_od3d_to_datasets = None
-    #
-    # name_partial = '_CO3Dv1_NeMo_Align3D_'
-    # name_partial = '_CO3D_NeMo_Align3D_'
-    # name_partial = '11-02_00-32-29_CO3D_ZSP_src_5s_ref_5s_local'
-    # name_partial = '11-02_22-00-14_CO3D_ZSP_z_cross_pascal3d_objectnet3d_local'
-    # name_partial = '11-05_17-18-19_CO3D_ZSP_z_cross_pascal3d_objectnet3d_local'
-    # #name_partial = '11-03_08-26-52_CO3D_ZSP_src_5s_ref_5s_local'
-    # name_partial = '11-11_13-11-29_CO3Dv1_NeMo_Align3D_local' # 1 to 1
-    # name_partial = '11-11_13-09-40_CO3Dv1_NeMo_Align3D_local' # 10 to 1
-    # metrics_dfs = get_categorical_results_from_single_runs(metrics_templates=metrics, categories=categories, age_in_hours=age_in_hours, name_partial=name_partial, metrics_scales=metrics_scales, map_od3d_to_datasets=map_od3d_to_datasets)
+    metrics = ['pose/prefix/CATEGORY_acc_pi6']
+    #metrics = ['test/pascal3d_test/pose/prefix/CATEGORY_acc_pi6']
+    #metrics = ['test/objectnet3d_test/pose/prefix/CATEGORY_acc_pi6']
 
+    metrics_dataset = [DATASET_CO3D_20]
+    #metrics_dataset = [DATASET_CO3D_28]
+    # metrics_dataset = [DATASET_PASCAL3D]
+    #metrics_dataset = [DATASET_OBJECTNET3D]
 
+    metrics_scales = [100]
+    categories = TABLE_CATEGORIES_CO3D_20[:-1]
+    #categories = TABLE_CATEGORIES_CO3D_28[:-1]
+    #categories = TABLE_CATEGORIES_PASCAL3D[:-1]
+    #categories = TABLE_CATEGORIES_OBJECTNET3D_23[:-1]
+    #categories = TABLE_CATEGORIES_OBJECTNET3D_3[:-1]
+
+    map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
+    map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
+    # map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_PASCAL3D]
+    #map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_OBJECTNET3D]
+    #map_od3d_to_datasets = None
+
+    name_partial = '_CO3Dv1_NeMo_Align3D_'
+    name_partial = '_CO3D_NeMo_Align3D_'
+    name_partial = '11-02_00-32-29_CO3D_ZSP_src_5s_ref_5s_local'
+    name_partial = '11-02_22-00-14_CO3D_ZSP_z_cross_pascal3d_objectnet3d_local'
+    name_partial = '11-05_17-18-19_CO3D_ZSP_z_cross_pascal3d_objectnet3d_local'
+    #name_partial = '11-03_08-26-52_CO3D_ZSP_src_5s_ref_5s_local'
+    name_partial = '11-11_13-11-29_CO3Dv1_NeMo_Align3D_local' # 1 to 1
+    name_partial = '11-11_13-09-40_CO3Dv1_NeMo_Align3D_local' # 10 to 1
+    name_regex = '11-12_10-11-07_CO3D_NeMo_Align3D_local' #  10s to 5
+    metrics_dfs = get_categorical_results_from_single_runs(metrics_templates=metrics, categories=categories, age_in_hours=age_in_hours, name_regex=name_regex, metrics_scales=metrics_scales, map_od3d_to_datasets=map_od3d_to_datasets)
+
+    ALLOW_CATEGORIES = None
+    # ALLOW_CATEGORIES = ['hairdryer', 'bicycle', 'suitcase']
     BAN_CATEGORIES = [] #  ['tv', 'motorcycle']
     _TABLE_CATEGORIES_PASCAL3D = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_PASCAL3D))
     _TABLE_CATEGORIES_OBJECTNET3D_3 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_OBJECTNET3D_3))
@@ -253,6 +258,20 @@ def pose_pi6_categories_separate():
     _TABLE_CATEGORIES_CO3D_28 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_CO3D_28))
     _TABLE_CATEGORIES_ZSP = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_ZSP))
     _TABLE_CATEGORIES_YOLO = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_YOLO))
+    if ALLOW_CATEGORIES is not None:
+        _TABLE_CATEGORIES_PASCAL3D = list(
+            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_PASCAL3D))
+        _TABLE_CATEGORIES_OBJECTNET3D_3 = list(
+            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_OBJECTNET3D_3))
+        _TABLE_CATEGORIES_OBJECTNET3D_23 = list(
+            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_OBJECTNET3D_23))
+        _TABLE_CATEGORIES_CO3D_20 = list(
+            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_CO3D_20))
+        _TABLE_CATEGORIES_CO3D_28 = list(
+            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_CO3D_28))
+        _TABLE_CATEGORIES_ZSP = list(filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_ZSP))
+        _TABLE_CATEGORIES_YOLO = list(filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_YOLO))
+
 
     for m, metric_df in enumerate(metrics_dfs):
         if metrics_dataset[m] == DATASET_PASCAL3D:

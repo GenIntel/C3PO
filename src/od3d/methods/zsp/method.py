@@ -1,4 +1,7 @@
 import logging
+
+import od3d.io
+
 logger = logging.getLogger(__name__)
 from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
@@ -51,6 +54,7 @@ class ZSP(OD3D_Method):
 
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
 
+        od3d.io.run_cmd('od3d docker zsp-run &', logger=logger, background=True)
         dataset_src: CO3D = datasets_train['src']
         dataset_ref: CO3D = datasets_train['labeled']
 
@@ -134,8 +138,8 @@ class ZSP(OD3D_Method):
 
                 from od3d.datasets.co3d.enum import PCL_SOURCES
 
-                transform_low_res = OD3D_Transform.create_by_name('scalemask1_centerzoom224')
-                transform_high_res = OD3D_Transform.create_by_name('scalemask1_centerzoom224')
+                transform_low_res = OD3D_Transform.create_by_name('scale_mask_separate_1_centerzoom224')
+                transform_high_res = OD3D_Transform.create_by_name('scale_mask_separate_1_centerzoom224')
                 transform_rescale = 1.
 
                 logger.info(f'ref {r+1} out of {len(ref_mesh_ids)}')
@@ -171,28 +175,35 @@ class ZSP(OD3D_Method):
                 #src_frame = self.transform_train(src_sequences[src_mesh_id].get_frame_by_index(source_frame_index))
 
 
-                if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED or \
-                        dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM or \
-                        dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
-                    ref_sequence_scale = ref_sequences[ref_mesh_id].get_a_src_scale_b_src(CAM_TFORM_OBJ_SOURCES.DROID_SLAM, CAM_TFORM_OBJ_SOURCES.CO3D)
-                    ref_cam_source = CAM_TFORM_OBJ_SOURCES.DROID_SLAM
+                # if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED or \
+                #         dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM or \
+                #         dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
+                #     ref_sequence_scale = ref_sequences[ref_mesh_id].get_a_src_scale_b_src(CAM_TFORM_OBJ_SOURCES.DROID_SLAM, CAM_TFORM_OBJ_SOURCES.CO3D)
+                #     ref_cam_source = CAM_TFORM_OBJ_SOURCES.DROID_SLAM
+                #
+                # else:
+                #     ref_cam_source = CAM_TFORM_OBJ_SOURCES.CO3D
+                #     ref_sequence_scale = torch.Tensor([1.])[None,]
+                #     logger.warning('ref scale = 1.')
+                #
 
-                else:
-                    ref_cam_source = CAM_TFORM_OBJ_SOURCES.CO3D
-                    ref_sequence_scale = torch.Tensor([1.])[None,]
-                    logger.warning('ref scale = 1.')
+                ref_cam_source = CAM_TFORM_OBJ_SOURCES.PCL
+                ref_sequence_scale = torch.Tensor([1.])[None,]
 
-                if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED or \
-                        dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM or \
-                        dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
-                    src_sequences_scales = torch.Tensor([src_sequences[src_mesh_id].get_a_src_scale_b_src(CAM_TFORM_OBJ_SOURCES.DROID_SLAM, CAM_TFORM_OBJ_SOURCES.CO3D) for s, src_mesh_id in enumerate(src_mesh_ids)])
+                # if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED or \
+                #         dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM or \
+                #         dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
+                #     src_sequences_scales = torch.Tensor([src_sequences[src_mesh_id].get_a_src_scale_b_src(CAM_TFORM_OBJ_SOURCES.DROID_SLAM, CAM_TFORM_OBJ_SOURCES.CO3D) for s, src_mesh_id in enumerate(src_mesh_ids)])
+                #
+                #     src_cam_source = CAM_TFORM_OBJ_SOURCES.DROID_SLAM
+                # else:
+                #     src_sequences_scales = torch.Tensor([1. for s, src_mesh_id in enumerate(src_mesh_ids)])
+                #     src_cam_source = CAM_TFORM_OBJ_SOURCES.CO3D
+                #     logger.warning('src scale = 1.')
+                # #show_scene(pts3d=[ref_sequences[ref_mesh_id].get_pcl(PCL_SOURCES.CO3D) for ref_mesh_id in ref_mesh_ids], pts3d_add_translation=True)
 
-                    src_cam_source = CAM_TFORM_OBJ_SOURCES.DROID_SLAM
-                else:
-                    src_sequences_scales = torch.Tensor([1. for s, src_mesh_id in enumerate(src_mesh_ids)])
-                    src_cam_source = CAM_TFORM_OBJ_SOURCES.CO3D
-                    logger.warning('src scale = 1.')
-                #show_scene(pts3d=[ref_sequences[ref_mesh_id].get_pcl(PCL_SOURCES.CO3D) for ref_mesh_id in ref_mesh_ids], pts3d_add_translation=True)
+                src_cam_source = CAM_TFORM_OBJ_SOURCES.PCL
+                src_sequences_scales = torch.Tensor([1. for s, src_mesh_id in enumerate(src_mesh_ids)])
 
                 # data = {'img': batch.rgb, 'cam_tform4x4_obj': batch.cam_tform4x4_obj}
                 # src_H, src_W =
@@ -252,8 +263,8 @@ class ZSP(OD3D_Method):
 
                 if self.config.use_train_only_to_collect_target_data:
                     ref_cam_source = ref_frames_high_res[0].cam_tform_obj_source
-                    ref_sequence_scale = ref_sequences[ref_mesh_id].get_a_src_scale_b_src(
-                        ref_cam_source, CAM_TFORM_OBJ_SOURCES.CO3D)
+                    #ref_sequence_scale = ref_sequences[ref_mesh_id].get_a_src_scale_b_src(
+                    #    ref_cam_source, CAM_TFORM_OBJ_SOURCES.CO3D)
                     target_cam_extr = \
                     torch.stack([ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[
                         None,].repeat(B, 1, 1, 1)
@@ -317,32 +328,31 @@ class ZSP(OD3D_Method):
                     pred_ref_tform_src = pred_ref_tform_srcs[s]
                     all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
-                    if self.config.use_gt_src:
-                        if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED:
-                            gt_ref_tform_src = tform4x4(
-                                inv_tform4x4(ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device,
-                                                                                                               dtype=pred_ref_tform_src.dtype)),
-                                src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_droid_slam_obj.to(device=self.device,
-                                                                                                  dtype=pred_ref_tform_src.dtype))
-                        elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
-                            gt_ref_tform_src = tform4x4(
-                                inv_tform4x4(ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(
-                                    device=self.device, dtype=pred_ref_tform_src.dtype)),
-                                src_sequences[src_mesh_id].labeled_obj_tform_obj.to(device=self.device,
-                                                                                    dtype=pred_ref_tform_src.dtype))
-                        elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.CO3D:
-                            gt_ref_tform_src = tform4x4(
-                                inv_tform4x4(
-                                    ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device,
-                                                                                                  dtype=pred_ref_tform_src.dtype)),
-                                src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_co3dv1_obj.to(device=self.device,
-                                                                                              dtype=pred_ref_tform_src.dtype))
-                        else:
-                            gt_ref_tform_src = torch.eye(4).to(device=self.device)
-                            logger.warning('No gt available ')
-                        diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
-                        logger.info(diff_rot_angle_rad)
-                        results_diff_log_rot[category][r, s] = diff_rot_angle_rad
+                    if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
+                        ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(
+                            device=self.device, dtype=pred_ref_tform_src.dtype)
+                    elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+                        ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(
+                            device=self.device, dtype=pred_ref_tform_src.dtype)
+                    else:
+                        ref_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
+                        logger.warning('No gt available for reference.')
+
+                    if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
+                        src_labeled_obj_tform_obj = src_sequences[src_mesh_id].labeled_obj_tform_obj.to(
+                            device=self.device, dtype=pred_ref_tform_src.dtype)
+                    elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+                        src_labeled_obj_tform_obj = src_sequences[src_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(
+                            device=self.device, dtype=pred_ref_tform_src.dtype)
+                    else:
+                        src_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
+                        logger.warning('No gt available for source.')
+
+                    gt_ref_tform_src = tform4x4(inv_tform4x4(ref_labeled_obj_tform_obj), src_labeled_obj_tform_obj)
+
+                    diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
+                    logger.info(diff_rot_angle_rad)
+                    results_diff_log_rot[category][r, s] = diff_rot_angle_rad
 
         if not self.config.use_train_only_to_collect_target_data:
             results = OD3D_Results()

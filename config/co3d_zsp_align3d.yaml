@@ -1,10 +1,10 @@
 defaults:
   - logger: wandb
   - methods@method.zsp: zsp
-  - datasets@train_datasets.src: co3dv1_10s_zsp_labeled #  co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
-  - datasets@train_datasets.labeled: co3dv1_10s_zsp_labeled # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
+  - datasets@train_datasets.src: co3dv1_10s_zsp_labeled_cuboid_ref #  co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
+  - datasets@train_datasets.labeled: co3dv1_10s_zsp_labeled_cuboid_ref # co3d_no_zsp_5s_labeled_ref co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
   - datasets@val_datasets.main:
-  - datasets@test_datasets.co3d: co3dv1_10s_zsp_labeled # co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
+  - datasets@test_datasets.co3d: co3dv1_10s_zsp_labeled_cuboid_ref # co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
@@ -16,7 +16,7 @@ categories: # bicycle hydrant motorcycle teddybear toaster
 #  - teddybear
 #  - car
 #  - bus
-  - motorcycle
+#  - motorcycle
 #  - keyboard
 #  - handbag
 #  - remote
@@ -31,6 +31,21 @@ categories: # bicycle hydrant motorcycle teddybear toaster
 #  - book
 #  - backpack
 
+# note all modalities requried for zsp
+modalities:
+    - 'size'
+    - 'category'
+    - 'cam_intr4x4'
+    - 'cam_tform4x4_obj'
+    - 'category'
+    - 'rgb'
+    - 'mask'
+    - 'sequence_name'
+    - 'sequence'
+    - 'depth'
+    - 'depth_mask'
+#    - 'mesh'
+
 metrics:
   - metricA
   - metricB
@@ -38,8 +53,10 @@ metrics:
 train_datasets:
   src:
     categories: ${categories}
+    modalities: ${modalities}
   labeled:
     categories: ${categories}
+    modalities: ${modalities}
 
 val_datasets:
   main:

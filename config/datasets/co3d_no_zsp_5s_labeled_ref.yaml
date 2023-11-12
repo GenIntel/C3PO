@@ -16,6 +16,7 @@ preprocess:
   label:
     enabled: False
     override: False
+
 #  mesh:
 #    enabled: True
 #    override: False
@@ -37,41 +38,42 @@ cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
 cam_tform_obj_source: 'labeled_cuboid' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
 pcl_source: 'co3d_clean' # 'co3d_clean' 'droid_slam_clean'
 
-sequences_require_good_cam_movement: True
+sequences_require_good_cam_movement: False
 sequences_require_mesh: False
 sequences_require_pcl: True
 sequences_require_gt_pose: True
 
 categories:
-  - bicycle
-  - truck
-  - train
-  - teddybear
-  - car
-  - bus
-  - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - airplane
-  - toilet
-  - hairdryer
-  - mouse
-  - toaster
-  - hydrant
-  - chair
-  - laptop
-  - book
-  - backpack
-  - cellphone # from cellphone on, no zsp categories
-  - microwave
-  - bench
-  - bottle
-  - couch
+#  - bicycle
+#  - truck
+#  - train
+#  - teddybear
+#  - car
+#  - bus
+#  - motorcycle
+#  - keyboard
+#  - handbag
+#  - remote
+#  - airplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
+#  - chair
+#  - laptop
+#  - book
+#  - backpack
+#  - cellphone # from cellphone on, no zsp categories
+#  - microwave
+#  - bench
+#  - bottle
+#  - couch
   - cup
-  - suitcase
-  - tv
+#  - suitcase
+#  - tv
 #
+
 dict_nested_frames:
   microwave:
     '404_53420_104078':
@@ -191,11 +193,11 @@ dict_nested_frames:
     # '30_1153_3436': # not required
   hairdryer:
     '101_11750_20715':
-    '20_713_1324':
     '306_32185_60457':
     '28_930_2081':
     '31_1294_3987':
-    # '252_27081_55271': # not required
+    '252_27081_55271':
+    # '20_713_1324': # not required, but also folded
   couch:
     '193_20843_43364':
     '193_20797_40499':

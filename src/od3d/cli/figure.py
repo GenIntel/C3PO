@@ -21,21 +21,25 @@ from od3d.cv.visual.show import show_imgs, get_img_from_plot, show_img
 from od3d.cv.visual.crop import crop_white_border_from_img
 import matplotlib.pyplot as plt
 from od3d.cv.visual.resize import resize
+from od3d.datasets.pascal3d.dataset import Pascal3D
+from od3d.datasets.objectnet3d.dataset import ObjectNet3D
 
+from od3d.methods.nemo import NeMo
+from pathlib import Path
 
+from omegaconf.omegaconf import OmegaConf  # bottle, suitcase, cup, airplane, microwave, tv, train, hairdryer, remote
+from od3d.cv.transforms.transform import OD3D_Transform
+import torch.utils.data
+from od3d.cv.geometry.transform import inv_tform4x4
+from tqdm import tqdm
+import open3d
 
 @app.command()
 def viewpoints():
     logging.basicConfig(level=logging.INFO)
-    from od3d.datasets.pascal3d.dataset import Pascal3D
-    from od3d.datasets.objectnet3d.dataset import ObjectNet3D
-    from omegaconf.omegaconf import OmegaConf #  bottle, suitcase, cup, airplane, microwave, tv, train, hairdryer, remote
-    from od3d.cv.transforms.transform import OD3D_Transform
-    import torch.utils.data
-    from od3d.cv.geometry.transform import inv_tform4x4
-    from tqdm import tqdm
 
-    import open3d
+
+
     bunny_data = open3d.data.BunnyMesh()
     bunny_mesh_open3d = open3d.io.read_triangle_mesh(bunny_data.path)
     bunny_mesh = Meshes.load_from_meshes([Mesh.from_o3d(bunny_mesh_open3d)])
@@ -232,7 +236,52 @@ def mv_pose():
     logging.basicConfig(level=logging.INFO)
     device = 'cuda'
     dtype = torch.float
-    co3d = CO3D.create_by_name('co3d_5s_no_zsp_aligned') #co3d_5s_no_zsp_labeled 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+
+    run_name = '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm'
+    mesh_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_20s_to_5s_mesh/r4/mesh/bicycle/mesh.ply')
+    aligned_name = 'all_20s_to_5s_mesh/r4'
+    # od3d bench rsync -r 11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm
+
+    # /misc/lmbraid19/sommerl/exps/11-11_20-30-27_CO3D_NeMo_cat1_bicycle_ref0_filtered_mesh_slurm/nemo.ckpt
+
+    #config_loaded.train.transform.transforms[0].config = None
+    #config_loaded.categories = ['bicycle']
+    #config_loaded.fpaths_meshes = {'bicycle': ''}
+    config_transform = od3d.io.read_config_intern(rfpath=Path("methods").joinpath('transform', f"scale_mask_shorter_1_centerzoom512.yaml"))
+    nemo = NeMo.create_by_name('nemo',
+                               logging_dir=Path('nemo_out'),
+                               config={'texture_dataset': None,
+                                        'train': {'transform': {'transforms': [config_transform]}},
+                                       'categories': ['bicycle'],
+                                       'fpaths_meshes': {'bicycle': str(mesh_fpath)},
+                                       'checkpoint': f'/misc/lmbraid19/sommerl/exps/{run_name}/nemo.ckpt'})
+    config_dataset = {'categories': ['bicycle'], 'dict_nested_frames': {'val': ['n03792782_687']}} # n03792782_6218, n03792782_687
+    dataset = ObjectNet3D.create_by_name('objectnet3d', config=config_dataset)
+    dataset.transform = nemo.transform_train  # OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False,
+                                             collate_fn=dataset.collate_fn, num_workers=4)
+    nemo.net.to(device=device)
+    nemo.net.eval()
+    # next(nemo.net.parameters()).is_cuda
+    for i, batch in tqdm(enumerate(dataloader)):
+        if torch.cuda.is_available():
+            batch.to(device=device)
+
+        from od3d.cv.visual.blend import blend_rgb
+        batch_res = nemo.inference_batch_single_view(batch)
+
+        #batch_res.keys()
+        pred_cam_tform4x4_obj = batch_res['cam_tform4x4_obj']
+        pred_verts_ncds = nemo.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=pred_cam_tform4x4_obj,
+                                             categories_ids=batch.label, size=batch.size,
+                                             down_sample_rate=1., pre_rendered=False)
+        for b in range(len(batch)):
+            img_in_the_wild = blend_rgb(resize(batch.rgb[b], scale_factor=1.), pred_verts_ncds[b], alpha1=0.3, alpha2=0.7)
+            show_img(img_in_the_wild, fpath='mv_pose_in_the_wild.png')
+
+    samples_count = 3
+    sequences_count = 3
+    co3d = CO3D.create_by_name('co3d_no_zsp_20s_aligned', config={'aligned_name': aligned_name, 'sequences_count_max_per_category': sequences_count}) # co3d_no_zsp_20s_aligned #co3d_5s_no_zsp_labeled 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
     categories = co3d.categories
     sequences = co3d.get_sequences()
     sequences_unique_names = [seq.name_unique for seq in sequences]
@@ -259,7 +308,7 @@ def mv_pose():
     # sequences[category_instance_ids[0]].categorical_pca_V = categorical_pca_V
 
     while True:
-        samples_count = 5
+
         rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=samples_count)
         seq1 = sequences[rand_category_rand_instance_ids[0]]
         cams_imgs = []
@@ -283,12 +332,13 @@ def mv_pose():
         #pts3d_colors = seq1.get_pcl_colors(pcl_source=seq1.pcl_source)
         from od3d.cv.visual.show import show_scene
         mesh = Meshes.load_from_meshes([seq1.get_mesh(mesh_source=CUBOID_SOURCES.ALIGNED)], device=device)
+        #mesh = Meshes.load_from_files(fpaths_meshes=[mesh_fpath], device=device)
         mesh.rgb = mesh.get_verts_ncds_cat_with_mesh_ids()
         #pts3d = transf3d_broadcast(pts3d=pts3d.to(device=device, dtype=dtype),
         #                           transf4x4=seq1.droid_slam_aligned_tform_droid_slam.to(device=device))
         # meshes=mesh,
 
-        cams_imgs_depth_scale=0.2
+        cams_imgs_depth_scale=0.3
         viewpoints_count = 5
         logger.info('rendering real images...')
         imgs_real = show_scene(meshes=mesh, cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=viewpoints_count, return_visualization=True, crop_white_border=True, cams_imgs_depth_scale=cams_imgs_depth_scale, cams_show_wireframe=False)
@@ -311,8 +361,9 @@ def mv_pose():
             img_real = crop_white_border_from_img(imgs_real[i], white_pad=30)
             img_rendered = crop_white_border_from_img(imgs_rendered[i], white_pad=30)
             img_rendered = resize(img_rendered, scale_factor=img_real.shape[-2]/img_rendered.shape[-2])
+            img_in_the_wild = resize(img_in_the_wild.detach().cpu(), scale_factor=img_real.shape[-2]/img_in_the_wild.shape[-2])
             logger.info('writing img...')
-            show_imgs(torch.cat([img_real, img_rendered], dim=-1), height=640, width=1280, fpath=f'mv_pose_{i}.png')
+            show_imgs(torch.cat([img_real * 255, img_rendered* 255, img_in_the_wild], dim=-1), height=640, width=1280, fpath=f'mv_pose_{i}.png')
 
 @app.command()
 def teaser():

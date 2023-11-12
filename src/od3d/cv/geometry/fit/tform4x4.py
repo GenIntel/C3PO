@@ -111,7 +111,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
 
     proposal_tform_pts = transf3d_broadcast(pts3d=pts[None,], transf4x4=tform4x4[:, None])
 
-    norm_p = 1
+    norm_p = 2
 
     # PxNxR
     # dist_ref_geometry = (proposal_tform_pts[:, :, None] - pts_ref[None, None,]).norm(dim=-1)

@@ -1,6 +1,6 @@
 defaults:
-  - /methods/transform@train.transform: scalemask1_centerzoom224
-  - /methods/transform@test.transform: scalemask1_centerzoom224
+  - /methods/transform@train.transform: scale_mask_separate_1_centerzoom224
+  - /methods/transform@test.transform: scale_mask_separate_1_centerzoom224
   - /methods/dataloader@train.dataloader: default
   - /methods/dataloader@test.dataloader: default
 

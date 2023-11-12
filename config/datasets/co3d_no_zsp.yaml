@@ -3,7 +3,7 @@ defaults:
 
 name: co3d_no_zsp
 
-sequences_count_max_per_category: 10
+sequences_count_max_per_category: 50
 sequences_sort_pcl_score: True
 
 preprocess:
@@ -14,7 +14,7 @@ preprocess:
     enabled: False
     override: False
   label:
-    enabled: True
+    enabled: False
     override: False
 #  mesh:
 #    enabled: True
@@ -38,7 +38,7 @@ cam_tform_obj_source: 'pcl' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'dro
 pcl_source: 'co3d_clean' # 'co3d_clean' 'droid_slam_clean'
 
 sequences_require_good_cam_movement: True
-sequences_require_mesh: False
+sequences_require_mesh: True
 sequences_require_pcl: True
 sequences_require_gt_pose: True
 
