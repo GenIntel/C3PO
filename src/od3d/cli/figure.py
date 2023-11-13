@@ -136,7 +136,7 @@ def align3d():
         #uniform_objs_tform_obj = get_spherical_uniform_tform4x4(azim_min = -math.pi / 2 , azim_max= + math.pi / 2, azim_steps=5,
         #                                                        elev_min=-math.pi / 2, elev_max=-math.pi / 2,
         #                                                        elev_steps=1, theta_min=0., theta_max=0., theta_steps=1).to(device=device)
-        P = 4
+        P = 3
 
         seq1 = sequences[rand_category_rand_instance_ids[0]]
         seq2 = sequences[rand_category_rand_instance_ids[1]]
@@ -161,7 +161,13 @@ def align3d():
         # sequences[rand_category_rand_instance_ids[0]]
         uniform_objs_tform_obj = fit_tform4x4(pts=pts2, pts_ref=pts1, pts_ids=pts_ids, dist_ref=dist_2_1)
 
-        _, proposal_dist_ref_geo_avg, proposal_dist_src_ref_2d_ids, proposal_dist_src_ref_weights = score_tform4x4_fit(pts=pts2, pts_ref=pts1, tform4x4=uniform_objs_tform_obj, dist_ref=dist_2_1, return_dists=True, return_weights=True, cyclic_weight_temp=0.7)
+        dist_appear_weight = 0.1
+        _, proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg, proposal_dist_src_ref_2d_ids, proposal_dist_src_ref_weights = \
+            score_tform4x4_fit(pts=pts2, pts_ref=pts1, tform4x4=uniform_objs_tform_obj, dist_ref=dist_2_1, return_dists=True, return_weights=True, cyclic_weight_temp=0.7, dist_appear_weight=dist_appear_weight)
+
+
+        proposal_dist_ref_geo_avg = proposal_dist_ref_geo_avg * (1. - dist_appear_weight)
+        proposal_dist_ref_appear_avg = proposal_dist_ref_appear_avg * dist_appear_weight
 
         from od3d.cv.select import batched_index_fill
         #mesh1_weights = torch.zeros_like(mesh1.rgb[:, :1])
@@ -208,20 +214,28 @@ def align3d():
         H, W = imgs.shape[-2:]
         # show_imgs(imgs, height=640, width=1280)
 
-        fig, ax = plt.subplots(P, 1, figsize=(2, 5))
+        max_y = (proposal_dist_ref_geo_avg + proposal_dist_ref_appear_avg).max().item()
+        fig, ax = plt.subplots(P, 1, figsize=(2, 6))
         for p in range(P):
-            x = [''] #, 'appearance']
-            y = [proposal_dist_ref_geo_avg[p].item()] #, proposal_dist_ref_geo_avg[p].item()]
-            bar_labels = ['geometry'] #, 'appearance']
-            bar_colors = ['tab:grey'] #, 'tab:green']
-            ax[p].bar(x, y, label=bar_labels, color=bar_colors,  width=0.02)
-            ax[p].set_ylabel(None) # 'distance'
+            dist_geo = proposal_dist_ref_geo_avg[p].item()
+            dist_appear = proposal_dist_ref_appear_avg[p].item()
+            dist_total = dist_geo + dist_appear
+            #if p == P-1:
+            #    x = ['total', 'geometry', 'appearance']
+            #else:
+            x = [0, 1, 2] #, 'appearance']
+            y = [dist_total, dist_geo, dist_appear]
+            bar_labels = ['total', 'geometry', 'appearance']
+            bar_colors = ['cornflowerblue', 'slategrey', 'lightgreen'] #''tab:green']
+            ax[p].bar(x, y, label=bar_labels, color=bar_colors,  width=0.8)
+            if p == 0:
+                ax[p].legend(title='')
+            # ax[p].set_ylabel(None) # 'distance'
             ax[p].set_title('')
             ax[p].set_xticks([], minor=False)
             ax[p].set_yticks([], minor=False)
-            ax[p].set_ylim([0., proposal_dist_ref_geo_avg.max().item()* 1.1])
-            ax[p].set_xlim([-0.03, 0.03])
-
+            ax[p].set_ylim([0., max_y * 1.1])
+            ax[p].set_xlim([-0.55, 2.55])
             # ax[p].legend(title='Distance')
 
         img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
@@ -230,9 +244,179 @@ def align3d():
         show_img(total_imgs, height=1080, width=1980, fpath='method_align3d.png')
         show_img(total_imgs, height=1080, width=1980)
 
+@app.command()
+def mv_pose_inference():
+    logging.basicConfig(level=logging.INFO)
+    device = 'cuda'
+    dtype = torch.float
+
+    run_name = '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm'
+    mesh_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_20s_to_5s_mesh/r4/mesh/bicycle/mesh.ply')
+    aligned_name = 'all_20s_to_5s_mesh/r4'
+    # od3d bench rsync -r 11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm
+
+    # /misc/lmbraid19/sommerl/exps/11-11_20-30-27_CO3D_NeMo_cat1_bicycle_ref0_filtered_mesh_slurm/nemo.ckpt
+
+    #config_loaded.train.transform.transforms[0].config = None
+    #config_loaded.categories = ['bicycle']
+    #config_loaded.fpaths_meshes = {'bicycle': ''}
+    config_transform = od3d.io.read_config_intern(rfpath=Path("methods").joinpath('transform', f"scale_mask_shorter_1_centerzoom512.yaml"))
+    nemo = NeMo.create_by_name('nemo',
+                               logging_dir=Path('nemo_out'),
+                               config={'texture_dataset': None,
+                                        'train': {'transform': {'transforms': [config_transform]}},
+                                       'categories': ['bicycle'],
+                                       'fpaths_meshes': {'bicycle': str(mesh_fpath)},
+                                       'checkpoint': f'/misc/lmbraid19/sommerl/exps/{run_name}/nemo.ckpt',
+                                       'multiview': {'batch_size': 3}
+                                       })
+    #config_dataset = {'categories': ['bicycle'], 'dict_nested_frames': {'val': ['n03792782_687']}} # n03792782_6218, n03792782_687
+
+    sequences_count = 10
+    samples_count = 3
+    samples_max_position = 2
+    mv_final_count = 2
+    category = 'bicycle'
+
+    co3d = CO3D.create_by_name('co3d_no_zsp_20s', config={'categories': [category], 'aligned_name': aligned_name, 'sequences_count_max_per_category': sequences_count}) # co3d_no_zsp_20s_aligned #co3d_5s_no_zsp_labeled 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+    categories = co3d.categories
+    sequences = co3d.get_sequences()
+    sequences_unique_names = [seq.name_unique for seq in sequences]
+    instances_count = len(sequences)
+    map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in sequences_unique_names])
+    instance_ids = torch.LongTensor(list(range(instances_count)))
+
+    dict_category_sequences = {category: list(sequence_dict.keys()) for category, sequence_dict in co3d.dict_nested_frames.items()}
+    co3d.transform = nemo.transform_train
+    # co3d.transform = nemo.transform_train
+
+    dataset_sub = co3d.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
+                                                  frames_count_max_per_sequence=nemo.config.multiview.batch_size)
+    dataset_sub.transform = nemo.transform_train
+
+    dataloader = torch.utils.data.DataLoader(dataset=dataset_sub, batch_size=nemo.config.multiview.batch_size,
+                                             shuffle=False,
+                                             collate_fn=dataset_sub.collate_fn,
+                                             num_workers=nemo.config.test.dataloader.num_workers,
+                                             pin_memory=nemo.config.test.dataloader.pin_memory)
+
+    nemo.meshes.to(device=device)
+    nemo.net.to(device=device)
+    nemo.net.eval()
+    from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+    # next(nemo.net.parameters()).is_cuda
+    for i, batch in tqdm(enumerate(dataloader)):
+        if torch.cuda.is_available():
+            batch.to(device=device)
+
+        # show_imgs(rgbs=batch.rgb[:, :5])
+        batch_res = nemo.inference_batch_multiview(batch)
+        samples_cam_tform4x4_obj = batch_res['samples_cam_tform4x4_obj']
+        pred_cam_tform4x4_obj = batch_res['cam_tform4x4_obj']
+        C = samples_cam_tform4x4_obj.shape[1]
+        sim = batch_res['samples_sim'].mean(dim=0)  #  batch_res['samples_sim']
+        samples_ids = random.sample(torch.arange(C).tolist(), samples_count)
+        samples_ids[samples_max_position] = sim.argmax().item()
+        samples_ids = torch.LongTensor(samples_ids).to(device=device)
+        samples_sim = sim[samples_ids]
+
+        sims = torch.cat([torch.Tensor([samples_sim.min(), samples_sim.min()]).to(device=device), samples_sim, batch_res['sim'].mean(dim=0)], dim=0).detach()
+        sims = (sims - sims.min()) / (sims.max() - sims.min())
+        sims[2:] += 0.1
+
+        S = len(sims)
+        fig, ax = plt.subplots(1, 1, figsize=(6, 1))
+        x = torch.arange(S).tolist()
+        y = (sims).tolist()
+        #bar_labels = ['total', 'geometry', 'appearance']
+        #label = bar_labels
+        #bar_colors = ['cornflowerblue', 'slategrey', 'lightgreen'] #''tab:green']
+        # color=bar_colors
+        ax.bar(x, y,  color='slategrey', width=0.4)
+        # ax.legend(title='log probability')
+        # ax[p].set_ylabel(None) # 'distance'
+        ax.set_title('')
+        ax.set_xticks([], minor=False)
+        ax.set_yticks([], minor=False)
+        ax.set_ylim([0., 1.2])
+        ax.set_xlim([-0.55, S - 1 + 0.55])
+        img_log_prob = get_img_from_plot(ax=ax, fig=fig, axis_off=True)
+        #img_log_prob = resize(img_log_prob, )
+        # show_img(img_log_prob)
+
+        cam_intr4x4 = batch.cam_intr4x4
+        img_feats = nemo.net(batch.rgb)
+        size = torch.Tensor([img_feats.shape[2] * nemo.down_sample_rate, img_feats.shape[3] * nemo.down_sample_rate]).to(device=device)
+        B, F, H, W = img_feats.shape
+        mesh_feats = nemo.meshes.render_feats(cams_tform4x4_obj=samples_cam_tform4x4_obj,
+                                              cams_intr4x4=cam_intr4x4[:, None],
+                                              imgs_sizes=size, meshes_ids=batch.label,
+                                              modality=MESH_RENDER_MODALITIES.FEATS,
+                                              down_sample_rate=nemo.down_sample_rate,
+                                              broadcast_batch_and_cams=True)
+        C = mesh_feats.shape[1]
+        _, _, pca_V = torch.pca_lowrank(torch.cat([img_feats.permute(0, 2, 3, 1).reshape(-1, F), mesh_feats.permute(0, 1, 3, 4, 2).reshape(-1, F)], dim=0))
+        img_feats_pca = torch.matmul(img_feats.permute(0, 2, 3, 1).reshape(-1, F), pca_V[:, 1:4]).reshape(B, H, W, -1).permute(0, 3, 1, 2)
+        mesh_feats_pca = torch.matmul(mesh_feats.permute(0, 1, 3, 4, 2).reshape(-1, F), pca_V[:, 1:4]).reshape(B, C, H, W, -1).permute(0, 1, 4, 2, 3)
+        mesh_feats_pca_mask_bg = (mesh_feats_pca == 0.).all(dim=2, keepdim=True)
+
+
+
+
+        mesh_feats_optimal = nemo.meshes.render_feats(cams_tform4x4_obj=pred_cam_tform4x4_obj,
+                                                      cams_intr4x4=cam_intr4x4,
+                                                      imgs_sizes=size, meshes_ids=batch.label,
+                                                      modality=MESH_RENDER_MODALITIES.FEATS,
+                                                      down_sample_rate=nemo.down_sample_rate,
+                                                      broadcast_batch_and_cams=False)
+        mesh_feats_optimal_pca = torch.matmul(mesh_feats_optimal.permute(0, 2, 3, 1).reshape(-1, F), pca_V[:, 1:4]).reshape(B, H, W, -1).permute(0, 3, 1, 2)
+
+        mesh_feats_optimal_pca_mask_bg = (mesh_feats_optimal_pca == 0.).all(dim=1, keepdim=True)
+
+        feats_pca = torch.cat([img_feats_pca[:, None], mesh_feats_pca[:, samples_ids], mesh_feats_optimal_pca[:, None]], dim=1)
+        feats_pca = (feats_pca - feats_pca.min()) / (feats_pca.max()- feats_pca.min())
+        feats_pca[:, 1:-1][mesh_feats_pca_mask_bg[:, samples_ids].expand(*feats_pca[:, 1:-1].shape)] = 1.
+        feats_pca[:, -1][mesh_feats_optimal_pca_mask_bg.expand(*feats_pca[:, -1].shape)] = 1.
+
+        rgb = (batch.rgb - batch.rgb.min()) / (batch.rgb.max() - batch.rgb.min())
+        rgb_no_rgb_mask = (rgb < 0.1).all(dim=1, keepdim=True)
+        rgb[rgb_no_rgb_mask.expand(*rgb.shape)] = 1.
+        _, _, H_rgb, W_rgb = batch.rgb.shape
+        scale_factor = H_rgb / H
+        feats_pca = resize(feats_pca.reshape(-1, 3, H, W), scale_factor=H_rgb / H, mode='nearest_v2').reshape(B, -1, 3, int(H * scale_factor), int(W* scale_factor))
+        img = torch.cat([rgb[:, None], feats_pca], dim=1)
+        from od3d.cv.visual.show import imgs_to_img
+        img = imgs_to_img(img[:mv_final_count], pad = 10)
+        img_log_prob = (resize(img_log_prob, scale_factor=img.shape[-1] / img_log_prob.shape[-1])).to(device=device)
+        img_mv_pose_inference = torch.cat([img * 255, img_log_prob], dim=-2)
+        show_img(rgb=img_mv_pose_inference, height=1080, width=1980, fpath='mv_pose_inference.png')
+        show_img(rgb=img_mv_pose_inference, height=1080, width=1980)
+
+
+    rand_category_id = categories.index(category) # 'car', 'chair',
+    rand_category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+
+    # # CALCULATING CATEGORICAL PCA
+    # category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+    # categorical_features = []
+    # for instance_id_in_category, instance_id in enumerate(category_instance_ids):
+    #     instance_feats = sequences[instance_id].feats
+    #
+    #     if isinstance(instance_feats, List):
+    #         categorical_features += torch.cat([vert_feats for vert_feats in instance_feats], dim=0)
+    #     else:
+    #         categorical_features.append(instance_feats)
+    # categorical_features = torch.stack(categorical_features, dim=0)
+    # _, _, categorical_pca_V = torch.pca_lowrank(categorical_features)
+    # sequences[category_instance_ids[0]].categorical_pca_V = categorical_pca_V
+
+
+    rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=1)
+    seq1 = sequences[rand_category_rand_instance_ids[0]]
+
 
 @app.command()
-def mv_pose():
+def mv_pose_train():
     logging.basicConfig(level=logging.INFO)
     device = 'cuda'
     dtype = torch.float
@@ -276,7 +460,9 @@ def mv_pose():
                                              categories_ids=batch.label, size=batch.size,
                                              down_sample_rate=1., pre_rendered=False)
         for b in range(len(batch)):
-            img_in_the_wild = blend_rgb(resize(batch.rgb[b], scale_factor=1.), pred_verts_ncds[b], alpha1=0.3, alpha2=0.7)
+            img_rgb = batch.rgb[b].clone()
+            img_rgb = (img_rgb - img_rgb.min()) / (img_rgb.max() - img_rgb.min())
+            img_in_the_wild = blend_rgb(resize(img_rgb, scale_factor=1.), pred_verts_ncds[b], alpha1=0.7, alpha2=0.7)
             show_img(img_in_the_wild, fpath='mv_pose_in_the_wild.png')
 
     samples_count = 3
@@ -363,7 +549,7 @@ def mv_pose():
             img_rendered = resize(img_rendered, scale_factor=img_real.shape[-2]/img_rendered.shape[-2])
             img_in_the_wild = resize(img_in_the_wild.detach().cpu(), scale_factor=img_real.shape[-2]/img_in_the_wild.shape[-2])
             logger.info('writing img...')
-            show_imgs(torch.cat([img_real * 255, img_rendered* 255, img_in_the_wild], dim=-1), height=640, width=1280, fpath=f'mv_pose_{i}.png')
+            show_imgs(torch.cat([img_real * 255, img_rendered* 255, img_in_the_wild], dim=-1), height=640, width=1280, fpath=f'mv_pose_train_{i}.png')
 
 @app.command()
 def teaser():

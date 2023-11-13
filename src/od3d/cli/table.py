@@ -197,7 +197,7 @@ def pose_pi6_categories_separate():
     from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
 
 
-    age_in_hours = 100 # 17
+    age_in_hours = 103 # 17
     configs = []
 
     # ###### FROM MULTIPLE RUNS
@@ -208,12 +208,12 @@ def pose_pi6_categories_separate():
     # metrics_scales = [100, 100, 100, 100]
     # metrics_names = ['PASCAL3D [%]', 'ObjectNet3D [%]', 'CO3D 5s [%]', 'CO3D ZSP 10s [%]']
     # name_partial = '_CO3D_NeMo_'
-    # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
+    # #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
     # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_cuboid.*'
-    # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_.*'
+    # #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_.*'
     # metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales, age_in_hours=age_in_hours, configs=configs, name_regex=name_regex)
-
-    #
+    # #
+    # #
     # # ###### FROM SINGLE RUNS
     metrics = ['pose/prefix/CATEGORY_acc_pi6']
     #metrics = ['test/pascal3d_test/pose/prefix/CATEGORY_acc_pi6']
@@ -245,7 +245,8 @@ def pose_pi6_categories_separate():
     #name_partial = '11-03_08-26-52_CO3D_ZSP_src_5s_ref_5s_local'
     name_partial = '11-11_13-11-29_CO3Dv1_NeMo_Align3D_local' # 1 to 1
     name_partial = '11-11_13-09-40_CO3Dv1_NeMo_Align3D_local' # 10 to 1
-    name_regex = '11-12_10-11-07_CO3D_NeMo_Align3D_local' #  10s to 5
+    name_regex = '11-12_10-11-07_CO3D_NeMo_Align3D_local' #  ours 10s to 5
+    name_regex = '11-12_15-25-58_CO3D_ZSP_local' # zsp 10s to 5s
     metrics_dfs = get_categorical_results_from_single_runs(metrics_templates=metrics, categories=categories, age_in_hours=age_in_hours, name_regex=name_regex, metrics_scales=metrics_scales, map_od3d_to_datasets=map_od3d_to_datasets)
 
     ALLOW_CATEGORIES = None

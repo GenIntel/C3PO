@@ -11,4 +11,4 @@ def blend_rgb(rgb1, rgb2, alpha1=0.5, alpha2=0.5):
     if rgb2.dtype == torch.bool or rgb2.dtype == torch.float:
         rgb2 = rgb_to_range01(rgb2)
         rgb2 = rgb2 * 255.
-    return (alpha1 * rgb1 + alpha2 * rgb2).to(torch.uint8)
+    return (alpha1 * rgb1 + alpha2 * rgb2).clamp(0, 255).to(torch.uint8)

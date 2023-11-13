@@ -552,7 +552,7 @@ def show_pcl(verts, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tens
     input('bla')
 
 
-def imgs_to_img(rgbs):
+def imgs_to_img(rgbs, pad=1):
     # rgb: K x 3 x H x W / GH x GW x 3 x H x W
 
     # , masks_mulitply=None, masks_overlay=None
@@ -560,7 +560,7 @@ def imgs_to_img(rgbs):
     #if masks is not None:
     #    rgb = (rgbs + masks) / 2.0
 
-    rgbs = torch.nn.functional.pad(rgbs, (1, 1, 1, 1), "constant", 1.0)
+    rgbs = torch.nn.functional.pad(rgbs, (pad, pad, pad, pad), "constant", 1.0)
     #margin = 2
     #torch.nn.functional.pad(rgbs, (1, 1), "constant", 0)
 
@@ -598,14 +598,14 @@ def imgs_to_img(rgbs):
     return rgb
 
 
-def fpaths_to_rgb(fpaths: List[Path], H: int, W: int):
+def fpaths_to_rgb(fpaths: List[Path], H: int, W: int, pad=1):
 
     rgbs = torch.stack([resize(torchvision.io.read_image(path=str(fpath)), H_out=H, W_out=W) for fpath in fpaths], dim=0)
-    rgb = imgs_to_img(rgbs)
+    rgb = imgs_to_img(rgbs, pad=pad)
     return rgb
 
-def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=None):
-    rgb = imgs_to_img(rgbs)
+def show_imgs(rgbs, duration=0, vwriter=None, fpath=None, height=None, width=None, pad=1):
+    rgb = imgs_to_img(rgbs, pad=pad)
     return show_img(rgb, duration, vwriter, fpath, height, width)
 
 def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None, normalize=False):

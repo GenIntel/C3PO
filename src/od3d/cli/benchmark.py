@@ -40,6 +40,7 @@ def get_nested_value(data, key):
             return None  # Key not found
     return value
 
+
 def get_dataframe(configs=[], metrics=[], name_regex=None, name_regex_groups=[], age_in_hours=None, name_partial_ban=None, filter_runs_with_metrics=True):
     logging.basicConfig(level=logging.INFO)
     import wandb
@@ -585,6 +586,61 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         time.sleep(10)
 
 
+def get_failed_runs(age_in_hours=None):
+    logging.basicConfig(level=logging.INFO)
+    import wandb
+    config = od3d.io.load_hierarchical_config()
+
+    # Initialize wandb
+     # wandb.init(project=config.logger.wandb_project_name)
+
+    # Access the API
+    api = wandb.Api()
+
+    # config.logger.wandb_project_name
+    # Fetch all the runs in your project
+    runs = api.runs(config.logger.wandb_project_name)
+
+    if age_in_hours is not None:
+        runs = list(filter(
+            lambda run: get_timestamp_from_string(run.name) > datetime.datetime.now() - datetime.timedelta(hours=age_in_hours),
+            runs))
+        #logger.info('after filtering timestamp...')
+        #logger.info(runs)
+        logger.info(f'after timestamp {len(runs)}, age in hours {age_in_hours}')
+
+    runs = list(filter(lambda run: run.state =='failed' or run.state=='crashed', runs))
+    # runs_states = [run.state for run in runs]
+    runs_names = [run.name for run in runs]
+    logger.info(f'found {len(runs)} failed or crashed runs')
+
+
+    return runs_names
+
+
+
+@app.command()
+def restart_slurm(age_in_hours: int = typer.Option(None, '-h', '--hours')):
+    from pathlib import Path
+    from od3d.benchmark.benchmark import get_timestamp_as_string
+
+    logging.basicConfig(level=logging.INFO)
+    runs_names = get_failed_runs(age_in_hours=age_in_hours)
+
+    cfg = od3d.io.read_config_intern(rfpath=Path('platform/local.yaml'))
+    for run_name in runs_names:
+        # cfg.path_home
+        local_tmp_config_fpath = Path(cfg.path_home).joinpath('tmp', f'config_{run_name}.yaml')
+        try:
+            cfg_old = od3d.io.read_config_extern(local_tmp_config_fpath)
+            timestamp_str = get_timestamp_as_string()
+            cfg_old.run_name = timestamp_str + run_name[len(timestamp_str):]
+
+            logger.info(f'restarting {run_name}...')
+            bench_single_method_slurm(cfg_old)
+        except Exception as e:
+            logger.info(e)
+    logger.info(runs_names)
 
 @app.command()
 def single_local(config_fpath: str = typer.Option(None, '-c', '--config')):
