@@ -118,56 +118,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     dist_ref_geometry = torch.cdist(proposal_tform_pts, pts_ref[None,], p=norm_p)  #
     dist_ref_geo_max = torch.cdist(pts_ref[None,], pts_ref[None,], p=norm_p).max()  #
     dist_src_geo_max = torch.cdist(pts[None,], pts[None,], p=norm_p).max()  #
-
-    #if (~dist_ref_geometry.isfinite()).any():
-    #    logger.warning(f'There are some infinite vlaues in dist geometry. WHY?')
-
-
-    if not use_appear_argmin:
-        # PxN
-        proposal_tform_pts_nn_ref_id = dist_ref_geometry.argmin(dim=-1)
-        proposal_tform_pts_id = torch.arange(proposal_tform_pts_nn_ref_id.shape[-1]).view(1, -1).\
-            expand(proposal_tform_pts_nn_ref_id.shape).to(device=device)
-
-        # PxR
-        proposal_tform_pts_ref_nn_pts_id = dist_ref_geometry.argmin(dim=-2)
-        proposal_tform_pts_ref_id = torch.arange(proposal_tform_pts_ref_nn_pts_id.shape[-1]).view(1, -1).\
-            expand(proposal_tform_pts_ref_nn_pts_id.shape).to(device=device)
-
-    else:
-        argmin_ref_from_src = dist_ref.argmin(dim=-1) # N,
-        argmin_src_from_ref = dist_ref.argmin(dim=-2) # R,
-
-        src_cyclic_dist = (pts - pts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1)
-        ref_cyclic_dist = (pts_ref - pts_ref[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1)
-
-        # PxN?
-        proposal_tform_pts_nn_ref_id = argmin_ref_from_src
-        proposal_tform_pts_nn_ref_id = proposal_tform_pts_nn_ref_id[None].expand(P, proposal_tform_pts_nn_ref_id.shape[-1]).contiguous()
-        proposal_tform_pts_id = torch.arange(proposal_tform_pts_nn_ref_id.shape[-1]).view(1, -1). \
-            expand(proposal_tform_pts_nn_ref_id.shape).to(device=device)
-
-        src_cyclic_mask = src_cyclic_dist <= src_cyclic_dist.quantile(q=0.1)
-        proposal_tform_pts_nn_ref_id = proposal_tform_pts_nn_ref_id[:, src_cyclic_mask]
-        proposal_tform_pts_id = proposal_tform_pts_id[:, src_cyclic_mask]
-
-        # PxR?
-        proposal_tform_pts_ref_nn_pts_id = argmin_src_from_ref
-        proposal_tform_pts_ref_nn_pts_id = proposal_tform_pts_ref_nn_pts_id[None].expand(P, proposal_tform_pts_ref_nn_pts_id.shape[-1]).contiguous()
-        proposal_tform_pts_ref_id = torch.arange(proposal_tform_pts_ref_nn_pts_id.shape[-1]).view(1, -1). \
-            expand(proposal_tform_pts_ref_nn_pts_id.shape).to(device=device)
-
-        ref_cyclic_mask = ref_cyclic_dist <= ref_cyclic_dist.quantile(q=0.1)
-        proposal_tform_pts_ref_nn_pts_id = proposal_tform_pts_ref_nn_pts_id[:, ref_cyclic_mask]
-        proposal_tform_pts_ref_id = proposal_tform_pts_ref_id[:, ref_cyclic_mask]
-
-    # PxNx2
-    proposal_tform_pts_nn_ref_id_2D = torch.stack([proposal_tform_pts_id, proposal_tform_pts_nn_ref_id], dim=-1)
-    proposal_tform_pts_nn_ref_id_2D = proposal_tform_pts_nn_ref_id_2D.clone()
-    # PxRx2
-    proposal_tform_pts_ref_nn_pts_id_2D = torch.stack([proposal_tform_pts_ref_id, proposal_tform_pts_ref_nn_pts_id], dim=-1)
-    proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.flip(dims=[-1])
-    proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
+    dist_ref_geometry = (dist_ref_geometry.clone() / (dist_ref_geo_max))
 
 
     argmin_ref_from_src = dist_ref.argmin(dim=-1)  # N,
@@ -177,23 +128,79 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     cyclic_dist_avg = (src_cyclic_dist[:, None] / dist_src_geo_max + ref_cyclic_dist[None,] / dist_ref_geo_max) / 2.
     cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape)
     # dist_ref_appearance = (dist_ref_geometry.clone() / (dist_ref_geo_max))
-    dist_ref_appearance_weight = torch.exp(- (1./cyclic_weight_temp) * cyclic_dist_avg )
 
+    dist_weight = torch.exp(- (1./cyclic_weight_temp) * cyclic_dist_avg )
+    dist_weight = dist_weight / dist_weight.flatten(1).mean(dim=-1)[:, None, None,]
 
     # PxNxR
-    #dist_ref_appearance = dist_ref[None,].expand(*dist_ref_geometry.shape)
-    #dist_ref_appearance = dist_ref_appearance.nan_to_num(1., posinf=1., neginf=1.)
-    ref_argmin_dist = (proposal_tform_pts[..., argmin_src_from_ref, :] - pts_ref[None,]).norm(dim=-1, p=norm_p)
+    argmin_ref_from_src = argmin_ref_from_src[None,].expand(P, N)
+    argmin_src_from_ref = argmin_src_from_ref[None,].expand(P, R)
 
-    src_argmin_dist = (proposal_tform_pts - pts_ref[argmin_ref_from_src][None,]).norm(dim=-1, p=norm_p)
-    dist_ref_appearance = ((src_argmin_dist[..., None,] / dist_ref_geo_max) + (ref_argmin_dist[..., None, :] / dist_ref_geo_max)).clone() / 2.
+    if not use_appear_argmin:
+        # PxN
+        proposal_tform_pts_nn_geo_ref_id = dist_ref_geometry.argmin(dim=-1)
+        proposal_tform_pts_geo_id = torch.arange(proposal_tform_pts_nn_geo_ref_id.shape[-1]).view(1, -1).\
+            expand(proposal_tform_pts_nn_geo_ref_id.shape).to(device=device)
 
-    #logger.info(f'dist_ref_geometry: {dist_ref_geometry.shape}')
-    #logger.info(f'dist_ref_appearance: {dist_ref_appearance.shape}')
-    #dist_ref_appearance_weight = dist_ref_appearance_weight / dist_ref_appearance_weight.flatten(-2).mean(dim=-1)[..., None, None]
-    #dist_ref_appearance = dist_ref_appearance_weight * dist_ref_appearance
+        # PxR
+        proposal_tform_pts_ref_nn_geo_pts_id = dist_ref_geometry.argmin(dim=-2)
+        proposal_tform_pts_ref_geo_id = torch.arange(proposal_tform_pts_ref_nn_geo_pts_id.shape[-1]).view(1, -1).\
+            expand(proposal_tform_pts_ref_nn_geo_pts_id.shape).to(device=device)
 
-    dist_ref_geometry = (dist_ref_geometry.clone() / (dist_ref_geo_max))
+        #
+        # # PxN
+        proposal_tform_pts_nn_app_ref_id = argmin_ref_from_src
+        proposal_tform_pts_app_id = torch.arange(proposal_tform_pts_nn_app_ref_id.shape[-1]).view(1, -1).\
+            expand(proposal_tform_pts_nn_app_ref_id.shape).to(device=device)
+
+        # PxR
+        proposal_tform_pts_ref_nn_app_pts_id = argmin_src_from_ref
+        proposal_tform_pts_ref_app_id = torch.arange(proposal_tform_pts_ref_nn_app_pts_id.shape[-1]).view(1, -1).\
+            expand(proposal_tform_pts_ref_nn_app_pts_id.shape).to(device=device)
+
+
+        # Px R+N
+        proposal_tform_pts_nn_ref_id = torch.cat([proposal_tform_pts_nn_geo_ref_id, proposal_tform_pts_nn_app_ref_id], dim=-1)
+        proposal_tform_pts_id = torch.cat([proposal_tform_pts_geo_id, proposal_tform_pts_app_id], dim=-1)
+        proposal_tform_pts_ref_nn_pts_id = torch.cat([proposal_tform_pts_ref_nn_geo_pts_id, proposal_tform_pts_ref_nn_app_pts_id], dim=-1)
+        proposal_tform_pts_ref_id = torch.cat([proposal_tform_pts_ref_geo_id, proposal_tform_pts_ref_app_id], dim=-1)
+
+    else:
+        argmin_ref_from_src = dist_ref.argmin(dim=-1) # N,
+        argmin_src_from_ref = dist_ref.argmin(dim=-2) # R,
+
+        src_cyclic_dist = (pts - pts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1)
+        ref_cyclic_dist = (pts_ref - pts_ref[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1)
+
+        # PxN?
+        proposal_tform_pts_nn_geo_ref_id = argmin_ref_from_src
+        proposal_tform_pts_nn_geo_ref_id = proposal_tform_pts_nn_geo_ref_id[None].expand(P, proposal_tform_pts_nn_geo_ref_id.shape[-1]).contiguous()
+        proposal_tform_pts_geo_id = torch.arange(proposal_tform_pts_nn_geo_ref_id.shape[-1]).view(1, -1). \
+            expand(proposal_tform_pts_nn_geo_ref_id.shape).to(device=device)
+
+        src_cyclic_mask = src_cyclic_dist <= src_cyclic_dist.quantile(q=0.1)
+        proposal_tform_pts_nn_geo_ref_id = proposal_tform_pts_nn_geo_ref_id[:, src_cyclic_mask]
+        proposal_tform_pts_geo_id = proposal_tform_pts_geo_id[:, src_cyclic_mask]
+
+        # PxR?
+        proposal_tform_pts_ref_nn_geo_pts_id = argmin_src_from_ref
+        proposal_tform_pts_ref_nn_geo_pts_id = proposal_tform_pts_ref_nn_geo_pts_id[None].expand(P, proposal_tform_pts_ref_nn_geo_pts_id.shape[-1]).contiguous()
+        proposal_tform_pts_ref_geo_id = torch.arange(proposal_tform_pts_ref_nn_geo_pts_id.shape[-1]).view(1, -1). \
+            expand(proposal_tform_pts_ref_nn_geo_pts_id.shape).to(device=device)
+
+        ref_cyclic_mask = ref_cyclic_dist <= ref_cyclic_dist.quantile(q=0.1)
+        proposal_tform_pts_ref_nn_geo_pts_id = proposal_tform_pts_ref_nn_geo_pts_id[:, ref_cyclic_mask]
+        proposal_tform_pts_ref_geo_id = proposal_tform_pts_ref_geo_id[:, ref_cyclic_mask]
+
+
+    # PxNx4
+    proposal_tform_pts_nn_ref_id_2D = torch.stack([proposal_tform_pts_id, proposal_tform_pts_nn_ref_id], dim=-1)
+    proposal_tform_pts_nn_ref_id_2D = proposal_tform_pts_nn_ref_id_2D.clone()
+    # PxRx2
+    proposal_tform_pts_ref_nn_pts_id_2D = torch.stack([proposal_tform_pts_ref_id, proposal_tform_pts_ref_nn_pts_id], dim=-1)
+    proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.flip(dims=[-1])
+    proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
+
 
     # forward+backward nn
     proposal_pts_nn_id_2D = torch.cat([proposal_tform_pts_nn_ref_id_2D, proposal_tform_pts_ref_nn_pts_id_2D], dim=1)
@@ -203,50 +210,24 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     #proposal_pts_nn_id_2D = proposal_tform_pts_nn_ref_id_2D
 
 
-    proposal_dist_ref_appear = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_appearance)
-    proposal_dist_ref_geometry = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_geometry)
+    proposal_dist_ref = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_geometry)
+    proposal_dist_ref_weight = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_weight)
 
-    proposal_dist_ref_appear_weight = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_appearance_weight)
-    #proposal_dist_ref_appear_weight = proposal_dist_ref_appear_weight / proposal_dist_ref_appear_weight.mean(dim=-1, keepdim=True)
-
-    proposal_dist_ref_appear = proposal_dist_ref_appear_weight * proposal_dist_ref_appear
-    proposal_dist_ref_geometry = proposal_dist_ref_appear_weight * proposal_dist_ref_geometry
-
-    #proposal_dist_ref_appear_pointwise_vals, proposal_dist_ref_appear_pointwise_ids = proposal_dist_ref_appear.sort(dim=-1, descending=False)
-    #N_score = int(proposal_dist_ref_appear.shape[-1] * score_perc)
-    #proposal_dist_ref_appear = batched_index_fill(input=proposal_dist_ref_appear, value=0.,  index=proposal_dist_ref_appear_pointwise_ids[..., N_score:])
+    proposal_dist_ref_geometry = torch.cat([proposal_dist_ref[:, :N], proposal_dist_ref[:, 2*N:2*N+R]], dim=-1)
+    proposal_dist_ref_appear = torch.cat([proposal_dist_ref[:, N:2*N], proposal_dist_ref[:, 2*N+R:]], dim=-1)
 
     proposal_scores_pointwise = -((1.-dist_appear_weight) * proposal_dist_ref_geometry + dist_appear_weight * proposal_dist_ref_appear)
 
     proposal_scores = proposal_scores_pointwise.mean(dim=-1)
-    #proposal_scores = proposal_scores_pointwise_vals[..., :N_score].mean(dim=-1)
 
     proposal_dist_ref_geo_avg = proposal_dist_ref_geometry.mean(dim=-1)
     proposal_dist_ref_appear_avg = proposal_dist_ref_appear.mean(dim=-1)
-    #proposal_dist_ref_geo_avg = batched_index_select(input=proposal_dist_ref_geometry, index=proposal_scores_pointwise_ids)[..., :].mean(dim=-1)
-    #proposal_dist_ref_appear_avg = batched_index_select(input=proposal_dist_ref_appear, index=proposal_scores_pointwise_ids)[..., :].mean(dim=-1)
-
-    # mask_finite = proposal_dist_ref_appear.isfinite()
-    # proposal_dist_ref_appear_avg = (proposal_dist_ref_appear.nan_to_num(1., posinf=1., neginf=1.).mean(dim=-1)) # * mask_finite).sum(dim=-1) / ((mask_finite).sum(dim=-1))
-    # proposal_dist_ref_appear_avg = proposal_dist_ref_appear_avg.nan_to_num(1., posinf=1., neginf=1.)
-    #
-    # proposal_dist_ref_geo_avg = proposal_dist_ref_geometry.mean(dim=-1)
-
-    # did not show improvements
-    #proposal_dist_ref_geo_avg = (proposal_dist_ref_geometry.nan_to_num(0., posinf=0., neginf=0.) * mask_finite).sum(dim=-1) / ((mask_finite).sum(dim=-1))
-    #proposal_dist_ref_geo_avg = proposal_dist_ref_geo_avg.nan_to_num(1., posinf=1., neginf=1.)
-
-    # did not show improvements
-    # scores = -proposal_dist_ref.quantile(q=0.9, dim=-1) #  (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
-    #scores = -proposal_dist_ref.mean(dim=-1)  # (proposal_dist_ref * propsoal_dist_ref_isfinite).sum(dim=-1) / (propsoal_dist_ref_isfinite.sum(dim=-1) + 1e-10)
-
-    #proposal_scores = -((1.-dist_appear_weight) * proposal_dist_ref_geo_avg + dist_appear_weight * proposal_dist_ref_appear_avg)
 
     returns = (proposal_scores, )
     if return_dists:
         returns += (proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg, )
     if return_weights:
-        returns += (proposal_pts_nn_id_2D, proposal_dist_ref_appear_weight, )
+        returns += (proposal_pts_nn_id_2D, proposal_dist_ref_weight, )
     if len(returns) == 1:
         returns = returns[0]
     return returns
