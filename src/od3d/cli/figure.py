@@ -34,6 +34,8 @@ from od3d.cv.geometry.transform import inv_tform4x4
 from tqdm import tqdm
 import open3d
 
+WINDOW_WIDTH = 1980
+WINDOW_HEIGHT = 1080
 @app.command()
 def viewpoints():
     logging.basicConfig(level=logging.INFO)
@@ -148,7 +150,6 @@ def align3d():
         dist_2_1 = seq2.get_dist_verts_mesh_feats_to_other_sequence(seq1).to(device=device)
         dist_2_1 = dist_2_1 / 2.
         from od3d.cv.geometry.fit.tform4x4 import score_tform4x4_fit, fit_tform4x4
-
 
         N = len(dist_2_1)
         fits_count = P
@@ -360,9 +361,6 @@ def mv_pose_inference():
         mesh_feats_pca = torch.matmul(mesh_feats.permute(0, 1, 3, 4, 2).reshape(-1, F), pca_V[:, 1:4]).reshape(B, C, H, W, -1).permute(0, 1, 4, 2, 3)
         mesh_feats_pca_mask_bg = (mesh_feats_pca == 0.).all(dim=2, keepdim=True)
 
-
-
-
         mesh_feats_optimal = nemo.meshes.render_feats(cams_tform4x4_obj=pred_cam_tform4x4_obj,
                                                       cams_intr4x4=cam_intr4x4,
                                                       imgs_sizes=size, meshes_ids=batch.label,
@@ -421,6 +419,9 @@ def mv_pose_train():
     device = 'cuda'
     dtype = torch.float
 
+    config_transform = od3d.io.read_config_intern(
+        rfpath=Path("methods").joinpath('transform', f"scale_mask_separate_centerzoom512.yaml")) # scale_mask_shorter_1_centerzoom512, scale_mask_separate_centerzoom512
+
     run_name = '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm'
     mesh_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_20s_to_5s_mesh/r4/mesh/bicycle/mesh.ply')
     aligned_name = 'all_20s_to_5s_mesh/r4'
@@ -431,7 +432,97 @@ def mv_pose_train():
     #config_loaded.train.transform.transforms[0].config = None
     #config_loaded.categories = ['bicycle']
     #config_loaded.fpaths_meshes = {'bicycle': ''}
-    config_transform = od3d.io.read_config_intern(rfpath=Path("methods").joinpath('transform', f"scale_mask_shorter_1_centerzoom512.yaml"))
+
+    frames_count = 4
+    sequences_count = 3
+    depth_scale = 0.3
+    category = 'bicycle'
+
+    # _aligned
+    co3d = CO3D.create_by_name('co3d_no_zsp_20s_aligned', config={
+        'categories': [category], 'aligned_name': aligned_name,
+        'sequences_count_max_per_category': sequences_count,
+        'frames_count_max_per_sequence': frames_count,
+        'dict_nested_frames_ban':{
+            'bicycle': {
+                '354_37645_70054': None,
+            }
+        }
+    })
+
+    co3d.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')  # scale_mask_shorter_1_centerzoom512, scale_mask_separate_centerzoom512 OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+    co3d.transform.center_use_mask = True
+    cams_tform4x4_world = []
+    cams_intr4x4 = []
+    cams_imgs = []
+    meshes_aligned = []
+    imgs_not_aligned_imgs = []
+    logger.info('rendering not aligned images')
+    for seq in co3d.get_sequences():
+        logger.info(f'seq {seq}')
+        seq_cams_tform4x4_world, seq_cams_intr4x4, seq_cams_imgs = seq.get_cams(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.PCL, cams_count=5, show_imgs=True)
+        seq_mesh = seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT, add_rgb_from_pca=True, device=device)
+
+        img_not_aligned_img = show_scene(meshes=[seq_mesh], viewpoints_count=1, return_visualization=True, cams_imgs_depth_scale=depth_scale)
+        # img_not_aligned_img = show_scene(meshes=[seq_mesh], cams_tform4x4_world=seq_cams_tform4x4_world, cams_intr4x4=seq_cams_intr4x4, cams_imgs=seq_cams_imgs, viewpoints_count=1, return_visualization=True, cams_imgs_depth_scale=depth_scale)
+
+        imgs_not_aligned_imgs.append(crop_white_border_from_img(img_not_aligned_img))
+        # show_img(imgs_not_aligned)
+
+        seq_cams_tform4x4_world, seq_cams_intr4x4, seq_cams_imgs = seq.get_cams(
+            cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.ALIGNED, cams_count=5, show_imgs=True)
+        cams_intr4x4.append(torch.stack(seq_cams_intr4x4, dim=0))
+        cams_tform4x4_world.append(torch.stack(seq_cams_tform4x4_world, dim=0))
+        cams_imgs += seq_cams_imgs
+
+
+    imgs_not_aligned_imgs = [resize(img, scale_factor=imgs_not_aligned_imgs[0].shape[-1] / img.shape[-1]) for img in imgs_not_aligned_imgs]
+    img_not_aligned_imgs = torch.cat(imgs_not_aligned_imgs, dim=-2)
+    # show_img(img_not_aligned_imgs, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+
+    # cams_intr4x4 = torch.cat(cams_intr4x4, dim=0)
+    # cams_tform4x4_world = torch.cat(cams_tform4x4_world, dim=0)
+    aligned_mesh = co3d.get_sequences()[0].get_mesh(mesh_source=CUBOID_SOURCES.ALIGNED, add_rgb_from_pca=False, device=device)
+    aligned_mesh = Meshes.load_from_meshes([aligned_mesh], device=device)
+    aligned_mesh.rgb = aligned_mesh.get_verts_ncds_cat_with_mesh_ids()
+    # logger.info('rendering aligned images')
+    # img_aligned_imgs = show_scene(meshes=aligned_mesh, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=3, return_visualization=True, cams_imgs_depth_scale=depth_scale)[1]
+    # img_aligned_imgs = crop_white_border_from_img(img_aligned_imgs, white_pad=50)
+    # show_img(img_aligned_imgs)
+
+    from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+
+    logger.info('rendering correspondence images...')
+    cams_imgs_rendered = []
+    for c, cam_img in tqdm(enumerate(cams_imgs)):
+        img_size = torch.Tensor(list(cams_imgs[c].shape[-2:]))
+        cams_imgs_rendered.append(255 * aligned_mesh.render_feats(cams_tform4x4_obj=cams_tform4x4_world[c:c + 1],
+                                                                  cams_intr4x4=cams_intr4x4[c:c + 1], imgs_sizes=img_size,
+                                                                  broadcast_batch_and_cams=False,
+                                                                  modality=MESH_RENDER_MODALITIES.RGB)[0])
+    img_aligned_correspondences = show_scene(meshes=aligned_mesh, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs_rendered, viewpoints_count=3, return_visualization=True, cams_imgs_depth_scale=depth_scale)[1]
+    img_aligned_correspondences = crop_white_border_from_img(img_aligned_correspondences, white_pad=50)
+
+    # imgs_not_aligned_imgs = [resize(img, scale_factor=imgs_not_aligned_imgs[0].shape[-1] / img.shape[-1]) for img in imgs_not_aligned_imgs]
+
+    #img_aligned_imgs = resize(img_aligned_imgs, scale_factor= img_not_aligned_imgs.shape[-2] / img_aligned_imgs.shape[-2])
+    img_aligned_correspondences = resize(img_aligned_correspondences, scale_factor= img_not_aligned_imgs.shape[-2] / img_aligned_correspondences.shape[-2])
+
+    # img_aligned_imgs
+    img_pipeline = torch.cat([img_not_aligned_imgs, img_aligned_correspondences], dim=-1)
+
+    show_img(img_pipeline, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, fpath='pipeline.png')
+    show_img(img_pipeline, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+
+    #meshes_not_aligned = Meshes.load_from_meshes(meshes_not_aligned, device=device)
+    #show_scene(meshes=meshes_not_aligned)
+
+    from od3d.cv.visual.show import imgs_to_img
+    imgs_video = cams_imgs
+    #img_videos = imgs_to_img(cams_imgs, pad=10, pad_value=255)
+    #show_img(img_videos)
+
+
     nemo = NeMo.create_by_name('nemo',
                                logging_dir=Path('nemo_out'),
                                config={'texture_dataset': None,
@@ -516,7 +607,6 @@ def mv_pose_train():
 
         #pts3d = seq1.get_pcl(pcl_source=seq1.pcl_source)
         #pts3d_colors = seq1.get_pcl_colors(pcl_source=seq1.pcl_source)
-        from od3d.cv.visual.show import show_scene
         mesh = Meshes.load_from_meshes([seq1.get_mesh(mesh_source=CUBOID_SOURCES.ALIGNED)], device=device)
         #mesh = Meshes.load_from_files(fpaths_meshes=[mesh_fpath], device=device)
         mesh.rgb = mesh.get_verts_ncds_cat_with_mesh_ids()
@@ -551,8 +641,155 @@ def mv_pose_train():
             logger.info('writing img...')
             show_imgs(torch.cat([img_real * 255, img_rendered* 255, img_in_the_wild], dim=-1), height=640, width=1280, fpath=f'mv_pose_train_{i}.png')
 
+
+
 @app.command()
 def teaser():
+    logging.basicConfig(level=logging.INFO)
+    device = 'cuda'
+    dtype = torch.float
+
+    config_transform = od3d.io.read_config_intern(
+        rfpath=Path("methods").joinpath('transform', f"scale_mask_separate_centerzoom512.yaml")) # scale_mask_shorter_1_centerzoom512, scale_mask_separate_centerzoom512
+
+    run_name = '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm'
+    mesh_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_20s_to_5s_mesh/r4/mesh/bicycle/mesh.ply')
+    aligned_name = 'all_20s_to_5s_mesh/r4'
+    # od3d bench rsync -r 11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm
+
+    # /misc/lmbraid19/sommerl/exps/11-11_20-30-27_CO3D_NeMo_cat1_bicycle_ref0_filtered_mesh_slurm/nemo.ckpt
+
+    #config_loaded.train.transform.transforms[0].config = None
+    #config_loaded.categories = ['bicycle']
+    #config_loaded.fpaths_meshes = {'bicycle': ''}
+
+    frames_count = 4
+    sequences_count = 3
+    pad = 30
+    depth_scale = 0.3
+    viewpoint = 2
+    category = 'bicycle'
+
+    # _aligned
+    co3d = CO3D.create_by_name('co3d_no_zsp_20s_aligned', config={
+        'categories': [category], 'aligned_name': aligned_name,
+        'sequences_count_max_per_category': sequences_count,
+        'frames_count_max_per_sequence': frames_count,
+        'dict_nested_frames_ban':{
+            'bicycle': {
+                '354_37645_70054': None,
+            }
+        }
+    })
+
+    co3d.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')  # scale_mask_shorter_1_centerzoom512, scale_mask_separate_centerzoom512 OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+    co3d.transform.center_use_mask = True
+
+    cams_tform4x4_world = []
+    cams_intr4x4 = []
+    cams_imgs = []
+    meshes_aligned = []
+    imgs_not_aligned_imgs = []
+    logger.info('rendering not aligned images')
+    for seq in co3d.get_sequences():
+        logger.info(f'seq {seq}')
+        seq_cams_tform4x4_world, seq_cams_intr4x4, seq_cams_imgs = seq.get_cams(
+            cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.ALIGNED, cams_count=frames_count, show_imgs=True)
+        cams_intr4x4.append(torch.stack(seq_cams_intr4x4, dim=0))
+        cams_tform4x4_world.append(torch.stack(seq_cams_tform4x4_world, dim=0))
+        cams_imgs += seq_cams_imgs
+
+    cams_intr4x4 = torch.cat(cams_intr4x4, dim=0)
+    cams_tform4x4_world = torch.cat(cams_tform4x4_world, dim=0)
+
+    block_imgs_ids = torch.LongTensor([0, 4, 7]) # .to(device=device)
+    filter_imgs_mask = torch.ones(size=(len(cams_intr4x4),)).to(dtype=bool) # , device=device)
+    filter_imgs_mask[block_imgs_ids] = False
+    cams_intr4x4 = cams_intr4x4[filter_imgs_mask]
+    cams_tform4x4_world = cams_tform4x4_world[filter_imgs_mask]
+    block_imgs_ids = block_imgs_ids.sort(descending=True).values
+    for block_img_id in block_imgs_ids:
+        cams_imgs.pop(block_img_id)
+
+    aligned_mesh = co3d.get_sequences()[0].get_mesh(mesh_source=CUBOID_SOURCES.ALIGNED, add_rgb_from_pca=False, device=device)
+    aligned_mesh = Meshes.load_from_meshes([aligned_mesh], device=device)
+    aligned_mesh.rgb = aligned_mesh.get_verts_ncds_cat_with_mesh_ids()
+    logger.info('rendering aligned images')
+    img_aligned_imgs = show_scene(meshes=aligned_mesh, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=viewpoint+1, return_visualization=True, cams_imgs_depth_scale=depth_scale)[viewpoint]
+    img_aligned_imgs = crop_white_border_from_img(img_aligned_imgs, white_pad=pad).to(device=device)
+    # show_img(img_aligned_imgs)
+
+    dataloader = torch.utils.data.DataLoader(dataset=co3d, batch_size=frames_count, shuffle=False,
+                                             collate_fn=co3d.collate_fn, num_workers=4)
+
+    # next(nemo.net.parameters()).is_cuda
+    cams_imgs = []
+    for i, batch in tqdm(enumerate(dataloader)):
+        if torch.cuda.is_available():
+            batch.to(device=device)
+        cams_imgs.append(batch.rgb)
+
+    cams_imgs = torch.stack(cams_imgs, dim=0)
+    from od3d.cv.visual.show import imgs_to_img
+    imgs_video = cams_imgs
+    img_videos = imgs_to_img(imgs_video, pad=pad * 3, pad_value=0)
+    #img_videos = imgs_to_img(cams_imgs, pad=10, pad_value=255)
+    #show_img(img_videos)
+
+
+    nemo = NeMo.create_by_name('nemo',
+                               logging_dir=Path('nemo_out'),
+                               config={'texture_dataset': None,
+                                        'train': {'transform': {'transforms': [config_transform]}},
+                                       'categories': ['bicycle'],
+                                       'fpaths_meshes': {'bicycle': str(mesh_fpath)},
+                                       'checkpoint': f'/misc/lmbraid19/sommerl/exps/{run_name}/nemo.ckpt'})
+    config_dataset = {'categories': ['bicycle'], 'dict_nested_frames': {'val': ['n03792782_687', 'n04126066_11131', 'n03792782_6218',]}} # n03792782_6218, n03792782_687
+    dataset = ObjectNet3D.create_by_name('objectnet3d', config=config_dataset)
+    dataset.transform = nemo.transform_train  # OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False,
+                                             collate_fn=dataset.collate_fn, num_workers=4)
+
+    imgs_in_the_wild = []
+    nemo.net.to(device=device)
+    nemo.net.eval()
+    # next(nemo.net.parameters()).is_cuda
+    for i, batch in tqdm(enumerate(dataloader)):
+        if i == sequences_count:
+            break
+        if torch.cuda.is_available():
+            batch.to(device=device)
+
+        from od3d.cv.visual.blend import blend_rgb
+        batch_res = nemo.inference_batch_single_view(batch)
+
+        #batch_res.keys()
+        pred_cam_tform4x4_obj = batch_res['cam_tform4x4_obj']
+        pred_verts_ncds = nemo.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=pred_cam_tform4x4_obj,
+                                             categories_ids=batch.label, size=batch.size,
+                                             down_sample_rate=1., pre_rendered=False)
+        for b in range(len(batch)):
+            img_rgb = batch.rgb[b].clone()
+            img_rgb = (img_rgb - img_rgb.min()) / (img_rgb.max() - img_rgb.min())
+            imgs_in_the_wild.append(torch.cat([img_rgb * 255, blend_rgb(resize(img_rgb, scale_factor=1.), pred_verts_ncds[b], alpha1=0.7, alpha2=0.7)], dim=-1))
+
+    imgs_in_the_wild = torch.stack(imgs_in_the_wild, dim=0)
+    img_in_the_wild = imgs_to_img(imgs_in_the_wild[:, None], pad=pad, pad_value=0)
+
+    img_aligned_imgs = resize(img_aligned_imgs, scale_factor=img_videos.shape[-2] / img_aligned_imgs.shape[-2] )
+    img_in_the_wild = resize(img_in_the_wild, scale_factor=img_videos.shape[-2] / img_in_the_wild.shape[-2] )
+    img = torch.cat([img_videos, img_aligned_imgs * 255, img_in_the_wild], dim=-1)
+    img[:, (img == 0).all(dim=0)] = 255
+
+    show_img(img, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, fpath='teaser.png')
+    show_img(img, width=WINDOW_WIDTH, height=WINDOW_HEIGHT,)
+
+
+
+
+
+
+"""    
     logging.basicConfig(level=logging.INFO)
     viewpoints_count = 2
     # category_meshes = self.meshes.get_meshes_with_ids(meshes_ids=category_instance_ids)
@@ -671,3 +908,118 @@ def teaser():
                meshes=meshes,
                meshes_add_translation=False, pts3d_add_translation=False,
                return_visualization=False, viewpoints_count=viewpoints_count)
+"""
+
+
+@app.command()
+def temp_weight_ablation():
+    from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
+    from od3d.cli.benchmark import get_dataframe
+
+    categories = od3d.io.read_config_intern(Path('datasets/categories/zsp.yaml'))
+    # categories = TABLE_CATEGORIES_CO3D_28[:-1]
+    #categories = ['bottle', 'couch', 'motorcycle', 'laptop']
+    # align3d_1on1_name_partial = '11-13_1[789].*CO3Dv1_NeMo_Align3D_dist_appear_weight.*'
+    # align3d_1on1_name_partial = '11-14_1[78].*CO3D_NeMo_Align3D_dist_appear_weight.*'
+    align3d_1on1_name_partial = '11-14_2[012].*CO3D_NeMo_Align3D_dist_appear_weight.*'
+
+    align3d_1on1_metrics = ['pose/acc_pi6', 'pose/acc_pi18']
+    align3d_1on1_columns_map = {}
+    align3d_1on1_columns_map[align3d_1on1_metrics[-2]] = "Acc. Pi/6. [%]"
+    align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = "Acc. Pi/18. [%]"
+    # age_in_hours = None
+    configs = ['ablation_name', 'method.dist_appear_weight', 'method.cyclic_weight_temp']
+    #configs = ['method.dist_appear_weight']
+    #align3d_1on1_columns_map['method.dist_appear_weight'] = 'Appear. Weight'
+    align3d_1on1_columns_map['ablation_name'] = 'Name'
+    for category in categories:
+        align3d_1on1_metrics.append(f'pose/prefix/{MAP_CATEGORIES_OD3D_TO_CO3D[category]}_acc_pi6')
+        align3d_1on1_metrics.append(f'pose/prefix/{MAP_CATEGORIES_OD3D_TO_CO3D[category]}_acc_pi18')
+        align3d_1on1_columns_map[align3d_1on1_metrics[-2]] = category
+        align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = category
+
+    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, name_regex=align3d_1on1_name_partial)
+
+    x = align3d_1on1_df['method.dist_appear_weight'].to_numpy()
+    y = align3d_1on1_df['method.cyclic_weight_temp'].to_numpy()
+    z = align3d_1on1_df['pose/acc_pi6'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    from matplotlib import cm
+
+    from scipy.interpolate import griddata
+    import matplotlib
+    matplotlib.use("TkAgg")
+
+    y = torch.log(torch.from_numpy(y)) / torch.log(torch.Tensor([10])).numpy()
+    xi = np.sort(np.unique(x)) #  np.arange(x.min(), x.max(), 0.01)
+    yi = np.sort(np.unique(y))
+    #  np.arange(x.min(), x.max(), 0.01)
+    xi, yi = np.meshgrid(xi, yi)
+    #yi_log = torch.log(torch.from_numpy(yi)) / torch.log(torch.Tensor([10])).numpy()
+
+    zi = griddata((x, y), z, (xi, yi),  method='linear') #
+
+
+    fig, ax = plt.subplots(1, 1)  # (subplot_kw={"projection": "3d"})
+
+    # Create a heatmap using imshow
+    im = ax.imshow(zi, cmap='viridis', interpolation='nearest')
+
+    # Add colorbar to the right of the plot
+    fig.colorbar(im, ax=ax)
+
+    ax.set_xlabel(r'appear. weight ($\alpha{}$)')
+    ax.set_ylabel(r'cyclical dist. temp. ($\log_{10}(\tau{})$)')
+    ax.set(xticks=np.arange(zi.shape[1]), xticklabels=np.round(np.linspace(xi.min(), xi.max(), zi.shape[1]), decimals=1))
+    ax.set(yticks=np.arange(zi.shape[0]), yticklabels=np.round(np.linspace(yi.min(), yi.max(), zi.shape[0]), decimals=0))
+
+
+    #max_point = np.unravel_index(np.argmax(z), z.shape)
+    #max_x, max_y, max_z = x[max_point], y[max_point], z[max_point]
+    max_coordinates = np.unravel_index(zi.argmax(), zi.shape)
+    max_x = xi[max_coordinates]
+    max_y = yi[max_coordinates]
+    max_z = zi[max_coordinates]
+    max_coordinates = (max_coordinates[1], max_coordinates[0])
+
+    # Plot the point using scatter
+    ax.scatter(*max_coordinates, color='red', marker='o', label='max')
+
+    # Annotate the point with a description
+    desc = r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\log_{10}(\tau{})=$' + f'{max_y:.1f}' + ', PI/6=' + f'{max_z*100:.1f}%'
+    ax.annotate(desc, max_coordinates, textcoords="offset points", xytext=(80, 10), ha='center', fontsize=12,
+                color='black')
+
+    img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
+    show_img(img, height=1080, width=1980, fpath='ablation_dist.png')
+    show_img(img, height=1080, width=1980)
+
+
+    plt.show()
+
+    from matplotlib.ticker import LinearLocator
+    # Plot the surface.
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+
+
+    ax.set_xlabel(r'appear. weight ($\alpha{}$)')
+    ax.set_ylabel(r'cyclical dist. temp. ($\log_{10}(\tau{})$)')
+
+    # Find the coordinates of the maximum point
+    max_point = np.unravel_index(np.argmax(z), z.shape)
+    max_x, max_y, max_z = x[max_point], y[max_point], z[max_point]
+
+    # Annotate the maximum point
+    ax.scatter(max_x, max_y, max_z+0.01, s=200, color='blue')
+    ax.text(max_x, max_y+0.5, max_z+0.2, r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\log_{10}(\tau{})=$' + f'{max_y:.1f}' + ', PI/6=' + f'{max_z*100:.1f}%', color='black')
+    surf = ax.plot_surface(xi, yi, zi, cmap=cm.coolwarm,
+                           linewidth=0, antialiased=False)
+
+    plt.show()
+    img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
+    show_img(img, height=1080, width=1980)
+
+    '11-13_19-07-18_CO3Dv1_NeMo_Align3D_dist_appear_weight_04_dist_cyclic_temp_1_slurm'

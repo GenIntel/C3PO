@@ -552,7 +552,7 @@ def show_pcl(verts, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tens
     input('bla')
 
 
-def imgs_to_img(rgbs, pad=1):
+def imgs_to_img(rgbs, pad=1, pad_value=0):
     # rgb: K x 3 x H x W / GH x GW x 3 x H x W
 
     # , masks_mulitply=None, masks_overlay=None
@@ -560,7 +560,7 @@ def imgs_to_img(rgbs, pad=1):
     #if masks is not None:
     #    rgb = (rgbs + masks) / 2.0
 
-    rgbs = torch.nn.functional.pad(rgbs, (pad, pad, pad, pad), "constant", 1.0)
+    rgbs = torch.nn.functional.pad(rgbs, (pad, pad, pad, pad), "constant", pad_value)
     #margin = 2
     #torch.nn.functional.pad(rgbs, (1, 1), "constant", 0)
 

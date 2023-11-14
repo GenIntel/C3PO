@@ -40,38 +40,61 @@ def get_nested_value(data, key):
             return None  # Key not found
     return value
 
-
-def get_dataframe(configs=[], metrics=[], name_regex=None, name_regex_groups=[], age_in_hours=None, name_partial_ban=None, filter_runs_with_metrics=True):
+def get_runs(name_regex='.*', age_in_hours=1000):
     logging.basicConfig(level=logging.INFO)
-    import wandb
     config = od3d.io.load_hierarchical_config()
 
+    import wandb
     # Initialize wandb
      # wandb.init(project=config.logger.wandb_project_name)
 
     # Access the API
     api = wandb.Api()
 
-
+    timestamp_created_gt = (datetime.datetime.now(datetime.timezone.utc) -datetime.timedelta(hours=age_in_hours)).isoformat()
     # config.logger.wandb_project_name
     # Fetch all the runs in your project
-    runs = api.runs(config.logger.wandb_project_name)
+    runs = api.runs(config.logger.wandb_project_name, filters={
+                            "display_name": {"$regex": name_regex},
+                            "$and": [{
+                                'created_at': {
+                                    # "$lt": '2022-03-09T10',
+                                    "$gt": timestamp_created_gt
+                                }
+                            }]}
+                    )
+    return runs
 
-    if age_in_hours is not None:
-        runs = list(filter(
-            lambda run: get_timestamp_from_string(run.name) > datetime.datetime.now() - datetime.timedelta(hours=age_in_hours),
-            runs))
-        #logger.info('after filtering timestamp...')
-        #logger.info(runs)
-        logger.info(f'after timestamp {len(runs)}, age in hours {age_in_hours}')
+def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[], age_in_hours=1000, name_partial_ban=None, filter_runs_with_metrics=True):
+
+    # Initialize wandb
+     # wandb.init(project=config.logger.wandb_project_name)
+
+    # # Access the API
+    # api = wandb.Api()
+    #
+    # timestamp_created_gt = (datetime.datetime.now(datetime.timezone.utc) -datetime.timedelta(hours=age_in_hours)).isoformat()
+    # # config.logger.wandb_project_name
+    # # Fetch all the runs in your project
+    # runs = api.runs(config.logger.wandb_project_name, filters={
+    #                         "display_name": {"$regex": name_regex},
+    #                         "$and": [{
+    #                             'created_at': {
+    #                                 # "$lt": '2022-03-09T10',
+    #                                 "$gt": timestamp_created_gt
+    #                             }
+    #                         }]}
+    #                 )
 
 
-    if name_regex is not None:
-        #runs_names_regex_matches = [re.match(name_regex, run.name) for run in runs]
-        #runs = [runs[i] if len(runs_names_regex_matches[i].groups()) >= len(name_regex_groups) else None for i in range(len(runs))]
-        runs = list(filter(lambda run: re.match(name_regex, run.name) and len(re.match(name_regex, run.name).groups()) >= len(name_regex_groups), runs))
-        logger.info(f'after filtering name regex {len(runs)}, regex {name_regex}')
-        #logger.info(runs)
+    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+
+    # if name_regex is not None:
+    #     #runs_names_regex_matches = [re.match(name_regex, run.name) for run in runs]
+    #     #runs = [runs[i] if len(runs_names_regex_matches[i].groups()) >= len(name_regex_groups) else None for i in range(len(runs))]
+    #     runs = list(filter(lambda run: re.match(name_regex, run.name) and len(re.match(name_regex, run.name).groups()) >= len(name_regex_groups), runs))
+    #     logger.info(f'after filtering name regex {len(runs)}, regex {name_regex}')
+    #     #logger.info(runs)
 
     if name_partial_ban is not None:
         for n in name_partial_ban:
@@ -586,46 +609,23 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         time.sleep(10)
 
 
-def get_failed_runs(age_in_hours=None):
+def get_failed_runs(name_regex='.*', age_in_hours=1000):
     logging.basicConfig(level=logging.INFO)
-    import wandb
-    config = od3d.io.load_hierarchical_config()
-
-    # Initialize wandb
-     # wandb.init(project=config.logger.wandb_project_name)
-
-    # Access the API
-    api = wandb.Api()
-
-    # config.logger.wandb_project_name
-    # Fetch all the runs in your project
-    runs = api.runs(config.logger.wandb_project_name)
-
-    if age_in_hours is not None:
-        runs = list(filter(
-            lambda run: get_timestamp_from_string(run.name) > datetime.datetime.now() - datetime.timedelta(hours=age_in_hours),
-            runs))
-        #logger.info('after filtering timestamp...')
-        #logger.info(runs)
-        logger.info(f'after timestamp {len(runs)}, age in hours {age_in_hours}')
-
-    runs = list(filter(lambda run: run.state =='failed' or run.state=='crashed', runs))
+    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = list(filter(lambda run: run.state =='failed' or run.state=='crashed' or run.state =='running', runs))
     # runs_states = [run.state for run in runs]
     runs_names = [run.name for run in runs]
     logger.info(f'found {len(runs)} failed or crashed runs')
-
-
     return runs_names
 
-
-
 @app.command()
-def restart_slurm(age_in_hours: int = typer.Option(None, '-h', '--hours')):
+def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
+                  name_regex: str = typer.Option('.*', '-n', '--name')):
     from pathlib import Path
     from od3d.benchmark.benchmark import get_timestamp_as_string
 
     logging.basicConfig(level=logging.INFO)
-    runs_names = get_failed_runs(age_in_hours=age_in_hours)
+    runs_names = get_failed_runs(age_in_hours=age_in_hours, name_regex=name_regex)
 
     cfg = od3d.io.read_config_intern(rfpath=Path('platform/local.yaml'))
     for run_name in runs_names:
