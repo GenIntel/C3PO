@@ -458,14 +458,14 @@ class NeMo_Align3D(OD3D_Method):
                 aligned_mesh_name = f'{self.config.aligned_name}_mesh/r{ref_instance_id_in_category}'
                 aligned_mesh_filtered_name = f'{self.config.aligned_name}_mesh_filtered/r{ref_instance_id_in_category}'
 
-                # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6 | 0.95 0.76
+                # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6 | 0.95 0.76 | 0.92 0.53
                 if self.config.gt_cam_tform_obj_source is not None:
                     rot_diff_rad = results_diff_log_rot[category][ref_instance_id_in_category, :]
                     accurate_pi6 = rot_diff_rad < (math.pi / 6.)
                     accurate_pi18 = rot_diff_rad < (math.pi / 18.)
-                accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][ref_instance_id_in_category, :]) > 0.95
+                accurate_sim_geo = (1.0 - all_pred_pose_dist_geo[category][ref_instance_id_in_category, :]) > 0.92
                 # accurate_sim_geo
-                accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][ref_instance_id_in_category, :]) > 0.76
+                accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][ref_instance_id_in_category, :]) > 0.53
                 accurate_sim = accurate_sim_geo * accurate_sim_appear
 
                 #if self.config.use_gt_src:
