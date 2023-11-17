@@ -14,18 +14,33 @@ from od3d.datasets.objectnet3d.enum import MAP_CATEGORIES_OD3D_TO_OBJECTNET3D, M
 # def get_categorical_and
 
 TABLE_CATEGORIES_OBJECTNET3D_3 = ['cellphone', 'toilet', 'microwave', 'mean (3)']
-TABLE_CATEGORIES_OBJECTNET3D_23 = [
-    'cellphone', 'toilet', 'microwave', 'airplane', 'backpack', 'bench', 'bicycle', 'bottle', 'bus', 'car',
+# TABLE_CATEGORIES_OBJECTNET3D_23 = [
+#     'cellphone', 'toilet', 'microwave', 'airplane', 'backpack', 'bench', 'bicycle', 'bottle', 'bus', 'car',
+#     'chair', 'couch', 'cup', 'hairdryer', 'keyboard', 'laptop', 'motorcycle',
+#     'mouse', 'remote', 'suitcase', 'toaster', 'train', 'tv', 'mean (23)'
+# ]
+TABLE_CATEGORIES_OBJECTNET3D_20 = [ # 'bottle', 'train',  'airplane',
+    'cellphone', 'toilet', 'microwave', 'backpack', 'bench', 'bicycle', 'bus', 'car',
     'chair', 'couch', 'cup', 'hairdryer', 'keyboard', 'laptop', 'motorcycle',
-    'mouse', 'remote', 'suitcase', 'toaster', 'train', 'tv', 'mean (23)'
+    'mouse', 'remote', 'suitcase', 'toaster', 'tv', 'mean (20)'
 ]
+
+TABLE_CATEGORIES_OBJECTNET3D_11 = [ # 'bottle', 'train',  'airplane',
+    'cellphone', 'microwave', 'backpack', 'bench', 'cup', 'hairdryer', 'laptop', 'mouse', 'remote', 'toaster', 'mean (10)'
+]
+
+TABLE_CATEGORIES_OBJECTNET3D_9 = [ # 'bottle', 'train',  'airplane',
+    'toilet', 'bicycle',  'bus', 'car', 'chair', 'couch',  'keyboard', 'motorcycle',  'suitcase', 'tv', 'mean (10)'
+]
+
 TABLE_CATEGORIES_CO3D_20 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'mean (20)']
 TABLE_CATEGORIES_CO3D_28 = ['bicycle', 'truck', 'train', 'teddybear', 'car', 'bus', 'motorcycle', 'keyboard', 'handbag', 'remote', 'airplane', 'toilet', 'hairdryer', 'mouse', 'toaster', 'hydrant', 'chair', 'laptop', 'book', 'backpack', 'cellphone', 'microwave', 'bench', 'bottle', 'couch', 'cup', 'suitcase', 'tv', 'mean (28)']
 
 TABLE_CATEGORIES_ZSP = ['bicycle', 'hydrant', 'motorcycle', 'teddybear', 'toaster', 'mean (20)']
 TABLE_CATEGORIES_YOLO = ['backpack', 'car', 'chair', 'keyboard', 'laptop', 'motorcycle', 'mean (20)'] # # B’pack Car Chair Keyboard Laptop M’cycle
 TABLE_CATEGORIES_5S = ['mean (20)', 'mean (28)']
-TABLE_CATEGORIES_PASCAL3D = ['airplane', 'bicycle', 'bottle', 'bus', 'car', 'chair', 'motorcycle', 'couch', 'train', 'tv', 'mean (10)']
+# TABLE_CATEGORIES_PASCAL3D = ['airplane', 'bicycle', 'bottle', 'bus', 'car', 'chair', 'motorcycle', 'couch', 'train', 'tv', 'mean (10)']
+TABLE_CATEGORIES_PASCAL3D = ['bicycle', 'bus', 'car', 'chair', 'motorcycle', 'couch', 'tv', 'mean (7)'] # # 'bottle', 'train',  'airplane',
 
 DATASET_PASCAL3D = 'pascal3d'
 DATASET_CO3D_20 = 'co3d_20'
@@ -197,10 +212,10 @@ def pose_pi6_categories_separate():
     from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
 
 
-    age_in_hours = 20 # 17
-    configs = []
-
-    # ##### FROM MULTIPLE RUNS
+    # age_in_hours = 20 # 17
+    # configs = []
+    #
+    # # ##### FROM MULTIPLE RUNS
     # metrics_dataset = [DATASET_PASCAL3D, DATASET_OBJECTNET3D, DATASET_CO3D_28, DATASET_CO3D_20]
     # metrics = ['test/pascal3d_test/pose/acc_pi6', 'test/objectnet3d_test/pose/acc_pi6', 'test/co3d_no_zsp_5s_labeled_ref/pose/acc_pi6', 'test/co3dv1_10s_zsp_labeled_cuboid_ref/pose/acc_pi6']
     # # metrics = ['test/pascal3d_test/pose/acc_pi18', 'test/objectnet3d_test/pose/acc_pi18', 'test/co3d_no_zsp_5s_labeled_ref/pose/acc_pi18', 'test/co3dv1_10s_zsp_labeled_cuboid_ref/pose/acc_pi18']
@@ -209,7 +224,7 @@ def pose_pi6_categories_separate():
     # metrics_names = ['PASCAL3D [%]', 'ObjectNet3D [%]', 'CO3D 5s [%]', 'CO3D ZSP 10s [%]']
     # name_partial = '_CO3D_NeMo_'
     # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_mesh.*'
-    # #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
+    # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
     # #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_cuboid.*'
     # #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_.*'
     # metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales, age_in_hours=age_in_hours, configs=configs, name_regex=name_regex)
@@ -219,19 +234,21 @@ def pose_pi6_categories_separate():
     # # # ###### FROM SINGLE RUNS
     metrics = ['pose/prefix/CATEGORY_acc_pi6']
     metrics = ['test/pascal3d_test/pose/prefix/CATEGORY_acc_pi6']
-    metrics = ['test/objectnet3d_test/pose/prefix/CATEGORY_acc_pi6']
+    # metrics = ['test/objectnet3d_test/pose/prefix/CATEGORY_acc_pi6']
 
     metrics_dataset = [DATASET_CO3D_20]
     #metrics_dataset = [DATASET_CO3D_28]
     metrics_dataset = [DATASET_PASCAL3D]
-    metrics_dataset = [DATASET_OBJECTNET3D]
+    #metrics_dataset = [DATASET_OBJECTNET3D]
 
     metrics_scales = [100]
     categories = TABLE_CATEGORIES_CO3D_20[:-1]
-    #categories = TABLE_CATEGORIES_CO3D_28[:-1]
+    categories = TABLE_CATEGORIES_CO3D_28[:-1]
     categories = TABLE_CATEGORIES_PASCAL3D[:-1]
-    categories = TABLE_CATEGORIES_OBJECTNET3D_23[:-1]
-    #categories = TABLE_CATEGORIES_OBJECTNET3D_3[:-1]
+    # categories = TABLE_CATEGORIES_OBJECTNET3D_11[:-1]
+    # categories = TABLE_CATEGORIES_OBJECTNET3D_9[:-1]
+    # categories = TABLE_CATEGORIES_OBJECTNET3D_20[:-1]
+    # #categories = TABLE_CATEGORIES_OBJECTNET3D_3[:-1]
 
     map_od3d_to_datasets = [MAP_CATEGORIES_OD3D_TO_CO3D]
 
@@ -248,6 +265,8 @@ def pose_pi6_categories_separate():
     # name_regex = '.*CO3D_NeMo_Align3D.*'
     #name_regex = '11-14_09-03-27_CO3Dv1_NeMo_Align3D_local' # ours 10 to 10
     #name_regex = '11-13_22-16-37_CO3D_NeMo_Align3D_local' # ours 10 to 5
+    #name_regex = '11-14_22-56-59_CO3Dv1_NeMo_Align3D_slurm' # ours 10 to 10
+    #name_regex = '11-14_22-57-20_CO3D_NeMo_Align3D_slurm' # ours 10 to 5
     name_regex = '11-12_21-21-36_CO3D_ZSP_cross_pascal3d_objectnet3d_local'
     age_in_hours = 130
     metrics_dfs = get_categorical_results_from_single_runs(metrics_templates=metrics, categories=categories, age_in_hours=age_in_hours, name_regex=name_regex, metrics_scales=metrics_scales, map_od3d_to_datasets=map_od3d_to_datasets)
@@ -256,8 +275,10 @@ def pose_pi6_categories_separate():
     # ALLOW_CATEGORIES = ['hairdryer', 'bicycle', 'suitcase']
     BAN_CATEGORIES = [] #  ['tv', 'motorcycle']
     _TABLE_CATEGORIES_PASCAL3D = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_PASCAL3D))
-    _TABLE_CATEGORIES_OBJECTNET3D_3 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_OBJECTNET3D_3))
-    _TABLE_CATEGORIES_OBJECTNET3D_23 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_OBJECTNET3D_23))
+    #_TABLE_CATEGORIES_OBJECTNET3D_3 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_OBJECTNET3D_3))
+    _TABLE_CATEGORIES_OBJECTNET3D_20 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_OBJECTNET3D_20))
+    _TABLE_CATEGORIES_OBJECTNET3D_11 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_OBJECTNET3D_11))
+    _TABLE_CATEGORIES_OBJECTNET3D_9 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_OBJECTNET3D_9))
     _TABLE_CATEGORIES_CO3D_20 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_CO3D_20))
     _TABLE_CATEGORIES_CO3D_28 = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_CO3D_28))
     _TABLE_CATEGORIES_ZSP = list(filter(lambda category: category not in BAN_CATEGORIES, TABLE_CATEGORIES_ZSP))
@@ -265,10 +286,12 @@ def pose_pi6_categories_separate():
     if ALLOW_CATEGORIES is not None:
         _TABLE_CATEGORIES_PASCAL3D = list(
             filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_PASCAL3D))
-        _TABLE_CATEGORIES_OBJECTNET3D_3 = list(
-            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_OBJECTNET3D_3))
-        _TABLE_CATEGORIES_OBJECTNET3D_23 = list(
-            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_OBJECTNET3D_23))
+        _TABLE_CATEGORIES_OBJECTNET3D_20 = list(
+            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_OBJECTNET3D_20))
+        _TABLE_CATEGORIES_OBJECTNET3D_9 = list(
+            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_OBJECTNET3D_9))
+        _TABLE_CATEGORIES_OBJECTNET3D_11 = list(
+            filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_OBJECTNET3D_11))
         _TABLE_CATEGORIES_CO3D_20 = list(
             filter(lambda category: category in ALLOW_CATEGORIES or category.startswith('mean'), _TABLE_CATEGORIES_CO3D_20))
         _TABLE_CATEGORIES_CO3D_28 = list(
@@ -286,16 +309,20 @@ def pose_pi6_categories_separate():
             logger.info(tabulate(metric_df[_TABLE_CATEGORIES_PASCAL3D], headers='keys', tablefmt='latex', floatfmt=".2f"))
         elif metrics_dataset[m] == DATASET_OBJECTNET3D:
             logger.info('ObjectNet3D')
-            metric_df[_TABLE_CATEGORIES_OBJECTNET3D_3[-1]] = [metric_df[_TABLE_CATEGORIES_OBJECTNET3D_3[:-1]].loc['mean'].mean(),
-                                                             metric_df[_TABLE_CATEGORIES_OBJECTNET3D_3[:-1]].loc['std'].mean()]
-            logger.info(f'ObjectNet3D {len(_TABLE_CATEGORIES_OBJECTNET3D_3[:-1])} ')
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_OBJECTNET3D_3], headers='keys', tablefmt='latex', floatfmt=".2f"))
+            for object_net3d_table in [_TABLE_CATEGORIES_OBJECTNET3D_20, _TABLE_CATEGORIES_OBJECTNET3D_11, _TABLE_CATEGORIES_OBJECTNET3D_9]:
+                metric_df[object_net3d_table[-1]] = [metric_df[object_net3d_table[:-1]].loc['mean'].mean(),
+                                                                 metric_df[object_net3d_table[:-1]].loc['std'].mean()]
 
-            logger.info(f'ObjectNet3D {len(_TABLE_CATEGORIES_OBJECTNET3D_23[:-1])} ')
-            metric_df[_TABLE_CATEGORIES_OBJECTNET3D_23[-1]] = [metric_df[_TABLE_CATEGORIES_OBJECTNET3D_23[:-1]].loc['mean'].mean(),
-                                                                metric_df[_TABLE_CATEGORIES_OBJECTNET3D_23[:-1]].loc['std'].mean()]
+                logger.info(f'ObjectNet3D {len(object_net3d_table[:-1])} ')
 
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_OBJECTNET3D_23], headers='keys', tablefmt='latex', floatfmt=".2f"))
+                logger.info(tabulate(metric_df[object_net3d_table], headers='keys', tablefmt='latex', floatfmt=".2f"))
+                #
+                # logger.info(f'ObjectNet3D {len(object_net3d_table[:-1])} ')
+                # metric_df[object_net3d_table[-1]] = [
+                #     metric_df[object_net3d_table[:-1]].loc['mean'].mean(),
+                #     metric_df[object_net3d_table[:-1]].loc['std'].mean()
+                # ]
+                # logger.info(tabulate(metric_df[object_net3d_table], headers='keys', tablefmt='latex', floatfmt=".2f"))
 
         elif metrics_dataset[m] == DATASET_CO3D_20:
             logger.info('CO3D 20')

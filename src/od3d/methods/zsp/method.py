@@ -100,15 +100,15 @@ class ZSP(OD3D_Method):
             src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
             ref_instance_ids = torch.LongTensor(list(range(ref_instances_count)))
 
-            src_category_instance_ids = src_instance_ids[src_map_seq_to_cat == cat_id]
-            ref_category_instance_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
+            #src_category_instance_ids = src_instance_ids[src_map_seq_to_cat == cat_id]
+            #ref_category_instance_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
 
             # this ensures that we first label the axis, which are required later to fit the cuboid
-            droid_slam_labeled_tform_droid_slam = ref_sequences[
-                ref_category_instance_ids[0]].labeled_obj_tform_obj.to(dtype=dtype, device=self.device)
-            droid_slam_labeled_cuboid_tform_droid_slam_labeled = ref_sequences[
-                ref_category_instance_ids[0]].labeled_cuboid_obj_tform_labeled_obj.to(dtype=dtype,
-                                                                                      device=self.device)
+            #droid_slam_labeled_tform_droid_slam = ref_sequences[
+            #    ref_category_instance_ids[0]].labeled_obj_tform_obj.to(dtype=dtype, device=self.device)
+            #droid_slam_labeled_cuboid_tform_droid_slam_labeled = ref_sequences[
+            #    ref_category_instance_ids[0]].labeled_cuboid_obj_tform_labeled_obj.to(dtype=dtype,
+            #                                                                          device=self.device)
 
             results_diff_log_rot[category] = torch.zeros(
                 size=(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id])).to(
@@ -358,6 +358,10 @@ class ZSP(OD3D_Method):
 
                     gt_ref_tform_src = tform4x4(inv_tform4x4(ref_labeled_obj_tform_obj), src_labeled_obj_tform_obj)
 
+                    if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
+                        aligned_cuboid_tform_obj = tform4x4(ref_labeled_obj_tform_obj, pred_ref_tform_src) # droid_slam_labeled_cuboid_tform_droid_slam
+                        src_sequences[src_mesh_id].write_aligned_obj_tform_obj(aligned_name=f'zsp/r{r}', aligned_obj_tform_obj=aligned_cuboid_tform_obj)
+
                     diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
                     logger.info(diff_rot_angle_rad)
                     results_diff_log_rot[category][r, s] = diff_rot_angle_rad
@@ -408,7 +412,7 @@ class ZSP(OD3D_Method):
             for i, batch in tqdm(enumerate(iter(dataloader))):
                 batch.to(device=self.device)
 
-                results_batch = self.inference_batch(batch=batch, dataset_type=type(dataset))
+                results_batch = self.inference_batch(batch=batch)
                 results_epoch += results_batch
 
             count_pred_frames = len(results_epoch['item_id'])
@@ -422,7 +426,7 @@ class ZSP(OD3D_Method):
         else:
             return OD3D_Results()
 
-    def inference_batch(self, batch: OD3D_Frames, dataset_type):
+    def inference_batch(self, batch: OD3D_Frames):
 
         # if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED or \
         #         dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM or \
@@ -538,6 +542,7 @@ class ZSP(OD3D_Method):
                 pred_ref_tform_srcs = torch.eye(4)[None,].repeat(B, 1, 1).to(device=self.device) * 0.
 
             cam_tform4x4_obj = tform4x4(batch.cam_tform4x4_obj, inv_tform4x4(pred_ref_tform_srcs))
+
             all_cam_tform4x4_obj.append(cam_tform4x4_obj)
             diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=cam_tform4x4_obj, gt_tform4x4=batch.cam_tform4x4_obj)
 
@@ -558,7 +563,7 @@ class ZSP(OD3D_Method):
         #results['label_pred'] = pred_class_ids
         #results['label_names'] = self.config.classes
         #results['sim'] = sim
-        results['cam_tform4x4_obj'] = random.choice(all_cam_tform4x4_obj)
+        results['cam_tform4x4_obj'] = all_cam_tform4x4_obj[0] #  random.choice(all_cam_tform4x4_obj)
         results['item_id'] = batch.item_id
         results['name_unique'] = batch.name_unique
 

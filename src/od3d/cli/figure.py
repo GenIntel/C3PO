@@ -1,6 +1,8 @@
 import logging
 import random
 
+from matplotlib.pyplot import xticks
+
 logger = logging.getLogger(__name__)
 import typer
 import od3d.io
@@ -11,6 +13,7 @@ app = typer.Typer()
 from od3d.datasets.co3d import CO3D
 from od3d.cv.visual.show import show_scene
 import torch
+from od3d.cv.visual.show import imgs_to_img
 
 from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4_from_transl3d, tform4x4, get_spherical_uniform_tform4x4
 from od3d.datasets.co3d.enum import PCL_SOURCES, CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES
@@ -25,6 +28,7 @@ from od3d.datasets.pascal3d.dataset import Pascal3D
 from od3d.datasets.objectnet3d.dataset import ObjectNet3D
 
 from od3d.methods.nemo import NeMo
+from od3d.methods.zsp import ZSP
 from pathlib import Path
 
 from omegaconf.omegaconf import OmegaConf  # bottle, suitcase, cup, airplane, microwave, tv, train, hairdryer, remote
@@ -40,8 +44,6 @@ WINDOW_HEIGHT = 1080
 def viewpoints():
     logging.basicConfig(level=logging.INFO)
 
-
-
     bunny_data = open3d.data.BunnyMesh()
     bunny_mesh_open3d = open3d.io.read_triangle_mesh(bunny_data.path)
     bunny_mesh = Meshes.load_from_meshes([Mesh.from_o3d(bunny_mesh_open3d)])
@@ -51,7 +53,6 @@ def viewpoints():
          [1., 0., 0., 0.,],
          [0., 1., 0., 0.,],
          [0., 0., 0., 1.,]])
-
 
     bunny_mesh.verts.data = transf3d_broadcast(pts3d=bunny_mesh.verts, transf4x4=bunny_rot)
     bunny_mesh.rgb = bunny_mesh.get_verts_ncds_cat_with_mesh_ids()
@@ -427,18 +428,29 @@ def mv_pose_train():
     aligned_name = 'all_20s_to_5s_mesh/r4'
     # od3d bench rsync -r 11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm
 
+    # 11-14_23-51-54_CO3D_NeMo_cat1_car_ref2_mesh_slurm
+    run_name = '11-14_23-51-54_CO3D_NeMo_cat1_car_ref2_mesh_slurm'
+    mesh_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_20s_to_5s_mesh/r2/mesh/car/mesh.ply')
+    aligned_name = 'all_20s_to_5s_mesh/r2'
+    # od3d bench rsync -r 11-14_23-51-54_CO3D_NeMo_cat1_car_ref2_mesh_slurm
+
+
+
+
     # /misc/lmbraid19/sommerl/exps/11-11_20-30-27_CO3D_NeMo_cat1_bicycle_ref0_filtered_mesh_slurm/nemo.ckpt
 
     #config_loaded.train.transform.transforms[0].config = None
     #config_loaded.categories = ['bicycle']
     #config_loaded.fpaths_meshes = {'bicycle': ''}
 
-    frames_count = 4
-    sequences_count = 3
+    frames_count = 6
+    sequences_count = 2
     depth_scale = 0.3
-    category = 'bicycle'
+    category = 'car' # bicycle
+    pad = 50
+    viewpoint_id = 2
 
-    # _aligned
+    # _aligned # _aligned
     co3d = CO3D.create_by_name('co3d_no_zsp_20s_aligned', config={
         'categories': [category], 'aligned_name': aligned_name,
         'sequences_count_max_per_category': sequences_count,
@@ -446,6 +458,12 @@ def mv_pose_train():
         'dict_nested_frames_ban':{
             'bicycle': {
                 '354_37645_70054': None,
+            },
+            'car': {
+                '185_19982_37678': None,
+                '194_20939_43630': None,
+                #'194_20900_41097': None,
+                '206_21810_45890': None,
             }
         }
     })
@@ -458,189 +476,244 @@ def mv_pose_train():
     meshes_aligned = []
     imgs_not_aligned_imgs = []
     logger.info('rendering not aligned images')
-    for seq in co3d.get_sequences():
-        logger.info(f'seq {seq}')
-        seq_cams_tform4x4_world, seq_cams_intr4x4, seq_cams_imgs = seq.get_cams(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.PCL, cams_count=5, show_imgs=True)
-        seq_mesh = seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT, add_rgb_from_pca=True, device=device)
-
-        img_not_aligned_img = show_scene(meshes=[seq_mesh], viewpoints_count=1, return_visualization=True, cams_imgs_depth_scale=depth_scale)
-        # img_not_aligned_img = show_scene(meshes=[seq_mesh], cams_tform4x4_world=seq_cams_tform4x4_world, cams_intr4x4=seq_cams_intr4x4, cams_imgs=seq_cams_imgs, viewpoints_count=1, return_visualization=True, cams_imgs_depth_scale=depth_scale)
-
-        imgs_not_aligned_imgs.append(crop_white_border_from_img(img_not_aligned_img))
-        # show_img(imgs_not_aligned)
-
-        seq_cams_tform4x4_world, seq_cams_intr4x4, seq_cams_imgs = seq.get_cams(
-            cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.ALIGNED, cams_count=5, show_imgs=True)
-        cams_intr4x4.append(torch.stack(seq_cams_intr4x4, dim=0))
-        cams_tform4x4_world.append(torch.stack(seq_cams_tform4x4_world, dim=0))
-        cams_imgs += seq_cams_imgs
-
-
-    imgs_not_aligned_imgs = [resize(img, scale_factor=imgs_not_aligned_imgs[0].shape[-1] / img.shape[-1]) for img in imgs_not_aligned_imgs]
-    img_not_aligned_imgs = torch.cat(imgs_not_aligned_imgs, dim=-2)
-    # show_img(img_not_aligned_imgs, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
-
-    # cams_intr4x4 = torch.cat(cams_intr4x4, dim=0)
-    # cams_tform4x4_world = torch.cat(cams_tform4x4_world, dim=0)
-    aligned_mesh = co3d.get_sequences()[0].get_mesh(mesh_source=CUBOID_SOURCES.ALIGNED, add_rgb_from_pca=False, device=device)
-    aligned_mesh = Meshes.load_from_meshes([aligned_mesh], device=device)
-    aligned_mesh.rgb = aligned_mesh.get_verts_ncds_cat_with_mesh_ids()
-    # logger.info('rendering aligned images')
-    # img_aligned_imgs = show_scene(meshes=aligned_mesh, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=3, return_visualization=True, cams_imgs_depth_scale=depth_scale)[1]
-    # img_aligned_imgs = crop_white_border_from_img(img_aligned_imgs, white_pad=50)
-    # show_img(img_aligned_imgs)
-
-    from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
-
-    logger.info('rendering correspondence images...')
-    cams_imgs_rendered = []
-    for c, cam_img in tqdm(enumerate(cams_imgs)):
-        img_size = torch.Tensor(list(cams_imgs[c].shape[-2:]))
-        cams_imgs_rendered.append(255 * aligned_mesh.render_feats(cams_tform4x4_obj=cams_tform4x4_world[c:c + 1],
-                                                                  cams_intr4x4=cams_intr4x4[c:c + 1], imgs_sizes=img_size,
-                                                                  broadcast_batch_and_cams=False,
-                                                                  modality=MESH_RENDER_MODALITIES.RGB)[0])
-    img_aligned_correspondences = show_scene(meshes=aligned_mesh, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs_rendered, viewpoints_count=3, return_visualization=True, cams_imgs_depth_scale=depth_scale)[1]
-    img_aligned_correspondences = crop_white_border_from_img(img_aligned_correspondences, white_pad=50)
-
-    # imgs_not_aligned_imgs = [resize(img, scale_factor=imgs_not_aligned_imgs[0].shape[-1] / img.shape[-1]) for img in imgs_not_aligned_imgs]
-
-    #img_aligned_imgs = resize(img_aligned_imgs, scale_factor= img_not_aligned_imgs.shape[-2] / img_aligned_imgs.shape[-2])
-    img_aligned_correspondences = resize(img_aligned_correspondences, scale_factor= img_not_aligned_imgs.shape[-2] / img_aligned_correspondences.shape[-2])
-
-    # img_aligned_imgs
-    img_pipeline = torch.cat([img_not_aligned_imgs, img_aligned_correspondences], dim=-1)
-
-    show_img(img_pipeline, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, fpath='pipeline.png')
-    show_img(img_pipeline, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
-
-    #meshes_not_aligned = Meshes.load_from_meshes(meshes_not_aligned, device=device)
-    #show_scene(meshes=meshes_not_aligned)
-
-    from od3d.cv.visual.show import imgs_to_img
-    imgs_video = cams_imgs
-    #img_videos = imgs_to_img(cams_imgs, pad=10, pad_value=255)
-    #show_img(img_videos)
 
 
     nemo = NeMo.create_by_name('nemo',
                                logging_dir=Path('nemo_out'),
                                config={'texture_dataset': None,
                                         'train': {'transform': {'transforms': [config_transform]}},
-                                       'categories': ['bicycle'],
-                                       'fpaths_meshes': {'bicycle': str(mesh_fpath)},
+                                       'categories': [category],
+                                       'fpaths_meshes': {category: str(mesh_fpath)},
                                        'checkpoint': f'/misc/lmbraid19/sommerl/exps/{run_name}/nemo.ckpt'})
-    config_dataset = {'categories': ['bicycle'], 'dict_nested_frames': {'val': ['n03792782_687']}} # n03792782_6218, n03792782_687
-    dataset = ObjectNet3D.create_by_name('objectnet3d', config=config_dataset)
-    dataset.transform = nemo.transform_train  # OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False,
-                                             collate_fn=dataset.collate_fn, num_workers=4)
-    nemo.net.to(device=device)
-    nemo.net.eval()
+
+    aligned_mesh = nemo.meshes
+
+    _, _, categorical_pca_V = torch.pca_lowrank(nemo.meshes.feats)
+    verts_feats_pca = torch.matmul(nemo.meshes.feats.to(device=device), categorical_pca_V[:, 0:3])
+    aligned_mesh.rgb =  (verts_feats_pca.nan_to_num() + 0.5).clamp(0, 1)
+
+    # aligned_mesh.rgb = aligned_mesh.get_verts_ncds_cat_with_mesh_ids()
+
+    img_aligned_correspondences = show_scene(meshes=aligned_mesh, viewpoints_count=viewpoint_id+1, return_visualization=True, cams_imgs_depth_scale=depth_scale)[viewpoint_id]
+    img_aligned_correspondences = crop_white_border_from_img(img_aligned_correspondences, white_pad=pad).detach().cpu()
+    show_img(img_aligned_correspondences, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+
+
+
+    dataloader = torch.utils.data.DataLoader(dataset=co3d, batch_size=frames_count, shuffle=False,
+                                             collate_fn=co3d.collate_fn, num_workers=4)
+
     # next(nemo.net.parameters()).is_cuda
+    cams_imgs = []
     for i, batch in tqdm(enumerate(dataloader)):
         if torch.cuda.is_available():
             batch.to(device=device)
-
-        from od3d.cv.visual.blend import blend_rgb
-        batch_res = nemo.inference_batch_single_view(batch)
-
-        #batch_res.keys()
-        pred_cam_tform4x4_obj = batch_res['cam_tform4x4_obj']
-        pred_verts_ncds = nemo.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=pred_cam_tform4x4_obj,
-                                             categories_ids=batch.label, size=batch.size,
-                                             down_sample_rate=1., pre_rendered=False)
         for b in range(len(batch)):
-            img_rgb = batch.rgb[b].clone()
-            img_rgb = (img_rgb - img_rgb.min()) / (img_rgb.max() - img_rgb.min())
-            img_in_the_wild = blend_rgb(resize(img_rgb, scale_factor=1.), pred_verts_ncds[b], alpha1=0.7, alpha2=0.7)
-            show_img(img_in_the_wild, fpath='mv_pose_in_the_wild.png')
+            show_img(batch.rgb[b], fpath=f'img_video_{i}_{b}.png')
+        cams_imgs.append(batch.rgb)
+    cams_imgs = torch.stack(cams_imgs, dim=0)
+    from od3d.cv.visual.show import imgs_to_img
+    imgs_video = cams_imgs
+    img_videos = imgs_to_img(imgs_video, pad=pad //2, pad_value=0).detach().cpu()
+    show_img(img_videos, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
 
-    samples_count = 3
-    sequences_count = 3
-    co3d = CO3D.create_by_name('co3d_no_zsp_20s_aligned', config={'aligned_name': aligned_name, 'sequences_count_max_per_category': sequences_count}) # co3d_no_zsp_20s_aligned #co3d_5s_no_zsp_labeled 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
-    categories = co3d.categories
-    sequences = co3d.get_sequences()
-    sequences_unique_names = [seq.name_unique for seq in sequences]
-    instances_count = len(sequences)
-    map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in sequences_unique_names])
-    instance_ids = torch.LongTensor(list(range(instances_count)))
+    for seq in co3d.get_sequences():
+        logger.info(f'seq {seq}')
+        seq_cams_tform4x4_world, seq_cams_intr4x4, seq_cams_imgs = seq.get_cams(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.PCL, cams_count=frames_count, show_imgs=True)
+        seq_mesh = seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT, add_rgb_from_pca=True, device=device)
+        seq_tform = torch.Tensor([
+            [1., 0., 0., 0.],
+            [0., 0., -1., 0.],
+            [0., -1., 0., 0.],
+            [0., 0., 0., 1.]
+        ]).to(device)
+        seq_mesh.verts = transf3d_broadcast(seq_mesh.verts, transf4x4=seq_tform)
+        img_not_aligned_img = show_scene(meshes=[seq_mesh], viewpoints_count=viewpoint_id+1, return_visualization=True, cams_imgs_depth_scale=depth_scale)[viewpoint_id]
+        imgs_not_aligned_imgs.append(crop_white_border_from_img(img_not_aligned_img))
 
-    category = 'bicycle'
-    rand_category_id = categories.index(category) # 'car', 'chair',
-    rand_category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+        show_img(img_not_aligned_img, fpath=f'{seq.name}.png')
+        # show_img(imgs_not_aligned)
+        #
+        # seq_cams_tform4x4_world, seq_cams_intr4x4, seq_cams_imgs = seq.get_cams(
+        #     cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.ALIGNED, cams_count=5, show_imgs=True)
+        # cams_intr4x4.append(torch.stack(seq_cams_intr4x4, dim=0))
+        # cams_tform4x4_world.append(torch.stack(seq_cams_tform4x4_world, dim=0))
+        # cams_imgs += seq_cams_imgs
 
-    # # CALCULATING CATEGORICAL PCA
-    # category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
-    # categorical_features = []
-    # for instance_id_in_category, instance_id in enumerate(category_instance_ids):
-    #     instance_feats = sequences[instance_id].feats
+    imgs_not_aligned_imgs = [resize(img, scale_factor=imgs_not_aligned_imgs[0].shape[-1] / img.shape[-1]) for img in imgs_not_aligned_imgs]
+    img_not_aligned_imgs = torch.cat(imgs_not_aligned_imgs, dim=-2)
+    img_not_aligned_imgs = crop_white_border_from_img(img_not_aligned_imgs, white_pad=pad)
+    show_img(img_not_aligned_imgs, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+
+    #cams_intr4x4 = torch.cat(cams_intr4x4, dim=0)
+    #cams_tform4x4_world = torch.cat(cams_tform4x4_world, dim=0)
+
+    img_videos = resize(img_videos, scale_factor= img_not_aligned_imgs.shape[-2] / img_videos.shape[-2])
+    img_aligned_correspondences = resize(img_aligned_correspondences, scale_factor= img_not_aligned_imgs.shape[-2] / img_aligned_correspondences.shape[-2])
+    # img_pipeline = torch.cat([255 * img_not_aligned_imgs , img_videos, 255 * img_aligned_correspondences], dim=-1)
+    img_pipeline = torch.cat([img_not_aligned_imgs , img_aligned_correspondences], dim=-1)
+
+    show_img(img_pipeline, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, fpath='pipeline_template.png')
+    show_img(img_pipeline, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+
     #
-    #     if isinstance(instance_feats, List):
-    #         categorical_features += torch.cat([vert_feats for vert_feats in instance_feats], dim=0)
-    #     else:
-    #         categorical_features.append(instance_feats)
-    # categorical_features = torch.stack(categorical_features, dim=0)
-    # _, _, categorical_pca_V = torch.pca_lowrank(categorical_features)
-    # sequences[category_instance_ids[0]].categorical_pca_V = categorical_pca_V
-
-    while True:
-
-        rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=samples_count)
-        seq1 = sequences[rand_category_rand_instance_ids[0]]
-        cams_imgs = []
-        cams_intr4x4 = []
-        cams_tform4x4_obj = []
-        for s in range(samples_count):
-            seq = sequences[rand_category_rand_instance_ids[s]]
-            frames_ids = torch.arange(seq.frames_count)[::50]
-            frames = seq.get_frames(frames_ids=frames_ids)
-            _cams_imgs = torch.stack([frame.rgb for frame in frames], dim=0).to(device=device)
-            _cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
-            _cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
-            cams_imgs += [cam_img.to(device=device) for cam_img in _cams_imgs]
-            cams_intr4x4.append(_cams_intr4x4)
-            cams_tform4x4_obj.append(_cams_tform4x4_obj)
-
-        cams_intr4x4 = torch.cat(cams_intr4x4, dim=0).to(device=device)
-        cams_tform4x4_obj = torch.cat(cams_tform4x4_obj, dim=0).to(device=device)
-
-        #pts3d = seq1.get_pcl(pcl_source=seq1.pcl_source)
-        #pts3d_colors = seq1.get_pcl_colors(pcl_source=seq1.pcl_source)
-        mesh = Meshes.load_from_meshes([seq1.get_mesh(mesh_source=CUBOID_SOURCES.ALIGNED)], device=device)
-        #mesh = Meshes.load_from_files(fpaths_meshes=[mesh_fpath], device=device)
-        mesh.rgb = mesh.get_verts_ncds_cat_with_mesh_ids()
-        #pts3d = transf3d_broadcast(pts3d=pts3d.to(device=device, dtype=dtype),
-        #                           transf4x4=seq1.droid_slam_aligned_tform_droid_slam.to(device=device))
-        # meshes=mesh,
-
-        cams_imgs_depth_scale=0.3
-        viewpoints_count = 5
-        logger.info('rendering real images...')
-        imgs_real = show_scene(meshes=mesh, cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=viewpoints_count, return_visualization=True, crop_white_border=True, cams_imgs_depth_scale=cams_imgs_depth_scale, cams_show_wireframe=False)
-        # frames_ids = torch.arange(seq1.frames_count)[::50]
-        # frames = seq1.get_frames(frames_ids=frames_ids)
-        # cams_imgs = torch.stack([frame.rgb for frame in frames], dim=0).to(device=device)
-        # cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
-        # cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
-        from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
-
-        logger.info('rendering rendered images...')
-        cams_imgs_rendered = []
-        for c, cam_img in enumerate(cams_imgs):
-            img_size = torch.Tensor(list(cams_imgs[c].shape[-2:]))
-            cams_imgs_rendered.append(255 * mesh.render_feats(cams_tform4x4_obj=cams_tform4x4_obj[c:c+1], cams_intr4x4=cams_intr4x4[c:c+1], imgs_sizes=img_size, broadcast_batch_and_cams=False, modality=MESH_RENDER_MODALITIES.RGB)[0])
-
-        imgs_rendered = show_scene(meshes=mesh, cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs_rendered, viewpoints_count=viewpoints_count, return_visualization=True, crop_white_border=True, cams_imgs_depth_scale=cams_imgs_depth_scale, cams_show_wireframe=False)
-
-        for i in range(viewpoints_count):
-            img_real = crop_white_border_from_img(imgs_real[i], white_pad=30)
-            img_rendered = crop_white_border_from_img(imgs_rendered[i], white_pad=30)
-            img_rendered = resize(img_rendered, scale_factor=img_real.shape[-2]/img_rendered.shape[-2])
-            img_in_the_wild = resize(img_in_the_wild.detach().cpu(), scale_factor=img_real.shape[-2]/img_in_the_wild.shape[-2])
-            logger.info('writing img...')
-            show_imgs(torch.cat([img_real * 255, img_rendered* 255, img_in_the_wild], dim=-1), height=640, width=1280, fpath=f'mv_pose_train_{i}.png')
-
+    # # logger.info('rendering aligned images')
+    # # img_aligned_imgs = show_scene(meshes=aligned_mesh, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=3, return_visualization=True, cams_imgs_depth_scale=depth_scale)[1]
+    # # img_aligned_imgs = crop_white_border_from_img(img_aligned_imgs, white_pad=50)
+    # # show_img(img_aligned_imgs)
+    #
+    # from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+    #
+    # logger.info('rendering correspondence images...')
+    # cams_imgs_rendered = []
+    # for c, cam_img in tqdm(enumerate(cams_imgs)):
+    #     img_size = torch.Tensor(list(cams_imgs[c].shape[-2:]))
+    #     cams_imgs_rendered.append(255 * aligned_mesh.render_feats(#cams_tform4x4_obj=cams_tform4x4_world[c:c + 1],
+    #                                                               #cams_intr4x4=cams_intr4x4[c:c + 1], imgs_sizes=img_size,
+    #                                                               #broadcast_batch_and_cams=False,
+    #                                                               modality=MESH_RENDER_MODALITIES.RGB)[0])
+    # img_aligned_correspondences = show_scene(meshes=aligned_mesh, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs_rendered, viewpoints_count=3, return_visualization=True, cams_imgs_depth_scale=depth_scale)[1]
+    # img_aligned_correspondences = crop_white_border_from_img(img_aligned_correspondences, white_pad=pad)
+    #
+    # # imgs_not_aligned_imgs = [resize(img, scale_factor=imgs_not_aligned_imgs[0].shape[-1] / img.shape[-1]) for img in imgs_not_aligned_imgs]
+    #
+    # #img_aligned_imgs = resize(img_aligned_imgs, scale_factor= img_not_aligned_imgs.shape[-2] / img_aligned_imgs.shape[-2])
+    # img_aligned_correspondences = resize(img_aligned_correspondences, scale_factor= img_not_aligned_imgs.shape[-2] / img_aligned_correspondences.shape[-2])
+    # img_videos = resize(img_videos, scale_factor= img_not_aligned_imgs.shape[-2] / img_videos.shape[-2])
+    #
+    # # img_aligned_imgs
+    # img_pipeline = torch.cat([img_not_aligned_imgs, img_videos, img_aligned_correspondences], dim=-1)
+    #
+    # show_img(img_pipeline, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, fpath='pipeline.png')
+    # show_img(img_pipeline, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+    #
+    # #meshes_not_aligned = Meshes.load_from_meshes(meshes_not_aligned, device=device)
+    # #show_scene(meshes=meshes_not_aligned)
+    #
+    # from od3d.cv.visual.show import imgs_to_img
+    # imgs_video = cams_imgs
+    # #img_videos = imgs_to_img(cams_imgs, pad=10, pad_value=255)
+    # #show_img(img_videos)
+    #
+    #
+    # nemo = NeMo.create_by_name('nemo',
+    #                            logging_dir=Path('nemo_out'),
+    #                            config={'texture_dataset': None,
+    #                                     'train': {'transform': {'transforms': [config_transform]}},
+    #                                    'categories': ['bicycle'],
+    #                                    'fpaths_meshes': {'bicycle': str(mesh_fpath)},
+    #                                    'checkpoint': f'/misc/lmbraid19/sommerl/exps/{run_name}/nemo.ckpt'})
+    # config_dataset = {'categories': ['bicycle'], 'dict_nested_frames': {'val': ['n03792782_687']}} # n03792782_6218, n03792782_687
+    # dataset = ObjectNet3D.create_by_name('objectnet3d', config=config_dataset)
+    # dataset.transform = nemo.transform_train  # OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+    # dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False,
+    #                                          collate_fn=dataset.collate_fn, num_workers=4)
+    # nemo.net.to(device=device)
+    # nemo.net.eval()
+    # # next(nemo.net.parameters()).is_cuda
+    # for i, batch in tqdm(enumerate(dataloader)):
+    #     if torch.cuda.is_available():
+    #         batch.to(device=device)
+    #
+    #     from od3d.cv.visual.blend import blend_rgb
+    #     batch_res = nemo.inference_batch_single_view(batch)
+    #
+    #     #batch_res.keys()
+    #     pred_cam_tform4x4_obj = batch_res['cam_tform4x4_obj']
+    #     pred_verts_ncds = nemo.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=pred_cam_tform4x4_obj,
+    #                                          categories_ids=batch.label, size=batch.size,
+    #                                          down_sample_rate=1., pre_rendered=False)
+    #     for b in range(len(batch)):
+    #         img_rgb = batch.rgb[b].clone()
+    #         img_rgb = (img_rgb - img_rgb.min()) / (img_rgb.max() - img_rgb.min())
+    #         img_in_the_wild = blend_rgb(resize(img_rgb, scale_factor=1.), pred_verts_ncds[b], alpha1=0.7, alpha2=0.7)
+    #         show_img(img_in_the_wild, fpath='mv_pose_in_the_wild.png')
+    #
+    # samples_count = 3
+    # sequences_count = 3
+    # co3d = CO3D.create_by_name('co3d_no_zsp_20s_aligned', config={'aligned_name': aligned_name, 'sequences_count_max_per_category': sequences_count}) # co3d_no_zsp_20s_aligned #co3d_5s_no_zsp_labeled 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+    # categories = co3d.categories
+    # sequences = co3d.get_sequences()
+    # sequences_unique_names = [seq.name_unique for seq in sequences]
+    # instances_count = len(sequences)
+    # map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in sequences_unique_names])
+    # instance_ids = torch.LongTensor(list(range(instances_count)))
+    #
+    # category = 'bicycle'
+    # rand_category_id = categories.index(category) # 'car', 'chair',
+    # rand_category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+    #
+    # # # CALCULATING CATEGORICAL PCA
+    # # category_instance_ids = instance_ids[map_seq_to_cat == rand_category_id]
+    # # categorical_features = []
+    # # for instance_id_in_category, instance_id in enumerate(category_instance_ids):
+    # #     instance_feats = sequences[instance_id].feats
+    # #
+    # #     if isinstance(instance_feats, List):
+    # #         categorical_features += torch.cat([vert_feats for vert_feats in instance_feats], dim=0)
+    # #     else:
+    # #         categorical_features.append(instance_feats)
+    # # categorical_features = torch.stack(categorical_features, dim=0)
+    # # _, _, categorical_pca_V = torch.pca_lowrank(categorical_features)
+    # # sequences[category_instance_ids[0]].categorical_pca_V = categorical_pca_V
+    #
+    # while True:
+    #
+    #     rand_category_rand_instance_ids = random.sample(rand_category_instance_ids.tolist(), k=samples_count)
+    #     seq1 = sequences[rand_category_rand_instance_ids[0]]
+    #     cams_imgs = []
+    #     cams_intr4x4 = []
+    #     cams_tform4x4_obj = []
+    #     for s in range(samples_count):
+    #         seq = sequences[rand_category_rand_instance_ids[s]]
+    #         frames_ids = torch.arange(seq.frames_count)[::50]
+    #         frames = seq.get_frames(frames_ids=frames_ids)
+    #         _cams_imgs = torch.stack([frame.rgb for frame in frames], dim=0).to(device=device)
+    #         _cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
+    #         _cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
+    #         cams_imgs += [cam_img.to(device=device) for cam_img in _cams_imgs]
+    #         cams_intr4x4.append(_cams_intr4x4)
+    #         cams_tform4x4_obj.append(_cams_tform4x4_obj)
+    #
+    #     cams_intr4x4 = torch.cat(cams_intr4x4, dim=0).to(device=device)
+    #     cams_tform4x4_obj = torch.cat(cams_tform4x4_obj, dim=0).to(device=device)
+    #
+    #     #pts3d = seq1.get_pcl(pcl_source=seq1.pcl_source)
+    #     #pts3d_colors = seq1.get_pcl_colors(pcl_source=seq1.pcl_source)
+    #     mesh = Meshes.load_from_meshes([seq1.get_mesh(mesh_source=CUBOID_SOURCES.ALIGNED)], device=device)
+    #     #mesh = Meshes.load_from_files(fpaths_meshes=[mesh_fpath], device=device)
+    #     mesh.rgb = mesh.get_verts_ncds_cat_with_mesh_ids()
+    #     #pts3d = transf3d_broadcast(pts3d=pts3d.to(device=device, dtype=dtype),
+    #     #                           transf4x4=seq1.droid_slam_aligned_tform_droid_slam.to(device=device))
+    #     # meshes=mesh,
+    #
+    #     cams_imgs_depth_scale=0.3
+    #     viewpoints_count = 5
+    #     logger.info('rendering real images...')
+    #     imgs_real = show_scene(meshes=mesh, cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=viewpoints_count, return_visualization=True, crop_white_border=True, cams_imgs_depth_scale=cams_imgs_depth_scale, cams_show_wireframe=False)
+    #     # frames_ids = torch.arange(seq1.frames_count)[::50]
+    #     # frames = seq1.get_frames(frames_ids=frames_ids)
+    #     # cams_imgs = torch.stack([frame.rgb for frame in frames], dim=0).to(device=device)
+    #     # cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
+    #     # cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
+    #     from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+    #
+    #     logger.info('rendering rendered images...')
+    #     cams_imgs_rendered = []
+    #     for c, cam_img in enumerate(cams_imgs):
+    #         img_size = torch.Tensor(list(cams_imgs[c].shape[-2:]))
+    #         cams_imgs_rendered.append(255 * mesh.render_feats(cams_tform4x4_obj=cams_tform4x4_obj[c:c+1], cams_intr4x4=cams_intr4x4[c:c+1], imgs_sizes=img_size, broadcast_batch_and_cams=False, modality=MESH_RENDER_MODALITIES.RGB)[0])
+    #
+    #     imgs_rendered = show_scene(meshes=mesh, cams_tform4x4_world=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs_rendered, viewpoints_count=viewpoints_count, return_visualization=True, crop_white_border=True, cams_imgs_depth_scale=cams_imgs_depth_scale, cams_show_wireframe=False)
+    #
+    #     for i in range(viewpoints_count):
+    #         img_real = crop_white_border_from_img(imgs_real[i], white_pad=30)
+    #         img_rendered = crop_white_border_from_img(imgs_rendered[i], white_pad=30)
+    #         img_rendered = resize(img_rendered, scale_factor=img_real.shape[-2]/img_rendered.shape[-2])
+    #         img_in_the_wild = resize(img_in_the_wild.detach().cpu(), scale_factor=img_real.shape[-2]/img_in_the_wild.shape[-2])
+    #         logger.info('writing img...')
+    #         show_imgs(torch.cat([img_real * 255, img_rendered* 255, img_in_the_wild], dim=-1), height=640, width=1280, fpath=f'mv_pose_train_{i}.png')
+    #
 
 
 @app.command()
@@ -653,8 +726,12 @@ def teaser():
         rfpath=Path("methods").joinpath('transform', f"scale_mask_separate_centerzoom512.yaml")) # scale_mask_shorter_1_centerzoom512, scale_mask_separate_centerzoom512
 
     run_name = '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm'
+    run_name = '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm'
     mesh_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_20s_to_5s_mesh/r4/mesh/bicycle/mesh.ply')
+    mesh_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_50s_to_5s_mesh/r4/mesh/bicycle/mesh.ply')
     aligned_name = 'all_20s_to_5s_mesh/r4'
+    aligned_name = 'all_50s_to_5s_mesh/r4'
+
     # od3d bench rsync -r 11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm
 
     # /misc/lmbraid19/sommerl/exps/11-11_20-30-27_CO3D_NeMo_cat1_bicycle_ref0_filtered_mesh_slurm/nemo.ckpt
@@ -663,7 +740,9 @@ def teaser():
     #config_loaded.categories = ['bicycle']
     #config_loaded.fpaths_meshes = {'bicycle': ''}
 
-    frames_count = 4
+    frames_count = 6
+    frames_shown_in_the_wild_count = 6
+    frames_shown_count = 4
     sequences_count = 3
     pad = 30
     depth_scale = 0.3
@@ -702,7 +781,9 @@ def teaser():
     cams_intr4x4 = torch.cat(cams_intr4x4, dim=0)
     cams_tform4x4_world = torch.cat(cams_tform4x4_world, dim=0)
 
-    block_imgs_ids = torch.LongTensor([0, 4, 7]) # .to(device=device)
+    block_imgs_ids = torch.LongTensor([0, 2, 3, 4, 5, 6, 9, 11, 12, 13, 14, 16])
+    # for  4 frames 0, 4, 7
+    # for 6 frames 0, 2, 3, 4, 5, 6, 9, 11, 12, 13, 14, 16
     filter_imgs_mask = torch.ones(size=(len(cams_intr4x4),)).to(dtype=bool) # , device=device)
     filter_imgs_mask[block_imgs_ids] = False
     cams_intr4x4 = cams_intr4x4[filter_imgs_mask]
@@ -717,7 +798,7 @@ def teaser():
     logger.info('rendering aligned images')
     img_aligned_imgs = show_scene(meshes=aligned_mesh, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs, viewpoints_count=viewpoint+1, return_visualization=True, cams_imgs_depth_scale=depth_scale)[viewpoint]
     img_aligned_imgs = crop_white_border_from_img(img_aligned_imgs, white_pad=pad).to(device=device)
-    # show_img(img_aligned_imgs)
+    show_img(img_aligned_imgs)
 
     dataloader = torch.utils.data.DataLoader(dataset=co3d, batch_size=frames_count, shuffle=False,
                                              collate_fn=co3d.collate_fn, num_workers=4)
@@ -730,12 +811,26 @@ def teaser():
         cams_imgs.append(batch.rgb)
 
     cams_imgs = torch.stack(cams_imgs, dim=0)
-    from od3d.cv.visual.show import imgs_to_img
-    imgs_video = cams_imgs
+    imgs_video = cams_imgs[:, :frames_shown_count]
     img_videos = imgs_to_img(imgs_video, pad=pad * 3, pad_value=0)
     #img_videos = imgs_to_img(cams_imgs, pad=10, pad_value=255)
     #show_img(img_videos)
 
+    # 'n02834778_10025',
+    # 'n02834778_10058',
+    # 'n02834778_10129',
+    # 'n02834778_10218',
+    # 'n02834778_10227',
+    # 'n02834778_10327',
+    # 'n02834778_10363',
+    # 'n02834778_10619',
+    # 'n02834778_1107',
+    # 'n02834778_11107',
+    #
+    # n02834778_10218
+    # n02834778_10753
+    # n02834778_10979
+    # n02834778_1130
 
     nemo = NeMo.create_by_name('nemo',
                                logging_dir=Path('nemo_out'),
@@ -744,7 +839,10 @@ def teaser():
                                        'categories': ['bicycle'],
                                        'fpaths_meshes': {'bicycle': str(mesh_fpath)},
                                        'checkpoint': f'/misc/lmbraid19/sommerl/exps/{run_name}/nemo.ckpt'})
-    config_dataset = {'categories': ['bicycle'], 'dict_nested_frames': {'val': ['n03792782_687', 'n04126066_11131', 'n03792782_6218',]}} # n03792782_6218, n03792782_687
+    config_dataset = {'categories': ['bicycle'],
+                      'dict_nested_frames': {
+                          'val': ['n03792782_687', 'n04126066_11131',], # 'n03792782_687', 'n04126066_11131', 'n03792782_6218'
+                          'test': ['n02834778_10129', 'n02834778_10753', 'n02834778_10979', 'n02834778_1130' ]}} # n02834778_10218
     dataset = ObjectNet3D.create_by_name('objectnet3d', config=config_dataset)
     dataset.transform = nemo.transform_train  # OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False,
@@ -755,7 +853,7 @@ def teaser():
     nemo.net.eval()
     # next(nemo.net.parameters()).is_cuda
     for i, batch in tqdm(enumerate(dataloader)):
-        if i == sequences_count:
+        if i == frames_shown_in_the_wild_count:
             break
         if torch.cuda.is_available():
             batch.to(device=device)
@@ -771,10 +869,12 @@ def teaser():
         for b in range(len(batch)):
             img_rgb = batch.rgb[b].clone()
             img_rgb = (img_rgb - img_rgb.min()) / (img_rgb.max() - img_rgb.min())
-            imgs_in_the_wild.append(torch.cat([img_rgb * 255, blend_rgb(resize(img_rgb, scale_factor=1.), pred_verts_ncds[b], alpha1=0.7, alpha2=0.7)], dim=-1))
+            imgs_in_the_wild.append(torch.cat([img_rgb * 255, blend_rgb(resize(img_rgb, scale_factor=1.), pred_verts_ncds[b], alpha1=0.3, alpha2=0.7)], dim=-1))
 
     imgs_in_the_wild = torch.stack(imgs_in_the_wild, dim=0)
-    img_in_the_wild = imgs_to_img(imgs_in_the_wild[:, None], pad=pad, pad_value=0)
+
+    img_in_the_wild = imgs_to_img(imgs_in_the_wild.reshape(sequences_count, frames_shown_in_the_wild_count // sequences_count, *imgs_in_the_wild.shape[1:]), pad=pad, pad_value=0)
+    # img_in_the_wild = imgs_to_img(imgs_in_the_wild[:, None], pad=pad, pad_value=0)
 
     img_aligned_imgs = resize(img_aligned_imgs, scale_factor=img_videos.shape[-2] / img_aligned_imgs.shape[-2] )
     img_in_the_wild = resize(img_in_the_wild, scale_factor=img_videos.shape[-2] / img_in_the_wild.shape[-2] )
@@ -783,10 +883,6 @@ def teaser():
 
     show_img(img, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, fpath='teaser.png')
     show_img(img, width=WINDOW_WIDTH, height=WINDOW_HEIGHT,)
-
-
-
-
 
 
 """    
@@ -963,19 +1059,25 @@ def temp_weight_ablation():
     zi = griddata((x, y), z, (xi, yi),  method='linear') #
 
 
-    fig, ax = plt.subplots(1, 1)  # (subplot_kw={"projection": "3d"})
+    fig, ax = plt.subplots(1, 1, figsize=(8, 3))  # (subplot_kw={"projection": "3d"})
 
+    aspect_ratio = 0.5
+
+    font_size = 16
     # Create a heatmap using imshow
-    im = ax.imshow(zi, cmap='viridis', interpolation='nearest')
+    im = ax.imshow(zi, cmap='viridis', interpolation='nearest', aspect='auto') # 'auto'
 
-    # Add colorbar to the right of the plot
-    fig.colorbar(im, ax=ax)
+    ax.tick_params(axis='y', labelsize=font_size)
+    ax.tick_params(axis='x', labelsize=font_size)
 
-    ax.set_xlabel(r'appear. weight ($\alpha{}$)')
-    ax.set_ylabel(r'cyclical dist. temp. ($\log_{10}(\tau{})$)')
+    ax.set_xlabel(r'appear. weight ($\alpha{}$)', fontsize=font_size)
+    ax.set_ylabel(r'cyclical dist. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
     ax.set(xticks=np.arange(zi.shape[1]), xticklabels=np.round(np.linspace(xi.min(), xi.max(), zi.shape[1]), decimals=1))
     ax.set(yticks=np.arange(zi.shape[0]), yticklabels=np.round(np.linspace(yi.min(), yi.max(), zi.shape[0]), decimals=0))
 
+    # Add colorbar to the right of the plot
+    cbar = fig.colorbar(im, ax=ax)  # , shrink='auto')
+    cbar.ax.tick_params(labelsize=font_size)
 
     #max_point = np.unravel_index(np.argmax(z), z.shape)
     #max_x, max_y, max_z = x[max_point], y[max_point], z[max_point]
@@ -990,9 +1092,12 @@ def temp_weight_ablation():
 
     # Annotate the point with a description
     desc = r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\log_{10}(\tau{})=$' + f'{max_y:.1f}' + ', PI/6=' + f'{max_z*100:.1f}%'
-    ax.annotate(desc, max_coordinates, textcoords="offset points", xytext=(80, 10), ha='center', fontsize=12,
+    ax.annotate(desc, max_coordinates, textcoords="offset points", xytext=(80, 10), ha='center', fontsize=font_size,
                 color='black')
 
+    plt.tight_layout()
+    plt.savefig('ablation_dist_size_16.eps')
+    plt.show()
     img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
     show_img(img, height=1080, width=1980, fpath='ablation_dist.png')
     show_img(img, height=1080, width=1980)
@@ -1023,3 +1128,508 @@ def temp_weight_ablation():
     show_img(img, height=1080, width=1980)
 
     '11-13_19-07-18_CO3Dv1_NeMo_Align3D_dist_appear_weight_04_dist_cyclic_temp_1_slurm'
+
+@app.command()
+def pose_alignment():
+    'latest_20_zsp'
+    from od3d.datasets.co3d.enum import PCL_SOURCES
+    from od3d.cv.geometry.transform import transf3d_broadcast, transf3d
+    from od3d.cv.geometry.downsample import random_sampling
+    logging.basicConfig(level=logging.INFO)
+    dtype = torch.float
+    if torch.cuda.is_available():
+       device = 'cuda'
+    else:
+        device = 'cpu'
+
+    viewpoint_id = 0
+    pad = 0
+    categories = ['backpack', 'car', 'chair', 'keyboard', 'laptop', 'motorcycle']
+    categories = ['chair', 'bicycle', 'teddybear', 'car'] #  'car',
+
+
+
+        # aligned_name = 'latest_20_zsp/r0'
+        # aligned_name = 'latest_20_zsp/r0'
+        # aligned_name = 'zsp/r0'
+        # backpack car chair keyboard laptop motorcycle
+
+
+    imgs_categories = []
+    for category in categories:
+
+        imgs_category = []
+        for dataset_name in ['latest_20_zsp/r4', 'zsp/r4']:
+            # category = 'car'
+            co3d = CO3D.create_by_name('co3dv1_10s_zsp_labeled_cuboid_ref', config={
+                'categories': [category], 'aligned_name': dataset_name, # , 'pcl_source': CAM_TFORM_OBJ_SOURCES.PCL,
+            })
+
+            sequences = co3d.get_sequences()
+
+            pcls_category = []
+            pcls_category_colors = []
+
+            for seq in sequences[:8]:
+                pcl = seq.get_pcl(PCL_SOURCES.CO3D).to(device)
+                pcl_colors = seq.get_pcl_colors(PCL_SOURCES.CO3D).to(device)
+                # show_scene(pts3d=[pcl], pts3d_colors=[pcl_colors]) # meshes=[seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT)]
+
+                pcl, pcl_mask = random_sampling(pcl, 70000, return_mask=True)
+                pcl_colors = pcl_colors[pcl_mask]
+                aligned_tform_obj = seq.aligned_obj_tform_obj.to(device)
+                pcl = transf3d_broadcast(pcl, aligned_tform_obj)
+                pcl = pcl - pcl.mean(dim=0, keepdim=True)
+                #img_pcl = show_scene(pts3d=[pcl], pts3d_colors=[pcl_colors], pts3d_add_translation=True, return_visualization=True, viewpoints_count=viewpoint_id+2)[viewpoint_id]
+                #img_pcl = crop_white_border_from_img(img_pcl)
+                #show_img(img_pcl)
+
+                pcls_category.append(pcl)
+                pcls_category_colors.append(pcl_colors)
+
+            pcls_category = torch.stack(pcls_category, dim=0)
+            pcls_category_colors = torch.stack(pcls_category_colors, dim=0)
+
+            # aligned_obj_tform_obj
+            #aligned_pcl_tform_pcl = torch.stack([sequence.aligned_obj_tform_obj  for sequence in sequences], dim=0).to(device)
+            #pcls_aligned = transf3d_broadcast(pcls, aligned_pcl_tform_pcl[:, None])
+
+            img_category = show_scene(pts3d=pcls_category, pts3d_colors=pcls_category_colors, pts3d_add_translation=True, return_visualization=True, viewpoints_count=viewpoint_id+2,
+                                      W=WINDOW_WIDTH * 4, H=WINDOW_HEIGHT * 4 )[viewpoint_id]
+            img_category = crop_white_border_from_img(img_category)
+
+            imgs_category.append(img_category)
+
+            # show_img(img_category)
+            #imgs_categories.append(img_category)
+
+        W = imgs_category[0].shape[-1]
+        H = imgs_category[0].shape[-2]
+
+        imgs_category = [resize(img_category, scale_factor=W / img_category.shape[-1]) for img_category in imgs_category]
+        imgs_category = [resize(img_category, H_out=img_category.shape[-2], W_out=W) for img_category in
+                           imgs_category]
+
+        # imgs_category = [resize(img_category, H_out=H, W_out=W) for img_category in imgs_category]
+
+        img_category = torch.cat(imgs_category, dim=-2)
+        imgs_categories.append(img_category)
+        # show_img(img_category)
+
+    W = imgs_categories[0].shape[-1]
+    imgs_categories = [resize(img_categories, scale_factor=W / img_categories.shape[-1]) for img_categories in imgs_categories]
+    imgs_categories = [resize(img_categories, H_out=img_categories.shape[-2], W_out=W) for img_categories in imgs_categories]
+
+
+    H_max = max([img_categories.shape[-2] for img_categories in imgs_categories])
+    img_categories_placeholder = torch.ones(size=(3, H_max, W)).to(device=device)
+    imgs_categories_final = []
+    for img_categories in imgs_categories:
+        img_categories_final = img_categories_placeholder.clone()
+        H = img_categories.shape[-2]
+        img_categories_margin = (H_max - H) // 2
+        img_categories_final[:, img_categories_margin:img_categories_margin+H, :] = img_categories
+        imgs_categories_final.append(img_categories_final)
+
+    imgs_categories_final = torch.stack(imgs_categories_final, dim=0)
+    imgs_categories_final = imgs_categories_final.reshape(2, len(imgs_categories_final) // 2, * (imgs_categories_final.shape[1:]))
+
+    imgs_categories_final = [crop_white_border_from_img(img_row.permute(1, 2, 0, 3).reshape(3, H_max, -1)) for img_row in imgs_categories_final]
+
+    img_categories_final = torch.cat(imgs_categories_final, dim=-2)
+
+    #imgs_categories_final = torch.cat(imgs_categories_final, dim=-2)
+    #img_categories_final = imgs_to_img(imgs_categories_final, pad=0, pad_value=1.)
+    show_img(img_categories_final, fpath='alignment.png', height=WINDOW_HEIGHT, width=WINDOW_WIDTH)
+    show_img(img_categories_final, height=WINDOW_HEIGHT, width=WINDOW_WIDTH)
+
+    # img_category = imgs_to_img(imgs_category[:, None], pad=pad, pad_value=1.)
+
+    # nemo3d_align_config = OmegaConf.create({
+    #     'ransac': {'samples': 1000, 'score_perc': 1.},
+    #     'cyclic_weight_temp': 100.,
+    #     'dist_appear_weight': 0.2
+    # })
+    # for category in categories:
+    #     dataset_src =
+    #     dataset_ref =
+    #     src_sequences = dataset_src.get_sequences()
+    #     ref_sequences = dataset_ref.get_sequences()
+    #
+    #     src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
+    #     ref_instance_ids = torch.LongTensor(list(range(ref_instances_count)))
+    #
+    #     src_mesh_ids = src_instance_ids[src_map_seq_to_cat == cat_id]
+    #     ref_mesh_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
+    #
+    #     for r, ref_mesh_id in enumerate(ref_mesh_ids):
+    #         for s, src_mesh_id in enumerate(src_mesh_ids):
+    #             # src_sequences[src_mesh_id].show(show_imgs=True)
+    #             src_vertices_mask = src_sequences_mesh_ids_for_verts == src_mesh_id
+    #             # src_vertices = torch.arange(src_vertices_count).to(device=self.device)[src_vertices_mask]
+    #             pts_src = src_meshes.verts[src_vertices_mask].clone()
+    #
+    #
+    #             logger.info(f'category: {category}, pts-src: {pts_src.shape}, pts-ref: {pts_ref.shape}')
+    #
+    #             dist_src_ref = src_sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
+    #                 ref_sequences[ref_mesh_id]).to(device=device, dtype=dtype)
+    #
+    #             # division by two to normalize to 0. - 1.
+    #             dist_src_ref = dist_src_ref / 2.
+    #
+    #             # four points required, otherwise rotation yields an ambiguity. like planes without normals
+    #             ref_tform4x4_src = ransac(pts=pts_src,
+    #                                       fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
+    #                                                        dist_ref=dist_src_ref),
+    #                                       score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
+    #                                                          dist_ref=dist_src_ref,
+    #                                                          dist_appear_weight=nemo3d_align_config.dist_appear_weight,
+    #                                                          cyclic_weight_temp=nemo3d_align_config.cyclic_weight_temp,
+    #                                                          score_perc=nemo3d_align_config.ransac.score_perc),
+    #                                       fits_count=1000, fit_pts_count=4)
+    #             # else:
+    #             #    ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
+    #             _, pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src, tform4x4=ref_tform4x4_src[None,], pts_ref=pts_ref,
+    #                                                                     dist_ref=dist_src_ref, return_dists=True,
+    #                                                                     dist_appear_weight=nemo3d_align_config.dist_appear_weight,
+    #                                                                     cyclic_weight_temp=nemo3d_align_config.cyclic_weight_temp,
+    #                                                                     score_perc=nemo3d_align_config.ransac.score_perc)
+    #             all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
+    #             all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
+    #
+    #             pred_ref_tform_src = ref_tform4x4_src.clone()
+    #             # pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
+    #             all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
+
+@app.command()
+def pose_in_the_wild():
+    logging.basicConfig(level=logging.INFO)
+    device = 'cuda'
+    dtype = torch.float
+
+    run_name = '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm'
+    mesh_fpath = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_20s_to_5s_mesh/r4/mesh/bicycle/mesh.ply')
+    aligned_name = 'all_20s_to_5s_mesh/r4'
+    # od3d bench rsync -r 11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm
+
+    pad = 5
+    pad_sample = 5
+    max_frames_count_per_category = 4 # 28
+    batch_size = 4 # 4 0.22 versus 10.92 s,
+    add_zsp = True # run zsp, takes long time
+
+    # 'couch', 'microwave',
+    categories = ['bicycle', 'car', 'motorcycle', 'couch', 'microwave', 'bench', 'chair']
+    categories = ['car', 'motorcycle', 'bench', 'chair',]
+
+    run_names = {
+        'bicycle': '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm',
+        'car': '11-14_23-52-28_CO3D_NeMo_cat1_car_ref3_filtered_mesh_slurm',
+        'motorcycle': '11-14_05-02-27_CO3D_NeMo_cat1_motorcycle_ref3_filtered_mesh_slurm',
+        'couch': '11-14_23-49-27_CO3D_NeMo_cat1_couch_ref1_filtered_mesh_slurm',
+        'microwave': '11-15_03-09-43_CO3D_NeMo_cat1_microwave_ref3_filtered_mesh_slurm',
+        'bench': '11-15_02-01-39_CO3D_NeMo_cat1_bench_ref0_filtered_mesh_slurm',
+        'toaster': '11-15_03-11-37_CO3D_NeMo_cat1_toaster_ref3_filtered_mesh_slurm',
+        'chair': '11-15_03-12-23_CO3D_NeMo_cat1_chair_ref1_filtered_mesh_slurm',
+    }
+
+    ref_ids = {
+        'bicycle': 4,
+        'car': 3,
+        'motorcycle': 3,
+        'couch': 1,
+        'microwave': 3,
+        'bench': 0,
+        'toaster': 3,
+        'chair': 1,
+    }
+
+    objectnet3d_frames_per_category = {
+        'bicycle': {'test': None},
+        'car': {'test': None},
+        'motorcycle': {'test': None},
+        'couch': {'test': None},
+        'microwave': {'test': None},
+        'bench': {'test': None},
+        'toaster': {'test': None},
+        'chair': {'test': None},
+    }
+
+    objectnet3d_frames_per_category = {
+        'bicycle': {'test': [
+            'n02834778_10025',
+            'n02834778_10058',
+            'n02834778_10129',
+            'n02834778_10218',
+            'n02834778_10227',
+            'n02834778_10327',
+            'n02834778_10363',
+            'n02834778_10619',
+            'n02834778_1107',
+            'n02834778_11107',
+            # 'n00000004_520',
+            # 'n02814533_10069',
+            # 'n02814533_10290',
+            # 'n02814533_10594',
+            # 'n02814533_10637',
+            # 'n02814533_10995',
+            # 'n02814533_10999',
+            # 'n02814533_11124',
+            # 'n02814533_11667',
+            # 'n02814533_11762',
+        ]},
+        'car': {'test':[
+                'n02814533_10329',
+                'n02814533_10818',
+                'n02814533_10995',
+                'n02814533_11056',
+                # 'n02814533_10069',
+                # 'n02814533_10329',
+                # 'n02814533_10818',
+                # 'n02814533_10911',
+                # 'n02814533_10995',
+                # 'n02814533_10999',
+                # 'n02814533_11051',
+                # 'n02814533_11056',
+                # 'n02814533_11124',
+                # 'n02814533_11246',
+        ]},
+        'motorcycle': {'test': [
+            'n03790512_10075',
+            'n03790512_10667',
+            'n03790512_10965',
+            'n03790512_10970',
+                # 'n03790512_10075',
+                # 'n03790512_10146',
+                # 'n03790512_10269',
+                # 'n03790512_10547',
+                # 'n03790512_10652',
+                # 'n03790512_10662',
+                # 'n03790512_10667',
+                # 'n03790512_10738',
+                # 'n03790512_10965',
+                # 'n03790512_10970',
+        ]},
+        'couch': {'test': None},
+        'microwave': {'test': [
+                'n03761084_10021',
+                'n03761084_10024',
+                'n03761084_10099',
+                'n03761084_10101',
+                'n03761084_10108',
+                'n03761084_10145',
+                'n03761084_10149',
+                'n03761084_10391',
+                'n03761084_10396',
+                'n03761084_10399',
+        ]},
+        'bench': {'test': [
+            'n03891251_1023',
+            'n03891251_1024',
+            'n03891251_1025',
+            'n03891251_1028',
+                # 'n03891251_1013',
+                # 'n03891251_1018',
+                # 'n03891251_1023',
+                # 'n03891251_1024',
+                # 'n03891251_1025',
+                # 'n03891251_1028',
+                # 'n03891251_1035',
+                # 'n03891251_104',
+                # 'n03891251_1040',
+                # 'n03891251_1041',
+                # # 'n03891251_108',
+        ]},
+        'toaster': {'test': None},
+        'chair': {'test': [
+            'n03001627_130',
+            'n03001627_13055',
+            'n03001627_1403',
+            'n03001627_14224',
+                    # 'n03001627_1015',
+                    # 'n03001627_1018',
+                    # 'n03001627_15080',
+                    # 'n03001627_10558',
+                    # 'n03001627_1545',
+                    # 'n03001627_1560',
+                    # 'n03001627_130',
+                    # 'n03001627_13055',
+                    # 'n03001627_1403',
+                    # 'n03001627_14224',
+                  ]},
+    }
+
+
+    """
+            'motorcycle': {'test':
+                           sorted(['n03790512_7678', 'n03791053_14900', 'n03791053_27777', 'n03791053_16363',
+                            'n04466871_6266', 'n03790512_489', 'n04466871_10130', 'n03790512_35174',
+                            'n03790512_3472', 'n03791053_21599', 'n03790512_8493', 'n03791053_6960',
+                            'n03790512_2887', 'n04466871_6000', 'n03790512_22770', 'n03790512_6771',
+                            'n03791053_3562', 'n03790512_12168', 'n04466871_13199', 'n03790512_574', ])
+                       },
+                       """
+
+    imgs_categories = []
+    for category in categories:
+        ref_id = ref_ids[category]
+        run_name = run_names[category]
+        aligned_name = f'all_50s_to_5s_mesh_filtered/r{ref_id}'
+
+        #  rsync -avrzP slurm:/work/dlclarge1/sommerl-od3d/exps/11-14_05-02-27_CO3D_NeMo_cat1_motorcycle_ref3_filtered_mesh_slurm /misc/lmbraid19/sommerl/exps
+        #  rsync -avrzP slurm:/work/dlclarge1/sommerl-od3d/datasets/CO3D_Preprocess/aligned/all_50s_to_5s_mesh_filtered /misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned
+        #  /misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned
+
+        mesh_fpath = Path(f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/{aligned_name}/mesh/{category}/mesh.ply')
+        # scale_mask_larger_1_centerzoom512 scale_mask_shorter_1_centerzoom512 scale_mask_separate_centerzoom512
+        config_transform = od3d.io.read_config_intern(rfpath=Path("methods").joinpath('transform', f"scale_mask_shorter_1_centerzoom512.yaml"))
+        # scale_mask_shorter_1_centerzoom512
+        nemo = NeMo.create_by_name('nemo',
+                                   logging_dir=Path('nemo_out'),
+                                   config={'texture_dataset': None,
+                                            'train': {'transform': {'transforms': [config_transform]}},
+                                           'categories': [category],
+                                           'fpaths_meshes': {category: str(mesh_fpath)},
+                                           'checkpoint': f'/misc/lmbraid19/sommerl/exps/{run_name}/nemo.ckpt'})
+
+        config_dataset = {'categories': [category]} # , 'dict_nested_frames': {'val': objectnet3d_frames}} # n03792782_6218, n03792782_687
+        config_dataset['modalities'] = ['size', 'category', 'cam_intr4x4', 'cam_tform4x4_obj', 'category', 'rgb', 'mask', 'depth', 'depth_mask']
+        config_dataset['dict_nested_frames'] = objectnet3d_frames_per_category[category]
+        config_dataset['subset_fraction'] = 1.
+
+        dataset_nemo = ObjectNet3D.create_by_name('objectnet3d_test', config=config_dataset)
+        dataset_nemo.transform = nemo.transform_train  # OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+        dataloader_nemo = torch.utils.data.DataLoader(dataset=dataset_nemo, batch_size=batch_size, shuffle=False,
+                                                 collate_fn=dataset_nemo.collate_fn, num_workers=0)
+
+        if add_zsp:
+            zsp = ZSP.create_by_name('zsp', logging_dir=Path('zsp_out'),
+                                     config={'use_gt_src': False,
+                                             'use_train_only_to_collect_target_data': True
+                                             })
+
+            dataset_zsp = ObjectNet3D.create_by_name('objectnet3d_test', config=config_dataset)
+            dataset_zsp.transform = zsp.transform_test  # OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
+
+            dataloader_zsp = torch.utils.data.DataLoader(dataset=dataset_zsp, batch_size=batch_size, shuffle=False,
+                                                          collate_fn=dataset_zsp.collate_fn, num_workers=0)
+
+            co3d_5refs = CO3D.create_by_name('co3d_no_zsp_5s_labeled_ref', config={'categories': [category],
+                                                                                   'modalities': ['size', 'category',
+                                                                                                  'cam_intr4x4',
+                                                                                                  'cam_tform4x4_obj',
+                                                                                                  'category', 'rgb',
+                                                                                                  'mask',
+                                                                                                  'sequence_name',
+                                                                                                  'sequence', 'depth',
+                                                                                                  'depth_mask']})
+            co3d_5refs_dict_category_sequence = {category: [co3d_5refs.dict_category_sequences_names[category][ref_id]]}
+            co3d_5refs = co3d_5refs.get_subset_by_sequences(co3d_5refs_dict_category_sequence)
+            train_datasets = {
+                'src': co3d_5refs,
+                'labeled': co3d_5refs,
+            }
+            zsp.train(datasets_train=train_datasets, datasets_val=None)
+        else:
+            dataset_zsp = dataset_nemo
+            dataloader_zsp = torch.utils.data.DataLoader(dataset=dataset_zsp, batch_size=batch_size, shuffle=False,
+                                                         collate_fn=dataset_zsp.collate_fn, num_workers=0)
+
+        imgs_in_the_wild = []
+        nemo.net.to(device=device)
+        nemo.net.eval()
+        # next(nemo.net.parameters()).is_cuda
+        # for i, batch in tqdm(enumerate(dataloader_nemo)):
+        logger.info('start eval...')
+        dataloader_zsp_iter = iter(dataloader_zsp)
+        dataloader_nemo_iter = iter(dataloader_nemo)
+        name_list = []
+        for i in range(max_frames_count_per_category): #  (batch_zsp, batch_nemo) in enumerate(tqdm(zip(dataloader_zsp, dataloader_nemo))):
+            batch_zsp = next(dataloader_zsp_iter)
+            batch_nemo = next(dataloader_nemo_iter)
+            logger.info(batch_zsp.name)
+            logger.info(batch_nemo.name)
+
+            name_list.append(batch_nemo.name)
+
+            if torch.cuda.is_available():
+                batch_nemo.to(device=device)
+                # batch_zsp.to(device=device)
+
+
+            from od3d.cv.visual.blend import blend_rgb
+            from time import time
+            time_nemo_start = time()
+            batch_res_nemo = nemo.inference_batch_single_view(batch_nemo)
+            duration_nemo = time() - time_nemo_start
+            logger.info(f'NeMo took {duration_nemo}s, per sample it is {duration_nemo/batch_size}s')
+            nemo_pred_cam_tform4x4_obj = batch_res_nemo['cam_tform4x4_obj']
+
+            if add_zsp:
+                time_zsp_start = time()
+                batch_res_zsp = zsp.inference_batch(batch_zsp)
+                duration_zsp = time() - time_zsp_start
+
+                logger.info(f'ZSP took {duration_zsp}s, persample it is {duration_zsp/batch_size}s')
+                zsp_pred_cam_tform4x4_obj = batch_res_zsp['cam_tform4x4_obj']
+                zsp_pred_cam_tform4x4_obj = zsp_pred_cam_tform4x4_obj.to(device=device)
+                zsp_pred_cam_tform4x4_obj[..., :3, :3] /= torch.linalg.norm(zsp_pred_cam_tform4x4_obj[..., :3, :3],
+                                                                            dim=-1,
+                                                                            keepdim=True)
+                zsp_pred_cam_tform4x4_obj[..., :3, 3] = batch_nemo.cam_tform4x4_obj[..., :3, 3]
+
+            else:
+                zsp_pred_cam_tform4x4_obj = batch_nemo.cam_tform4x4_obj
+
+
+            nemo_pred_verts_ncds = nemo.get_ncds_with_cam(cam_intr4x4=batch_nemo.cam_intr4x4, cam_tform4x4_obj=nemo_pred_cam_tform4x4_obj,
+                                                 categories_ids=batch_nemo.label, size=batch_nemo.size,
+                                                 down_sample_rate=1., pre_rendered=False)
+
+            zsp_pred_verts_ncds = nemo.get_ncds_with_cam(cam_intr4x4=batch_nemo.cam_intr4x4, cam_tform4x4_obj=zsp_pred_cam_tform4x4_obj,
+                                                 categories_ids=batch_nemo.label, size=batch_nemo.size,
+                                                 down_sample_rate=1., pre_rendered=False)
+
+            for b in range(len(batch_nemo)):
+                logger.info(batch_nemo.name_unique[b])
+                img_rgb = batch_nemo.rgb[b].clone()
+
+                img_rgb_min = img_rgb.flatten(1).min(dim=-1).values[:, None, None]
+                img_rgb_max = img_rgb.flatten(1).max(dim=-1).values[:, None, None]
+                img_rgb = (img_rgb - img_rgb_min) / (img_rgb_max - img_rgb_min)
+
+                # img_rgb = (img_rgb - img_rgb.min()) / (img_rgb.max() - img_rgb.min())
+
+                img_rgb_nemo_overlay = blend_rgb(resize(img_rgb, scale_factor=1.), nemo_pred_verts_ncds[b], alpha1=0.2, alpha2=0.8)
+                img_rgb_zsp_overlay = blend_rgb(resize(img_rgb, scale_factor=1.), zsp_pred_verts_ncds[b], alpha1=0.2, alpha2=0.8)
+
+                img_in_the_wild_single = torch.stack([img_rgb * 255, img_rgb_nemo_overlay, img_rgb_zsp_overlay], dim=0)
+                img_in_the_wild_single = imgs_to_img(img_in_the_wild_single[:, None], pad=pad_sample, pad_value=255)
+
+                # img_in_the_wild_single_no_rgb_mask = (img_in_the_wild_single < 0.1).all(dim=0, keepdim=True)
+                # img_in_the_wild_single[img_in_the_wild_single_no_rgb_mask.expand(*img_in_the_wild_single.shape)] = 255.
+
+                # show_img(img_in_the_wild_single)
+                imgs_in_the_wild.append(img_in_the_wild_single)
+
+            if ((i+1) * batch_size) >= max_frames_count_per_category:
+                break
+
+        od3d.io.write_list_as_yaml(Path(f'pose_in_the_wild_names_{category}_{max_frames_count_per_category}.yaml'), name_list)
+        imgs_in_the_wild = torch.stack(imgs_in_the_wild, dim=0)
+        img_in_the_wild = imgs_to_img(imgs_in_the_wild[None, :], pad=pad, pad_value=255)
+
+        imgs_categories.append(img_in_the_wild)
+        show_img(img_in_the_wild, width=2 * WINDOW_WIDTH, height=2 * WINDOW_HEIGHT, fpath=f'pose_in_the_wild_{category}_{max_frames_count_per_category}.png')
+        # show_img(img_in_the_wild, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+
+    imgs_categories = torch.stack(imgs_categories, dim=0)
+    img_categories = imgs_to_img(imgs_categories.reshape(len(imgs_categories)//2, 2, *imgs_categories.shape[1:]))
+    show_img(img_categories, width=2 * WINDOW_WIDTH, height=2 * WINDOW_HEIGHT,
+             fpath=f'pose_in_the_wild_categories_{max_frames_count_per_category}.png')
+
+    # img_aligned_imgs = resize(img_aligned_imgs, scale_factor=img_videos.shape[-2] / img_aligned_imgs.shape[-2] )
+        # img_in_the_wild = resize(img_in_the_wild, scale_factor=img_videos.shape[-2] / img_in_the_wild.shape[-2] )
+        # img = torch.cat([img_videos, img_aligned_imgs * 255, img_in_the_wild], dim=-1)
+        # img[:, (img == 0).all(dim=0)] = 255

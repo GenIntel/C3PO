@@ -618,7 +618,7 @@ def show_img(rgb, duration=0, vwriter=None, fpath=None, height=None, width=None,
     if width is not None and height is not None:
         orig_width = rgb.size(2)
         orig_height = rgb.size(1)
-        scale_factor = min(width / orig_width, height / orig_width)
+        scale_factor = min(width / orig_width, height / orig_height)
     elif width is not None:
         orig_width = rgb.size(2)
         scale_factor = width / orig_width

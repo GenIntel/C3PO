@@ -470,14 +470,12 @@ class NeMo_Align3D(OD3D_Method):
 
                 #if self.config.use_gt_src:
                 if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
-                    obj_labeled_cuboid_tform_obj = inv_tform4x4(
-                        ref_sequences[ref_category_instance_ids[0]].co3dv1_zsp_obj_tform_obj.to(
-                            device=self.device, dtype=dtype))
+                    obj_labeled_cuboid_tform_obj = ref_sequences[ref_instance_id].co3dv1_zsp_obj_tform_obj.to(
+                            device=self.device, dtype=dtype)
                     logger.warning('aligned cuboid does not exist.')
                 elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                    obj_labeled_cuboid_tform_obj = inv_tform4x4(
-                        ref_sequences[ref_category_instance_ids[0]].zsp_labeled_cuboid_ref_tform_obj.to(
-                            device=self.device, dtype=dtype))
+                    obj_labeled_cuboid_tform_obj = ref_sequences[ref_instance_id].zsp_labeled_cuboid_ref_tform_obj.to(
+                            device=self.device, dtype=dtype)
                     logger.warning('aligned cuboid does not exist.')
                 elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
                     obj_labeled_cuboid_tform_obj = ref_sequences[ref_instance_id].labeled_cuboid_obj_tform_obj.to(dtype=dtype, device=self.device)
