@@ -34,7 +34,10 @@ class ObjectNet3D(OD3D_Dataset):
                          path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
 
+
         self.path_meshes = self.path_raw.joinpath('CAD')
+        # logger.info(self.list_frames_unique)
+
     def get_item(self, item):
         frame_meta = ObjectNet3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
         return ObjectNet3D_Frame(path_meshes=self.path_meshes, path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta, meta=frame_meta, modalities=self.modalities, categories=self.categories)
@@ -52,7 +55,7 @@ class ObjectNet3D(OD3D_Dataset):
                     logger.info(f'{subset}, {category}')
                     allowed_frames_unique += self.get_subset_category_names_unique(subset=subset, category=category)
             list_frames_unique_filtered = list(set.intersection(set(allowed_frames_unique), set(list_frames_unique)))
-
+            list_frames_unique_filtered = sorted(list_frames_unique_filtered)
             # for frame_name_unique in tqdm(list_frames_unique):
             #     meta = ObjectNet3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=frame_name_unique)
             #     if meta.category in self.categories: # filter with only first object's category

@@ -112,7 +112,7 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
         #logger.info('after filtering metrics...')
         #logger.info(runs)
 
-
+    logger.info(f'found {len(runs)} runs')
     rows = []
     for run in runs:
         try:
