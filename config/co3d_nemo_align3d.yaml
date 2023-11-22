@@ -2,10 +2,10 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo_align3d
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.src: co3dv1_10s_zsp_labeled_cuboid_ref #  co3dv1_10s_zsp_labeled #  co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
+  - datasets@train_datasets.src: co3dv1_10s_zsp_labeled_cuboid_ref #  co3d_no_zsp_5s_labeled_ref, co3dv1_10s_zsp_labeled_cuboid_ref #  co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
   - datasets@train_datasets.labeled: co3dv1_10s_zsp_labeled_cuboid_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_10s_zsp_labeled_cuboid_ref # co3dv1_10s_zsp_labeled # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
   - datasets@val_datasets.main:
-  - datasets@test_datasets.co3d: co3dv1_10s_zsp_labeled_cuboid_ref # co3dv1_10s_zsp_labeled # co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
+  - datasets@test_datasets.co3d: co3d_no_zsp_5s_labeled_ref # co3dv1_10s_zsp_labeled # co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
@@ -31,6 +31,14 @@ categories:
   - laptop
   - book
   - backpack
+#  - cellphone # from cellphone on, no zsp categories
+#  - microwave
+#  - bench
+#  - bottle
+#  - couch
+#  - cup
+#  - suitcase
+#  - tv
 
 metrics:
   - metricA
@@ -42,13 +50,13 @@ method:
       samples: 1000
       score_perc: 1.
     use_only_first_reference: False
-    cyclic_weight_temp: 0.7
+    cyclic_weight_temp: 100.
     gt_cam_tform_obj_source: zsp_labeled
-    dist_appear_weight: 0.1
+    dist_appear_weight: 0.2
     use_appear_argmin: False
     global_optimization_steps: 1
     categories: ${categories}
-    aligned_name: 'latest'
+    aligned_name: 'latest_20_zsp'
 
 
 train_datasets:
@@ -56,6 +64,7 @@ train_datasets:
     categories: ${categories}
   labeled:
     categories: ${categories}
+
 
 val_datasets:
   main:

@@ -2,8 +2,8 @@
 defaults:
   - /ablations/nemo3d_align/dist_weight/_default
 
-ablation_name_nemo3d_align_dist_weight: dist_appear_weight_10
+ablation_name_nemo3d_align_dist_weight: dist_appear_weight_0
 
 method:
   nemo:
-    dist_appear_weight: 1.0
+    dist_appear_weight: 0.0

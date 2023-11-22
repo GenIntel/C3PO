@@ -40,6 +40,143 @@ import open3d
 
 WINDOW_WIDTH = 1980
 WINDOW_HEIGHT = 1080
+
+@app.command()
+def mesh():
+    logging.basicConfig(level=logging.INFO)
+    device = 'cuda'
+    dtype = torch.float # co3dv1_10s_zsp_labeled co3d_10s_zsp_unlabeled
+    co3d = CO3D.create_by_name('co3d_10s_zsp_unlabeled', config={'categories': ['bicycle']}) #co3d_5s_no_zsp_labeled 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+    categories = co3d.categories
+    sequences = co3d.get_sequences()
+    sequences_unique_names = [seq.name_unique for seq in sequences]
+    instances_count = len(sequences)
+    map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in sequences_unique_names])
+    instance_ids = torch.LongTensor(list(range(instances_count)))
+
+    # while True:
+    #     rand_category_rand_instance_id = random.sample(instance_ids.tolist(), k=1)[0]
+    #     logger.info(f'chosen ids are {rand_category_rand_instance_id}')
+    #     seq1 = sequences[rand_category_rand_instance_id]
+    #     show_scene(pts3d=[seq1.get_pcl(pcl_source=PCL_SOURCES.CO3D)],
+    #                pts3d_colors=[seq1.get_pcl_colors(pcl_source=PCL_SOURCES.CO3D)])
+
+    rand_category_rand_instance_id = 9  # 344 349 337 334 322 324
+    viewpoint_id = 2
+    logger.info(f'chosen ids are {rand_category_rand_instance_id}')
+    mesh_source = CUBOID_SOURCES.DEFAULT
+    seq1 = sequences[rand_category_rand_instance_id]
+    mesh1 = seq1.get_mesh(mesh_source=mesh_source, add_rgb_from_pca=False, device=device)
+    cams_tform4x4_world, cams_intr4x4, cams_imgs = seq1.get_cams(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D, cams_count=5, show_imgs=True)
+    tform = torch.Tensor([[1., 0., 0., 0.], [0., 0., 1., 0.], [0., -1., 0., 0.], [0., 0., 0., 1.]]).to(device=device)
+    pts3d_raw = transf3d_broadcast(seq1.get_pcl(pcl_source=PCL_SOURCES.CO3D).to(device=device), transf4x4=tform)
+    img_pcl_raw = show_scene(pts3d=[pts3d_raw],
+               pts3d_colors=[seq1.get_pcl_colors(pcl_source=PCL_SOURCES.CO3D)],
+               #cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs,
+               return_visualization=True, viewpoints_count=viewpoint_id+2, meshes_as_wireframe=True)[viewpoint_id]
+    # show_img(img_pcl_raw)
+
+
+    cams_tform4x4_world, cams_intr4x4, cams_imgs = seq1.get_cams(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D, cams_count=5, show_imgs=True)
+    pts3d_clean = transf3d_broadcast(seq1.get_pcl(pcl_source=PCL_SOURCES.CO3D_CLEAN.value).to(device=device), transf4x4=tform)
+
+    img_pcl_clean = show_scene(pts3d=[pts3d_clean],
+               pts3d_colors=[seq1.get_pcl_colors(pcl_source=PCL_SOURCES.CO3D_CLEAN.value)],
+               #cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs,
+               return_visualization=True, viewpoints_count=viewpoint_id+2, meshes_as_wireframe=True)[viewpoint_id]
+
+    mesh_vertices_count = 500
+    pts3d = pts3d_clean # seq1.get_pcl(pcl_source=PCL_SOURCES.CO3D_CLEAN.value)
+    o3d_pcl = open3d.geometry.PointCloud()
+    o3d_pcl.points = open3d.utility.Vector3dVector(pts3d.detach().cpu().numpy())
+    from od3d.cv.geometry.downsample import random_sampling
+    pts3d = random_sampling(pts3d, pts3d_max_count=20000)
+
+    particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=5. / len(pts3d)).mean()
+    alpha = 10 * particle_size
+    o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+    logger.info(o3d_obj_mesh)
+    o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
+    logger.info(o3d_obj_mesh)
+    obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+    obj_mesh = Meshes.load_from_meshes(meshes=[obj_mesh])
+    #obj_mesh.rgb = obj_mesh.get_verts_ncds_cat_with_mesh_ids()
+
+    cams_tform4x4_world, cams_intr4x4, cams_imgs = seq1.get_cams(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D, cams_count=5, show_imgs=True)
+    img_mesh_fine = show_scene(meshes=obj_mesh, pts3d=[pts3d_clean],
+               pts3d_colors=[seq1.get_pcl_colors(pcl_source=PCL_SOURCES.CO3D_CLEAN.value)],
+               return_visualization=True, viewpoints_count=viewpoint_id+2, meshes_as_wireframe=True)[viewpoint_id]
+                # ,cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs)
+
+    o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(mesh_vertices_count)
+    logger.info(o3d_obj_mesh)
+    obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+    obj_mesh = Meshes.load_from_meshes(meshes=[obj_mesh])
+    #obj_mesh.rgb = obj_mesh.get_verts_ncds_cat_with_mesh_ids()
+    cams_tform4x4_world, cams_intr4x4, cams_imgs = seq1.get_cams(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D, cams_count=5, show_imgs=True)
+    img_mesh_coarse = show_scene(meshes=obj_mesh, pts3d=[pts3d_clean],
+               pts3d_colors=[seq1.get_pcl_colors(pcl_source=PCL_SOURCES.CO3D_CLEAN.value)],
+               return_visualization=True, viewpoints_count=viewpoint_id+2, meshes_as_wireframe=True)[viewpoint_id]
+               #  , cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs)
+
+    img_pcl_raw = crop_white_border_from_img(img_pcl_raw)
+    img_pcl_clean = crop_white_border_from_img(img_pcl_clean)
+    img_mesh_fine = crop_white_border_from_img(img_mesh_fine)
+    img_mesh_coarse = crop_white_border_from_img(img_mesh_coarse)
+    # img_pcl_raw, img_pcl_clean, img_mesh_fine, img_mesh_coarse
+
+    H, W = img_pcl_raw.shape[1:]
+    img_pcl_clean = resize(img_pcl_clean, scale_factor=H / img_pcl_clean.shape[-2])
+    img_mesh_fine = resize(img_mesh_fine, scale_factor=H / img_mesh_fine.shape[-2])
+    img_mesh_coarse = resize(img_mesh_coarse, scale_factor=H / img_mesh_coarse.shape[-2])
+
+    img = torch.cat([img_pcl_raw, img_pcl_clean, img_mesh_fine, img_mesh_coarse], dim=-1)
+    show_img(rgb=img, fpath='mesh_extraction.png')
+    show_img(rgb=img)
+
+
+@app.command()
+def videos_filtering():
+    logging.basicConfig(level=logging.INFO)
+    device = 'cuda'
+    dtype = torch.float # co3dv1_10s_zsp_labeled co3d_10s_zsp_unlabeled
+    co3d = CO3D.create_by_name('co3d_no_zsp', config={'categories': ['car'],
+                                                      'sequences_require_good_cam_movement': False,
+                                                      'sequences_require_gt_pose': False,
+                                                      'sequences_require_mesh': False,}) #co3d_5s_no_zsp_labeled 'co3d_50s_no_zsp_aligned' 'co3dv1_10s_zsp_aligned' 'co3d_10s_zsp_aligned' 'co3dv1_10s_zsp_unlabeled'
+    categories = co3d.categories
+    sequences = co3d.get_sequences()
+    sequences_unique_names = [seq.name_unique for seq in sequences]
+    instances_count = len(sequences)
+    map_seq_to_cat = torch.LongTensor([categories.index(name.split('/')[0]) for name in sequences_unique_names])
+    instance_ids = torch.LongTensor(list(range(instances_count)))
+
+    while True:
+        rand_category_rand_instance_id = random.sample(instance_ids.tolist(), k=1)[0]
+        # rand_category_rand_instance_id = 49
+        logger.info(f'chosen ids are {rand_category_rand_instance_id}')
+        seq1 = sequences[rand_category_rand_instance_id]
+        cams_tform4x4_world, cams_intr4x4, cams_imgs = seq1.get_cams(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D,
+                                                                     cams_count=5, show_imgs=True)
+
+        if seq1.viewpoint_coverage < 0.10 or seq1.centered_accuracy < 0.8 or seq1.mask_coverage < 0.05:
+            if seq1.viewpoint_coverage < 0.10:
+                # category: bicycle, id: 49
+                # category: car, id: 3
+                logger.info('no viewpoint variance')
+
+            if seq1.centered_accuracy < 0.8:
+                # category: car, id: 39, 3
+                logger.info('not centered')
+
+            if seq1.mask_coverage < 0.05:
+                logger.info('not enough mask coverage')
+
+            show_scene(pts3d=[seq1.get_pcl(pcl_source=PCL_SOURCES.CO3D)],
+                       pts3d_colors=[seq1.get_pcl_colors(pcl_source=PCL_SOURCES.CO3D.value)],
+                       cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs)
+
+
 @app.command()
 def viewpoints():
     logging.basicConfig(level=logging.INFO)
@@ -1147,7 +1284,14 @@ def pose_alignment():
     categories = ['backpack', 'car', 'chair', 'keyboard', 'laptop', 'motorcycle']
     categories = ['chair', 'bicycle', 'teddybear', 'car'] #  'car',
 
+    categories = ['backpack', 'keyboard', 'laptop', 'motorcycle']
+    categories = ['truck', 'train', 'bus', 'handbag']
+    categories = ['remote', 'airplane', 'toilet', 'hairdryer']
+    categories = ['mouse', 'toaster', 'hydrant', 'book']
 
+    categories = ['mouse', 'toaster', 'hydrant', 'book', 'remote', 'airplane', 'toilet', 'hairdryer', 'truck', 'train', 'bus', 'handbag', 'backpack', 'keyboard', 'laptop', 'motorcycle']
+
+    categories = ['mouse', 'toaster', 'hydrant', 'book']
 
         # aligned_name = 'latest_20_zsp/r0'
         # aligned_name = 'latest_20_zsp/r0'

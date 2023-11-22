@@ -942,6 +942,8 @@ class CO3D_Sequence():
                                 dist_verts_seq1_seq2[i, j] = dists.min()
                             elif self.dist_verts_mesh_feats_reduce_type == REDUCE_TYPES.AVG:
                                 dist_verts_seq1_seq2[i, j] = dists.mean()
+                            elif self.dist_verts_mesh_feats_reduce_type == REDUCE_TYPES.MIN_AVG:
+                                dist_verts_seq1_seq2[i, j] = torch.cat([dists.min(dim=-1).values, dists.min(dim=-2).values]).mean()
                             else:
                                 logger.warning(f'Unknown reduce type {self.dist_verts_mesh_feats_reduce_type}.')
                         del dists
@@ -1699,10 +1701,30 @@ class CO3D_Sequence():
             else:
                 self._meta_ext = {}
         return self._meta_ext
+
+    @property
+    def mask_coverage(self):
+        if 'mask_coverage' not in self.meta_ext.keys():
+            _ = self.good_cam_movement
+        return self.meta_ext['mask_coverage']
+
+    @property
+    def centered_accuracy(self):
+        if 'centered_accuracy' not in self.meta_ext.keys():
+            _ = self.good_cam_movement
+        return self.meta_ext['centered_accuracy']
+
+    @property
+    def viewpoint_coverage(self):
+        if 'viewpoints_coverage' not in self.meta_ext.keys():
+            _ = self.good_cam_movement
+        return self.meta_ext['viewpoints_coverage']
+
+
     @property
     def good_cam_movement(self):
         name = f'{self.pcl_source}_good_cam_movement'
-        if name not in self.meta_ext:
+        if True or name not in self.meta_ext:
             device = 'cuda'
             frames = self.get_frames()
             frames_mask = torch.stack([frame.mask for frame in frames], dim=0).to(device=device)
@@ -1733,6 +1755,10 @@ class CO3D_Sequence():
             viewpoints_coverage = len(dist_viewpoints_versus_uniform.min(dim=-1).indices.unique()) / len(
                 viewpoints3d_uniform)
 
+            self.write_meta_ext('viewpoints_coverage', viewpoints_coverage)
+            self.write_meta_ext('centered_accuracy', center2d_offset_small_acc.item())
+            self.write_meta_ext('mask_coverage', frames_mask_coverage.item())
+
             if viewpoints_coverage < 0.15:
                 logger.warning(f'did skip pcl {self.name} due too few viewpoints coverage {viewpoints_coverage}')
                 good_cam_movement = False
@@ -1744,6 +1770,7 @@ class CO3D_Sequence():
                 good_cam_movement= False
             else:
                 good_cam_movement = True
+
             logger.info(f'viewpoints coverage {viewpoints_coverage}')
             logger.info(f'centering accuracy {center2d_offset_small_acc}')
             logger.info(f'mask coverage {frames_mask_coverage}')

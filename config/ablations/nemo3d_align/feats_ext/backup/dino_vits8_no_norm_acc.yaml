@@ -5,7 +5,7 @@ ablation_name: $ablation_name_nemo3d_align_feats_ext
 ablation_name_nemo3d_align_feats_ext: dino_vits8_acc
 
 # mesh_feats_type: 'M_dino_vits8_frozen_base_T_centerzoom512_R_acc' # 'R_acc' # 'R_avg', 'R_avg_norm'
-mesh_feats_type: 'M_dino_vits8_frozen_base_T_centerzoom512_R_acc' # 'R_acc' # 'R_avg', 'R_avg_norm'
+mesh_feats_type: 'M_dino_vits8_no_norm_frozen_base_T_centerzoom512_R_acc' # 'R_acc' # 'R_avg', 'R_avg_norm'
 
 # scale_mask_separate_centerzoom512
 # mesh_feats_type: 'M_dinov2_frozen_base_T_centerzoom512_R_acc' # 'R_acc' # 'R_avg', 'R_avg_norm'
@@ -13,9 +13,7 @@ mesh_feats_type: 'M_dino_vits8_frozen_base_T_centerzoom512_R_acc' # 'R_acc' # 'R
 train_datasets:
   labeled:
     mesh_feats_type: ${mesh_feats_type}
-    dist_verts_mesh_feats_reduce_type: 'min_avg' #'avg' 'min' 'min_avg'
   src:
     mesh_feats_type: ${mesh_feats_type}
-    dist_verts_mesh_feats_reduce_type: 'min_avg' #'avg' 'min' 'min_avg'
 
 

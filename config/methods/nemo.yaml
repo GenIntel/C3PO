@@ -14,8 +14,7 @@ categories: ${train_datasets.labeled.categories}
 fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
 
 multiview:
-  batch_size: 4
-
+  batch_size: 6
 
 train:
   early_stopping: True
@@ -49,7 +48,6 @@ train:
   epochs: 5
   val_fraction: 0.01
   batch_accumulate_to_next_step: 2
-
 
   visualize:
       down_sample_rate: 4.

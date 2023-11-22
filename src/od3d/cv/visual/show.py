@@ -309,6 +309,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             opt = vis.get_render_option()
             #opt.background_color = np.asarray([0, 0, 0])
             opt.mesh_show_back_face = True
+            # opt.mesh_show_wireframe = mesh_show_wireframe
 
             geometries_vertices_orig = []
 

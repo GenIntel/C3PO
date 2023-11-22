@@ -14,11 +14,8 @@ metrics:
   - metricA
   - metricB
 
-#method:
-#  nemo:
-#    checkpoint: ${platform.path_exps}/08-28_09-14-15_Pascal3D_NeMo_slurm/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
 
-train: True
+train: False
 test: True
 
 train_datasets:
@@ -39,3 +36,37 @@ test_datasets:
     #   val:
     #      bus:
     #        - "n04146614_2398"
+
+method:
+  nemo:
+    checkpoint: ${platform.path_exps}/11-20_19-29-23_Pascal3D_NeMo_local/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
+    train:
+      transform:
+        class_name: SequentialTransform
+        transforms:
+          - class_name: RandomCenterZoom3D
+            apply_txtr: False
+            config: ${texture_dataset}
+            W: 512
+            H: 512
+            scale_with_mask: 1.
+            scale_selection: 'shorter' # 'shorter' 'larger' 'separate'
+            scale_min: 0.8
+            scale_max: 1.2
+            center_rel_shift_xy_min:
+              - -0.
+              - -0.
+            center_rel_shift_xy_max:
+              - +0.
+              - +0.
+          - class_name: RGB_Random
+    test:
+      transform:
+        class_name: CenterZoom3D
+        W: 512
+        H: 512
+        scale:
+        scale_with_mask: 1.
+        center_rel_shift_xy:
+          - -0.
+          - -0.

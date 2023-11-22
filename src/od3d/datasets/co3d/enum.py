@@ -49,6 +49,7 @@ class FEATURE_TYPES(str, ExtEnum):
 class REDUCE_TYPES(str, ExtEnum):
     AVG = 'avg'
     MIN = 'min'
+    MIN_AVG = 'min_avg'
 
 class PCL_SOURCES(str, ExtEnum):
     CO3D = 'co3d'

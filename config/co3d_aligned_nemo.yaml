@@ -16,7 +16,7 @@ defaults:
   - platform@platform_local: local
   - platform: local
 
-test_subset_fraction: 0.2
+test_subset_fraction: 1.
 
 categories:
   - bicycle
@@ -53,7 +53,7 @@ metrics:
 
 aligned_name_ref: '/r0'
 aligned_name_suffix: '_filtered'
-aligned_name: 'all_20s_to_5s${aligned_name_suffix}${aligned_name_ref}'
+aligned_name: 'latest_50s_to_5s${aligned_name_suffix}${aligned_name_ref}'
 
 method:
   nemo:
