@@ -164,7 +164,7 @@ class NeMo(OD3D_Method):
         # self.verts_feats = checkpoint["memory"][:self.mem_verts_feats_count].clone().detach().cpu()
         # note: somehow vertices are stored in wrong order of classes (starting with last class tvmonitor until first class aeroplane
         # self.verts_feats = self.verts_feats.reshape(len(self.meshes), self.verts_count_max, -1).flip(dims=(0,)).reshape(len(self.meshes) * self.verts_count_max, -1)
-        self.down_sample_rate = self.config.down_sample_rate
+        self.down_sample_rate = self.net.downsample_rate
 
     def normalize_feats(self):
         self.clutter_feats.data = self.clutter_feats.detach() / self.clutter_feats.detach().norm(dim=-1, keepdim=True)
@@ -349,7 +349,8 @@ class NeMo(OD3D_Method):
         N = vts2d.shape[1]
         # B x F+N x C
         feats2d_net = self.net(batch.rgb)
-        feats2d_net_mask = resize(batch.mask_rgb, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+
+        feats2d_net_mask = torch.ones(size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3])).to(device=self.device)
         if self.config.train.use_mask_object:
             feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
                                                               W_out=feats2d_net.shape[3])

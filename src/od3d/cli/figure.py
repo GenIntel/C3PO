@@ -1290,8 +1290,10 @@ def pose_alignment():
     categories = ['mouse', 'toaster', 'hydrant', 'book']
 
     categories = ['mouse', 'toaster', 'hydrant', 'book', 'remote', 'airplane', 'toilet', 'hairdryer', 'truck', 'train', 'bus', 'handbag', 'backpack', 'keyboard', 'laptop', 'motorcycle']
+    # categories = ['toaster', 'hydrant', 'airplane', 'hairdryer'] # toaster
+    categories = ['handbag', 'laptop', 'motorcycle', 'hydrant', 'airplane', 'hairdryer'] #  'handbag', 'backpack', 'keyboard',] # #v'backpack'
 
-    categories = ['mouse', 'toaster', 'hydrant', 'book']
+    # categories = ['mouse', 'toaster', 'hydrant', 'book']
 
         # aligned_name = 'latest_20_zsp/r0'
         # aligned_name = 'latest_20_zsp/r0'
@@ -1303,7 +1305,7 @@ def pose_alignment():
     for category in categories:
 
         imgs_category = []
-        for dataset_name in ['latest_20_zsp/r4', 'zsp/r4']:
+        for dataset_name in ['ours_zsp/r4', 'zsp/r4']:
             # category = 'car'
             co3d = CO3D.create_by_name('co3dv1_10s_zsp_labeled_cuboid_ref', config={
                 'categories': [category], 'aligned_name': dataset_name, # , 'pcl_source': CAM_TFORM_OBJ_SOURCES.PCL,
@@ -1319,7 +1321,7 @@ def pose_alignment():
                 pcl_colors = seq.get_pcl_colors(PCL_SOURCES.CO3D).to(device)
                 # show_scene(pts3d=[pcl], pts3d_colors=[pcl_colors]) # meshes=[seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT)]
 
-                pcl, pcl_mask = random_sampling(pcl, 70000, return_mask=True)
+                pcl, pcl_mask = random_sampling(pcl, 50000, return_mask=True)
                 pcl_colors = pcl_colors[pcl_mask]
                 aligned_tform_obj = seq.aligned_obj_tform_obj.to(device)
                 pcl = transf3d_broadcast(pcl, aligned_tform_obj)
@@ -1376,7 +1378,8 @@ def pose_alignment():
         imgs_categories_final.append(img_categories_final)
 
     imgs_categories_final = torch.stack(imgs_categories_final, dim=0)
-    imgs_categories_final = imgs_categories_final.reshape(2, len(imgs_categories_final) // 2, * (imgs_categories_final.shape[1:]))
+    rows = 3
+    imgs_categories_final = imgs_categories_final.reshape(rows, len(imgs_categories_final) // rows, * (imgs_categories_final.shape[1:]))
 
     imgs_categories_final = [crop_white_border_from_img(img_row.permute(1, 2, 0, 3).reshape(3, H_max, -1)) for img_row in imgs_categories_final]
 
@@ -1462,10 +1465,13 @@ def pose_in_the_wild():
     max_frames_count_per_category = 4 # 28
     batch_size = 4 # 4 0.22 versus 10.92 s,
     add_zsp = True # run zsp, takes long time
+    threshold = torch.pi / 18
 
     # 'couch', 'microwave',
     categories = ['bicycle', 'car', 'motorcycle', 'couch', 'microwave', 'bench', 'chair']
     categories = ['car', 'motorcycle', 'bench', 'chair',]
+    categories = ['toybus', 'bicycle', 'couch', 'microwave', ]
+    # categories = ['toybus']
 
     run_names = {
         'bicycle': '11-11_20-30-50_CO3D_NeMo_cat1_bicycle_ref4_filtered_mesh_slurm',
@@ -1476,6 +1482,9 @@ def pose_in_the_wild():
         'bench': '11-15_02-01-39_CO3D_NeMo_cat1_bench_ref0_filtered_mesh_slurm',
         'toaster': '11-15_03-11-37_CO3D_NeMo_cat1_toaster_ref3_filtered_mesh_slurm',
         'chair': '11-15_03-12-23_CO3D_NeMo_cat1_chair_ref1_filtered_mesh_slurm',
+        #'toybus': '11-14_23-47-12_CO3D_NeMo_cat1_bus_ref4_filtered_mesh_slurm',
+        # 'toybus': '11-14_23-46-04_CO3D_NeMo_cat1_bus_ref2_filtered_mesh_slurm',
+        'toybus': '11-14_23-45-52_CO3D_NeMo_cat1_bus_ref1_mesh_slurm',
     }
 
     ref_ids = {
@@ -1487,6 +1496,9 @@ def pose_in_the_wild():
         'bench': 0,
         'toaster': 3,
         'chair': 1,
+        #'toybus': 2,
+        #'toybus': 4,
+        'toybus': 1,
     }
 
     objectnet3d_frames_per_category = {
@@ -1498,6 +1510,7 @@ def pose_in_the_wild():
         'bench': {'test': None},
         'toaster': {'test': None},
         'chair': {'test': None},
+        'toybus': {'test': None},
     }
 
     objectnet3d_frames_per_category = {
@@ -1586,6 +1599,7 @@ def pose_in_the_wild():
                 # # 'n03891251_108',
         ]},
         'toaster': {'test': None},
+        'toybus': {'test': None},
         'chair': {'test': [
             'n03001627_130',
             'n03001627_13055',
@@ -1617,6 +1631,7 @@ def pose_in_the_wild():
 
     imgs_categories = []
     for category in categories:
+
         ref_id = ref_ids[category]
         run_name = run_names[category]
         aligned_name = f'all_50s_to_5s_mesh_filtered/r{ref_id}'
@@ -1629,6 +1644,8 @@ def pose_in_the_wild():
         # scale_mask_larger_1_centerzoom512 scale_mask_shorter_1_centerzoom512 scale_mask_separate_centerzoom512
         config_transform = od3d.io.read_config_intern(rfpath=Path("methods").joinpath('transform', f"scale_mask_shorter_1_centerzoom512.yaml"))
         # scale_mask_shorter_1_centerzoom512
+        from od3d.datasets.co3d.enum import MAP_CO3D_OBJECTNET3D
+
         nemo = NeMo.create_by_name('nemo',
                                    logging_dir=Path('nemo_out'),
                                    config={'texture_dataset': None,
@@ -1637,9 +1654,11 @@ def pose_in_the_wild():
                                            'fpaths_meshes': {category: str(mesh_fpath)},
                                            'checkpoint': f'/misc/lmbraid19/sommerl/exps/{run_name}/nemo.ckpt'})
 
-        config_dataset = {'categories': [category]} # , 'dict_nested_frames': {'val': objectnet3d_frames}} # n03792782_6218, n03792782_687
+        config_dataset = {'categories': [MAP_CO3D_OBJECTNET3D[category]]} # , 'dict_nested_frames': {'val': objectnet3d_frames}} # n03792782_6218, n03792782_687
         config_dataset['modalities'] = ['size', 'category', 'cam_intr4x4', 'cam_tform4x4_obj', 'category', 'rgb', 'mask', 'depth', 'depth_mask']
-        config_dataset['dict_nested_frames'] = objectnet3d_frames_per_category[category]
+
+        # config_dataset['dict_nested_frames'] = objectnet3d_frames_per_category[category]
+
         config_dataset['subset_fraction'] = 1.
 
         dataset_nemo = ObjectNet3D.create_by_name('objectnet3d_test', config=config_dataset)
@@ -1689,7 +1708,7 @@ def pose_in_the_wild():
         dataloader_zsp_iter = iter(dataloader_zsp)
         dataloader_nemo_iter = iter(dataloader_nemo)
         name_list = []
-        for i in range(max_frames_count_per_category): #  (batch_zsp, batch_nemo) in enumerate(tqdm(zip(dataloader_zsp, dataloader_nemo))):
+        for i in range(len(dataset_zsp)): #  (batch_zsp, batch_nemo) in enumerate(tqdm(zip(dataloader_zsp, dataloader_nemo))):
             batch_zsp = next(dataloader_zsp_iter)
             batch_nemo = next(dataloader_nemo_iter)
             logger.info(batch_zsp.name)
@@ -1709,6 +1728,7 @@ def pose_in_the_wild():
             duration_nemo = time() - time_nemo_start
             logger.info(f'NeMo took {duration_nemo}s, per sample it is {duration_nemo/batch_size}s')
             nemo_pred_cam_tform4x4_obj = batch_res_nemo['cam_tform4x4_obj']
+            logger.info(batch_res_nemo['rot_diff_rad'])
 
             if add_zsp:
                 time_zsp_start = time()
@@ -1736,6 +1756,9 @@ def pose_in_the_wild():
                                                  down_sample_rate=1., pre_rendered=False)
 
             for b in range(len(batch_nemo)):
+                # if batch_res_nemo['']
+                if batch_res_nemo['rot_diff_rad'][b] > (threshold):
+                    continue
                 logger.info(batch_nemo.name_unique[b])
                 img_rgb = batch_nemo.rgb[b].clone()
 
@@ -1757,11 +1780,11 @@ def pose_in_the_wild():
                 # show_img(img_in_the_wild_single)
                 imgs_in_the_wild.append(img_in_the_wild_single)
 
-            if ((i+1) * batch_size) >= max_frames_count_per_category:
+            if len(imgs_in_the_wild) >= max_frames_count_per_category:
                 break
 
         od3d.io.write_list_as_yaml(Path(f'pose_in_the_wild_names_{category}_{max_frames_count_per_category}.yaml'), name_list)
-        imgs_in_the_wild = torch.stack(imgs_in_the_wild, dim=0)
+        imgs_in_the_wild = torch.stack(imgs_in_the_wild, dim=0)[:max_frames_count_per_category]
         img_in_the_wild = imgs_to_img(imgs_in_the_wild[None, :], pad=pad, pad_value=255)
 
         imgs_categories.append(img_in_the_wild)

@@ -105,6 +105,14 @@ class ResNet(OD3D_Head):
                                                      pre_upsampling=self.conv_blocks_pre_upsampling[i])
                                            for i in range(self.conv_blocks_count)])
 
+
+        if config.fully_connected.out_dim is not None:
+            self.out_dim = config.fully_connected.out_dim
+        elif len(config.conv_blocks.out_dims) > 0:
+            self.out_dim = config.conv_blocks.out_dims[-1]
+        else:
+            self.out_dim = self.in_dims[-1]
+
         if config.fully_connected.out_dim is not None:
             self.fc_enabled = True
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
