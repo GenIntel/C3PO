@@ -12,6 +12,7 @@ path_home: /home/sommerl
 url_od3d: git@github.com:Generative-Vision-Robust-Learning/od3d.git
 username: sommerl
 gpu_count: 1
+gpu_mem_in_gb: 20
 cpu_count: 8
-ram: "40gb"
+ram: "20gb"
 walltime: "24:00:00"
