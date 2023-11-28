@@ -54,7 +54,7 @@ class ResNet(OD3D_Backbone):
         self.out_downsample_scales = [2**(self.layers_returned[i]-self.layers_returned[i+1]) for i in range(self.layers_count - 1)]
 
         self.downsample_rate = self.config.downsample_rate
-        self.downsample_rate_resnet = 4 * (2**self.layers_returned[-1])
+        self.downsample_rate_resnet = 2 * (2**self.layers_returned[-1])
 
         if self.freeze:
             for param in self.parameters():
