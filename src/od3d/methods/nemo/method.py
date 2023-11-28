@@ -372,6 +372,7 @@ class NeMo(OD3D_Method):
 
 
         # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
+        logger.info(batch.label)
         batch_vts_ids = self.meshes.get_verts_and_noise_ids_stacked(batch.label.tolist(),
                                                                     count_noise_ids=self.config.num_noise)
 
