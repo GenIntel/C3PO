@@ -45,6 +45,7 @@ dependencies = [
     "open3d",
     "numba",
     "pycuda",
+    "timm",
 ]
 
 dynamic = ["version"]
