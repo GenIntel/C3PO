@@ -20,6 +20,7 @@ backbone:
 head:
   class_name: ResNet
   block_type: 'bottleneck' # 'bottleneck', 'basic'
+  pad_zero: False
   conv_blocks:
     out_dims: [ 512, 512, 128 ]
     strides: [ 1, 1, 1 ]

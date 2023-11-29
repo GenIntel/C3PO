@@ -47,6 +47,8 @@ class ResNet(OD3D_Head):
         self.upsample_conv_blocks = nn.ModuleList()
         self.upsample = nn.ModuleList()
         self.block_type: RESNET_CONV_BLOCK_TYPES = config.block_type
+        self.pad_zero = config.pad_zero
+        self.pad_width = 1
 
         self.in_upsampled_dim = config.get("in_upsampled_dim", self.in_dims[-1])
         assert len(self.in_upsample_scales) == len(self.in_dims) - 1
@@ -137,7 +139,15 @@ class ResNet(OD3D_Head):
                     x_low = x_res
                 x_res = self.upsample_conv_blocks[i](torch.cat([x[i+1], self.upsample[i](x_low)], dim=1))
 
+        if self.pad_zero:
+
+            x_res = torch.nn.functional.pad(x_res, (self.pad_width, self.pad_width, self.pad_width, self.pad_width), mode='constant', value=0)
+
         x_res = self.conv_blocks(x_res)
+
+        if self.pad_zero:
+            pad_width = int((1 / self.downsample_rate) * self.pad_width)
+            x_res = x_res[:, :, pad_width:-pad_width, pad_width:-pad_width]
 
         if self.fc_enabled:
             x_res = self.avgpool(x_res)
