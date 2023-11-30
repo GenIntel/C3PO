@@ -41,6 +41,7 @@ method:
   nemo:
     # checkpoint: ${platform.path_exps}/11-20_19-29-23_Pascal3D_NeMo_local/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
     train:
+      val: True
       epochs: 50 # artur: 200  wufei: 800
       dataloader:
         num_workers: 4

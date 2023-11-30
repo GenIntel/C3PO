@@ -109,6 +109,10 @@ class NeMo(OD3D_Method):
         # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
         self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
         self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes)
+        self.meshes.geodesic_prob_sigma = self.config.train.geodesic_prob_sigma
+        #self.meshes.rgb = (self.meshes.geodesic_prob[3, :, None].repeat(1, 3)).clamp(0, 1)
+        # self.meshes.show()
+
         logger.info(f'loading meshes from following fpaths: {self.fpaths_meshes}...')
         # self.meshes.show()
         self.verts_count_max = self.meshes.verts_counts_max
@@ -116,11 +120,14 @@ class NeMo(OD3D_Method):
         self.mem_clutter_feats_count = config.num_noise * config.max_group
         self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
 
+        self.feats_bank_count = self.verts_count_max * len(self.meshes) + 1
+
         self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, self.net.out_dim), device=self.device),
                                                 requires_grad=True)
         self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(
             torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.out_dim), device=self.device),
             requires_grad=True))
+
         # self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.feat_dim), device=self.device), requires_grad=True))
 
         # dict to save estimated tforms, sequence : tform,
@@ -131,6 +138,10 @@ class NeMo(OD3D_Method):
 
         if self.config.train.loss == 'cross_entropy':
             self.criterion = torch.nn.CrossEntropyLoss().cuda()
+        elif self.config.train.loss == 'cross_entropy_smooth_geo':
+            from od3d.cv.metric.cross_entropy_smooth import CrossEntropyLabelsSmoothed
+            labels_smoothed = self.meshes.geodesic_prob_with_noise.to(device=self.device)
+            self.criterion = CrossEntropyLabelsSmoothed(labels_smoothed=labels_smoothed)
         elif self.config.train.loss == 'nll_softmax':
             self.softmax = torch.nn.LogSoftmax(dim=1)
             self.criterion = torch.nn.NLLLoss().cuda()
@@ -1181,10 +1192,9 @@ class NeMo(OD3D_Method):
             feats2d_net_mask_clutter_bin = (feats2d_net_mask < 0.5).expand(*sim_pxl.shape)
             sim_pxl[feats2d_net_mask_clutter_bin] = sim_clutter.expand(*sim_pxl.shape)[feats2d_net_mask_clutter_bin]
             sim_pxl[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask]
-
         else:
             sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
-
+            sim_pxl[~feats2d_rendered_clutter_mask] = torch.max(sim_texture_multiple_cams[~feats2d_rendered_clutter_mask], sim_clutter.expand(*sim_pxl.shape)[~feats2d_rendered_clutter_mask])
         # depcrecated?
         # if feats2d_net_mask is None:
         #     sim = sim_pxl.flatten(2).mean(dim=-1)

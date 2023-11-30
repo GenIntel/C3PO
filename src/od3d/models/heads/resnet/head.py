@@ -47,7 +47,7 @@ class ResNet(OD3D_Head):
         self.upsample_conv_blocks = nn.ModuleList()
         self.upsample = nn.ModuleList()
         self.block_type: RESNET_CONV_BLOCK_TYPES = config.block_type
-        self.pad_zero = config.pad_zero
+        self.pad_zero = config.get('pad_zero', False)
         self.pad_width = 1
 
         self.in_upsampled_dim = config.get("in_upsampled_dim", self.in_dims[-1])

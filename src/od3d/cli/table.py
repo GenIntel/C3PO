@@ -48,11 +48,100 @@ DATASET_CO3D_28 = 'co3d_28'
 DATASET_OBJECTNET3D = 'objectnet3d'
 
 @app.command()
+def pascal3d(
+        name_regex: str = typer.Option('Pascal3D_NeMo', '-n', '--name'),
+        age_in_hours: int = typer.Option(24, '-h', '--hours'),
+        digits: int = typer.Option(1, '-d', '--digits')
+    ):
+    map_runs_names = None
+
+    # regex either head or backbone
+    name_regex = '.*Pascal3D_NeMo_(bs.*)_slurm'
+    map_runs_names = {
+        '11-28_14-50-50_Pascal3D_NeMo_bs1x6_slurm': '1x6',
+        '11-28_15-53-00_Pascal3D_NeMo_bs1x12_slurm': '1x12',
+        '11-28_14-49-42_Pascal3D_NeMo_bs1x24_slurm': '1x24',
+        '11-28_14-50-05_Pascal3D_NeMo_bs2x6_slurm': '2x6',
+        '11-28_14-50-16_Pascal3D_NeMo_bs2x12_slurm': '2x12',
+        '11-28_14-51-01_Pascal3D_NeMo_bs2x24_slurm': '2x24',
+        '11-28_14-49-53_Pascal3D_NeMo_bs4x12_slurm': '4x12',
+        '11-28_14-50-38_Pascal3D_NeMo_bs16x12_slurm': '16x12',
+    }
+
+    map_runs_names = {
+        '11-29_11-59-52_Pascal3D_NeMo_bs1x6_slurm': '1x6',
+        '11-29_11-59-29_Pascal3D_NeMo_bs1x12_slurm': '1x12',
+        '11-29_11-58-44_Pascal3D_NeMo_bs1x24_slurm': '1x24',
+        '11-29_11-59-06_Pascal3D_NeMo_bs2x6_slurm': '2x6',
+        '11-29_11-59-18_Pascal3D_NeMo_bs2x12_slurm': '2x12',
+        '11-29_12-00-03_Pascal3D_NeMo_bs2x24_slurm': '2x24',
+        '11-29_11-58-55_Pascal3D_NeMo_bs4x12_slurm': '4x12',
+        '11-29_11-58-32_Pascal3D_NeMo_bs8x12_slurm': '8x12',
+        '11-29_11-59-40_Pascal3D_NeMo_bs16x12_slurm': '16x12',
+    }
+    #name_regex = '.*Pascal3D_NeMo_(temp_[^b]*)_slurm'
+    #name_regex = '.*Pascal3D_NeMo_(head_.*|backbone_.*)_slurm'
+    # map_runs_names = {
+    #     '11-28_19-05-05_Pascal3D_NeMo_backbone_resnet_slurm': 'ResNet-50 (frozen) + 3 ResNetBlocks',
+    #     '11-28_18-46-24_Pascal3D_NeMo_backbone_resnet_unfrozen_slurm': 'ResNet-50 (unfrozen) + 3 ResNetBlocks',
+    #     # '11-28_19-04-42_Pascal3D_NeMo_backbone_resnet_unfrozen_moving_avg_slurm': 'ResNet-50 (unfrozen) + 3 ResNetBlocks + Moving Avg.',
+    #     #'11-28_18-33-11_Pascal3D_NeMo_head_resnet_slurm': 'DinoV2 (frozen) +  3 ResNetBlocks',
+    #     #'11-27_10-39-11_Pascal3D_NeMo_backbone_resnet_unfrozen_slurm': 'ResNet-50 (unfrozen) + 3 ResNetBlocks',
+    #     #'11-27_10-38-23_Pascal3D_NeMo_head_resnet_slurm': 'DinoV2 (frozen) +  3 ResNetBlocks',
+    #     #'11-27_09-38-56_Pascal3D_NeMo_backbone_resnet_slurm': 'ResNet-50 (frozen) + 3 ResNetBlocks',
+    #     '11-28_19-04-53_Pascal3D_NeMo_head_resnet_slurm': 'DinoV2 (frozen) +  3 ResNetBlocks',
+    #     '11-27_09-38-34_Pascal3D_NeMo_head_vit_depth_0_slurm': 'DinoV2 (frozen) + 1 LinearLayer',
+    #     '11-27_09-38-23_Pascal3D_NeMo_head_vit_depth_1_slurm': 'DinoV2 (frozen) + 1 LinearLayer + 1 ViTBlocks',
+    #     '11-27_09-38-45_Pascal3D_NeMo_head_vit_depth_2_slurm': 'DinoV2 (frozen) + 1 LinearLayer + 2 ViTBlocks',
+    #     '11-27_09-38-11_Pascal3D_NeMo_head_vit_depth_5_slurm': 'DinoV2 (frozen) + 1 LinearLayer + 5 ViTBlocks',
+    # }
+
+    metrics = ['test/pascal3d_test/label/acc', 'test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18']
+    metrics_names = ['CLS [%]', '3D Pose PI/6 [%]', '3D Pose PI/18 [%]']
+
+    df = get_dataframe(name_regex=name_regex, metrics=metrics, age_in_hours=age_in_hours)
+    # filter pandas df with column name and list map_runs_names.keys()
+    if map_runs_names is not None:
+        df = df[df['name'].isin(map_runs_names.keys())]
+        df = df.replace({'name': map_runs_names})
+
+    df = df.set_index('name')
+    if map_runs_names is not None:
+        df = df.reindex(map_runs_names.values())
+    df = df * 100.
+
+    # having two lists metrics, metrics_names, make a dictionary map_metrics
+    map_metrics = dict(zip(metrics, metrics_names))
+    df.rename(columns=map_metrics, inplace=True)
+    logger.info(tabulate(df, headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+
+    import matplotlib.pyplot as plt
+    # change from matplotlib the switch backend to interactive tkinter
+    plt.switch_backend('TkAgg')
+    # using matplotlib plot the dataframe transposed,
+    df.transpose().plot.bar(rot=0)
+    # add value for each bar
+    for p in plt.gca().patches:
+        plt.gca().annotate(f"{p.get_height():.{digits}f}", (p.get_x() + p.get_width() / 2., p.get_height()),
+                           ha='center', va='center', xytext=(0, 10), textcoords='offset points')
+
+    # ensure that legend is not inside bars
+    plt.legend(loc='upper right') # , bbox_to_anchor=(0.0, 0.5))
+
+    # ensure that figure is large enough to cover the legend bars, and text
+    plt.gcf().set_size_inches(20, 7)
+
+    # show the plot
+    plt.show()
+
+
+@app.command()
 def pose_categories(
         dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
         metric: str = typer.Option('pi6', '-m', '--metric'),
         name_regex: str = typer.Option('CO3D_NeMo', '-n', '--name'),
         age_in_hours: int = typer.Option(1000, '-h', '--hours')):
+
     metric = 'pi6' # 'pi6', 'pi12', 'pi18',
     dataset = 'objectnet3d' # 'pascal3d' 'co3d_20' 'co3d_28' 'objectnet3d'
     name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'

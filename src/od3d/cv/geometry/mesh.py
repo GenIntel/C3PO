@@ -69,6 +69,7 @@ class Mesh:
     def create_sphere(center3d: torch.Tensor([0., 0., 0.]), radius: float = 1., device='cpu'):
         return Mesh.from_o3d(o3d.geometry.TriangleMesh.create_sphere(radius=radius).translate(center3d.detach().cpu().numpy()), device=device)
 
+
     @staticmethod
     def create_plane_as_cone(center3d: torch.Tensor= torch.Tensor([0., 0., 0.]), radius:float=1., height:float=1., device='cpu'):
         R = o3d.geometry.TriangleMesh.get_rotation_matrix_from_xyz((np.pi, 0., 0.))
@@ -85,13 +86,16 @@ class Mesh:
     # ray.transform(inv_tform4x4(cam_tform4x4_obj).detach().cpu().numpy())
 
 class Meshes(torch.nn.Module):
-    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None, feats: List[torch.Tensor]=None):
+    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None, feats: List[torch.Tensor]=None, geodesic_prob_sigma=0.2):
         super().__init__()
 
         self.meshes_count = len(verts)
         self.verts = torch.nn.Parameter(torch.cat([_verts for _verts in verts], dim=0), requires_grad=False)
         self.faces = torch.nn.Parameter(torch.cat([_faces for _faces in faces], dim=0), requires_grad=False)
         self.device = self.verts.device
+
+        self.geodesic_prob_sigma = geodesic_prob_sigma
+        self._geodesic_dist = None
 
         self.verts_counts = [_verts.shape[0] for _verts in verts]
         self.faces_counts = [_faces.shape[0] for _faces in faces]
@@ -169,6 +173,29 @@ class Meshes(torch.nn.Module):
             rgb = None
         return Meshes(verts=verts, faces=faces, rgb=rgb)
 
+    @staticmethod
+    def load_by_name(name: str, device='cpu', faces_count=None):
+        if name == 'bunny':
+            bunny_data = o3d.data.BunnyMesh()
+            bunny_mesh_open3d = o3d.io.read_triangle_mesh(bunny_data.path)
+            if faces_count is not None:
+                bunny_mesh_open3d = bunny_mesh_open3d.simplify_quadric_decimation(faces_count)
+            bunny_mesh = Meshes.load_from_meshes([Mesh.from_o3d(bunny_mesh_open3d, device=device)])
+            bunny_rot = torch.Tensor(
+                [[0., 0., 1., 0., ],
+                 [1., 0., 0., 0., ],
+                 [0., 1., 0., 0., ],
+                 [0., 0., 0., 1., ]]).to(device=device)
+            bunny_mesh.verts.data = transf3d_broadcast(pts3d=bunny_mesh.verts, transf4x4=bunny_rot)
+            return bunny_mesh
+        elif name == 'cuboid':
+            from od3d.cv.geometry.primitives import Cuboids
+            cuboids = Cuboids.create_dense_from_limits(limits=torch.Tensor([[[-1., -1., -1.], [1., 1., 1.]],]), device=device)
+            return cuboids
+
+        else:
+            raise ValueError(f'Unknown mesh name: {name}')
+
     def __add__(self, meshes2):
         meshes = []
         for mesh_id in list(range(len(self))):
@@ -216,6 +243,53 @@ class Meshes(torch.nn.Module):
         else:
             feats = [self.get_feats_with_mesh_id(mesh_id=mesh_id, clone=clone) for mesh_id in meshes_ids]
         return Meshes(verts=verts, faces=faces, rgb=rgb, feats=feats)
+
+    @property
+    def geodesic_dist(self):
+        if self._geodesic_dist is None:
+            self._geodesic_dist = self.get_verts_geodestic_distances()
+        return self._geodesic_dist
+
+    @property
+    def geodesic_prob(self):
+        _geodesic_dist = self.geodesic_dist.clone()
+        _geodesic_prob = torch.exp(input=-_geodesic_dist / (self.geodesic_prob_sigma + 1e-10))
+        # replace inf with 0
+        _geodesic_prob[torch.isinf(_geodesic_dist)] = 0.
+        return _geodesic_prob
+    @property
+    def geodesic_prob_with_noise(self):
+        geodesic_prob_with_noise = torch.eye(self.verts.shape[0]+1, device=self.device)
+        geodesic_prob_with_noise[:-1, :-1] = self.geodesic_prob
+        return geodesic_prob_with_noise
+
+
+    def get_verts_geodestic_distances(self):
+        import gdist
+
+        meshes_ids = list(range(len(self)))
+        geodesic_dist = torch.ones(size=(self.verts.shape[0], self.verts.shape[0]), device=self.device) * torch.inf
+        for mesh_id in meshes_ids:
+            verts = self.get_verts_with_mesh_id(mesh_id=mesh_id)
+            faces = self.get_faces_with_mesh_id(mesh_id=mesh_id)
+            mesh_verts_geodesic_dist = gdist.local_gdist_matrix(
+                vertices=verts.detach().cpu().to(torch.float64).numpy(),
+                triangles=faces.cpu().detach().to(torch.int32).numpy()
+            )
+            # convert  scipy.sparse._csc.csc_matrix to torch.Tensor, fill sparse with torch.inf
+            mesh_verts_geodesic_dist = torch.from_numpy(mesh_verts_geodesic_dist.toarray()).to(dtype=torch.float32, device=self.device)
+            mesh_verts_geodesic_dist = mesh_verts_geodesic_dist / mesh_verts_geodesic_dist.max()
+            mesh_verts_geodesic_dist[mesh_verts_geodesic_dist == 0] = torch.inf
+            mesh_verts_geodesic_dist[torch.arange(mesh_verts_geodesic_dist.shape[0]).to(self.device), torch.arange(mesh_verts_geodesic_dist.shape[0]).to(self.device)] = 0.
+
+            #mesh_verts_geodesic_dist = torch.from_numpy(mesh_verts_geodesic_dist.toarray()).to(dtype=torch.float32, device=self.device)
+
+            geodesic_dist[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1], self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]] = mesh_verts_geodesic_dist
+
+        #euclidean_dist = torch.cdist(self.verts[None,], self.verts[None,])[0]
+        #geodesic_dist = torch.ones_like(euclidean_dist) * torch.inf
+        # would need to get verts nearest neighbors and iteratively propagating geodesic_dist
+        return geodesic_dist
 
     def get_verts_ncds_with_mesh_id(self, mesh_id):
         verts3d = self.get_verts_with_mesh_id(mesh_id)
@@ -450,7 +524,7 @@ class Meshes(torch.nn.Module):
 
     def show(self, fpath: Path = None, return_visualization=False, viewpoints_count=1):
         from od3d.cv.visual.show import show_scene
-        return show_scene(meshes=self, fpath=fpath, return_visualization=return_visualization, viewpoints_count=viewpoints_count)
+        return show_scene(meshes=self, fpath=fpath, return_visualization=return_visualization, viewpoints_count=viewpoints_count, meshes_add_translation=True)
 
     """
     def show(self, pts3d=[], meshes_ids=None):
@@ -772,3 +846,5 @@ class Meshes(torch.nn.Module):
             mesh_feats2d_rendered = mesh_feats2d_rendered.reshape(meshes_count, cams_count, *mesh_feats2d_rendered.shape[-3:])
 
         return mesh_feats2d_rendered
+
+
