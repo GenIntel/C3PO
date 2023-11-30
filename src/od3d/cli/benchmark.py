@@ -113,10 +113,11 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
         #logger.info(runs)
 
     logger.info(f'found {len(runs)} runs')
+    runs_names = [run.name for run in runs]
+    logger.info(f'runs: \n{runs_names}')
     rows = []
     for run in runs:
         try:
-            logger.info(f'runs {run.name}')
             run_summary = run.summary
             row = [run.name]
             if len(configs) > 0:
@@ -128,7 +129,7 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
                     row.append(run_summary[metric])
                 else:
                     row.append(numpy.nan)
-            if name_regex is not None:
+            if name_regex is not None and len(name_regex_groups) > 0:
                 re_matched_groups = re.match(name_regex, run.name).groups()
                 for i, name_regex_group in enumerate(name_regex_groups):
                     row.append(re_matched_groups[i])
