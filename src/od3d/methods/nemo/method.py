@@ -378,9 +378,12 @@ class NeMo(OD3D_Method):
         xy = torch.stack(
             torch.meshgrid(torch.arange(W, device=self.device), torch.arange(H, device=self.device),
                            indexing='xy'), dim=0)  # HxW
-        prob_noise = (1. - 1. * resize(feats2d_net_mask, scale_factor=1. / self.down_sample_rate)).abs().flatten(1)
+        prob_noise = (1. - 1. * feats2d_net_mask).clamp(0, 1).flatten(1)
         prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
         noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise, replacement=True)].permute(1, 2, 0)
+
+        #from od3d.cv.visual.show import show_imgs
+        #show_imgs(prob_noise.reshape(-1, 1, H, W))
 
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
         vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
@@ -437,7 +440,7 @@ class NeMo(OD3D_Method):
 
         loss.backward()
         logger.info(f'loss {loss.item()}')
-
+        results_batch['noise2d'] = noise2d
         results_batch['loss'] = loss[None,]
         results_batch['item_id'] = batch.item_id
         results_batch['name_unique'] = batch.name_unique
@@ -831,7 +834,8 @@ class NeMo(OD3D_Method):
                 batch_result_ids = torch.LongTensor([dict_name_unique_to_result_id[batch.name_unique[b]] for b in range(B)]).to(device=self.device)
                 if 'gt_cam_tform4x4_obj' in results_epoch.keys():
                     batch.cam_tform4x4_obj = results_epoch['gt_cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
-
+                if 'noise2d' in results_epoch.keys():
+                    batch.noise2d = results_epoch['noise2d'].to(device=self.device)[batch_result_ids]
                 batch_sel_names = [dict_name_unique_to_sel_name[batch.name_unique[b]] for b in range(B)]
                 batch_names = [batch.name_unique[b] for b in range(B)]
                 batch_sel_scores = []
@@ -970,6 +974,10 @@ class NeMo(OD3D_Method):
                         for b in range(len(batch)):
                             img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
                                             gt_verts_ncds[b])
+                            if 'noise2d' in results_epoch.keys():
+                                from od3d.cv.visual.draw import draw_pixels
+                                img = draw_pixels(img, batch.noise2d[b] * (self.down_sample_rate / config_visualize.down_sample_rate))
+
                             results[
                                 f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB}'] = image_as_wandb_image(
                                 img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
@@ -978,6 +986,7 @@ class NeMo(OD3D_Method):
                 if VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
                     logger.info('create pred vs gt verts ncds...')
                     for b in range(len(batch)):
+                        # if 'noise2d' in results
                         img1 = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
                                          pred_verts_ncds[b])
                         img2 = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
