@@ -17,7 +17,8 @@ multiview:
 
 train:
   early_stopping: True
-  use_mask_object: True
+  use_mask_object: False
+  use_mask_rendered_object: True
   loss: cross_entropy # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
   bank_feats_update: loss_gradient # loss_gradient, normalize_loss_gradient, moving_average, loss
   T: 0.07
@@ -95,7 +96,7 @@ inference:
     pre_rendered: True
     sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
     live: False
-    use_mask_object: True
+    use_mask_object: False
     sample:
       method: uniform # epnp3d2d uniform
       uniform_multiview_rescale: True

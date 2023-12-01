@@ -1,6 +1,7 @@
 import time
 from typing import List
 import od3d.io
+from od3d.cv.statistics.standard_devation import mean_avg_std_with_id
 from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.benchmark.results import OD3D_Results
@@ -365,6 +366,13 @@ class NeMo(OD3D_Method):
         if self.config.train.use_mask_object:
             feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
                                                               W_out=feats2d_net.shape[3])
+        if self.config.train.use_mask_rendered_object:
+            feats2d_net_mask = feats2d_net_mask * self.meshes.render_feats(
+                cams_intr4x4=batch.cam_intr4x4,
+                cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                imgs_sizes=batch.size, meshes_ids=batch.label,
+                down_sample_rate=self.down_sample_rate,
+                modality=MESH_RENDER_MODALITIES.MASK)
 
         H, W = feats2d_net.shape[-2:]
         xy = torch.stack(
@@ -373,6 +381,7 @@ class NeMo(OD3D_Method):
         prob_noise = (1. - 1. * resize(feats2d_net_mask, scale_factor=1. / self.down_sample_rate)).abs().flatten(1)
         prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
         noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise, replacement=True)].permute(1, 2, 0)
+
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
         vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
         net_feats = sample_pxl2d_pts(feats2d_net, pxl2d=torch.cat([vts2d, noise2d], dim=1))
