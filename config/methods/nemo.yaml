@@ -91,6 +91,7 @@ test:
       live: False
 
 inference:
+    only_use_rendered_inliers: False
     pre_rendered: True
     sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
     live: False
