@@ -350,7 +350,7 @@ class NeMo(OD3D_Method):
 
         batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
-        # logger.info(f'batch.label {batch.label}')
+        logger.info(f'batch.label {batch.label}')
         # B x x N x 2
         vts2d, vts2d_mask = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
                                                 cams_tform4x4_obj=batch.cam_tform4x4_obj,
