@@ -352,6 +352,8 @@ class NeMo(OD3D_Method):
         batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
         logger.info(f'batch.label {batch.label}')
+        logger.info(f'batch.size {batch.size}')
+
         # B x x N x 2
         vts2d, vts2d_mask = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
                                                 cams_tform4x4_obj=batch.cam_tform4x4_obj,
@@ -367,6 +369,7 @@ class NeMo(OD3D_Method):
             feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
                                                               W_out=feats2d_net.shape[3])
         if self.config.train.use_mask_rendered_object:
+            logger.info(f'batch.size {batch.size}')
             feats2d_net_mask = feats2d_net_mask * self.meshes.render_feats(
                 cams_intr4x4=batch.cam_intr4x4,
                 cams_tform4x4_obj=batch.cam_tform4x4_obj,
