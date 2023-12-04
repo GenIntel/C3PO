@@ -427,6 +427,7 @@ class NeMo(OD3D_Method):
             batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
             bank_feats[batch_vts_ids_unique].data = bank_feats_new
+            self.normalize_feats()
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
             sim = None
