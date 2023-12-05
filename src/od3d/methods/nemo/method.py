@@ -1086,9 +1086,9 @@ class NeMo(OD3D_Method):
     def get_nearest_corresp2d3d(self, feats2d_net, meshes_ids, feats2d_net_mask: torch.Tensor=None):
         nearest_verts3d, sim_texture, sim_clutter = self.get_nearest_verts3d_to_feats2d_net(feats2d_net, meshes_ids, return_sim_texture_and_clutter=True)
         nearest_verts2d = get_pxl2d_like(nearest_verts3d.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-
         # H=sim_clutter.shape[1], W=sim_clutter.shape[2], dtype=sim_nearest_texture_verts.dtype, device=sim_nearest_texture_verts.device)[None,].expand()
-        prob_corresp2d3d = ((sim_texture + 1) / 2) * (1-((sim_clutter+1)/ 2)) #  (sim_clutter < sim_texture) * sim_texture
+        # prob_corresp2d3d = ((sim_texture + 1) / 2) * (1-((sim_clutter+1)/ 2)) #  (sim_clutter < sim_texture) * sim_texture
+        prob_corresp2d3d = torch.exp(sim_texture) / (torch.exp(sim_texture) + torch.exp(sim_clutter))
         prob_corresp2d3d *= feats2d_net_mask
 
         return nearest_verts3d, nearest_verts2d, prob_corresp2d3d
