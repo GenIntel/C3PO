@@ -1217,7 +1217,11 @@ class NeMo(OD3D_Method):
         if feats2d_net_mask is not None:
             feats2d_net_mask_clutter_bin = (feats2d_net_mask < 0.5).expand(*sim_pxl.shape)
             sim_pxl[feats2d_net_mask_clutter_bin] = sim_clutter.expand(*sim_pxl.shape)[feats2d_net_mask_clutter_bin]
-            sim_pxl[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask]
+            # sim_pxl[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask]
+            sim_pxl[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask] = \
+                torch.max(sim_texture_multiple_cams[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask],
+                          sim_clutter.expand(*sim_pxl.shape)[(~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask])
+
         else:
             sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[feats2d_rendered_clutter_mask]
             sim_pxl[~feats2d_rendered_clutter_mask] = torch.max(sim_texture_multiple_cams[~feats2d_rendered_clutter_mask], sim_clutter.expand(*sim_pxl.shape)[~feats2d_rendered_clutter_mask])
