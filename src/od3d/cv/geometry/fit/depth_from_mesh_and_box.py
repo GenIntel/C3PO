@@ -61,10 +61,10 @@ def depth_from_mesh_and_box(b_cams_multiview_intr4x4, b_cams_multiview_tform4x4_
 
     # B x C x 4
     scales = torch.stack([
-        (mask_verts2d_x_max - cx) / (mesh_verts2d_x_max - cx),
-        (mask_verts2d_x_min - cx) / (mesh_verts2d_x_min - cx),
-        (mask_verts2d_y_max - cy) / (mesh_verts2d_y_max - cy),
-        (mask_verts2d_y_min - cy) / (mesh_verts2d_y_min - cy)],
+        (mesh_verts2d_x_max - cx) / (mask_verts2d_x_max - cx),
+        (mesh_verts2d_x_min - cx) / (mask_verts2d_x_min - cx),
+        (mesh_verts2d_y_max - cy) / (mask_verts2d_y_max - cy),
+        (mesh_verts2d_y_min - cy) / (mask_verts2d_y_min - cy)],
         dim=-1)
 
     if multiview:
