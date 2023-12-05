@@ -459,7 +459,6 @@ class Meshes(torch.nn.Module):
         verts_ids = [torch.arange(self.verts_counts_acc_from_0[mesh_id], self.verts_counts_acc_from_0[mesh_id] + self.verts_counts_max, device=device) for mesh_id in mesh_ids]
         return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
 
-
     def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: Union[torch.LongTensor, List], down_sample_rate=1., broadcast_batch_and_cams=False):
         """
             Args:
@@ -467,10 +466,8 @@ class Meshes(torch.nn.Module):
                 cams_intr4x4 (torch.Tensor): Bx4x4
                 imgs_sizes (torch.Tensor): Bx2 / 2 (height, width)
                 mesh_ids (list): len(mesh_ids) == B
-
             Returns:
                 verts2d (torch.Tensor): BxNx2
-
         """
         #meshes_count = mesh_ids.shape[0]
         # cams_count = cams_tform4x4_obj.shape[0]
@@ -506,11 +503,9 @@ class Meshes(torch.nn.Module):
         cams_proj4x4_obj = torch.bmm(cams_intr4x4, cams_tform4x4_obj)
         verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=mesh_ids)
         verts2d = proj3d2d_broadcast(verts3d, proj4x4=cams_proj4x4_obj[:, None])
-
         mask_verts_vsbl = self.render_feats(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4, imgs_sizes=imgs_sizes, meshes_ids=mesh_ids, modality=MESH_RENDER_MODALITIES.MASK_VERTS_VSBL, down_sample_rate=down_sample_rate)
         mask_verts_vsbl *= (verts2d <= (imgs_sizes[None, None] - 1)).all(dim=-1)
         mask_verts_vsbl *= (verts2d >= 0).all(dim=-1)
-
         verts2d[~mask_verts_vsbl] = 0
         # verts2d.clamp()
 

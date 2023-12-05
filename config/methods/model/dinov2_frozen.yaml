@@ -27,4 +27,4 @@ head:
     pre_upsampling: [1., 1., 2.]
   fully_connected:
     out_dim: # None means that there is no linear layer
-  normalize: True
+  normalize: False

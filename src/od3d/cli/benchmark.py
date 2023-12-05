@@ -613,7 +613,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 def get_failed_runs(name_regex='.*', age_in_hours=1000):
     logging.basicConfig(level=logging.INFO)
     runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
-    runs = list(filter(lambda run: run.state =='failed' or run.state=='crashed' or run.state =='running', runs))
+    runs = list(filter(lambda run: run.state =='failed' or run.state=='crashed', runs)) #  or run.state =='running'
     # runs_states = [run.state for run in runs]
     runs_names = [run.name for run in runs]
     logger.info(f'found {len(runs)} failed or crashed runs')

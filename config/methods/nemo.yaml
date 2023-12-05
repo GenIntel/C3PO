@@ -21,7 +21,7 @@ train:
   use_mask_rendered_object: True
   loss: cross_entropy # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
   bank_feats_update: loss_gradient # loss_gradient, normalize_loss_gradient, moving_average, loss
-  T: 0.07
+  T: 1
   alpha: 0.96
   geodesic_prob_sigma: 0.2
   val: True
@@ -99,6 +99,7 @@ inference:
     use_mask_object: False
     sample:
       method: uniform # epnp3d2d uniform
+      depth_from_box: False
       uniform_multiview_rescale: True
       epnp3d2d:
         count_cams: 100
@@ -108,12 +109,10 @@ inference:
             min: '0.'
             max: math.pi * 2 - (math.pi * 2) / 12.
             steps: 12
-
         elev:
             min: -math.pi / 6
             max: math.pi / 3
             steps: 4
-
         theta:
             min: -math.pi / 6
             max: math.pi / 6

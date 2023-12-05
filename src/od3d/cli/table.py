@@ -50,37 +50,117 @@ DATASET_OBJECTNET3D = 'objectnet3d'
 @app.command()
 def pascal3d(
         name_regex: str = typer.Option('Pascal3D_NeMo', '-n', '--name'),
-        age_in_hours: int = typer.Option(24, '-h', '--hours'),
+        age_in_hours: int = typer.Option(82, '-h', '--hours'),
         digits: int = typer.Option(1, '-d', '--digits')
     ):
     map_runs_names = None
 
     # regex either head or backbone
-    name_regex = '.*Pascal3D_NeMo_(bs.*)_slurm'
+    #name_regex = '.*Pascal3D_NeMo_(bs.*)_slurm'
+    # map_runs_names = {
+    #     '11-28_14-50-50_Pascal3D_NeMo_bs1x6_slurm': '1x6',
+    #     '11-28_15-53-00_Pascal3D_NeMo_bs1x12_slurm': '1x12',
+    #     '11-28_14-49-42_Pascal3D_NeMo_bs1x24_slurm': '1x24',
+    #     '11-28_14-50-05_Pascal3D_NeMo_bs2x6_slurm': '2x6',
+    #     '11-28_14-50-16_Pascal3D_NeMo_bs2x12_slurm': '2x12',
+    #     '11-28_14-51-01_Pascal3D_NeMo_bs2x24_slurm': '2x24',
+    #     '11-28_14-49-53_Pascal3D_NeMo_bs4x12_slurm': '4x12',
+    #     '11-28_14-50-38_Pascal3D_NeMo_bs16x12_slurm': '16x12',
+    # }
+    #
+    # map_runs_names = {
+    #     '11-29_11-59-52_Pascal3D_NeMo_bs1x6_slurm': '1x6',
+    #     '11-29_11-59-29_Pascal3D_NeMo_bs1x12_slurm': '1x12',
+    #     '11-29_11-58-44_Pascal3D_NeMo_bs1x24_slurm': '1x24',
+    #     '11-29_11-59-06_Pascal3D_NeMo_bs2x6_slurm': '2x6',
+    #     '11-29_11-59-18_Pascal3D_NeMo_bs2x12_slurm': '2x12',
+    #     '11-29_12-00-03_Pascal3D_NeMo_bs2x24_slurm': '2x24',
+    #     '11-29_11-58-55_Pascal3D_NeMo_bs4x12_slurm': '4x12',
+    #     '11-29_11-58-32_Pascal3D_NeMo_bs8x12_slurm': '8x12',
+    #     '11-29_11-59-40_Pascal3D_NeMo_bs16x12_slurm': '16x12',
+    # }
+
+    # map_runs_names = {
+    #     '11-30_14-11-28_Pascal3D_NeMo_bs1x12_slurm': '1x12',
+    #     '11-30_14-10-43_Pascal3D_NeMo_bs1x24_slurm': '1x24',
+    #     '11-30_14-12-02_Pascal3D_NeMo_bs1x48_slurm': '1x48',
+    #     '11-30_14-11-05_Pascal3D_NeMo_bs2x6_slurm': '2x6',
+    #     '11-30_14-11-17_Pascal3D_NeMo_bs2x12_slurm': '2x12',
+    #     '11-30_14-12-25_Pascal3D_NeMo_bs2x24_slurm': '2x24',
+    #     '11-30_14-11-39_Pascal3D_NeMo_bs2x48_slurm': '2x48',
+    #     '11-30_14-10-54_Pascal3D_NeMo_bs4x12_slurm': '4x12',
+    #     '11-30_14-10-31_Pascal3D_NeMo_bs8x12_slurm': '8x12',
+    #     '11-30_14-11-51_Pascal3D_NeMo_bs16x12_slurm': '16x12',
+    # }
+
+    # name_regex = '.*Pascal3D_NeMo_(.*epochs.*)_slurm'
+    # map_runs_names = {
+    #     '11-30_14-02-18_Pascal3D_NeMo_backbone_resnet_unfrozen_moving_avg_epochs10_slurm': 'ResNet50 + ResNet Head + Mov. Avg. + Epochs 10',
+    #     #'11-30_11-08-22_Pascal3D_NeMo_backbone_resnet_unfrozen_moving_avg_epochs10_slurm': 'ResNet50 + ResNet Head + Mov. Avg. + Epochs 10 (2)',
+    #     '11-30_14-03-49_Pascal3D_NeMo_backbone_resnet_unfrozen_epochs10_slurm': 'ResNet50 + ResNet Head + Epochs 10',
+    #     #'11-30_11-08-13_Pascal3D_NeMo_backbone_resnet_unfrozen_epochs10_slurm': 'ResNet50 + ResNet Head + Epochs 10 (2)',
+    #     '11-30_14-03-04_Pascal3D_NeMo_head_resnet_epochs10_slurm': 'DinoV2 + ResNet Head + epochs 10',
+    #     '11-30_14-01-33_Pascal3D_NeMo_head_vit_depth_1_epochs10_slurm': 'DinoV2 + ViT Head + epochs 10',
+    #     '11-30_14-02-30_Pascal3D_NeMo_backbone_resnet_unfrozen_moving_avg_epochs50_slurm': 'ResNet50 + ResNet Head + Mov. Avg. + Epochs 50',
+    #     '11-30_14-04-00_Pascal3D_NeMo_backbone_resnet_unfrozen_epochs50_slurm': 'ResNet50 + ResNet Head + Epochs 50',
+    #     '11-30_14-03-15_Pascal3D_NeMo_head_resnet_epochs50_slurm': 'DinoV2 + ResNet Head + Epochs 50',
+    #     '11-30_14-01-45_Pascal3D_NeMo_head_vit_depth_1_epochs50_slurm': 'DinoV2 + ViT Head + Epochs 50',
+    #     '11-30_14-02-41_Pascal3D_NeMo_backbone_resnet_unfrozen_moving_avg_epochs100_slurm': 'ResNet50 + ResNet Head + Mov. Avg. + Epochs 100',
+    #     '11-30_14-04-12_Pascal3D_NeMo_backbone_resnet_unfrozen_epochs100_slurm': 'ResNet50 + ResNet Head + Epochs 100',
+    #     '11-30_14-03-26_Pascal3D_NeMo_head_resnet_epochs100_slurm': 'DinoV2 + ResNet Head + Epochs 100',
+    #     '11-30_14-01-56_Pascal3D_NeMo_head_vit_depth_1_epochs100_slurm': 'DinoV2 + ViT Head + Epochs 100',
+    # }
+
+    # name_regex = '.*Pascal3D_NeMo_(.*mask.*)_slurm'
+    # map_runs_names = {
+    #     '11-29_17-00-52_Pascal3D_NeMo_no_mask_slurm': 'No Mask',
+    #     '11-29_17-00-41_Pascal3D_NeMo_mask_test_slurm': 'Mask Test',
+    #     '11-29_17-00-30_Pascal3D_NeMo_mask_train_slurm': 'Mask Train',
+    #     '11-29_17-00-18_Pascal3D_NeMo_mask_train_test_slurm': 'Mask Train Test',
+    # }
+
+    #name_regex = '.*Pascal3D_NeMo_(temp_[^b]*)_slurm'
+    name_regex = '.*Pascal3D_NeMo_(head_.*|backbone_.*)_slurm'
+    name_regex = '.*Pascal3D_NeMo_(epochs.*|)(head_.*|backbone_.*)_slurm'
+    # name_regex = '.*Pascal3D_NeMo_(inf.*|)(head_.*|backbone_.*)_slurm'
+    # moving average does not work as good for me as no moving average
+    # map_runs_names = {
+    #     '12-01_15-48-28_Pascal3D_NeMo_backbone_resnet_unfrozen_moving_avg_slurm': 'ResNet50 + ResNet Head + Moving Avg. + Epochs 50',
+    #     '12-01_15-48-52_Pascal3D_NeMo_head_resnet_moving_avg_slurm': 'DinoV2 + ResNet Head + Moving Avg. + Epochs 50',
+    #     '12-01_15-49-15_Pascal3D_NeMo_backbone_resnet_unfrozen_slurm': 'ResNet50 + ResNet Head + Epochs 50',
+    #     '12-03_16-44-52_Pascal3D_NeMo_epochs100_backbone_resnet_unfrozen_moving_avg_slurm': 'ResNet50 + ResNet Head + Moving Avg. + Epochs 100',
+    #     '12-03_17-10-06_Pascal3D_NeMo_epochs100_head_resnet_moving_avg_slurm': 'DinoV2 + ResNet Head + Moving Avg. + Epochs 100',
+    #     '12-03_16-45-37_Pascal3D_NeMo_epochs100_backbone_resnet_unfrozen_slurm': 'ResNet50 + ResNet Head + Epochs 100',
+    #     '12-03_16-45-26_Pascal3D_NeMo_epochs100_head_resnet_slurm': 'DinoV2 + ResNet Head + Epochs 100',
+    # }
+
+
+    # vit head helps classfication
+    # map_runs_names = {
+    #     '12-01_15-48-17_Pascal3D_NeMo_head_vit_depth_1_slurm': 'DinoV2 + ViT Head + Epochs 50',
+    #     '12-03_16-45-26_Pascal3D_NeMo_epochs100_head_resnet_slurm': 'DinoV2 + ResNet Head + Epochs 100',
+    #     '12-03_16-44-41_Pascal3D_NeMo_epochs100_head_vit_depth_1_slurm': 'DinoV2 + ViT Head + Epochs 100',
+    # }
+
+    # name_regex = '.*Pascal3D_NeMo_(epochs.*|)(head_.*|backbone_.*)(bs.*)_slurm'
+    # # batch size important matters?
+    # map_runs_names = {
+    #     '12-03_16-49-26_Pascal3D_NeMo_epochs100_backbone_resnet_unfrozen_bs1x6_slurm': 'ResNet50 + ResNet Head + Epochs 100 + BS 1x6',
+    #     '12-03_16-49-03_Pascal3D_NeMo_epochs100_backbone_resnet_unfrozen_bs1x12_slurm': 'ResNet50 + ResNet Head + Epochs 100 + BS 1x12',
+    #     '12-03_16-48-52_Pascal3D_NeMo_epochs100_backbone_resnet_unfrozen_bs1x24_slurm': 'ResNet50 + ResNet Head + Epochs 100 + BS 1x24',
+    #     '12-03_16-48-41_Pascal3D_NeMo_epochs100_head_resnet_bs1x6_slurm': 'DinoV2 + ResNet Head + Epochs 100 + BS 1x6',
+    #     '12-03_16-48-18_Pascal3D_NeMo_epochs100_head_resnet_bs1x12_slurm': 'DinoV2 + ResNet Head + Epochs 100 + BS 1x12',
+    #     '12-03_16-48-07_Pascal3D_NeMo_epochs100_head_resnet_bs1x24_slurm': 'DinoV2 + ResNet Head + Epochs 100 + BS 1x24',
+    # }
+
+    name_regex = '.*Pascal3D_NeMo_(epochs.*|)(head_.*|backbone_.*)_slurm'
     map_runs_names = {
-        '11-28_14-50-50_Pascal3D_NeMo_bs1x6_slurm': '1x6',
-        '11-28_15-53-00_Pascal3D_NeMo_bs1x12_slurm': '1x12',
-        '11-28_14-49-42_Pascal3D_NeMo_bs1x24_slurm': '1x24',
-        '11-28_14-50-05_Pascal3D_NeMo_bs2x6_slurm': '2x6',
-        '11-28_14-50-16_Pascal3D_NeMo_bs2x12_slurm': '2x12',
-        '11-28_14-51-01_Pascal3D_NeMo_bs2x24_slurm': '2x24',
-        '11-28_14-49-53_Pascal3D_NeMo_bs4x12_slurm': '4x12',
-        '11-28_14-50-38_Pascal3D_NeMo_bs16x12_slurm': '16x12',
+      '12-01_15-48-17_Pascal3D_NeMo_head_vit_depth_1_slurm': 'DinoV2 + ViT Head + Epochs 50',
+      '12-01_15-48-40_Pascal3D_NeMo_head_vit_depth_1_no_temp_slurm': 'DinoV2 + ViT Head + No Temp. + Epochs 50',
+      '12-03_16-44-41_Pascal3D_NeMo_epochs100_head_vit_depth_1_slurm': 'DinoV2 + ViT Head + Epochs 100',
+      '12-03_16-45-03_Pascal3D_NeMo_epochs100_head_vit_depth_1_no_temp_slurm': 'DinoV2 + ViT Head + No Temp. + Epochs 100',
     }
 
-    map_runs_names = {
-        '11-29_11-59-52_Pascal3D_NeMo_bs1x6_slurm': '1x6',
-        '11-29_11-59-29_Pascal3D_NeMo_bs1x12_slurm': '1x12',
-        '11-29_11-58-44_Pascal3D_NeMo_bs1x24_slurm': '1x24',
-        '11-29_11-59-06_Pascal3D_NeMo_bs2x6_slurm': '2x6',
-        '11-29_11-59-18_Pascal3D_NeMo_bs2x12_slurm': '2x12',
-        '11-29_12-00-03_Pascal3D_NeMo_bs2x24_slurm': '2x24',
-        '11-29_11-58-55_Pascal3D_NeMo_bs4x12_slurm': '4x12',
-        '11-29_11-58-32_Pascal3D_NeMo_bs8x12_slurm': '8x12',
-        '11-29_11-59-40_Pascal3D_NeMo_bs16x12_slurm': '16x12',
-    }
-    #name_regex = '.*Pascal3D_NeMo_(temp_[^b]*)_slurm'
-    #name_regex = '.*Pascal3D_NeMo_(head_.*|backbone_.*)_slurm'
     # map_runs_names = {
     #     '11-28_19-05-05_Pascal3D_NeMo_backbone_resnet_slurm': 'ResNet-50 (frozen) + 3 ResNetBlocks',
     #     '11-28_18-46-24_Pascal3D_NeMo_backbone_resnet_unfrozen_slurm': 'ResNet-50 (unfrozen) + 3 ResNetBlocks',
@@ -118,7 +198,7 @@ def pascal3d(
     import matplotlib.pyplot as plt
     # change from matplotlib the switch backend to interactive tkinter
     plt.switch_backend('TkAgg')
-    # using matplotlib plot the dataframe transposed,
+    # using matplotlib plot the dataframe transposed
     df.transpose().plot.bar(rot=0)
     # add value for each bar
     for p in plt.gca().patches:

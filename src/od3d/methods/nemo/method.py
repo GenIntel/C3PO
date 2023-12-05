@@ -1243,7 +1243,7 @@ class NeMo(OD3D_Method):
             return sim
 
     def get_samples(self, config_sample: DictConfig, cam_intr4x4: torch.Tensor, cam_tform4x4_obj: torch.Tensor,
-                    feats2d_net: torch.Tensor, categories_ids: torch.Tensor, feats2d_net_mask: torch.Tensor=None, multiview=False):
+                    feats2d_net: torch.Tensor, categories_ids: torch.LongTensor, feats2d_net_mask: torch.Tensor=None, multiview=False):
 
         if multiview:
             b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4 = self.get_samples(config_sample=config_sample,
@@ -1255,92 +1255,16 @@ class NeMo(OD3D_Method):
                                                                                                       :1],
                                                                                        feats2d_net_mask=feats2d_net_mask[
                                                                                                         :1])
-            device = cam_tform4x4_obj.device
 
-            # multiview adaption
-            if config_sample.method == 'uniform':
-                if config_sample.uniform_multiview_rescale:
-                    from od3d.cv.geometry.transform import proj3d2d_broadcast
-                    # this only works in multiview
-                    assert (categories_ids ==categories_ids[0]).all()
-
-                    B = len(cam_tform4x4_obj)
-                    C = len(b_cams_multiview_intr4x4[0])
-                    H = feats2d_net.shape[-2] * self.down_sample_rate
-                    W = feats2d_net.shape[-1] * self.down_sample_rate
-                    mesh_verts3d = self.meshes.get_verts_with_mesh_id(categories_ids[0])  # self.meshes.verts2d(cams_tform4x4_obj=cam_tform4x4_obj, cams_intr4x4=cam_intr4x4)
-
-                    #mesh_pxl2d = proj3d2d_broadcast(mesh_verts3d[None].expand(B, *mesh_verts3d.shape), proj4x4=tform4x4(cam_intr4x4, cam_tform4x4_obj)[:, None])
-                    mesh_pxl2d = proj3d2d_broadcast(mesh_verts3d[None, None].expand(B, C, *mesh_verts3d.shape), proj4x4=tform4x4(b_cams_multiview_intr4x4, b_cams_multiview_tform4x4_obj)[:, :, None])
-
-                    cx = cam_intr4x4[:, 0, 2]
-                    cy = cam_intr4x4[:, 1, 2]
-                    #fx = cam_intr4x4[:, 0, 0]
-                    #fy = cam_intr4x4[:, 1, 1]
-                    mesh_bbox_x_max = mesh_pxl2d[..., 0].max(dim=-1).values.clamp(0, W-1) - cx[:, None,]
-                    mesh_bbox_x_min = mesh_pxl2d[..., 0].min(dim=-1).values.clamp(0, W-1) - cx[:, None,]
-                    mesh_bbox_y_max = mesh_pxl2d[..., 1].max(dim=-1).values.clamp(0, H-1) - cy[:, None,]
-                    mesh_bbox_y_min = mesh_pxl2d[..., 1].min(dim=-1).values.clamp(0, H-1) - cy[:, None,]           #meshes_bbox =
-
-                    from od3d.cv.geometry.grid import get_pxl2d
-
-                    mask_bbox_x_max = torch.ones(size=(B,)).to(device=device) * (W - 1) - cx
-                    mask_bbox_x_min = torch.ones(size=(B,)).to(device=device) * 0 - cx
-                    mask_bbox_y_max = torch.ones(size=(B,)).to(device=device) * (H - 1) - cy
-                    mask_bbox_y_min = torch.ones(size=(B,)).to(device=device) * 0 - cy
-                    if feats2d_net_mask is not None:
-                        mask = feats2d_net_mask > 0.5
-                        mask_pxl2d = get_pxl2d(H=feats2d_net_mask.shape[-2], W=feats2d_net_mask.shape[-1], dtype=float, device=feats2d_net_mask.device)
-                        mask_pxl2d = mask_pxl2d[None, None].expand(*feats2d_net_mask.shape, 2) * self.down_sample_rate
-                        for b in range(B):
-                            if mask[b].sum() > 0:
-                                mask_bbox_x_max[b] = mask_pxl2d[b][mask[b]][:, 0].max() - cx[b]
-                                mask_bbox_x_min[b] = mask_pxl2d[b][mask[b]][:, 0].min() - cx[b]
-                                mask_bbox_y_max[b] = mask_pxl2d[b][mask[b]][:, 1].max() - cy[b]
-                                mask_bbox_y_min[b] = mask_pxl2d[b][mask[b]][:, 1].min() - cy[b]
-                    # B x 4
-                    scales = torch.stack([
-                        mask_bbox_x_max[:, None,] / mesh_bbox_x_max,
-                        mask_bbox_x_min[:, None,] / mesh_bbox_x_min,
-                        mask_bbox_y_max[:, None,] / mesh_bbox_y_max,
-                        mask_bbox_y_min[:, None,] / mesh_bbox_y_min],
-                        dim=-1)
-                        # torch.masked_select(input=mask_pxl2d, mask=feats2d_net_mask > 0.5)
-
-                    _scale = scales.permute(1, 0, 2).flatten(1).median(dim=-1).values[None,]
-
-                    if (_scale < 0.01).any() or (_scale > 100.).any():
-                        _scale[_scale < 0.01] = 1.
-                        _scale[_scale > 100.] = 1.
-                        logger.warning('setting scale of <0.01 or >100. to 1.')
-
-                    # _scale = scales.max()[None, None]
-                    #_scale = scales.max(dim=-1).values.mean()[None, None] # average over different views
-                    #_scale = scales.min(dim=-1).values.mean()[None, None] # average over different views
-                else:
-                    _scale = torch.Tensor([[1.]]).to(device=device)
-
-            elif config_sample.method == 'epnp3d2d':
-                # note: not alignment of droid slam may include scale, therefore remove this scale.
-                # note: projection does not change as we scale the depth z to the object as well
-                _scale = cam_tform4x4_obj[:1, None, 2, 3] / (b_cams_multiview_tform4x4_obj[:, :, 2, 3] + 1e-10)
-
-            else:
-                raise NotImplementedError
-
-
-            b_cams_multiview_tform4x4_obj[:, :, :3, :3] = b_cams_multiview_tform4x4_obj[:, :, :3, :3] * _scale[:, :, None, None]
+            b_cams_multiview_tform4x4_obj[:, :, :3, :3] = b_cams_multiview_tform4x4_obj[:, :, :3, :3]  # * _scale[:, :, None, None]
 
             cam_tform4x4_obj_scaled = cam_tform4x4_obj[:, None].clone().expand(cam_tform4x4_obj.shape[0], *b_cams_multiview_tform4x4_obj.shape[1:]).clone()
-            #cam_tform4x4_obj_scaled[:, :, :3] = cam_tform4x4_obj_scaled[:, :, :3] / (_scale[:, :, None, None] + 1e-10)
             objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj_scaled[:1]),
                                                                       b_cams_multiview_tform4x4_obj)
             b_cams_multiview_tform4x4_obj = tform4x4_broadcast(cam_tform4x4_obj_scaled,
                                                                objs_multiview_tform4x4_cuboid_front)
             b_cams_multiview_intr4x4 = b_cams_multiview_intr4x4.expand(*b_cams_multiview_tform4x4_obj.shape)
 
-            #from od3d.cv.visual.show import show_scene
-            #show_scene(cams_tform4x4_world=b_cams_multiview_tform4x4_obj[:, :10].reshape(-1, 4, 4), cams_intr4x4=b_cams_multiview_intr4x4[:, :10].reshape(-1, 4, 4))
         else:
 
             B = len(feats2d_net)
@@ -1356,7 +1280,6 @@ class NeMo(OD3D_Method):
                 #dist = torch.linspace(start=eval(config_sample.uniform.dist.min), end=eval(config_sample.uniform.dist.max), steps=config_sample.uniform.dist.steps).to(
                 #    device=self.device)
                 dist = torch.linspace(start=1., end=1., steps=1).to(device=self.device)
-
 
                 azim_shape = azim.shape
                 elev_shape = elev.shape
@@ -1419,6 +1342,12 @@ class NeMo(OD3D_Method):
             else:
                 raise NotImplementedError
 
+        if config_sample.depth_from_box:
+            from od3d.cv.geometry.fit.depth_from_mesh_and_box import depth_from_mesh_and_box
+            b_cams_multiview_tform4x4_obj[..., 2, 3] = depth_from_mesh_and_box(
+                b_cams_multiview_intr4x4=cam_intr4x4, b_cams_multiview_tform4x4_obj=b_cams_multiview_tform4x4_obj,
+                meshes=self.meshes, labels=categories_ids, mask=feats2d_net_mask, downsample_rate=self.down_sample_rate,
+                multiview=multiview)
         return b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4
 
 
