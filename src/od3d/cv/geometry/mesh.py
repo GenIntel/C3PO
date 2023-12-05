@@ -724,11 +724,14 @@ class Meshes(torch.nn.Module):
         self.to(device)
 
         if down_sample_rate != 1.:
-            cams_intr4x4 = cams_intr4x4 / down_sample_rate
-            imgs_sizes = imgs_sizes // down_sample_rate
+            cams_intr4x4 = cams_intr4x4.clone() / down_sample_rate
+            imgs_sizes = imgs_sizes.clone() // down_sample_rate
 
         if meshes_ids is None:
             meshes_ids = torch.LongTensor(list(range(len(self)))).to(device=device)
+
+        if isinstance(meshes_ids, torch.LongTensor):
+            meshes_ids = meshes_ids.clone().to(device=device)
 
         meshes_count = meshes_ids.shape[0]
         if cams_tform4x4_obj.dim() == 4:
