@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - /ablations/nemo_inference/_default
+
+ablation_name_nemo_inference: 'epnp_refine3d'
+
+method:
+  nemo:
+    inference:
+      sample:
+        method: epnp3d2d # epnp3d2d uniform
+        depth_from_box: False
+      refine:
+        enabled: True
+        dims_detached: [ 0, 1, 2 ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5

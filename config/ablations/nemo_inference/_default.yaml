@@ -1,0 +1,9 @@
+# @package _global_
+
+ablation_name: ${ablation_name_nemo_inference}
+
+method:
+    nemo:
+      checkpoint: ${platform.path_exps}/12-03_16-48-18_Pascal3D_NeMo_epochs100_head_resnet_bs1x12_slurm/nemo.ckpt
+
+train: False

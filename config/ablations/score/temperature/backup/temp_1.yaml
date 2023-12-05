@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+  - /ablations/score/temperature/_default
+
+ablation_name_score_temperature: 'temp_1_no_img_feat_normalize'
+
+method:
+  nemo:
+    train:
+      T: 1.
+    model:
+      head:
+        normalize: False
