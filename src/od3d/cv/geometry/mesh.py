@@ -253,7 +253,7 @@ class Meshes(torch.nn.Module):
     @property
     def geodesic_prob(self):
         _geodesic_dist = self.geodesic_dist.clone()
-        _geodesic_prob = torch.exp(input=-_geodesic_dist / (self.geodesic_prob_sigma + 1e-10))
+        _geodesic_prob = torch.exp(input=- 0.5 * (_geodesic_dist / (self.geodesic_prob_sigma + 1e-10))**2)
         # replace inf with 0
         _geodesic_prob[torch.isinf(_geodesic_dist)] = 0.
         return _geodesic_prob
