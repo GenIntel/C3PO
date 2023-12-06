@@ -475,6 +475,9 @@ class Meshes(torch.nn.Module):
         if isinstance(mesh_ids, List):
             mesh_ids = torch.LongTensor(mesh_ids)
 
+        if isinstance(mesh_ids, torch.LongTensor):
+            mesh_ids = mesh_ids.clone()
+
         meshes_count = mesh_ids.shape[0]
         if cams_tform4x4_obj.dim() == 4:
             cams_count = cams_tform4x4_obj.shape[1]
