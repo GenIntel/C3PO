@@ -497,6 +497,9 @@ class CO3D(OD3D_Dataset):
             elif key == 'mesh' and config_preprocess.mesh.get('enabled', False):
                 override = config_preprocess.mesh.get('override', False)
                 self.preprocess_meshs(override=override)
+            elif key == 'mesh_feats' and config_preprocess.mesh_feats.get('enabled', False):
+                override = config_preprocess.mesh_feats.get('override', False)
+                self.preprocess_meshs_feats(override=override)
 
         # CO3D.preprocess_cam_tform4x4_obj_canonic(config=config)
         # CO3D.preprocess_front_names(config=config)
@@ -516,6 +519,15 @@ class CO3D(OD3D_Dataset):
                 logger.info(f"preprocess meshs, sequence {sequence_name}, {self.mesh_name}")
                 sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
                 sequence.preprocess_mesh(override=override)
+
+    def preprocess_meshs_feats(self, override=False, remove_previous=False):
+        logger.info("preprocess meshs feats...")
+
+        for category, sequences_names in self.dict_category_sequences_names.items():
+            for sequence_name in sequences_names:
+                logger.info(f"preprocess meshs feats, sequence {sequence_name}, {self.mesh_name}")
+                sequence = self.get_sequence_by_category_and_name(category=category, name=sequence_name)
+                sequence.preprocess_mesh_feats(override=override)
 
     def preprocess_droid_slams(self, override=False, remove_previous=False):
         logger.info("preprocess meshs...")
