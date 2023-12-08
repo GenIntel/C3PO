@@ -2,7 +2,7 @@
 defaults:
   - /ablations/nemo_inference/_default
 
-ablation_name_nemo_inference: 'epnp_refine3d'
+ablation_name_nemo_inference: 'epnp_refine6d_epochs60'
 
 method:
   nemo:
@@ -13,4 +13,6 @@ method:
         depth_from_box: False
       refine:
         enabled: True
-        dims_detached: [ 0, 1, 2 ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
+        dims_detached: [ ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
+      optimizer:
+        epochs: 60 # 30

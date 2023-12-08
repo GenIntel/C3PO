@@ -56,6 +56,9 @@ preprocess:
   mesh:
     enabled: False
     override: False
+  mesh_feats:
+    enabled: False
+    override: False
   cuboid:
     enabled: False
     override: False

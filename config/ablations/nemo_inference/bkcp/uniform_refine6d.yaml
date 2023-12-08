@@ -2,7 +2,7 @@
 defaults:
   - /ablations/nemo_inference/_default
 
-ablation_name_nemo_inference: 'uniform_refine3d'
+ablation_name_nemo_inference: 'uniform_refine6d'
 
 method:
   nemo:

@@ -7,6 +7,7 @@ ablation_name_nemo_inference: 'epnp_refine6d'
 method:
   nemo:
     inference:
+      pre_rendered: False
       sample:
         method: epnp3d2d # epnp3d2d uniform
         depth_from_box: False

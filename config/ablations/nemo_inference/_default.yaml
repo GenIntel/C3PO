@@ -4,6 +4,6 @@ ablation_name: ${ablation_name_nemo_inference}
 
 method:
     nemo:
-      checkpoint: ${platform.path_exps}/12-03_16-48-18_Pascal3D_NeMo_epochs100_head_resnet_bs1x12_slurm/nemo.ckpt
+      checkpoint: ${platform.path_exps}/12-04_10-40-31_Pascal3D_NeMo_head_resnet_no_temp_slurm/nemo.ckpt
 
 train: False

@@ -1,0 +1,15 @@
+# @package _global_
+
+ablation_name: $ablation_name_nemo3d_align_dist_verts_reduce_type
+
+ablation_name_nemo3d_align_dist_verts_reduce_type: reduce_min
+
+dist_verts_mesh_feats_reduce_type: 'min' #'avg' 'min' 'min_avg'
+
+train_datasets:
+  labeled:
+    dist_verts_mesh_feats_reduce_type: ${dist_verts_mesh_feats_reduce_type} #'avg' 'min' 'min_avg'
+  src:
+    dist_verts_mesh_feats_reduce_type: ${dist_verts_mesh_feats_reduce_type} #'avg' 'min' 'min_avg'
+
+
