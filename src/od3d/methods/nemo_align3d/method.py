@@ -122,8 +122,7 @@ class NeMo_Align3D(OD3D_Method):
         self.net.eval()
         self.net.cpu()
 
-        self.config.down_sample_rate = 16
-        self.down_sample_rate = self.config.down_sample_rate
+        self.down_sample_rate = self.net.downsample_rate
 
         self.dir_tmp = Path('/tmp').joinpath(self.__class__.__name__)
         self.dir_tmp.mkdir(parents=True, exist_ok=True)
@@ -171,6 +170,10 @@ class NeMo_Align3D(OD3D_Method):
             for seq in ref_sequences:
                 _ = seq.co3dv1_zsp_obj_tform_obj
 
+        # if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
+        #     for seq1 in ref_sequences:
+        #         for seq2 in ref_sequences:
+        #             _ = seq1.get_dist_viewpoints_matched_to_other_sequence(seq2)
 
         src_instances_count = len(src_meshes)
         ref_instances_count = len(ref_meshes)

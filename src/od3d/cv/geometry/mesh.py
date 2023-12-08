@@ -459,6 +459,24 @@ class Meshes(torch.nn.Module):
         verts_ids = [torch.arange(self.verts_counts_acc_from_0[mesh_id], self.verts_counts_acc_from_0[mesh_id] + self.verts_counts_max, device=device) for mesh_id in mesh_ids]
         return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
 
+    def normals3d(self, meshes_ids: Union[torch.LongTensor, List]=None):
+        """
+            Args:
+                meshes_ids (Union[torch.LongTensor, List]): len(mesh_ids) == B
+            Returns:
+                normals3d (torch.Tensor): BxNx3
+        """
+
+        if isinstance(meshes_ids, List):
+            meshes_ids = torch.LongTensor(meshes_ids)
+
+        if isinstance(meshes_ids, torch.LongTensor):
+            meshes_ids = meshes_ids.clone()
+
+        pt3dmeshes = self.pt3dmeshes[meshes_ids]
+        return pt3dmeshes.verts_normals_padded()
+
+
     def verts2d(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, mesh_ids: Union[torch.LongTensor, List], down_sample_rate=1., broadcast_batch_and_cams=False):
         """
             Args:

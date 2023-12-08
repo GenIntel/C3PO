@@ -55,6 +55,29 @@ def se3_exp_map(se3_log: torch.Tensor):
 
     return se3_4x4
 
+
+def rot3x3_from_normal(normal: torch.Tensor):
+    """Rotation matrix for rotating normal to vector [0.,-1.,0.]
+        Args:
+            normal (torch.Tensor): ...x3
+
+        Returns:
+            rot3x3 (torch.Tensor): ...x3x3
+    """
+    return rot3x3_from_two_vectors(a=normal, b=torch.Tensor([0., -1., 0.]).to(device=normal.device, dtype=normal.dtype).expand(normal.shape[:-1] + torch.Size([3])))
+
+
+def transf4x4_from_normal(normal: torch.Tensor):
+    """Transformation matrix for rotating vector [0.,-1.,0.] onto normal
+        Args:
+            normal (torch.Tensor): ...x3
+
+        Returns:
+            transf4x4 (torch.Tensor): ...x4x4
+    """
+
+    return transf4x4_from_rot3x3(rot3x3_from_normal(normal))
+
 def rot3x3_from_two_vectors(a: torch.Tensor, b: torch.Tensor):
     """Rotation matrix for rotating vector a onto vector b
         Args:
