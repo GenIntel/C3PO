@@ -272,7 +272,8 @@ class NeMo_Align3D(OD3D_Method):
                                                                              dist_ref=dist_src_ref,
                                                                              use_appear_argmin=self.config.use_appear_argmin,
                                                                              dist_appear_weight=self.config.dist_appear_weight,
-                                                                             cyclic_weight_temp=self.config.cyclic_weight_temp,
+                                                                             geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
+                                                                             sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
                                                                              score_perc=self.config.ransac.score_perc),
                                                           fits_count=self.config.ransac.samples,
                                                           fit_pts_count=4)
@@ -284,7 +285,8 @@ class NeMo_Align3D(OD3D_Method):
                                                                                         return_dists=True,
                                                                                         use_appear_argmin=self.config.use_appear_argmin,
                                                                                         dist_appear_weight=self.config.dist_appear_weight,
-                                                                                        cyclic_weight_temp=self.config.cyclic_weight_temp,
+                                                                                        geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
+                                                                                        sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
                                                                                         score_perc=self.config.ransac.score_perc)
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
@@ -313,7 +315,8 @@ class NeMo_Align3D(OD3D_Method):
                                                                              dist_ref=dist_src_ref,
                                                                              use_appear_argmin=self.config.use_appear_argmin,
                                                                              dist_appear_weight=self.config.dist_appear_weight,
-                                                                             cyclic_weight_temp=self.config.cyclic_weight_temp,
+                                                                             geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
+                                                                             sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
                                                                              score_perc=self.config.ransac.score_perc),
                                                           fits_count=self.config.ransac.samples, fit_pts_count=4)
                                 #else:
@@ -322,7 +325,8 @@ class NeMo_Align3D(OD3D_Method):
                                                                                      dist_ref=dist_src_ref, return_dists=True,
                                                                                      use_appear_argmin=self.config.use_appear_argmin,
                                                                                      dist_appear_weight=self.config.dist_appear_weight,
-                                                                                     cyclic_weight_temp=self.config.cyclic_weight_temp,
+                                                                                     geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
+                                                                                     sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
                                                                                      score_perc=self.config.ransac.score_perc)
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
