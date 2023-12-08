@@ -95,7 +95,7 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
 
 
 def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch.Tensor, dist_ref: torch.Tensor,
-                       return_dists=False, return_weights=False, use_appear_argmin=False,
+                       return_dists=False, return_weights=False,
                        geo_cyclic_weight_temp=1., sem_cyclic_weight_temp=1., dist_appear_weight=0.5, score_perc=1.):
     """
     Args:
@@ -137,67 +137,42 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     argmin_ref_from_src = argmin_ref_from_src[None,].expand(P, N)
     argmin_src_from_ref = argmin_src_from_ref[None,].expand(P, R)
 
-    if not use_appear_argmin:
-        # PxN
-        proposal_tform_pts_nn_geo_ref_id = dist_ref_geometry.argmin(dim=-1)
-        proposal_tform_pts_geo_id = torch.arange(proposal_tform_pts_nn_geo_ref_id.shape[-1]).view(1, -1).\
-            expand(proposal_tform_pts_nn_geo_ref_id.shape).to(device=device)
+    # PxN
+    proposal_tform_pts_nn_geo_ref_id = dist_ref_geometry.argmin(dim=-1)
+    proposal_tform_pts_geo_id = torch.arange(proposal_tform_pts_nn_geo_ref_id.shape[-1]).view(1, -1).\
+        expand(proposal_tform_pts_nn_geo_ref_id.shape).to(device=device)
 
-        # PxR
-        proposal_tform_pts_ref_nn_geo_pts_id = dist_ref_geometry.argmin(dim=-2)
-        proposal_tform_pts_ref_geo_id = torch.arange(proposal_tform_pts_ref_nn_geo_pts_id.shape[-1]).view(1, -1).\
-            expand(proposal_tform_pts_ref_nn_geo_pts_id.shape).to(device=device)
+    # PxR
+    proposal_tform_pts_ref_nn_geo_pts_id = dist_ref_geometry.argmin(dim=-2)
+    proposal_tform_pts_ref_geo_id = torch.arange(proposal_tform_pts_ref_nn_geo_pts_id.shape[-1]).view(1, -1).\
+        expand(proposal_tform_pts_ref_nn_geo_pts_id.shape).to(device=device)
 
-        #
-        # # PxN
-        proposal_tform_pts_nn_app_ref_id = argmin_ref_from_src
-        proposal_tform_pts_app_id = torch.arange(proposal_tform_pts_nn_app_ref_id.shape[-1]).view(1, -1).\
-            expand(proposal_tform_pts_nn_app_ref_id.shape).to(device=device)
+    #
+    # # PxN
+    proposal_tform_pts_nn_app_ref_id = argmin_ref_from_src
+    proposal_tform_pts_app_id = torch.arange(proposal_tform_pts_nn_app_ref_id.shape[-1]).view(1, -1).\
+        expand(proposal_tform_pts_nn_app_ref_id.shape).to(device=device)
 
-        # PxR
-        proposal_tform_pts_ref_nn_app_pts_id = argmin_src_from_ref
-        proposal_tform_pts_ref_app_id = torch.arange(proposal_tform_pts_ref_nn_app_pts_id.shape[-1]).view(1, -1).\
-            expand(proposal_tform_pts_ref_nn_app_pts_id.shape).to(device=device)
-
-
-        # Px R+N
-        proposal_tform_pts_nn_ref_id = torch.cat([proposal_tform_pts_nn_geo_ref_id, proposal_tform_pts_nn_app_ref_id], dim=-1)
-        proposal_tform_pts_id = torch.cat([proposal_tform_pts_geo_id, proposal_tform_pts_app_id], dim=-1)
-        proposal_tform_pts_ref_nn_pts_id = torch.cat([proposal_tform_pts_ref_nn_geo_pts_id, proposal_tform_pts_ref_nn_app_pts_id], dim=-1)
-        proposal_tform_pts_ref_id = torch.cat([proposal_tform_pts_ref_geo_id, proposal_tform_pts_ref_app_id], dim=-1)
-
-    else:
-        argmin_ref_from_src = dist_ref.argmin(dim=-1) # N,
-        argmin_src_from_ref = dist_ref.argmin(dim=-2) # R,
-
-        src_cyclic_dist = (pts - pts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1)
-        ref_cyclic_dist = (pts_ref - pts_ref[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1)
-
-        # PxN?
-        proposal_tform_pts_nn_geo_ref_id = argmin_ref_from_src
-        proposal_tform_pts_nn_geo_ref_id = proposal_tform_pts_nn_geo_ref_id[None].expand(P, proposal_tform_pts_nn_geo_ref_id.shape[-1]).contiguous()
-        proposal_tform_pts_geo_id = torch.arange(proposal_tform_pts_nn_geo_ref_id.shape[-1]).view(1, -1). \
-            expand(proposal_tform_pts_nn_geo_ref_id.shape).to(device=device)
-
-        src_cyclic_mask = src_cyclic_dist <= src_cyclic_dist.quantile(q=0.1)
-        proposal_tform_pts_nn_geo_ref_id = proposal_tform_pts_nn_geo_ref_id[:, src_cyclic_mask]
-        proposal_tform_pts_geo_id = proposal_tform_pts_geo_id[:, src_cyclic_mask]
-
-        # PxR?
-        proposal_tform_pts_ref_nn_geo_pts_id = argmin_src_from_ref
-        proposal_tform_pts_ref_nn_geo_pts_id = proposal_tform_pts_ref_nn_geo_pts_id[None].expand(P, proposal_tform_pts_ref_nn_geo_pts_id.shape[-1]).contiguous()
-        proposal_tform_pts_ref_geo_id = torch.arange(proposal_tform_pts_ref_nn_geo_pts_id.shape[-1]).view(1, -1). \
-            expand(proposal_tform_pts_ref_nn_geo_pts_id.shape).to(device=device)
-
-        ref_cyclic_mask = ref_cyclic_dist <= ref_cyclic_dist.quantile(q=0.1)
-        proposal_tform_pts_ref_nn_geo_pts_id = proposal_tform_pts_ref_nn_geo_pts_id[:, ref_cyclic_mask]
-        proposal_tform_pts_ref_geo_id = proposal_tform_pts_ref_geo_id[:, ref_cyclic_mask]
+    # PxR
+    proposal_tform_pts_ref_nn_app_pts_id = argmin_src_from_ref
+    proposal_tform_pts_ref_app_id = torch.arange(proposal_tform_pts_ref_nn_app_pts_id.shape[-1]).view(1, -1).\
+        expand(proposal_tform_pts_ref_nn_app_pts_id.shape).to(device=device)
 
 
-    # PxNx4
+    # Px2N
+    proposal_tform_pts_nn_ref_id = torch.cat([proposal_tform_pts_nn_geo_ref_id, proposal_tform_pts_nn_app_ref_id], dim=-1)
+    proposal_tform_pts_id = torch.cat([proposal_tform_pts_geo_id, proposal_tform_pts_app_id], dim=-1)
+    # Px2R
+    proposal_tform_pts_ref_nn_pts_id = torch.cat([proposal_tform_pts_ref_nn_geo_pts_id, proposal_tform_pts_ref_nn_app_pts_id], dim=-1)
+    proposal_tform_pts_ref_id = torch.cat([proposal_tform_pts_ref_geo_id, proposal_tform_pts_ref_app_id], dim=-1)
+
+
+    # forward: Px2Nx2
     proposal_tform_pts_nn_ref_id_2D = torch.stack([proposal_tform_pts_id, proposal_tform_pts_nn_ref_id], dim=-1)
     proposal_tform_pts_nn_ref_id_2D = proposal_tform_pts_nn_ref_id_2D.clone()
-    # PxRx2
+    assert proposal_tform_pts_nn_ref_id_2D.shape == torch.Size([P, 2*N, 2])
+
+    # backward: Px2Rx2
     proposal_tform_pts_ref_nn_pts_id_2D = torch.stack([proposal_tform_pts_ref_id, proposal_tform_pts_ref_nn_pts_id], dim=-1)
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.flip(dims=[-1])
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
