@@ -93,6 +93,7 @@ test:
 
 inference:
     only_use_rendered_inliers: False
+    allow_clutter: True
     pre_rendered: True
     sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
     live: False
