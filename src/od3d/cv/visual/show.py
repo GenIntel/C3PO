@@ -91,6 +91,38 @@ from od3d.cv.geometry.mesh import Meshes, Mesh
 from od3d.cv.visual.draw import get_colors
 import open3d
 
+def show_scene2d(
+        pts2d: Union[torch.Tensor, List[torch.Tensor]]=None,
+        pts2d_names: List[str]=None,
+        pts2d_colors: Union[torch.Tensor, List]=None,
+):
+    """
+
+    Args:
+        pts2d (Union[torch.Tensor, List[torch.Tensor]]): PxNx2 or List(Npx2)
+        pts2d_names (List[str]): (P,)
+        pts2d_colors (Union[torch.Tensor, List]): Px2x3 or List(3)
+    Returns:
+
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib
+    matplotlib.use("TkAgg")
+
+    # scatter plot 2d with legend and colors
+    fig, ax = plt.subplots(len(pts2d), 1)
+    if pts2d is not None:
+        for i, pts2d_i in enumerate(pts2d):
+            if pts2d_colors is not None:
+                pts2d_colors_i = pts2d_colors[i]
+            else:
+                pts2d_colors_i = get_colors(len(pts2d))[i]
+            ax[i].scatter(pts2d_i[:, 0].detach().cpu().numpy(), pts2d_i[:, 1].detach().cpu().numpy(), c=pts2d_colors_i.detach().cpu().numpy())
+
+            if pts2d_names is not None:
+                ax[i].legend(pts2d_names[i])
+    plt.show()
+
 def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None,
                cams_intr4x4: Union[torch.Tensor, List[torch.Tensor]]=None,
                cams_imgs: Union[torch.Tensor, List[torch.Tensor]]=None,

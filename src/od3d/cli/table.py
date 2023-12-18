@@ -47,6 +47,7 @@ DATASET_CO3D_20 = 'co3d_20'
 DATASET_CO3D_28 = 'co3d_28'
 DATASET_OBJECTNET3D = 'objectnet3d'
 
+
 @app.command()
 def pascal3d(
         name_regex: str = typer.Option('Pascal3D_NeMo', '-n', '--name'),
@@ -134,17 +135,61 @@ def pascal3d(
     #     '12-03_16-45-26_Pascal3D_NeMo_epochs100_head_resnet_slurm': 'DinoV2 + ResNet Head + Epochs 100',
     # }
 
-    age_in_hours = 200
-    name_regex = '.*Pascal3D_NeMo_.*_slurm'
+    # age_in_hours = 200
+    # name_regex = '.*Pascal3D_NeMo_.*_slurm'
+    # map_runs_names = {
+    #     '12-04_11-30-32_Pascal3D_NeMo_dinov2_moving_avg_epochs50_slurm': 'DinoV2 + ResNet Head + Moving Avg. + Epochs 50',
+    #     '12-04_10-40-20_Pascal3D_NeMo_head_resnet_slurm': 'DinoV2 + ResNet Head + Epochs 50',
+    #     '12-04_11-30-54_Pascal3D_NeMo_dinov2_moving_avg_epochs100_slurm': 'DinoV2 + ResNet Head + Moving Avg. + Epochs 100',
+    #     '12-03_16-45-26_Pascal3D_NeMo_epochs100_head_resnet_slurm': 'DinoV2 + ResNet Head + Epochs 100',
+    #     '12-04_11-30-43_Pascal3D_NeMo_dinov2_moving_avg_epochs150_slurm': 'DinoV2 + ResNet Head + Moving Avg. + Epochs 150',
+    # } # 12-04_11-30-43_Pascal3D_NeMo_dinov2_moving_avg_epochs150_slurm
+
+    # age_in_hours = 24
+    # name_regex = '12-1[12]_.*_Pascal3D_NeMo_epochs50'
+    # map_runs_names = {
+    #     '12-12_09-09-11_Pascal3D_NeMo_epochs50_uniform_refine3d_slurm': 'Uniform + Refine 3D',
+    #     '12-11_19-09-51_Pascal3D_NeMo_epochs50_uniform_refine6d_slurm': 'Uniform + Refine 6D',
+    #     '12-11_19-10-02_Pascal3D_NeMo_epochs50_uniform_refine3d_only_rendered_slurm': 'Uniform + Refine 3D (Only Rendered)',
+    #     '12-11_19-08-54_Pascal3D_NeMo_epochs50_uniform_refine3d_no_clutter_slurm': 'Uniform + Refine 3D (No Clutter)',
+    #     '12-11_19-09-28_Pascal3D_NeMo_epochs50_uniform_refine3d_only_rendered_no_clutter_slurm': 'Uniform + Refine 3D (Only Rendered + No Clutter)',
+    #     '12-12_09-09-10_Pascal3D_NeMo_epochs50_uniform_depth_from_box_refine3d_slurm': 'Uniform + Depth from BBox + Refine 3D',
+    #     '12-11_19-08-43_Pascal3D_NeMo_epochs50_uniform_depth_from_box_refine6d_slurm': 'Uniform + Depth from BBox + Refine 6D',
+    #     '12-11_19-09-05_Pascal3D_NeMo_epochs50_epnp_refine6d_slurm': 'EPnP + Refine 6D',
+    #     '12-11_19-08-32_Pascal3D_NeMo_epochs50_epnp_refine6d_epochs60_slurm': 'EPnP + 2x Refine 6D',
+    #     '12-11_19-08-20_Pascal3D_NeMo_epochs50_epnp_refine3d_slurm': 'EPnP + Refine 3D',
+    # }
+
+    # age_in_hours = 24
+    # name_regex = '12-1[12]_.*_Pascal3D_NeMo_epochs100'
+    # map_runs_names = {
+    #     '12-11_19-13-25_Pascal3D_NeMo_epochs100_uniform_refine3d_slurm': 'Uniform + Refine 3D',
+    #     '12-11_19-13-36_Pascal3D_NeMo_epochs100_uniform_refine6d_slurm': 'Uniform + Refine 6D',
+    #     '12-11_19-13-48_Pascal3D_NeMo_epochs100_uniform_refine3d_only_rendered_slurm': 'Uniform + Refine 3D (Only Rendered)',
+    #     '12-11_19-12-40_Pascal3D_NeMo_epochs100_uniform_refine3d_no_clutter_slurm': 'Uniform + Refine 3D (No Clutter)',
+    #     '12-11_19-13-14_Pascal3D_NeMo_epochs100_uniform_refine3d_only_rendered_no_clutter_slurm': 'Uniform + Refine 3D (Only Rendered + No Clutter)',
+    #     '12-11_19-13-03_Pascal3D_NeMo_epochs100_uniform_depth_from_box_refine3d_slurm': 'Uniform + Depth from BBox + Refine 3D',
+    #     '12-11_19-12-29_Pascal3D_NeMo_epochs100_uniform_depth_from_box_refine6d_slurm': 'Uniform + Depth from BBox + Refine 6D',
+    #     '12-11_19-12-51_Pascal3D_NeMo_epochs100_epnp_refine6d_slurm': 'EPnP + Refine 6D',
+    #     '12-11_19-12-17_Pascal3D_NeMo_epochs100_epnp_refine6d_epochs60_slurm': 'EPnP + 2x Refine 6D',
+    #     '12-11_19-12-06_Pascal3D_NeMo_epochs100_epnp_refine3d_slurm': 'EPnP + Refine 3D',
+    # }
+
+    age_in_hours = 24
+    name_regex = '12-1[12]_.*_Pascal3D_NeMo_epochs150'
+
     map_runs_names = {
-        '12-04_11-30-32_Pascal3D_NeMo_dinov2_moving_avg_epochs50_slurm': 'DinoV2 + ResNet Head + Moving Avg. + Epochs 50',
-        '12-04_10-40-20_Pascal3D_NeMo_head_resnet_slurm': 'DinoV2 + ResNet Head + Epochs 50',
-        '12-04_11-30-54_Pascal3D_NeMo_dinov2_moving_avg_epochs100_slurm': 'DinoV2 + ResNet Head + Moving Avg. + Epochs 100',
-        '12-03_16-45-26_Pascal3D_NeMo_epochs100_head_resnet_slurm': 'DinoV2 + ResNet Head + Epochs 100',
-        '12-04_11-30-43_Pascal3D_NeMo_dinov2_moving_avg_epochs150_slurm': 'DinoV2 + ResNet Head + Moving Avg. + Epochs 150',
-    } # 12-04_11-30-43_Pascal3D_NeMo_dinov2_moving_avg_epochs150_slurm
-
-
+        '12-11_19-11-32_Pascal3D_NeMo_epochs150_uniform_refine3d_slurm': 'Uniform + Refine 3D',
+        '12-11_19-11-44_Pascal3D_NeMo_epochs150_uniform_refine6d_slurm': 'Uniform + Refine 6D',
+        '12-11_19-11-55_Pascal3D_NeMo_epochs150_uniform_refine3d_only_rendered_slurm': 'Uniform + Refine 3D (Only Rendered)',
+        '12-11_19-10-47_Pascal3D_NeMo_epochs150_uniform_refine3d_no_clutter_slurm': 'Uniform + Refine 3D (No Clutter)',
+        '12-11_19-11-21_Pascal3D_NeMo_epochs150_uniform_refine3d_only_rendered_no_clutter_slurm': 'Uniform + Refine 3D (Only Rendered + No Clutter)',
+        '12-11_19-11-10_Pascal3D_NeMo_epochs150_uniform_depth_from_box_refine3d_slurm': 'Uniform + Depth from BBox + Refine 3D',
+        '12-11_19-10-36_Pascal3D_NeMo_epochs150_uniform_depth_from_box_refine6d_slurm': 'Uniform + Depth from BBox + Refine 6D',
+        '12-11_19-10-58_Pascal3D_NeMo_epochs150_epnp_refine6d_slurm': 'EPnP + Refine 6D',
+        '12-11_19-10-24_Pascal3D_NeMo_epochs150_epnp_refine6d_epochs60_slurm': 'EPnP + 2x Refine 6D',
+        '12-11_19-10-13_Pascal3D_NeMo_epochs150_epnp_refine3d_slurm': 'EPnP + Refine 3D',
+    }
     # vit does not head helps classfication
     # map_runs_names = {
     #     '12-04_10-40-20_Pascal3D_NeMo_head_resnet_slurm': 'DinoV2 + ResNet Head + Epochs 50',

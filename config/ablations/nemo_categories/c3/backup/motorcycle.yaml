@@ -1,9 +1,0 @@
-# @package _global_
-
-ablation_name: motorcycle
-
-aligned_name: 'all_to_one_c3_s50' # 'all_to_one_13_10_23' 'all_to_one_12_10_23'
-
-categories:
-  - motorcycle
-

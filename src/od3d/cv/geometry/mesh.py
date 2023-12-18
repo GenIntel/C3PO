@@ -69,6 +69,9 @@ class Mesh:
     def create_sphere(center3d: torch.Tensor([0., 0., 0.]), radius: float = 1., device='cpu'):
         return Mesh.from_o3d(o3d.geometry.TriangleMesh.create_sphere(radius=radius).translate(center3d.detach().cpu().numpy()), device=device)
 
+    @property
+    def verts_ncds(self):
+        return (self.verts - self.verts.min(dim=0).values[None,]) / (self.verts.max(dim=0).values[None,] - self.verts.min(dim=0).values[None,])
 
     @staticmethod
     def create_plane_as_cone(center3d: torch.Tensor= torch.Tensor([0., 0., 0.]), radius:float=1., height:float=1., device='cpu'):

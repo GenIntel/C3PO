@@ -1,14 +1,10 @@
 import logging
 import random
-
-from matplotlib.pyplot import xticks
-
 logger = logging.getLogger(__name__)
 import typer
 import od3d.io
 
 app = typer.Typer()
-
 
 from od3d.datasets.co3d import CO3D
 from od3d.cv.visual.show import show_scene
@@ -18,7 +14,6 @@ from od3d.cv.visual.show import imgs_to_img
 from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4_from_transl3d, tform4x4, get_spherical_uniform_tform4x4
 from od3d.datasets.co3d.enum import PCL_SOURCES, CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES
 from od3d.cv.geometry.mesh import Meshes, Mesh
-from typing import List
 
 from od3d.cv.visual.show import show_imgs, get_img_from_plot, show_img
 from od3d.cv.visual.crop import crop_white_border_from_img
@@ -1143,6 +1138,106 @@ def teaser():
                return_visualization=False, viewpoints_count=viewpoints_count)
 """
 
+@app.command()
+def temps_weight_ablation():
+    from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
+    from od3d.cli.benchmark import get_dataframe
+    align3d_df = get_dataframe(configs=['ablation_name', 'method.dist_appear_weight', 'method.sem_cyclic_weight_temp', 'method.geo_cyclic_weight_temp'],
+                                    metrics=['pose/acc_pi6', 'pose/acc_pi18'],
+                                    name_regex='12-1[12]_.*_CO3D_NeMo_Align3D_.*')
+
+
+    dist_appear_weight = align3d_df['method.dist_appear_weight'].to_numpy()
+
+    x = align3d_df['method.geo_cyclic_weight_temp'].to_numpy()
+    y = align3d_df['method.sem_cyclic_weight_temp'].to_numpy()
+    import numpy as np
+    x_log = torch.log(torch.from_numpy(x)) / torch.log(torch.Tensor([10])).numpy()
+    y_log = torch.log(torch.from_numpy(y)) / torch.log(torch.Tensor([10])).numpy()
+    xi = np.sort(np.unique(x))
+    yi = np.sort(np.unique(y))
+    grid_xiyi = np.stack(np.meshgrid(xi, yi))
+    mask_grid_xiyi = (x[:, None] == grid_xiyi[0].flatten()[None, : ]) * (y[:, None] == grid_xiyi[1].flatten()[None, :])
+    xi_log = np.sort(np.unique(x_log)) #  np.arange(x.min(), x.max(), 0.01)
+    yi_log = np.sort(np.unique(y_log))
+
+    z = align3d_df['pose/acc_pi18'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
+    z_max = (z[:, None] * mask_grid_xiyi).max(axis=0).reshape(grid_xiyi.shape[1:])
+    dist_appear_weight_max = dist_appear_weight[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
+    x_max = x[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
+    y_max = y[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
+    xi, yi = np.meshgrid(xi, yi)
+    xi_log, yi_log = np.meshgrid(xi_log, yi_log)
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import matplotlib
+    matplotlib.use("TkAgg")
+
+
+    fig, ax = plt.subplots(2, 1, figsize=(8, 6))  # (subplot_kw={"projection": "3d"})
+
+    aspect_ratio = 0.5
+
+    font_size = 16
+    # Create a heatmap using imshow
+    im = ax[0].imshow(z_max, cmap='viridis', interpolation='nearest', aspect='auto') # 'auto'
+    im2 = ax[1].imshow(dist_appear_weight_max, cmap='viridis', interpolation='nearest', aspect='auto') # 'auto'
+
+    ax[0].tick_params(axis='y', labelsize=font_size)
+    ax[0].tick_params(axis='x', labelsize=font_size)
+    ax[1].tick_params(axis='y', labelsize=font_size)
+    ax[1].tick_params(axis='x', labelsize=font_size)
+
+    ax[0].set_xlabel(r'geo. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
+    ax[0].set_ylabel(r'app. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
+    ax[1].set_xlabel(r'geo. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
+    ax[1].set_ylabel(r'app. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
+    ax[0].set(xticks=np.arange(z_max.shape[1]), xticklabels=np.round(np.linspace(xi_log.min(), xi_log.max(), z_max.shape[1]), decimals=1))
+    ax[0].set(yticks=np.arange(z_max.shape[0]), yticklabels=np.round(np.linspace(yi_log.min(), yi_log.max(), z_max.shape[0]), decimals=0))
+    ax[1].set(xticks=np.arange(z_max.shape[1]), xticklabels=np.round(np.linspace(xi_log.min(), xi_log.max(), z_max.shape[1]), decimals=1))
+    ax[1].set(yticks=np.arange(z_max.shape[0]), yticklabels=np.round(np.linspace(yi_log.min(), yi_log.max(), z_max.shape[0]), decimals=0))
+
+    # Add colorbar to the right of the plot
+    cbar = fig.colorbar(im, ax=ax[0])  # , shrink='auto')
+    cbar.ax.tick_params(labelsize=font_size)
+
+    # Add colorbar to the right of the plot
+    cbar = fig.colorbar(im2, ax=ax[1])  # , shrink='auto')
+    cbar.ax.tick_params(labelsize=font_size)
+
+    #max_point = np.unravel_index(np.argmax(z), z.shape)
+    #max_x, max_y, max_z = x[max_point], y[max_point], z[max_point]
+    max_coordinates = np.unravel_index(z_max.argmax(), z_max.shape)
+    max_x = xi_log[max_coordinates]
+    max_y = yi_log[max_coordinates]
+    max_z = z_max[max_coordinates]
+    max_dist_appear_weight_max = dist_appear_weight_max[max_coordinates]
+    max_coordinates = (max_coordinates[1], max_coordinates[0])
+
+    # Plot the point using scatter
+    ax[0].scatter(*max_coordinates, color='red', marker='o', label='max')
+
+    # Annotate the point with a description
+    desc = 'PI/18=' + f'{max_z*100:.1f}%'
+    ax[0].annotate(desc, max_coordinates, textcoords="offset points", xytext=(40, 10), ha='center', fontsize=font_size,
+                color='red')
+
+    # Plot the point using scatter
+    ax[1].scatter(*max_coordinates, color='red', marker='o', label='max')
+    # Annotate the point with a description
+    #desc = r'$\log_{10}(\tau{})=$' + f'{max_x:.1f}' + r' , $\log_{10}(\tau{})=$' + f'{max_y:.1f}' + r', $\alpha{}$=' + f'{max_dist_appear_weight_max*100:.1f}%'
+    desc = r'$\alpha{}$=' + f'{max_dist_appear_weight_max*100:.1f}%'
+    ax[1].annotate(desc, max_coordinates, textcoords="offset points", xytext=(40, 10), ha='center', fontsize=font_size,
+                color='red')
+
+    plt.tight_layout()
+    plt.savefig('ablation_dist_cycle.eps')
+    plt.show()
+    # img = get_img_from_plot(ax=ax[0], fig=fig, axis_off=False)
+    # show_img(img, height=1080, width=1980, fpath='ablation_dist.png')
+    # show_img(img, height=1080, width=1980)
+    # plt.show()
 
 @app.command()
 def temp_weight_ablation():
@@ -1238,8 +1333,6 @@ def temp_weight_ablation():
     img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
     show_img(img, height=1080, width=1980, fpath='ablation_dist.png')
     show_img(img, height=1080, width=1980)
-
-
     plt.show()
 
     from matplotlib.ticker import LinearLocator

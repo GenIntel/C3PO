@@ -620,6 +620,14 @@ def get_failed_runs(name_regex='.*', age_in_hours=1000):
     return runs_names
 
 @app.command()
+def recent(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
+                  name_regex: str = typer.Option('.*', '-n', '--name')):
+    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    # runs_states = [run.state for run in runs]
+    for run in runs:
+        logger.info(f'{run.name} {run.state}')
+
+@app.command()
 def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
                   name_regex: str = typer.Option('.*', '-n', '--name')):
     from pathlib import Path
