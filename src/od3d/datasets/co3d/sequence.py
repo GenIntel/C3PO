@@ -1086,9 +1086,9 @@ class CO3D_Sequence():
 
             # perform pca on seq1_feats and seq2_feats and visualize
             if isinstance(seq1_feats, list):
-                seq1_verts = len(seq1_feats)
-                seq2_verts = len(seq2_feats)
-                dist_verts_seq1_seq2 = torch.ones(size=(seq1_verts, seq2_verts)).to(device=device) * torch.inf
+                seq1_verts_count = len(seq1_feats)
+                seq2_verts_count = len(seq2_feats)
+                dist_verts_seq1_seq2 = torch.ones(size=(seq1_verts_count, seq2_verts_count)).to(device=device) * torch.inf
 
                 # Vertices1+2 x Viewpoints x F
                 seq12_feats_padded = torch.nn.utils.rnn.pad_sequence(seq1_feats + seq2_feats, batch_first=True, padding_value=torch.nan).to(device=device)
@@ -1107,59 +1107,76 @@ class CO3D_Sequence():
                 else:
                     logger.warning(f'unknown embed type {embed_type}')
 
-                # Vertices1 x Viewpoints x F
-                seq1_feats_padded = seq12_feats_padded[:seq1_verts]
-                seq2_feats_padded = seq12_feats_padded[seq1_verts:]
+                P = 3 # ensures that 11 GB are enough
+                for p in range(P):
+                    if p < P-1:
+                        seq1_verts_partial = torch.arange(seq1_verts_count)[
+                                             (seq1_verts_count // P) * p:
+                                             (seq1_verts_count // P) * (p+1)].to(device=device)
+                    else:
+                        seq1_verts_partial = torch.arange(seq1_verts_count)[
+                                             (seq1_verts_count // P) * p:].to(
+                            device=device)
+                    seq1_verts_partial_count = len(seq1_verts_partial)
+                    # logger.info(seq1_verts_partial)
+                    # Vertices1 x Viewpoints x F
+                    seq1_feats_padded = seq12_feats_padded[seq1_verts_partial].clone()
+                    seq2_feats_padded = seq12_feats_padded[seq1_verts_count:].clone()
 
-                # Vertices1 x Viewpoints x Vertices2 x Viewpoints
-                dists_verts_feats_seq1_seq2 = torch.cdist(seq1_feats_padded.reshape(-1, F)[None,], seq2_feats_padded.reshape(-1, F)[None,]).reshape(seq1_verts, V, seq2_verts, V)
-                dists_verts_feats_seq1_seq2_mask = seq12_feats_padded_mask[:seq1_verts, :, None, None] * seq12_feats_padded_mask[None, None, seq1_verts:]
-                dist_verts_seq1_seq2_inf_mask = dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2).sum(
-                    dim=-1) == 0.
+                    seq1_feats_padded_mask = seq12_feats_padded_mask[seq1_verts_partial].clone()
+                    seq2_feats_padded_mask = seq12_feats_padded_mask[seq1_verts_count:].clone()
 
-                if reduce_type == REDUCE_TYPES.MIN:
-                    # replace nan values with inf
-                    dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
-                    dist_verts_seq1_seq2 = dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).flatten(2).min(dim=-1).values
-                elif reduce_type == REDUCE_TYPES.AVG:
-                    dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(0.)
-                    dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
-                    dist_verts_seq1_seq2 = (dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).flatten(2) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2)).sum(dim=-1) / \
-                                           (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2).sum(dim=-1) + 1e-10)
-                    dist_verts_seq1_seq2[dist_verts_seq1_seq2_inf_mask] = torch.inf
-                elif reduce_type == REDUCE_TYPES.MIN_AVG:
-                    dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
-                    dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
-                    dist_verts_seq1_seq2 = \
-                        (((dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).min(dim=-1).values.nan_to_num(posinf=0.) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :, :, 0]).sum(dim=-1) +
-                          (dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).min(dim=-2).values.nan_to_num(posinf=0.) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :, 0, :]).sum(dim=-1)) /
-                         (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :, 0, :].sum(dim=-1) + dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :, :, 0].sum(dim=-1) + 1e-10))
-                    dist_verts_seq1_seq2[dist_verts_seq1_seq2_inf_mask] = torch.inf
-                else:
-                    logger.warning(f'Unknown reduce type {reduce_type}.')
+                    # Vertices1 x Viewpoints x Vertices2 x Viewpoints
+                    dists_verts_feats_seq1_seq2 = torch.cdist(seq1_feats_padded.reshape(-1, F)[None,], seq2_feats_padded.reshape(-1, F)[None,]).reshape(seq1_verts_partial_count, V, seq2_verts_count, V)
+                    dists_verts_feats_seq1_seq2_mask = (seq1_feats_padded_mask[:, :, None, None] * seq2_feats_padded_mask[None, None, :, :])
+                    dist_verts_seq1_seq2_inf_mask = dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2).sum(
+                       dim=-1) == 0.
 
-                # for i in tqdm(range(seq1_verts)):
-                #     for j in range(seq2_verts):
-                #         dists = torch.cdist(seq1_feats[i].to(device=device), seq2_feats[j].to(device=device))
-                #         if dists.numel() == 0:
-                #             dist_verts_seq1_seq2[i, j] = torch.inf
-                #         else:
-                #             if reduce_type == REDUCE_TYPES.MIN:
-                #                 dist_verts_seq1_seq2[i, j] = dists.min()
-                #             elif reduce_type == REDUCE_TYPES.AVG:
-                #                 dist_verts_seq1_seq2[i, j] = dists.mean()
-                #             elif reduce_type == REDUCE_TYPES.MIN_AVG:
-                #                 dist_verts_seq1_seq2[i, j] = torch.cat([dists.min(dim=-1).values, dists.min(dim=-2).values]).mean()
-                #             elif reduce_type.startswith('pca'):
-                #                 logger.info('pca...')
-                #             else:
-                #                 logger.warning(f'Unknown reduce type {reduce_type}.')
-                #         del dists
-                #
-                # for f in seq1_feats:
-                #     del f
-                # for f in seq2_feats:
-                #     del f
+                    if reduce_type == REDUCE_TYPES.MIN:
+                       # replace nan values with inf
+                       dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
+                       dist_verts_seq1_seq2[seq1_verts_partial] = dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).flatten(2).min(dim=-1).values
+                    elif reduce_type == REDUCE_TYPES.AVG:
+                       dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(0.)
+                       dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
+                       dist_verts_seq1_seq2_partial = (dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).flatten(2) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2)).sum(dim=-1) / \
+                                              (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2).sum(dim=-1) + 1e-10)
+                       dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
+                       dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
+                    elif reduce_type == REDUCE_TYPES.MIN_AVG:
+                       dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
+                       dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
+                       dist_verts_seq1_seq2_partial = ((
+                                                              (dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).min(dim=-1).values.nan_to_num(posinf=0.) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :, :, 0]).sum(dim=-1) +
+                                                              (dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).min(dim=-2).values.nan_to_num(posinf=0.) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :, 0, :]).sum(dim=-1)) /
+                                                       (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :, 0, :].sum(dim=-1) + dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :, :, 0].sum(dim=-1) + 1e-10))
+                       dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
+                       dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
+                    else:
+                       logger.warning(f'Unknown reduce type {reduce_type}.')
+
+                    # for i in tqdm(range(seq1_verts)):
+                    #     for j in range(seq2_verts):
+                    #         dists = torch.cdist(seq1_feats[i].to(device=device), seq2_feats[j].to(device=device))
+                    #         if dists.numel() == 0:
+                    #             dist_verts_seq1_seq2[i, j] = torch.inf
+                    #         else:
+                    #             if reduce_type == REDUCE_TYPES.MIN:
+                    #                 dist_verts_seq1_seq2[i, j] = dists.min()
+                    #             elif reduce_type == REDUCE_TYPES.AVG:
+                    #                 dist_verts_seq1_seq2[i, j] = dists.mean()
+                    #             elif reduce_type == REDUCE_TYPES.MIN_AVG:
+                    #                 dist_verts_seq1_seq2[i, j] = torch.cat([dists.min(dim=-1).values, dists.min(dim=-2).values]).mean()
+                    #             elif reduce_type.startswith('pca'):
+                    #                 logger.info('pca...')
+                    #             else:
+                    #                 logger.warning(f'Unknown reduce type {reduce_type}.')
+                    #         del dists
+                    #
+                    # for f in seq1_feats:
+                    #     del f
+                    # for f in seq2_feats:
+                    #     del f
             else:
                 dist_verts_seq1_seq2 = torch.cdist(seq1_feats.to(device=device), seq2_feats.to(device=device))
             if not fpath_dist_verts_mesh_feats.parent.exists():
