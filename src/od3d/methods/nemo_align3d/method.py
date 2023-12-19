@@ -546,8 +546,26 @@ class NeMo_Align3D(OD3D_Method):
                     dist_verts_ref = src_sequences[src_instance_id].get_dist_verts_mesh_feats_to_other_sequence(ref_sequences[ref_instance_id]).to(device=self.device, dtype=dtype)
                     dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
 
+
+
                     src_meshes_cloned.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes_cloned.get_verts_with_mesh_id(src_instance_id), transf4x4=aligned_cuboid_tform_obj)
-                    src_meshes_cloned.rgb[src_vertices_mask] = ref_meshes.rgb[ref_vertices_mask][dists_verts_min_ref_vertices]
+
+                    _, dist_ref_geometry_weight, dist_ref_appear_weight = score_tform4x4_fit(pts=src_meshes_cloned.verts[src_vertices_mask],
+                                       tform4x4=torch.eye(4)[None,].to(device=self.device),
+                                       pts_ref=ref_meshes.verts[ref_vertices_mask],
+                                       dist_ref=dist_verts_ref,
+                                       return_weights=True,
+                                       dist_appear_weight=self.config.dist_appear_weight,
+                                       geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
+                                       sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
+                                       score_perc=self.config.ransac.score_perc)
+
+                    # dist_ref_geometry_weight = dist_ref_geometry_weight / dist_ref_geometry_weight.max()
+                    dist_ref_appear_weight = dist_ref_appear_weight / dist_ref_appear_weight.max()
+
+                    ref_verts_ncds = (transf3d_broadcast(pts3d=ref_meshes.verts[ref_vertices_mask], transf4x4=aligned_cuboid_tform_obj) + 1.) / 2.
+                    # ref_verts_ncds = ref_meshes.rgb[ref_vertices_mask]
+                    src_meshes_cloned.rgb[src_vertices_mask] = ref_verts_ncds[dists_verts_min_ref_vertices] * dist_ref_appear_weight[0, :src_vertices_mask.sum(), None]
 
                     #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                     #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
