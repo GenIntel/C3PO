@@ -8,6 +8,7 @@ from od3d.cli._platform import app as app_platform
 from od3d.cli.table import app as app_table
 from od3d.cli.figure import app as app_figure
 from od3d.cli.docker import app as app_docker
+from od3d.cli.write import app as app_write
 
 app.add_typer(app_run, name='bench')
 app.add_typer(app_setup, name='dataset')
@@ -17,6 +18,7 @@ app.add_typer(app_platform, name='platform')
 app.add_typer(app_table, name='table')
 app.add_typer(app_figure, name='figure')
 app.add_typer(app_docker, name='docker')
+app.add_typer(app_write, name='write')
 
 def main():
     app()

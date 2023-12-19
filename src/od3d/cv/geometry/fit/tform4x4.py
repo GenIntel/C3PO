@@ -1,10 +1,9 @@
 import logging
 logger = logging.getLogger(__name__)
-from od3d.cv.select import batched_index_select, batched_index_fill
+from od3d.cv.select import batched_index_select
 import torch
 from od3d.cv.select import batched_indexMD_select
 from pytorch3d.ops.points_alignment import corresponding_points_alignment
-from od3d.cv.geometry.transform import transf3d_broadcast
 from od3d.cv.geometry.transform import transf3d_broadcast
 
 
@@ -63,25 +62,7 @@ def fit_tform4x4(pts: torch.Tensor, pts_ids: torch.LongTensor, pts_ref: torch.Te
 
     pts_ref_sampled = batched_index_select(index=pts_ref_ids.flatten(-2), input=pts_ref).view(pts_ref_ids.shape + (-1,))
 
-    ## start single batch dimension (= flatten proposals)
-    #
-    # S = corresponding_points_alignment(pts_sampled.view(-1, S, F), pts_ref_sampled.view(-1, S, F), weights=None,
-    #                                    estimate_scale=True)
-    #
-    # pts_ref_tform4x4_pts = torch.zeros(size=(pts_sampled.shape[:-2].numel(), 4, 4)).to(
-    #     device=device)
-    # pts_ref_tform4x4_pts[..., 3, 3] = 1.
-    # pts_ref_tform4x4_pts[..., :3, :3] = S.R.permute(0, 2, 1) * S.s[..., None, None]
-    # pts_ref_tform4x4_pts[..., :3, 3] = S.T
-
     pts_ref_tform4x4_pts = fit_tform4x4_with_matches3d3d(pts=pts_sampled, pts_ref=pts_ref_sampled, estimate_scale=True)
-
-    pts_ref_tform_pts_sampled = transf3d_broadcast(pts3d=pts_sampled, transf4x4=pts_ref_tform4x4_pts[:, None])
-
-    ##logger.info(
-    #    f'sampled geometrical error before transform: \n{(pts_sampled - pts_ref_sampled).norm(dim=-1).mean(dim=1).mean()}')
-    #logger.info(
-    #    f'sampled geometrical error after transform: \n{(pts_ref_tform_pts_sampled - pts_ref_sampled).norm(dim=-1).mean(dim=1).mean()}')
 
     # problem of zeros is ill posed problem if from all 4 sampled points the nearest neighbor is the same.
     mask_pts_ref_tform4x4_pts_zeros = pts_ref_tform4x4_pts[:, :3, :3].flatten(1).sum(dim=-1) == 0.
@@ -130,9 +111,6 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape).clone() # PxNxR
     cyclic_dist_avg[dist_ref.isinf()[None,].expand(*dist_ref_geometry.shape)] = torch.inf
 
-    # dist_weight_geo = torch.exp(- (1./geo_cyclic_weight_temp) * cyclic_dist_avg)
-    # dist_weight = dist_weight / dist_weight.flatten(1).mean(dim=-1)[:, None, None,]
-
     # PxNxR
     argmin_ref_from_src = argmin_ref_from_src[None,].expand(P, N)
     argmin_src_from_ref = argmin_src_from_ref[None,].expand(P, R)
@@ -147,8 +125,7 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_tform_pts_ref_geo_id = torch.arange(proposal_tform_pts_ref_nn_geo_pts_id.shape[-1]).view(1, -1).\
         expand(proposal_tform_pts_ref_nn_geo_pts_id.shape).to(device=device)
 
-    #
-    # # PxN
+    # PxN
     proposal_tform_pts_nn_app_ref_id = argmin_ref_from_src
     proposal_tform_pts_app_id = torch.arange(proposal_tform_pts_nn_app_ref_id.shape[-1]).view(1, -1).\
         expand(proposal_tform_pts_nn_app_ref_id.shape).to(device=device)
@@ -158,14 +135,12 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_tform_pts_ref_app_id = torch.arange(proposal_tform_pts_ref_nn_app_pts_id.shape[-1]).view(1, -1).\
         expand(proposal_tform_pts_ref_nn_app_pts_id.shape).to(device=device)
 
-
     # Px2N
     proposal_tform_pts_nn_ref_id = torch.cat([proposal_tform_pts_nn_geo_ref_id, proposal_tform_pts_nn_app_ref_id], dim=-1)
     proposal_tform_pts_id = torch.cat([proposal_tform_pts_geo_id, proposal_tform_pts_app_id], dim=-1)
     # Px2R
     proposal_tform_pts_ref_nn_pts_id = torch.cat([proposal_tform_pts_ref_nn_geo_pts_id, proposal_tform_pts_ref_nn_app_pts_id], dim=-1)
     proposal_tform_pts_ref_id = torch.cat([proposal_tform_pts_ref_geo_id, proposal_tform_pts_ref_app_id], dim=-1)
-
 
     # forward: Px2Nx2
     proposal_tform_pts_nn_ref_id_2D = torch.stack([proposal_tform_pts_id, proposal_tform_pts_nn_ref_id], dim=-1)
@@ -177,25 +152,11 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.flip(dims=[-1])
     proposal_tform_pts_ref_nn_pts_id_2D = proposal_tform_pts_ref_nn_pts_id_2D.clone()
 
-
     # forward+backward nn
     proposal_pts_nn_id_2D = torch.cat([proposal_tform_pts_nn_ref_id_2D, proposal_tform_pts_ref_nn_pts_id_2D], dim=1)
-    # backward nn
-    #proposal_pts_nn_id_2D = proposal_tform_pts_ref_nn_pts_id_2D
-    # forward nn
-    #proposal_pts_nn_id_2D = proposal_tform_pts_nn_ref_id_2D
-
 
     proposal_dist_ref = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_geometry)
     proposal_cyclic_dist_avg_ref = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=cyclic_dist_avg)
-    # proposal_dist_ref_weight_geo = torch.exp(- (1./geo_cyclic_weight_temp) * proposal_cyclic_dist_avg_ref)
-    #proposal_dist_ref_weight_geo = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_weight_geo)
-    # proposal_dist_ref_weight_geo = proposal_dist_ref_weight_geo / proposal_dist_ref_weight_geo.mean(dim=-1, keepdim=True)
-
-    # proposal_dist_ref_weight_sem = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_weight_sem)
-    # proposal_dist_ref_weight_sem = proposal_dist_ref_weight_sem / proposal_dist_ref_weight_sem.mean(dim=-1, keepdim=True)
-
-    # proposal_dist_ref = proposal_dist_ref * proposal_dist_ref_weight_geo
 
     proposal_dist_ref_geometry = torch.cat([proposal_dist_ref[:, :N], proposal_dist_ref[:, 2*N:2*N+R]], dim=-1)
     proposal_dist_ref_appear = torch.cat([proposal_dist_ref[:, N:2*N], proposal_dist_ref[:, 2*N+R:]], dim=-1)
@@ -203,9 +164,9 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_cyclic_dist_ref_geometry = torch.cat([proposal_cyclic_dist_avg_ref[:, :N], proposal_cyclic_dist_avg_ref[:, 2*N:2*N+R]], dim=-1)
     proposal_cyclic_dist_ref_appear = torch.cat([proposal_cyclic_dist_avg_ref[:, N:2*N], proposal_cyclic_dist_avg_ref[:, 2*N+R:]], dim=-1)
 
-    proposal_dist_ref_geometry_weight = torch.exp(- (1./geo_cyclic_weight_temp) * (proposal_cyclic_dist_ref_geometry**2))
+    proposal_dist_ref_geometry_weight = torch.exp(-(1./(geo_cyclic_weight_temp**2)) * (proposal_cyclic_dist_ref_geometry**2))
     proposal_dist_ref_geometry_weight = proposal_dist_ref_geometry_weight / proposal_dist_ref_geometry_weight.mean(dim=-1, keepdim=True)
-    proposal_dist_ref_appear_weight = torch.exp(- (1./sem_cyclic_weight_temp) * (proposal_cyclic_dist_ref_appear**2))
+    proposal_dist_ref_appear_weight = torch.exp(- (1./(sem_cyclic_weight_temp**2)) * (proposal_cyclic_dist_ref_appear**2))
     proposal_dist_ref_appear_weight = proposal_dist_ref_appear_weight / proposal_dist_ref_appear_weight.mean(dim=-1, keepdim=True)
 
     proposal_dist_ref_geometry *= proposal_dist_ref_geometry_weight

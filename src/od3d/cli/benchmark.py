@@ -628,6 +628,14 @@ def recent(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
         logger.info(f'{run.name} {run.state}')
 
 @app.command()
+def delete_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
+                  name_regex: str = typer.Option('.*', '-n', '--name')):
+
+    logging.basicConfig(level=logging.INFO)
+    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    for run in runs:
+        run.delete()
+@app.command()
 def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
                   name_regex: str = typer.Option('.*', '-n', '--name')):
     from pathlib import Path

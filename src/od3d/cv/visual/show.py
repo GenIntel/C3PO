@@ -406,7 +406,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             vis.destroy_window()
         else:
             logger.warning(
-                'could not visualize with open3d, most likely env DISPLAY not set, try `export DISPLAY=:0.0;`')
+                'could not visualize with open3d, most likely env DISPLAY not set, try `export DISPLAY=:0.0;` (maybe without ;)')
 
             return [torch.zeros(size=(3, 480, 640)).to(device=device)] * viewpoints_count
 
@@ -592,6 +592,9 @@ def imgs_to_img(rgbs, pad=1, pad_value=0):
     #rgbs = (rgbs * 1.0).clamp(0, 1)
     #if masks is not None:
     #    rgb = (rgbs + masks) / 2.0
+
+    if isinstance(rgbs, List):
+        rgbs = torch.stack(rgbs, dim=0)
 
     rgbs = torch.nn.functional.pad(rgbs, (pad, pad, pad, pad), "constant", pad_value)
     #margin = 2
