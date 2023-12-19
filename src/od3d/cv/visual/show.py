@@ -335,13 +335,11 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
     else:
         if os.environ.get('DISPLAY') or open3d._build_config['ENABLE_HEADLESS_RENDERING']:
             vis = o3d.visualization.Visualizer()
-
             vis.create_window(visible=False, height=H, width=W)
-
             opt = vis.get_render_option()
-            #opt.background_color = np.asarray([0, 0, 0])
             opt.mesh_show_back_face = True
-            # opt.mesh_show_wireframe = mesh_show_wireframe
+            #opt.background_color = np.asarray([0, 0, 0])
+            #opt.mesh_show_wireframe = mesh_show_wireframe
 
             geometries_vertices_orig = []
 

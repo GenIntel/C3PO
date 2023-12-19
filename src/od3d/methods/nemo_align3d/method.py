@@ -544,9 +544,8 @@ class NeMo_Align3D(OD3D_Method):
                     ref_vertices_mask = ref_sequences_mesh_ids_for_verts == ref_instance_id
 
                     dist_verts_ref = src_sequences[src_instance_id].get_dist_verts_mesh_feats_to_other_sequence(ref_sequences[ref_instance_id]).to(device=self.device, dtype=dtype)
+                    dist_verts_ref = dist_verts_ref / 2.
                     dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
-
-
 
                     src_meshes_cloned.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes_cloned.get_verts_with_mesh_id(src_instance_id), transf4x4=aligned_cuboid_tform_obj)
 
@@ -560,18 +559,20 @@ class NeMo_Align3D(OD3D_Method):
                                        sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
                                        score_perc=self.config.ransac.score_perc)
 
-                    # dist_ref_geometry_weight = dist_ref_geometry_weight / dist_ref_geometry_weight.max()
+                    dist_ref_geometry_weight = dist_ref_geometry_weight / dist_ref_geometry_weight.max()
                     dist_ref_appear_weight = dist_ref_appear_weight / dist_ref_appear_weight.max()
 
-                    ref_verts_ncds = (transf3d_broadcast(pts3d=ref_meshes.verts[ref_vertices_mask], transf4x4=aligned_cuboid_tform_obj) + 1.) / 2.
-                    # ref_verts_ncds = ref_meshes.rgb[ref_vertices_mask]
-                    src_meshes_cloned.rgb[src_vertices_mask] = ref_verts_ncds[dists_verts_min_ref_vertices] * dist_ref_appear_weight[0, :src_vertices_mask.sum(), None]
+                    # ref_verts_ncds = transf3d_broadcast(pts3d=ref_meshes.verts[ref_vertices_mask].clone(), transf4x4=aligned_cuboid_tform_obj)
+                    ref_verts_ncds = ref_meshes.verts[ref_vertices_mask].clone()
+                    ref_verts_ncds = (ref_verts_ncds - ref_verts_ncds.min(dim=0, keepdim=True).values) / (1e-10 + ref_verts_ncds.max(dim=0, keepdim=True).values - ref_verts_ncds.min(dim=0, keepdim=True).values)
+                    ref_verts_ncds = (ref_verts_ncds + 1.) / 2.
+                    src_meshes_cloned.rgb[src_vertices_mask] = ref_verts_ncds[dists_verts_min_ref_vertices]
+                    src_meshes_cloned.rgb[src_vertices_mask] *= dist_ref_appear_weight[0, :src_vertices_mask.sum(), None]
 
                     #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                     #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
 
                     pts3d.append(transf3d_broadcast(pts3d=src_sequences[src_instance_id].get_pcl().to(device=self.device, dtype=dtype), transf4x4=aligned_cuboid_tform_obj))
-
                     pts3d_colors.append(src_sequences[src_instance_id].get_pcl_colors().to(device=self.device, dtype=dtype))
 
                 viewpoints_count = 2
