@@ -333,7 +333,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             logger.warning('could not visualize with open3d, because env DISPLAY not set, try `export DISPLAY=:0.0;`')
             return
     else:
-        if os.environ.get('DISPLAY'):
+        if os.environ.get('DISPLAY') or open3d._build_config['ENABLE_HEADLESS_RENDERING']:
             vis = o3d.visualization.Visualizer()
 
             vis.create_window(visible=False, height=H, width=W)
