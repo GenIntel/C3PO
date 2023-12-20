@@ -267,12 +267,12 @@ class NeMo_Align3D(OD3D_Method):
 
                                 # four points required, otherwise rotation yields an ambiguity. like planes without normals
                                 ref_tform4x4_src = ransac(pts=pts_src, fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
-                                                                                        dist_ref=dist_src_ref),
+                                                                                        dist_app_ref=dist_src_ref),
                                                           score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
-                                                                             dist_ref=dist_src_ref,
-                                                                             dist_appear_weight=self.config.dist_appear_weight,
+                                                                             dist_app_ref=dist_src_ref,
+                                                                             dist_app_weight=self.config.dist_appear_weight,
                                                                              geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
-                                                                             sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
+                                                                             app_cyclic_weight_temp=self.config.app_cyclic_weight_temp,
                                                                              score_perc=self.config.ransac.score_perc),
                                                           fits_count=self.config.ransac.samples,
                                                           fit_pts_count=4)
@@ -280,11 +280,11 @@ class NeMo_Align3D(OD3D_Method):
                                 _, pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src,
                                                                                         tform4x4=ref_tform4x4_src[None,],
                                                                                         pts_ref=pts_ref,
-                                                                                        dist_ref=dist_src_ref,
+                                                                                        dist_app_ref=dist_src_ref,
                                                                                         return_dists=True,
-                                                                                        dist_appear_weight=self.config.dist_appear_weight,
+                                                                                        dist_app_weight=self.config.dist_appear_weight,
                                                                                         geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
-                                                                                        sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
+                                                                                        app_cyclic_weight_temp=self.config.app_cyclic_weight_temp,
                                                                                         score_perc=self.config.ransac.score_perc)
                                 # logger.info(f'sim: geo: {pose_dist_geo}, app: {pose_dist_appear}')
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
@@ -311,20 +311,20 @@ class NeMo_Align3D(OD3D_Method):
                                                           fit_func=partial(fit_tform4x4, pts_ref=pts_ref,
                                                                            dist_ref=dist_src_ref),
                                                           score_func=partial(score_tform4x4_fit, pts_ref=pts_ref,
-                                                                             dist_ref=dist_src_ref,
-                                                                             dist_appear_weight=self.config.dist_appear_weight,
+                                                                             dist_app_ref=dist_src_ref,
+                                                                             dist_app_weight=self.config.dist_appear_weight,
                                                                              geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
-                                                                             sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
+                                                                             app_cyclic_weight_temp=self.config.app_cyclic_weight_temp,
                                                                              score_perc=self.config.ransac.score_perc),
                                                           fits_count=self.config.ransac.samples, fit_pts_count=4)
                                 #else:
                                 #    ref_tform4x4_src = torch.eye(4).to(device=self.device, dtype=dtype)
                                 _, pose_dist_geo, pose_dist_appear = score_tform4x4_fit(pts=pts_src, tform4x4=ref_tform4x4_src[None,], pts_ref=pts_ref,
-                                                                                     dist_ref=dist_src_ref, return_dists=True,
-                                                                                     dist_appear_weight=self.config.dist_appear_weight,
-                                                                                     geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
-                                                                                     sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
-                                                                                     score_perc=self.config.ransac.score_perc)
+                                                                                        dist_app_ref=dist_src_ref, return_dists=True,
+                                                                                        dist_app_weight=self.config.dist_appear_weight,
+                                                                                        geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
+                                                                                        app_cyclic_weight_temp=self.config.app_cyclic_weight_temp,
+                                                                                        score_perc=self.config.ransac.score_perc)
                                 # logger.info(f'sim: geo: {pose_dist_geo}, app: {pose_dist_appear}')
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
@@ -552,14 +552,14 @@ class NeMo_Align3D(OD3D_Method):
                     src_meshes_cloned.verts[src_vertices_mask] = transf3d_broadcast(pts3d=src_meshes_cloned.get_verts_with_mesh_id(src_instance_id), transf4x4=aligned_cuboid_tform_obj)
 
                     _, dist_ref_geometry_weight, dist_ref_appear_weight = score_tform4x4_fit(pts=src_meshes_cloned.verts[src_vertices_mask],
-                                       tform4x4=torch.eye(4)[None,].to(device=self.device),
-                                       pts_ref=ref_meshes.verts[ref_vertices_mask],
-                                       dist_ref=dist_verts_ref,
-                                       return_weights=True,
-                                       dist_appear_weight=self.config.dist_appear_weight,
-                                       geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
-                                       sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
-                                       score_perc=self.config.ransac.score_perc)
+                                                                                             tform4x4=torch.eye(4)[None,].to(device=self.device),
+                                                                                             pts_ref=ref_meshes.verts[ref_vertices_mask],
+                                                                                             dist_app_ref=dist_verts_ref,
+                                                                                             return_weights=True,
+                                                                                             dist_app_weight=self.config.dist_appear_weight,
+                                                                                             geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
+                                                                                             app_cyclic_weight_temp=self.config.app_cyclic_weight_temp,
+                                                                                             score_perc=self.config.ransac.score_perc)
 
                     dist_ref_geometry_weight = dist_ref_geometry_weight / dist_ref_geometry_weight.max()
                     dist_ref_appear_weight = dist_ref_appear_weight / dist_ref_appear_weight.max()

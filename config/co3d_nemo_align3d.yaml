@@ -5,7 +5,7 @@ defaults:
   - datasets@train_datasets.src: co3d_no_zsp_5s_labeled_ref #  co3d_no_zsp_5s_labeled_ref, co3dv1_10s_zsp_labeled_cuboid_ref #  co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
   - datasets@train_datasets.labeled: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_10s_zsp_labeled_cuboid_ref # co3dv1_10s_zsp_labeled # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
   - datasets@val_datasets.main:
-  - datasets@test_datasets.co3d: co3dv1_10s_zsp_labeled_cuboid_ref # co3dv1_10s_zsp_labeled # co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
+  - datasets@test_datasets.co3d: co3d_no_zsp_5s_labeled_ref # co3dv1_10s_zsp_labeled # co3d_50s_no_zsp co3dv1_10s_zsp_labeled co3d_10s_test, co3d_test
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
@@ -31,14 +31,14 @@ categories:
   - laptop
   - book
   - backpack
-#  - cellphone # from cellphone on, no zsp categories
-#  - microwave
-#  - bench
-#  - bottle
-#  - couch
-#  - cup
-#  - suitcase
-#  - tv
+  - cellphone # from cellphone on, no zsp categories
+  - microwave
+  - bench
+  - bottle
+  - couch
+  - cup
+  - suitcase
+  - tv
 
 metrics:
   - metricA
@@ -50,13 +50,13 @@ method:
       samples: 1000
       score_perc: 1.
     use_only_first_reference: False
-    geo_cyclic_weight_temp: 1.
-    sem_cyclic_weight_temp: 10.
-    gt_cam_tform_obj_source: zsp_labeled
+    geo_cyclic_weight_temp: 0.9
+    app_cyclic_weight_temp: 0.9
+    gt_cam_tform_obj_source: labeled_cuboid # zsp_labeled, labeled, labeled_cuboid
     dist_appear_weight: 0.2
     global_optimization_steps: 1
     categories: ${categories}
-    aligned_name: 'latest_zsp'
+    aligned_name: 'latest_5s_sota'
 
 mesh_feats_type: 'M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc' # 'R_acc' # 'R_avg', 'R_avg_norm'
 dist_verts_mesh_feats_reduce_type: 'min_avg' # 'pca32_', 'avg', 'min', 'min_avg'
