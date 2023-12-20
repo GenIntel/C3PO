@@ -286,6 +286,7 @@ class NeMo_Align3D(OD3D_Method):
                                                                                         geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
                                                                                         sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
                                                                                         score_perc=self.config.ransac.score_perc)
+                                # logger.info(f'sim: geo: {pose_dist_geo}, app: {pose_dist_appear}')
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
                                 pred_ref_tform_src = ref_tform4x4_src.clone()
@@ -324,6 +325,7 @@ class NeMo_Align3D(OD3D_Method):
                                                                                      geo_cyclic_weight_temp=self.config.geo_cyclic_weight_temp,
                                                                                      sem_cyclic_weight_temp=self.config.sem_cyclic_weight_temp,
                                                                                      score_perc=self.config.ransac.score_perc)
+                                # logger.info(f'sim: geo: {pose_dist_geo}, app: {pose_dist_appear}')
                                 all_pred_pose_dist_geo[category][r, s] = pose_dist_geo
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
 

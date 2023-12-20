@@ -99,11 +99,29 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
             pull_od3d_submodules_cmds_str = ''
 
         if cfg.platform.install_od3d:
+            # headless open3d rendering infeasible due to requirements
+            # https://github.com/isl-org/Open3D/blob/main/util/install_deps_ubuntu.sh (most likely clang version)
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
 pip install torch
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 pip install -e {cfg.platform.path_od3d}
+# pip uninstall open3d -y
+# rm -rf Open3D
+# git clone --recursive --branch v0.17.0 https://github.com/isl-org/Open3D.git
+# cd Open3D/
+# mkdir build && cd build
+# cmake -DBUILD_FILAMENT_FROM_SOURCE=ON \
+#       -DBUILD_SHARED_LIBS=ON \
+#       -DENABLE_HEADLESS_RENDERING=ON \
+#       -DBUILD_GUI=OFF \
+#       -DBUILD_WEBRTC=OFF \
+#       -DUSE_SYSTEM_GLEW=OFF \
+#       -DUSE_SYSTEM_GLFW=OFF ..
+# make -j$(nproc)
+# make install
+# make install-pip-package
+# cd ../..
             '''
         else:
             install_od3d_cmds_str = ''
@@ -125,11 +143,9 @@ echo $(curl google.com)
 CUDA_HOME={cfg.platform.path_cuda}
 PATH=${{CUDA_HOME}}/bin:${{PATH}}
 LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
-DISPLAY=:0.0
 export PATH
 export LD_LIBRARY_PATH
 export CUDA_HOME
-export DISPLAY
 
 echo PATH=${{PATH}}
 echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
@@ -229,11 +245,29 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
             pull_od3d_submodules_cmds_str = ''
 
         if cfg.platform.install_od3d:
+            # headless open3d rendering infeasible due to requirements
+            # https://github.com/isl-org/Open3D/blob/main/util/install_deps_ubuntu.sh (most likely clang version)
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
 pip install torch
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 pip install -e {cfg.platform.path_od3d}
+# pip uninstall open3d -y
+# rm -rf Open3D
+# git clone --recursive --branch v0.17.0 https://github.com/isl-org/Open3D.git
+# cd Open3D/
+# mkdir build && cd build
+# cmake -DBUILD_FILAMENT_FROM_SOURCE=ON \
+#       -DBUILD_SHARED_LIBS=ON \
+#       -DENABLE_HEADLESS_RENDERING=ON \
+#       -DBUILD_GUI=OFF \
+#       -DBUILD_WEBRTC=OFF \
+#       -DUSE_SYSTEM_GLEW=OFF \
+#       -DUSE_SYSTEM_GLFW=OFF ..
+# make -j$(nproc)
+# make install
+# make install-pip-package
+# cd ../..
             '''
         else:
             install_od3d_cmds_str = ''
@@ -255,11 +289,9 @@ pip install -e {cfg.platform.path_od3d}
 CUDA_HOME={cfg.platform.path_cuda}
 PATH=${{CUDA_HOME}}/bin:${{PATH}}
 LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
-DISPLAY=:0.0
 export PATH
 export LD_LIBRARY_PATH
 export CUDA_HOME
-export DISPLAY
 
 HTTP_PROXY=http://tfsquid.informatik.intra.uni-freiburg.de:8080
 HTTPS_PROXY=http://tfsquid.informatik.intra.uni-freiburg.de:8080
