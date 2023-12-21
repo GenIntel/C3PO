@@ -1970,7 +1970,7 @@ class CO3D_Sequence():
     @property
     def good_cam_movement(self):
         name = f'{self.pcl_source}_good_cam_movement'
-        if True or name not in self.meta_ext:
+        if name not in self.meta_ext:
             device = 'cuda'
             frames = self.get_frames()
             frames_mask = torch.stack([frame.mask for frame in frames], dim=0).to(device=device)
