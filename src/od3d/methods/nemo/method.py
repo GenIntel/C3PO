@@ -1272,10 +1272,10 @@ class NeMo(OD3D_Method):
                                                                                                       :1],
                                                                                        feats2d_net_mask=feats2d_net_mask[
                                                                                                         :1])
-
-            b_cams_multiview_tform4x4_obj[:, :, :3, :3] = b_cams_multiview_tform4x4_obj[:, :, :3, :3]  # * _scale[:, :, None, None]
-
+            scale = b_cams_multiview_tform4x4_obj[..., 2, 3] / cam_tform4x4_obj[:, None, 2, 3]
             cam_tform4x4_obj_scaled = cam_tform4x4_obj[:, None].clone().expand(cam_tform4x4_obj.shape[0], *b_cams_multiview_tform4x4_obj.shape[1:]).clone()
+            cam_tform4x4_obj_scaled[:, :, :3, :3] = cam_tform4x4_obj_scaled[:, :, :3, :3] * scale[:, None, None]
+
             objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj_scaled[:1]),
                                                                       b_cams_multiview_tform4x4_obj)
             b_cams_multiview_tform4x4_obj = tform4x4_broadcast(cam_tform4x4_obj_scaled,
