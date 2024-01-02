@@ -1278,7 +1278,9 @@ class NeMo(OD3D_Method):
             # use rot. scaling
             # cam_tform4x4_obj_scaled[:, :, :3, :3] = cam_tform4x4_obj_scaled[:, :, :3, :3] * scale[:, :, None, None]
             # use transl. scaling
-            cam_tform4x4_obj_scaled[:, :, :3, 3] = cam_tform4x4_obj_scaled[:, :, :3, 3] * scale[:, :, None]
+            #cam_tform4x4_obj_scaled[:, :, :3, 3] = cam_tform4x4_obj_scaled[:, :, :3, 3] * scale[:, :, None]
+            # use depth scaling
+            cam_tform4x4_obj_scaled[:, :, 2, 3] = cam_tform4x4_obj_scaled[:, :, 2, 3] * scale[:, :]
 
             objs_multiview_tform4x4_cuboid_front = tform4x4_broadcast(inv_tform4x4(cam_tform4x4_obj_scaled[:1]),
                                                                       b_cams_multiview_tform4x4_obj)
