@@ -277,7 +277,8 @@ class Meshes(torch.nn.Module):
             faces = self.get_faces_with_mesh_id(mesh_id=mesh_id)
             mesh_verts_geodesic_dist = gdist.local_gdist_matrix(
                 vertices=verts.detach().cpu().to(torch.float64).numpy(),
-                triangles=faces.cpu().detach().to(torch.int32).numpy()
+                triangles=faces.cpu().detach().to(torch.int32).numpy(),
+                max_distance=99999,
             )
             # convert  scipy.sparse._csc.csc_matrix to torch.Tensor, fill sparse with torch.inf
             mesh_verts_geodesic_dist = torch.from_numpy(mesh_verts_geodesic_dist.toarray()).to(dtype=torch.float32, device=self.device)
