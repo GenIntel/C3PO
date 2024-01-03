@@ -1248,7 +1248,7 @@ class NeMo(OD3D_Method):
         #     sim = sim_pxl.flatten(2).sum(dim=-1) / (feats2d_net_mask.flatten(2).sum(dim=-1) + 1e-10)
 
         # use sigmoid
-        sim_pxl = torch.nn.functional.softmax(sim_pxl, dim=1)
+        # sim_pxl = torch.nn.functional.softmax(sim_pxl, dim=1)
 
         # only use rendered map inliers
         if only_use_rendered_inliers:
