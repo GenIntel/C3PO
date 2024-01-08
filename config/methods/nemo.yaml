@@ -23,7 +23,7 @@ train:
   bank_feats_update: loss_gradient # loss_gradient, normalize_loss_gradient, moving_average, loss
   T: 1
   alpha: 0.96
-  geodesic_prob_sigma: 0.2
+  geodesic_prob_sigma: 0.
   val: True
   split: random # 'random' 'sequences_separated' 'seqences_shared'
 
@@ -94,6 +94,7 @@ test:
 inference:
     only_use_rendered_inliers: False
     allow_clutter: True
+    use_sigmoid: False
     pre_rendered: True
     sim_feats_mesh_with_image: 'rendered' # 'rendered', 'verts2d'
     live: False

@@ -535,7 +535,8 @@ class NeMo(OD3D_Method):
                 categories_ids=batch.label,
                 broadcast_batch_and_cams=True,
                 only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                allow_clutter=self.config.inference.allow_clutter
+                allow_clutter=self.config.inference.allow_clutter,
+                use_sigmoid=self.config.inference.use_sigmoid
             )
 
             if return_samples_with_sim:
@@ -578,7 +579,8 @@ class NeMo(OD3D_Method):
                                                                   broadcast_batch_and_cams=False,
                                                                   pre_rendered=False,
                                                                   only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                                                                  allow_clutter=self.config.inference.allow_clutter)
+                                                                  allow_clutter=self.config.inference.allow_clutter,
+                                                                  use_sigmoid=self.config.inference.use_sigmoid)
                 mesh_cam_loss = -sim
 
                 if self.config.inference.live:
@@ -688,7 +690,8 @@ class NeMo(OD3D_Method):
                                                      feats2d_net_mask=feats2d_net_mask,
                                                      pre_rendered=False,
                                                      only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                                                     allow_clutter=self.config.inference.allow_clutter)
+                                                     allow_clutter=self.config.inference.allow_clutter,
+                                                     use_sigmoid=self.config.inference.use_sigmoid)
 
             sim = sim.mean(dim=0, keepdim=True).expand(*sim.shape)
 
@@ -734,7 +737,8 @@ class NeMo(OD3D_Method):
                                                                   broadcast_batch_and_cams=False,
                                                                   feats2d_net_mask=feats2d_net_mask, pre_rendered=False,
                                                                   only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                                                                  allow_clutter=self.config.inference.allow_clutter)
+                                                                  allow_clutter=self.config.inference.allow_clutter,
+                                                                  use_sigmoid=self.config.inference.use_sigmoid)
                 mesh_cam_loss = -sim
 
                 if self.config.inference.live:
@@ -950,7 +954,8 @@ class NeMo(OD3D_Method):
                                                                       sim_feats_mesh_with_image=SIM_FEATS_MESH_WITH_IMAGE.RENDERED,
                                                                       pre_rendered=False,
                                                                       only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                                                                      allow_clutter=self.config.inference.allow_clutter)
+                                                                      allow_clutter=self.config.inference.allow_clutter,
+                                                                      use_sigmoid=self.config.inference.use_sigmoid)
 
                     sim_pxl = resize(sim_pxl, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
                     for b in range(len(batch)):
@@ -1056,7 +1061,7 @@ class NeMo(OD3D_Method):
                                         broadcast_batch_and_cams=broadcast_batch_and_cams)
 
     def get_sim_feats2d_net_with_cams(self, feats2d_net, cam_tform4x4_obj, cam_intr4x4, categories_ids, return_sim_pxl=False,
-                                      broadcast_batch_and_cams=False, feats2d_net_mask=None, sim_feats_mesh_with_image: SIM_FEATS_MESH_WITH_IMAGE=None, pre_rendered: bool=None, only_use_rendered_inliers=False, allow_clutter=True):
+                                      broadcast_batch_and_cams=False, feats2d_net_mask=None, sim_feats_mesh_with_image: SIM_FEATS_MESH_WITH_IMAGE=None, pre_rendered: bool=None, only_use_rendered_inliers=False, allow_clutter=True, use_sigmoid=False):
         if sim_feats_mesh_with_image is None:
             sim_feats_mesh_with_image = self.config.inference.sim_feats_mesh_with_image
         if pre_rendered is None:
@@ -1078,7 +1083,7 @@ class NeMo(OD3D_Method):
                                                                  down_sample_rate=self.down_sample_rate,
                                                                  broadcast_batch_and_cams=broadcast_batch_and_cams)
 
-            return self.get_sim_feats2d_net_and_rendered(feats2d_net=feats2d_net, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=return_sim_pxl, feats2d_net_mask=feats2d_net_mask, only_use_rendered_inliers=only_use_rendered_inliers, allow_clutter=allow_clutter)
+            return self.get_sim_feats2d_net_and_rendered(feats2d_net=feats2d_net, feats2d_rendered=mesh_feats2d_rendered, return_sim_pxl=return_sim_pxl, feats2d_net_mask=feats2d_net_mask, only_use_rendered_inliers=only_use_rendered_inliers, allow_clutter=allow_clutter, use_sigmoid=use_sigmoid)
 
         elif sim_feats_mesh_with_image == SIM_FEATS_MESH_WITH_IMAGE.VERTS2D:
             verts2d_mesh, verts2d_mesh_mask = self.meshes.verts2d(cams_intr4x4=cam_intr4x4,
@@ -1095,6 +1100,7 @@ class NeMo(OD3D_Method):
         # H=sim_clutter.shape[1], W=sim_clutter.shape[2], dtype=sim_nearest_texture_verts.dtype, device=sim_nearest_texture_verts.device)[None,].expand()
         # prob_corresp2d3d = ((sim_texture + 1) / 2) * (1-((sim_clutter+1)/ 2)) #  (sim_clutter < sim_texture) * sim_texture
         prob_corresp2d3d = torch.exp(sim_texture) / (torch.exp(sim_texture) + torch.exp(sim_clutter))
+
         prob_corresp2d3d *= feats2d_net_mask
 
         return nearest_verts3d, nearest_verts2d, prob_corresp2d3d
@@ -1183,7 +1189,7 @@ class NeMo(OD3D_Method):
         index = index.expand(expanse)
         return torch.gather(input, dim, index)
 
-    def get_sim_feats2d_net_and_rendered(self, feats2d_net, feats2d_rendered, return_sim_pxl=False, feats2d_net_mask=None, only_use_rendered_inliers=False, allow_clutter=True):
+    def get_sim_feats2d_net_and_rendered(self, feats2d_net, feats2d_rendered, return_sim_pxl=False, feats2d_net_mask=None, only_use_rendered_inliers=False, allow_clutter=True, use_sigmoid=False):
         """
 
         Args:
@@ -1199,6 +1205,7 @@ class NeMo(OD3D_Method):
 
         sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[
             0]
+
         # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
 
         if feats2d_rendered.dim() == 5:
@@ -1249,6 +1256,8 @@ class NeMo(OD3D_Method):
 
         # use sigmoid
         # sim_pxl = torch.nn.functional.softmax(sim_pxl, dim=1)
+
+        sim_pxl = torch.sigmoid(sim_pxl)
 
         # only use rendered map inliers
         if only_use_rendered_inliers:
