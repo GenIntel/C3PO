@@ -1257,7 +1257,8 @@ class NeMo(OD3D_Method):
         # use sigmoid
         # sim_pxl = torch.nn.functional.softmax(sim_pxl, dim=1)
 
-        sim_pxl = torch.sigmoid(sim_pxl)
+        if use_sigmoid:
+            sim_pxl = torch.sigmoid(sim_pxl)
 
         # only use rendered map inliers
         if only_use_rendered_inliers:
