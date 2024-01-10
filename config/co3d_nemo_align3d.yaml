@@ -46,17 +46,22 @@ metrics:
 
 method:
   nemo:
+    refine_optimization_steps: 20
+    refine_lr: 2e-2 # 2e-2
+    refine_pts_weight: 0.5
+    refine_arap_weight: 0.05
+    refine_arap_geo_std: 0.02
     ransac:
       samples: 1000
       score_perc: 1.
     use_only_first_reference: False
-    geo_cyclic_weight_temp: 0.9
-    app_cyclic_weight_temp: 0.9
-    gt_cam_tform_obj_source: labeled_cuboid # zsp_labeled, labeled, labeled_cuboid
-    dist_appear_weight: 0.2
+    geo_cyclic_weight_temp: 0.6
+    app_cyclic_weight_temp: 0.6
+    gt_cam_tform_obj_source: labeled_cuboid # zsp_labeled, labeled, labeled_cuboid or '' for only align
+    dist_appear_weight: 0.1
     global_optimization_steps: 1
     categories: ${categories}
-    aligned_name: 'latest_5s_sota'
+    aligned_name: 'latest_50s_to_5s' # 'latest_50s_to_5s_sota'
 
 mesh_feats_type: 'M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc' # 'R_acc' # 'R_avg', 'R_avg_norm'
 dist_verts_mesh_feats_reduce_type: 'min_avg' # 'pca32_', 'avg', 'min', 'min_avg'
