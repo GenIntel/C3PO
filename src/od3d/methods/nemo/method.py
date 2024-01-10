@@ -592,7 +592,7 @@ class NeMo(OD3D_Method):
                                                                           modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
                             0]).to(dtype=batch.rgb.dtype)), duration=1)
 
-                loss = mesh_cam_loss.mean()
+                loss = mesh_cam_loss.sum()
                 loss.backward()
                 optim_inference.step()
                 optim_inference.zero_grad()
