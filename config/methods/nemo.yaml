@@ -1,7 +1,7 @@
 defaults:
   - optimizer@train.optimizer: adam
   - scheduler@train.scheduler: multistep
-  - model@model: dinov2_frozen
+  - model@model: dinov2_frozen_norm
 
 name: nemo
 class_name: NeMo
@@ -21,7 +21,7 @@ train:
   use_mask_rendered_object: True
   loss: cross_entropy # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
   bank_feats_update: loss_gradient # loss_gradient, normalize_loss_gradient, moving_average, loss
-  T: 1
+  T: 0.07 # 0.07
   alpha: 0.96
   geodesic_prob_sigma: 0.
   val: True
