@@ -2,8 +2,8 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.labeled: co3d_no_zsp_20s_aligned # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
-  - datasets@train_datasets.unlabeled: co3d_no_zsp_20s # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
+  - datasets@train_datasets.labeled: co3d_no_zsp_50s_aligned # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
+  - datasets@train_datasets.unlabeled: co3d_no_zsp_50s # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
   - datasets@val_datasets.main: co3d_no_zsp_5s_labeled_ref
   - datasets@val_datasets.co3d_zsp: co3dv1_10s_zsp_labeled_cuboid_ref
   - datasets@val_datasets.pascal3d: pascal3d_val
@@ -52,37 +52,19 @@ metrics:
   - metricB
 
 aligned_name_ref: '/r0'
-aligned_name_suffix: '_filtered'
-aligned_name: 'latest_50s_to_5s${aligned_name_suffix}${aligned_name_ref}'
+aligned_name_suffix: '_mesh'
+aligned_name: 'latest_50s_to_5s_sota${aligned_name_suffix}${aligned_name_ref}'
 
 method:
   nemo:
     inference:
       pre_rendered: False
-      use_mask_object: True
-#      sample:
-#        uniform_multiview_rescale: False
-#        method: uniform # epnp3d2d uniform
-#        epnp3d2d:
-#          count_cams: 100
-#          count_pts: 4
-#        uniform:
-#          azim:
-#            min: '0.'
-#            max: math.pi * 2 / 8.                 # math.pi * 2 - (math.pi * 2) / 12. # 12
-#            steps: 8               #  12
-#          elev:
-#            min: -math.pi / 2 + math.pi / 8  #-math.pi / 6
-#            max: math.pi / 2  - math.pi / 8 # math.pi / 3
-#            steps: 4
-#
-#          theta:
-#            min: -math.pi + math.pi / 8 # -math.pi / 6
-#            max: math.pi - math.pi / 8 # math.pi / 6
-#            steps: 4
-#      refine:
-#        enabled: True
-#        dims_detached: [ 0, 1, 2 ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
+      sample:
+        method: epnp3d2d # epnp3d2d uniform
+        depth_from_box: False
+      refine:
+        enabled: True
+        dims_detached: [ ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
     train:
       early_stopping: False
       epochs: 10
@@ -151,6 +133,31 @@ method:
       cup: ${..path_meshes}/cup/mesh.ply
       suitcase: ${..path_meshes}/suitcase/mesh.ply
       tv: ${..path_meshes}/tv/mesh.ply
+
+#    inference:
+#      sample:
+#        method: uniform # epnp3d2d uniform
+#        depth_from_box: False
+#        epnp3d2d:
+#          count_cams: 100
+#          count_pts: 4
+#        uniform:
+#          azim:
+#            min: '0.'
+#            max: math.pi * 2 / 8.                 # math.pi * 2 - (math.pi * 2) / 12. # 12
+#            steps: 8               #  12
+#          elev:
+#            min: -math.pi / 2 + math.pi / 8  #-math.pi / 6
+#            max: math.pi / 2  - math.pi / 8 # math.pi / 3
+#            steps: 4
+#
+#          theta:
+#            min: -math.pi + math.pi / 8 # -math.pi / 6
+#            max: math.pi - math.pi / 8 # math.pi / 6
+#            steps: 4
+#      refine:
+#        enabled: True
+#        dims_detached: [ 0, 1, 2 ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
 
 train_datasets:
   labeled:
