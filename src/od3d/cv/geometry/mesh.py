@@ -2,7 +2,10 @@ import logging
 from pytorch3d.io import IO
 import torch
 from pathlib import Path
+from pytorch3d.renderer.mesh import TexturesUV as PT3DTexturesUV
+from pytorch3d.renderer.mesh import TexturesVertex as PT3DTexturesVertex
 from pytorch3d.structures.meshes import Meshes as PT3DMeshes
+from pytorch3d.structures import packed_to_list as pt3d_packed_to_list
 from pytorch3d.renderer.cameras import PerspectiveCameras
 from pytorch3d.renderer import MeshRasterizer, RasterizationSettings
 from pytorch3d.renderer.mesh.utils import interpolate_face_attributes
@@ -38,13 +41,26 @@ class Mesh:
         self.feats = feats
         self.device = verts.device
 
+
+
+    @staticmethod
+    def convert_to_textureVertex(textures_uv: PT3DTexturesUV, meshes: PT3DMeshes) -> PT3DTexturesVertex:
+        # note: this is a workaround, since the model textures_uv contains multiple values per vertex, but textures_vertex only one
+        verts_colors_packed = torch.zeros_like(meshes.verts_packed())
+        verts_colors_packed[meshes.faces_packed()] = textures_uv.faces_verts_textures_packed()  # (*)
+        return PT3DTexturesVertex(pt3d_packed_to_list(verts_colors_packed, meshes.num_verts_per_mesh()))
+
     @staticmethod
     def load_from_file(fpath: Path, device='cpu', scale=1.):
         io = IO()
         mesh = io.load_mesh(fpath, device=device)
         verts = mesh[0].verts_list()[0] * scale
         faces = mesh[0].faces_list()[0]
-        return Mesh(verts=verts, faces=faces)
+        if mesh[0].textures is not None:
+            verts_rgb = Mesh.convert_to_textureVertex(textures_uv=mesh[0].textures, meshes=mesh[0]).verts_features_list()[0]
+        else:
+            verts_rgb = None
+        return Mesh(verts=verts, faces=faces, rgb=verts_rgb)
 
     @staticmethod
     def load_from_file_ply(fpath: Path):
@@ -247,53 +263,55 @@ class Meshes(torch.nn.Module):
             feats = [self.get_feats_with_mesh_id(mesh_id=mesh_id, clone=clone) for mesh_id in meshes_ids]
         return Meshes(verts=verts, faces=faces, rgb=rgb, feats=feats)
 
-    @property
-    def geodesic_dist(self):
+    def get_geodesic_dist(self):
         if self._geodesic_dist is None:
-            self._geodesic_dist = self.get_verts_geodestic_distances()
+            import gdist
+
+            meshes_ids = list(range(len(self)))
+            geodesic_dist = torch.ones(size=(self.verts.shape[0], self.verts.shape[0]), device=self.device) * torch.inf
+            for mesh_id in meshes_ids:
+                verts = self.get_verts_with_mesh_id(mesh_id=mesh_id)
+                faces = self.get_faces_with_mesh_id(mesh_id=mesh_id)
+                mesh_verts_geodesic_dist = gdist.local_gdist_matrix(
+                    vertices=verts.detach().cpu().to(torch.float64).numpy(),
+                    triangles=faces.cpu().detach().to(torch.int32).numpy(),
+                    max_distance=99999,
+                )
+                # convert  scipy.sparse._csc.csc_matrix to torch.Tensor, fill sparse with torch.inf
+                mesh_verts_geodesic_dist = torch.from_numpy(mesh_verts_geodesic_dist.toarray()).to(dtype=torch.float32,
+                                                                                                   device=self.device)
+                mesh_verts_geodesic_dist = mesh_verts_geodesic_dist / mesh_verts_geodesic_dist.max()
+                mesh_verts_geodesic_dist[mesh_verts_geodesic_dist == 0] = torch.inf
+                mesh_verts_geodesic_dist[torch.arange(mesh_verts_geodesic_dist.shape[0]).to(self.device), torch.arange(
+                    mesh_verts_geodesic_dist.shape[0]).to(self.device)] = 0.
+
+                # mesh_verts_geodesic_dist = torch.from_numpy(mesh_verts_geodesic_dist.toarray()).to(dtype=torch.float32, device=self.device)
+
+                geodesic_dist[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id + 1],
+                self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[
+                    mesh_id + 1]] = mesh_verts_geodesic_dist
+
+            # euclidean_dist = torch.cdist(self.verts[None,], self.verts[None,])[0]
+            # geodesic_dist = torch.ones_like(euclidean_dist) * torch.inf
+            # would need to get verts nearest neighbors and iteratively propagating geodesic_dist
+            self._geodesic_dist = geodesic_dist
+
         return self._geodesic_dist
 
-    @property
-    def geodesic_prob(self):
-        _geodesic_dist = self.geodesic_dist.clone()
+
+    def get_geodesic_prob(self):
+        _geodesic_dist = self.get_geodesic_dist.clone()
         _geodesic_prob = torch.exp(input=- 0.5 * (_geodesic_dist / (self.geodesic_prob_sigma + 1e-10))**2)
         # replace inf with 0
         _geodesic_prob[torch.isinf(_geodesic_dist)] = 0.
         return _geodesic_prob
+
+
     @property
     def geodesic_prob_with_noise(self):
         geodesic_prob_with_noise = torch.eye(self.verts.shape[0]+1, device=self.device)
-        geodesic_prob_with_noise[:-1, :-1] = self.geodesic_prob
+        geodesic_prob_with_noise[:-1, :-1] = self.get_geodesic_prob
         return geodesic_prob_with_noise
-
-
-    def get_verts_geodestic_distances(self):
-        import gdist
-
-        meshes_ids = list(range(len(self)))
-        geodesic_dist = torch.ones(size=(self.verts.shape[0], self.verts.shape[0]), device=self.device) * torch.inf
-        for mesh_id in meshes_ids:
-            verts = self.get_verts_with_mesh_id(mesh_id=mesh_id)
-            faces = self.get_faces_with_mesh_id(mesh_id=mesh_id)
-            mesh_verts_geodesic_dist = gdist.local_gdist_matrix(
-                vertices=verts.detach().cpu().to(torch.float64).numpy(),
-                triangles=faces.cpu().detach().to(torch.int32).numpy(),
-                max_distance=99999,
-            )
-            # convert  scipy.sparse._csc.csc_matrix to torch.Tensor, fill sparse with torch.inf
-            mesh_verts_geodesic_dist = torch.from_numpy(mesh_verts_geodesic_dist.toarray()).to(dtype=torch.float32, device=self.device)
-            mesh_verts_geodesic_dist = mesh_verts_geodesic_dist / mesh_verts_geodesic_dist.max()
-            mesh_verts_geodesic_dist[mesh_verts_geodesic_dist == 0] = torch.inf
-            mesh_verts_geodesic_dist[torch.arange(mesh_verts_geodesic_dist.shape[0]).to(self.device), torch.arange(mesh_verts_geodesic_dist.shape[0]).to(self.device)] = 0.
-
-            #mesh_verts_geodesic_dist = torch.from_numpy(mesh_verts_geodesic_dist.toarray()).to(dtype=torch.float32, device=self.device)
-
-            geodesic_dist[self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1], self.verts_counts_acc_from_0[mesh_id]: self.verts_counts_acc_from_0[mesh_id+1]] = mesh_verts_geodesic_dist
-
-        #euclidean_dist = torch.cdist(self.verts[None,], self.verts[None,])[0]
-        #geodesic_dist = torch.ones_like(euclidean_dist) * torch.inf
-        # would need to get verts nearest neighbors and iteratively propagating geodesic_dist
-        return geodesic_dist
 
     def get_verts_ncds_with_mesh_id(self, mesh_id):
         verts3d = self.get_verts_with_mesh_id(mesh_id)

@@ -141,7 +141,7 @@ class NeMo(OD3D_Method):
             self.criterion = torch.nn.CrossEntropyLoss().cuda()
         elif self.config.train.loss == 'cross_entropy_smooth_geo':
             from od3d.cv.metric.cross_entropy_smooth import CrossEntropyLabelsSmoothed
-            labels_smoothed = self.meshes.geodesic_prob_with_noise.to(device=self.device)
+            labels_smoothed = self.meshes.get_geodesic_prob_with_noise.to(device=self.device)
             self.criterion = CrossEntropyLabelsSmoothed(labels_smoothed=labels_smoothed)
         elif self.config.train.loss == 'nll_softmax':
             self.softmax = torch.nn.LogSoftmax(dim=1)
@@ -362,8 +362,10 @@ class NeMo(OD3D_Method):
 
         N = vts2d.shape[1]
         # B x F+N x C
+        logger.info(f'batch.size {batch.size}')
         feats2d_net = self.net(batch.rgb)
 
+        logger.info(f'batch.size {batch.size}')
         feats2d_net_mask = torch.ones(size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3])).to(device=self.device)
         if self.config.train.use_mask_object:
             feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
