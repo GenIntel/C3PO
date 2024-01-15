@@ -48,6 +48,7 @@ class FEATURE_TYPES(str, ExtEnum):
 
 class REDUCE_TYPES(str, ExtEnum):
     AVG = 'avg'
+    AVG50 = 'avg50'
     MIN = 'min'
     MIN_AVG = 'min_avg'
 

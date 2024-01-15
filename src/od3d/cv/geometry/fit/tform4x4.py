@@ -105,11 +105,15 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
 
     argmin_ref_from_src = dist_app_ref.argmin(dim=-1)  # N,
     argmin_src_from_ref = dist_app_ref.argmin(dim=-2)  # R,
-    src_cyclic_dist = (pts - pts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1, p=norm_p) #  N,
-    ref_cyclic_dist = (pts_ref - pts_ref[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1, p=norm_p) # R,
-    cyclic_dist_avg = (src_cyclic_dist[:, None] / dist_src_geo_max + ref_cyclic_dist[None,] / dist_ref_geo_max) / 2. # NxR,
-    cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape).clone() # PxNxR
-    cyclic_dist_avg[dist_app_ref.isinf()[None,].expand(*dist_ref_geometry.shape)] = torch.inf
+    src_cyclic_dist = (pts - pts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1, p=norm_p) / dist_src_geo_max #  N,
+    ref_cyclic_dist = (pts_ref - pts_ref[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1, p=norm_p) / dist_ref_geo_max # R,
+
+    src_cyclic_dist[batched_index_select(input=dist_app_ref, index=argmin_ref_from_src[..., None], dim=1).isinf()[:, 0]] = torch.inf
+    ref_cyclic_dist[batched_index_select(input=dist_app_ref.T, index=argmin_src_from_ref[..., None], dim=1).isinf()[:, 0]] = torch.inf
+
+    # not used anymore due to uni-directional cycle dist
+    #cyclic_dist_avg = (src_cyclic_dist[:, None] + ref_cyclic_dist[None,]) / 2. # NxR,
+    #cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape).clone() # PxNxR
 
     # PxNxR
     argmin_ref_from_src = argmin_ref_from_src[None,].expand(P, N)
@@ -154,9 +158,13 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
 
     # forward+backward nn
     proposal_pts_nn_id_2D = torch.cat([proposal_tform_pts_nn_ref_id_2D, proposal_tform_pts_ref_nn_pts_id_2D], dim=1)
-
     proposal_dist_ref = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=dist_ref_geometry)
-    proposal_cyclic_dist_avg_ref = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=cyclic_dist_avg)
+    # not used anymore due to uni-directional cycle dist
+    #proposal_cyclic_dist_avg_ref = batched_indexMD_select(indexMD=proposal_pts_nn_id_2D, inputMD=cyclic_dist_avg)
+
+    # forward + backward nn
+    proposal_cyclic_dist_avg_ref = torch.cat([batched_index_select(index=proposal_tform_pts_nn_ref_id_2D[:, :, 0:1], input=src_cyclic_dist[None, None].repeat(*(proposal_tform_pts_nn_ref_id_2D.shape[:2] + (1,))), dim=2),
+                                              batched_index_select(index=proposal_tform_pts_ref_nn_pts_id_2D[:, :, 1:2], input=ref_cyclic_dist[None, None].repeat(*(proposal_tform_pts_ref_nn_pts_id_2D.shape[:2] + (1,))), dim=2)], dim=1)[:, :, 0]
 
     proposal_dist_ref_geometry = torch.cat([proposal_dist_ref[:, :N], proposal_dist_ref[:, 2*N:2*N+R]], dim=-1)
     proposal_dist_ref_appear = torch.cat([proposal_dist_ref[:, N:2*N], proposal_dist_ref[:, 2*N+R:]], dim=-1)

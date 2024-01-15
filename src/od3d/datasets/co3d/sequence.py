@@ -952,8 +952,29 @@ class CO3D_Sequence():
             del meshes_verts_aggregated_features_avg_norm
             meshes_verts_aggregated_viewpoints_avg = torch.stack([agg_viewpoints.mean(dim=0) for agg_viewpoints in meshes_verts_aggregated_viewpoints], dim=0)
             torch.save(meshes_verts_aggregated_viewpoints_avg.detach().cpu(), f=self.fpath_mesh_feats_viewpoints)
+
+        elif reduce_type == 'min50':
+            if not self.fpath_mesh_feats.parent.exists():
+                self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+
+            meshes_verts_aggregated_features_padded = torch.nn.utils.rnn.pad_sequence(meshes_verts_aggregated_features, padding_value=torch.nan, batch_first=True)
+            meshes_verts_aggregated_viewpoints_padded = torch.nn.utils.rnn.pad_sequence(meshes_verts_aggregated_viewpoints, padding_value=torch.nan, batch_first=True)
+
+            meshes_verts_aggregated_features_dists = torch.cdist(meshes_verts_aggregated_features_padded, meshes_verts_aggregated_features_padded)
+            c = torch.nanquantile(meshes_verts_aggregated_features_dists, q=0.5, dim=-1)
+            vals, indices = c.nan_to_num(torch.inf).min(dim=-1)
+            from od3d.cv.select import batched_index_select
+
+            mesh_verts_aggregated_features_min50 = batched_index_select(input=meshes_verts_aggregated_features_padded, index=indices[:, None], dim=1)[:, 0]
+            mesh_verts_aggregated_viewpoints_min50 = batched_index_select(input=meshes_verts_aggregated_viewpoints_padded, index=indices[:, None], dim=1)[:, 0]
+
+            torch.save(mesh_verts_aggregated_features_min50.detach().cpu(), f=self.fpath_mesh_feats)
+            torch.save(mesh_verts_aggregated_viewpoints_min50.detach().cpu(), f=self.fpath_mesh_feats_viewpoints)
+
         else:
             logger.warning(f'Unknown mesh feature reduce_type {reduce_type}.')
+
+
 
         del dataloader
         del dataset
