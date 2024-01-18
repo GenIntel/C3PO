@@ -297,7 +297,7 @@ def align3d():
 
         dist_appear_weight = 0.1
         _, proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg, proposal_dist_src_ref_2d_ids, proposal_dist_src_ref_weights = \
-            score_tform4x4_fit(pts=pts2, pts_ref=pts1, tform4x4=uniform_objs_tform_obj, dist_ref=dist_2_1, return_dists=True, return_weights=True, cyclic_weight_temp=0.7, dist_appear_weight=dist_appear_weight)
+            score_tform4x4_fit(pts=pts2, pts_ref=pts1, tform4x4=uniform_objs_tform_obj, dist_app_ref=dist_2_1, return_dists=True, return_weights=True, cyclic_weight_temp=0.7, dist_app_weight=dist_appear_weight)
 
 
         proposal_dist_ref_geo_avg = proposal_dist_ref_geo_avg * (1. - dist_appear_weight)
@@ -1144,7 +1144,7 @@ def temps_weight_ablation():
     from od3d.cli.benchmark import get_dataframe
     align3d_df = get_dataframe(configs=['ablation_name', 'method.dist_appear_weight', 'method.sem_cyclic_weight_temp', 'method.geo_cyclic_weight_temp'],
                                     metrics=['pose/acc_pi6', 'pose/acc_pi18'],
-                                    name_regex='12-1[12]_.*_CO3D_NeMo_Align3D_.*')
+                                    name_regex='12-[12][90].*_CO3D_NeMo_Align3D_geo.*_slurm')
 
 
     dist_appear_weight = align3d_df['method.dist_appear_weight'].to_numpy()
@@ -1152,27 +1152,30 @@ def temps_weight_ablation():
     x = align3d_df['method.geo_cyclic_weight_temp'].to_numpy()
     y = align3d_df['method.sem_cyclic_weight_temp'].to_numpy()
     import numpy as np
-    x_log = torch.log(torch.from_numpy(x)) / torch.log(torch.Tensor([10])).numpy()
-    y_log = torch.log(torch.from_numpy(y)) / torch.log(torch.Tensor([10])).numpy()
+    x_log = torch.from_numpy(x) # torch.log(torch.from_numpy(x)) / torch.log(torch.Tensor([10])).numpy()
+    y_log = torch.from_numpy(y) # torch.log(torch.from_numpy(y)) / torch.log(torch.Tensor([10])).numpy()
     xi = np.sort(np.unique(x))
     yi = np.sort(np.unique(y))
     grid_xiyi = np.stack(np.meshgrid(xi, yi))
+    logger.info(grid_xiyi)
     mask_grid_xiyi = (x[:, None] == grid_xiyi[0].flatten()[None, : ]) * (y[:, None] == grid_xiyi[1].flatten()[None, :])
     xi_log = np.sort(np.unique(x_log)) #  np.arange(x.min(), x.max(), 0.01)
     yi_log = np.sort(np.unique(y_log))
 
-    z = align3d_df['pose/acc_pi18'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
+    z = align3d_df['pose/acc_pi6'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
     z_max = (z[:, None] * mask_grid_xiyi).max(axis=0).reshape(grid_xiyi.shape[1:])
     dist_appear_weight_max = dist_appear_weight[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
     x_max = x[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
     y_max = y[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
+    xi_unique = xi.copy()
+    yi_unique = yi.copy()
     xi, yi = np.meshgrid(xi, yi)
     xi_log, yi_log = np.meshgrid(xi_log, yi_log)
 
     import matplotlib.pyplot as plt
     import numpy as np
     import matplotlib
-    matplotlib.use("TkAgg")
+    #matplotlib.use("TkAgg")
 
 
     fig, ax = plt.subplots(2, 1, figsize=(8, 6))  # (subplot_kw={"projection": "3d"})
@@ -1193,10 +1196,10 @@ def temps_weight_ablation():
     ax[0].set_ylabel(r'app. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
     ax[1].set_xlabel(r'geo. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
     ax[1].set_ylabel(r'app. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
-    ax[0].set(xticks=np.arange(z_max.shape[1]), xticklabels=np.round(np.linspace(xi_log.min(), xi_log.max(), z_max.shape[1]), decimals=1))
-    ax[0].set(yticks=np.arange(z_max.shape[0]), yticklabels=np.round(np.linspace(yi_log.min(), yi_log.max(), z_max.shape[0]), decimals=0))
-    ax[1].set(xticks=np.arange(z_max.shape[1]), xticklabels=np.round(np.linspace(xi_log.min(), xi_log.max(), z_max.shape[1]), decimals=1))
-    ax[1].set(yticks=np.arange(z_max.shape[0]), yticklabels=np.round(np.linspace(yi_log.min(), yi_log.max(), z_max.shape[0]), decimals=0))
+    ax[0].set(xticks=np.arange(z_max.shape[1]), xticklabels=xi_unique) #np.round(np.linspace(xi_log.min(), xi_log.max(), z_max.shape[1]), decimals=1))
+    ax[0].set(yticks=np.arange(z_max.shape[0]), yticklabels=yi_unique) #np.round(np.linspace(yi_log.min(), yi_log.max(), z_max.shape[0]), decimals=0))
+    ax[1].set(xticks=np.arange(z_max.shape[1]), xticklabels=xi_unique) #np.round(np.linspace(xi_log.min(), xi_log.max(), z_max.shape[1]), decimals=1))
+    ax[1].set(yticks=np.arange(z_max.shape[0]), yticklabels=yi_unique) #np.round(np.linspace(yi_log.min(), yi_log.max(), z_max.shape[0]), decimals=0))
 
     # Add colorbar to the right of the plot
     cbar = fig.colorbar(im, ax=ax[0])  # , shrink='auto')
@@ -1219,8 +1222,8 @@ def temps_weight_ablation():
     ax[0].scatter(*max_coordinates, color='red', marker='o', label='max')
 
     # Annotate the point with a description
-    desc = 'PI/18=' + f'{max_z*100:.1f}%'
-    ax[0].annotate(desc, max_coordinates, textcoords="offset points", xytext=(40, 10), ha='center', fontsize=font_size,
+    desc = 'PI/6=' + f'{max_z*100:.1f}%'
+    ax[0].annotate(desc, max_coordinates, textcoords="offset points", xytext=(0, 10), ha='center', fontsize=font_size,
                 color='red')
 
     # Plot the point using scatter
@@ -1228,12 +1231,13 @@ def temps_weight_ablation():
     # Annotate the point with a description
     #desc = r'$\log_{10}(\tau{})=$' + f'{max_x:.1f}' + r' , $\log_{10}(\tau{})=$' + f'{max_y:.1f}' + r', $\alpha{}$=' + f'{max_dist_appear_weight_max*100:.1f}%'
     desc = r'$\alpha{}$=' + f'{max_dist_appear_weight_max*100:.1f}%'
-    ax[1].annotate(desc, max_coordinates, textcoords="offset points", xytext=(40, 10), ha='center', fontsize=font_size,
+    ax[1].annotate(desc, max_coordinates, textcoords="offset points", xytext=(0, 10), ha='center', fontsize=font_size,
                 color='red')
 
     plt.tight_layout()
-    plt.savefig('ablation_dist_cycle.eps')
-    plt.show()
+    plt.savefig('ablation_dist_cycle.png')
+
+    # plt.show()
     # img = get_img_from_plot(ax=ax[0], fig=fig, axis_off=False)
     # show_img(img, height=1080, width=1980, fpath='ablation_dist.png')
     # show_img(img, height=1080, width=1980)
@@ -1251,12 +1255,14 @@ def temp_weight_ablation():
     # align3d_1on1_name_partial = '11-14_1[78].*CO3D_NeMo_Align3D_dist_appear_weight.*'
     align3d_1on1_name_partial = '11-14_2[012].*CO3D_NeMo_Align3D_dist_appear_weight.*'
 
+    align3d_1on1_name_partial = '.*_CO3D_NeMo_Align3D_cyclic_temp_.*_dist_appear_weight_.*_slurm'
+
     align3d_1on1_metrics = ['pose/acc_pi6', 'pose/acc_pi18']
     align3d_1on1_columns_map = {}
     align3d_1on1_columns_map[align3d_1on1_metrics[-2]] = "Acc. Pi/6. [%]"
     align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = "Acc. Pi/18. [%]"
     # age_in_hours = None
-    configs = ['ablation_name', 'method.dist_appear_weight', 'method.cyclic_weight_temp']
+    configs = ['ablation_name', 'method.dist_appear_weight', 'method.geo_cyclic_weight_temp']
     #configs = ['method.dist_appear_weight']
     #align3d_1on1_columns_map['method.dist_appear_weight'] = 'Appear. Weight'
     align3d_1on1_columns_map['ablation_name'] = 'Name'
@@ -1269,7 +1275,7 @@ def temp_weight_ablation():
     align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, name_regex=align3d_1on1_name_partial)
 
     x = align3d_1on1_df['method.dist_appear_weight'].to_numpy()
-    y = align3d_1on1_df['method.cyclic_weight_temp'].to_numpy()
+    y = align3d_1on1_df['method.geo_cyclic_weight_temp'].to_numpy()
     z = align3d_1on1_df['pose/acc_pi6'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
 
     import matplotlib.pyplot as plt
@@ -1281,9 +1287,12 @@ def temp_weight_ablation():
     import matplotlib
     matplotlib.use("TkAgg")
 
-    y = torch.log(torch.from_numpy(y)) / torch.log(torch.Tensor([10])).numpy()
+    # y = (torch.log(torch.from_numpy(y)) / torch.log(torch.Tensor([10]))).numpy()
+    y = y
     xi = np.sort(np.unique(x)) #  np.arange(x.min(), x.max(), 0.01)
     yi = np.sort(np.unique(y))
+    xi_unique = xi.copy()
+    yi_unique = yi.copy()
     #  np.arange(x.min(), x.max(), 0.01)
     xi, yi = np.meshgrid(xi, yi)
     #yi_log = torch.log(torch.from_numpy(yi)) / torch.log(torch.Tensor([10])).numpy()
@@ -1303,9 +1312,9 @@ def temp_weight_ablation():
     ax.tick_params(axis='x', labelsize=font_size)
 
     ax.set_xlabel(r'appear. weight ($\alpha{}$)', fontsize=font_size)
-    ax.set_ylabel(r'cyclical dist. temp. ($\log_{10}(\tau{})$)', fontsize=font_size)
-    ax.set(xticks=np.arange(zi.shape[1]), xticklabels=np.round(np.linspace(xi.min(), xi.max(), zi.shape[1]), decimals=1))
-    ax.set(yticks=np.arange(zi.shape[0]), yticklabels=np.round(np.linspace(yi.min(), yi.max(), zi.shape[0]), decimals=0))
+    ax.set_ylabel(r'cyclical dist. temp. ($\tau{}$)', fontsize=font_size)
+    ax.set(xticks=np.arange(zi.shape[1]), xticklabels=xi_unique) #np.round(np.linspace(xi.min(), xi.max(), zi.shape[1]), decimals=1))
+    ax.set(yticks=np.arange(zi.shape[0]), yticklabels=yi_unique) #np.round(np.linspace(yi.min(), yi.max(), zi.shape[0]), decimals=0))
 
     # Add colorbar to the right of the plot
     cbar = fig.colorbar(im, ax=ax)  # , shrink='auto')
@@ -1323,41 +1332,43 @@ def temp_weight_ablation():
     ax.scatter(*max_coordinates, color='red', marker='o', label='max')
 
     # Annotate the point with a description
-    desc = r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\log_{10}(\tau{})=$' + f'{max_y:.1f}' + ', PI/6=' + f'{max_z*100:.1f}%'
-    ax.annotate(desc, max_coordinates, textcoords="offset points", xytext=(80, 10), ha='center', fontsize=font_size,
+    desc = r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\tau{}=$' + f'{max_y:.1f}' + ', PI/6=' + f'{max_z*100:.1f}%'
+    ax.annotate(desc, max_coordinates, textcoords="offset points", xytext=(100, 10), ha='center', fontsize=font_size,
                 color='black')
 
     plt.tight_layout()
-    plt.savefig('ablation_dist_size_16.eps')
-    plt.show()
-    img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
-    show_img(img, height=1080, width=1980, fpath='ablation_dist.png')
-    show_img(img, height=1080, width=1980)
+    plt.savefig('ablation_dist_6.eps')
     plt.show()
 
-    from matplotlib.ticker import LinearLocator
-    # Plot the surface.
-    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-
-
-    ax.set_xlabel(r'appear. weight ($\alpha{}$)')
-    ax.set_ylabel(r'cyclical dist. temp. ($\log_{10}(\tau{})$)')
-
-    # Find the coordinates of the maximum point
-    max_point = np.unravel_index(np.argmax(z), z.shape)
-    max_x, max_y, max_z = x[max_point], y[max_point], z[max_point]
-
-    # Annotate the maximum point
-    ax.scatter(max_x, max_y, max_z+0.01, s=200, color='blue')
-    ax.text(max_x, max_y+0.5, max_z+0.2, r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\log_{10}(\tau{})=$' + f'{max_y:.1f}' + ', PI/6=' + f'{max_z*100:.1f}%', color='black')
-    surf = ax.plot_surface(xi, yi, zi, cmap=cm.coolwarm,
-                           linewidth=0, antialiased=False)
-
-    plt.show()
-    img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
-    show_img(img, height=1080, width=1980)
-
-    '11-13_19-07-18_CO3Dv1_NeMo_Align3D_dist_appear_weight_04_dist_cyclic_temp_1_slurm'
+    #
+    # img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
+    # show_img(img, height=1080, width=1980, fpath='ablation_dist.png')
+    # show_img(img, height=1080, width=1980)
+    # plt.show()
+    #
+    # from matplotlib.ticker import LinearLocator
+    # # Plot the surface.
+    # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    #
+    #
+    # ax.set_xlabel(r'appear. weight ($\alpha{}$)')
+    # ax.set_ylabel(r'cyclical dist. temp. ($\tau{}$)')
+    #
+    # # Find the coordinates of the maximum point
+    # max_point = np.unravel_index(np.argmax(z), z.shape)
+    # max_x, max_y, max_z = x[max_point], y[max_point], z[max_point]
+    #
+    # # Annotate the maximum point
+    # ax.scatter(max_x, max_y, max_z+0.01, s=200, color='blue')
+    # ax.text(max_x, max_y+0.5, max_z+0.2, r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\tau{}=$' + f'{max_y:.1f}' + ', PI/6=' + f'{max_z*100:.1f}%', color='black')
+    # surf = ax.plot_surface(xi, yi, zi, cmap=cm.coolwarm,
+    #                        linewidth=0, antialiased=False)
+    #
+    # plt.show()
+    # img = get_img_from_plot(ax=ax, fig=fig, axis_off=False)
+    # show_img(img, height=1080, width=1980)
+    #
+    # '11-13_19-07-18_CO3Dv1_NeMo_Align3D_dist_appear_weight_04_dist_cyclic_temp_1_slurm'
 
 @app.command()
 def pose_alignment():

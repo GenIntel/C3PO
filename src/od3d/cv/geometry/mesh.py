@@ -32,6 +32,10 @@ class MESH_RENDER_MODALITIES(str, Enum):
     MASK_VERTS_VSBL = 'mask_verts_vsbl'
     VERTS_NCDS = 'verts_ncds'
 
+class MESH_RENDER_MODALITIES_GAUSSIAN_SPLAT(str, Enum):
+    RGB = MESH_RENDER_MODALITIES.RGB
+    FEATS = MESH_RENDER_MODALITIES.FEATS
+    VERTS_NCDS = MESH_RENDER_MODALITIES.VERTS_NCDS
 
 class Mesh:
     def __init__(self, verts, faces, rgb=None, feats=None):
@@ -105,13 +109,20 @@ class Mesh:
     # ray.transform(inv_tform4x4(cam_tform4x4_obj).detach().cpu().numpy())
 
 class Meshes(torch.nn.Module):
-    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None, feats: List[torch.Tensor]=None, geodesic_prob_sigma=0.2):
+    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None,
+                 feats: List[torch.Tensor]=None, geodesic_prob_sigma=0.2,
+                 gaussian_splat_enabled=False, gaussian_splat_opacity=0.7,
+                 pt3d_raster_perspective_correct=False):
         super().__init__()
 
         self.meshes_count = len(verts)
         self.verts = torch.nn.Parameter(torch.cat([_verts for _verts in verts], dim=0), requires_grad=False)
         self.faces = torch.nn.Parameter(torch.cat([_faces for _faces in faces], dim=0), requires_grad=False)
         self.device = self.verts.device
+
+        self.gaussian_splat_enabled = gaussian_splat_enabled
+        self.gaussian_splat_opacity = gaussian_splat_opacity
+        self.pt3d_raster_perspective_correct = pt3d_raster_perspective_correct
 
         self.geodesic_prob_sigma = geodesic_prob_sigma
         self._geodesic_dist = None
@@ -398,6 +409,14 @@ class Meshes(torch.nn.Module):
         return self.get_tensor_verts_with_pad(tensor=self.get_feats_with_mesh_id(mesh_id), mesh_id=mesh_id)
     def get_verts_padded_with_mesh_id(self, mesh_id):
         return self.get_tensor_verts_with_pad(tensor=self.get_verts_with_mesh_id(mesh_id), mesh_id=mesh_id)
+
+    def get_verts_ncds_padded_with_mesh_id(self, mesh_id):
+        return self.get_tensor_verts_with_pad(tensor=self.get_verts_ncds_with_mesh_id(mesh_id), mesh_id=mesh_id)
+
+    def get_rgb_padded_with_mesh_id(self, mesh_id):
+        return self.get_tensor_verts_with_pad(tensor=self.get_rgb_with_mesh_id(mesh_id), mesh_id=mesh_id)
+
+    # get_rgb_padded_with_mesh_id
     #def to(self, device):
     #    if self.device != device:
     #        self.verts = [v.to(device=device) for v in self.verts]
@@ -418,6 +437,17 @@ class Meshes(torch.nn.Module):
     def set_feats_cat(self, feats):
         self.feats = torch.nn.Parameter(feats, requires_grad=True)
         self.feats_from_faces = torch.nn.Parameter(torch.cat([self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)] for mesh_id in range(len(self))], dim=0))
+
+
+    def get_verts_ncds_stacked_with_mesh_ids(self, mesh_ids=None):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        return torch.stack([self.get_verts_ncds_padded_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
+
+    def get_rgb_stacked_with_mesh_ids(self, mesh_ids=None):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        return torch.stack([self.get_rgb_padded_with_mesh_id(mesh_id) for mesh_id in mesh_ids], dim=0)
 
     def get_verts_stacked_with_mesh_ids(self, mesh_ids=None):
         if mesh_ids == None:
@@ -758,7 +788,6 @@ class Meshes(torch.nn.Module):
 
     #def get_pre_rendered_masks(self):
 
-
     def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
         # imgs_size: (height, width)
         dtype = cams_tform4x4_obj.dtype
@@ -802,7 +831,30 @@ class Meshes(torch.nn.Module):
                 raise ValueError(f'Set `broadcast_batch_and_cams=True` to allow different number of cameras and meshes')
             render_count = meshes_count
 
+        if self.gaussian_splat_enabled and modality in [MESH_RENDER_MODALITIES.VERTS_NCDS, MESH_RENDER_MODALITIES.RGB, MESH_RENDER_MODALITIES.FEATS]: # MESH_RENDER_MODALITIES.FEATS:
+            from od3d.cv.render.gaussian_splats import render_gaussians
+            pts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device).clone().detach()
+            if modality == MESH_RENDER_MODALITIES.VERTS_NCDS:
+                feats = self.get_verts_ncds_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
+            elif modality == MESH_RENDER_MODALITIES.RGB:
+                feats = self.get_rgb_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
+            else:
+                feats = self.get_feats_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
 
+            pts3d_mask = self.mask_verts_not_padded.to(device)[meshes_ids]
+            mesh_feats2d_rendered = render_gaussians(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4,
+                                                     imgs_size=imgs_sizes, pts3d=pts3d, pts3d_mask=pts3d_mask, feats=feats,
+                                                     opacity=self.gaussian_splat_opacity)
+
+            if broadcast_batch_and_cams:
+                #logger.info(cams_intr4x4.reshape(meshes_count, cams_count, 4, 4)[:, 0])
+                #logger.info(cams_tform4x4_obj.reshape(meshes_count, cams_count, 4, 4)[:, 0])
+                mesh_feats2d_rendered = mesh_feats2d_rendered.reshape(meshes_count, cams_count, *mesh_feats2d_rendered.shape[-3:])
+                # from od3d.cv.visual.show import show_imgs
+                # show_imgs(mesh_feats2d_rendered)
+            else:
+                pass
+            return mesh_feats2d_rendered
         # self.to(device)
 
         #num_cams = cams_tform4x4_obj.shape[0]
@@ -840,6 +892,7 @@ class Meshes(torch.nn.Module):
             faces_per_pixel=1,
             bin_size=None,
             max_faces_per_bin=None,
+            perspective_correct=self.pt3d_raster_perspective_correct
         )
 
         rasterizer = MeshRasterizer(

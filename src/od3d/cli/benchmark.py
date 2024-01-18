@@ -633,7 +633,9 @@ def delete_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
 
     logging.basicConfig(level=logging.INFO)
     runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    logger.info(f'deleting following runs: ')
     for run in runs:
+        logger.info(run.name)
         run.delete()
 @app.command()
 def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),

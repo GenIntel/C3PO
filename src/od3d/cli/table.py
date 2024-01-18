@@ -309,12 +309,32 @@ def pose_categories(
         dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
         metric: str = typer.Option('pi6', '-m', '--metric'),
         name_regex: str = typer.Option('CO3D_NeMo', '-n', '--name'),
-        age_in_hours: int = typer.Option(1000, '-h', '--hours')):
+        age_in_hours: int = typer.Option(24, '-h', '--hours')):
 
     metric = 'pi6' # 'pi6', 'pi12', 'pi18',
-    dataset = 'objectnet3d' # 'pascal3d' 'co3d_20' 'co3d_28' 'objectnet3d'
-    name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
-    name_regex = f'11-1[45].*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
+    dataset = 'co3d_20' # 'pascal3d' 'co3d_20' 'co3d_28' 'objectnet3d'
+    # tablefmt 'latex', 'plain', 'tsv',
+    tablefmt = 'tsv'
+
+    #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
+    # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_mesh.*'
+    name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_slurm'
+
+    name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_uniform_refine3d_slurm'
+    #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_epnp_refine6d_slurm'
+    #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_epnp_refine6d_only_rendered_no_clutter_mesh_slurm'
+    #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_epnp_refine6d_no_clutter_slurm'
+
+
+    # cat1_hairdryer_ref0_epnp_refine6d_no_clutter_slurm
+    # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_epnp_refine6d_only_rendered_no_clutter_filtered_mesh_slurm'
+
+    #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_uniform_refine3d_only_rendered_slurm'
+    #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_uniform_refine3d_only_rendered_no_clutter_slurm'
+    # 01-13_00-32-54_CO3D_NeMo_cat1_motorcycle_ref0_uniform_refine3d_only_rendered_no_clutter_slurm
+
+    # only_rendered_slurm
+    #name_regex = f'11-1[45].*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_filtered_mesh.*'
 
     # name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_.*'
     #name_regex = '11-12_15-25-58_CO3D_ZSP_local' # zsp 10s to 5s
@@ -360,7 +380,7 @@ def pose_categories(
                                                                age_in_hours=age_in_hours, name_regex=name_regex,
                                                                metrics_scales=metrics_scales)
 
-    tabulate_metrics_for_dataset(metrics_dfs=metrics_dfs, datasets=[dataset], digits=1)
+    tabulate_metrics_for_dataset(metrics_dfs=metrics_dfs, datasets=[dataset], digits=1, tablefmt=tablefmt)
 
 
 
@@ -590,7 +610,7 @@ def pose_pi6_categories_separate():
     metrics_dfs = get_categorical_results_from_single_runs(metrics_templates=metrics, categories=categories, age_in_hours=age_in_hours, name_regex=name_regex, metrics_scales=metrics_scales, map_od3d_to_datasets=map_od3d_to_datasets)
 
 
-def tabulate_metrics_for_dataset(metrics_dfs, datasets: List[str], digits=2):
+def tabulate_metrics_for_dataset(metrics_dfs, datasets: List[str], digits=2, tablefmt='latex'):
     ALLOW_CATEGORIES = None
     # ALLOW_CATEGORIES = ['hairdryer', 'bicycle', 'suitcase']
     BAN_CATEGORIES = [] #  ['tv', 'motorcycle']
@@ -626,16 +646,18 @@ def tabulate_metrics_for_dataset(metrics_dfs, datasets: List[str], digits=2):
             metric_df[_TABLE_CATEGORIES_PASCAL3D[-1]] = [metric_df[_TABLE_CATEGORIES_PASCAL3D[:-1]].loc['mean'].mean(),
                                                         metric_df[_TABLE_CATEGORIES_PASCAL3D[:-1]].loc['std'].mean()]
 
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_PASCAL3D], headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_PASCAL3D], headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
         elif datasets[m] == DATASET_OBJECTNET3D:
+            zeros_df = pd.DataFrame(columns=_TABLE_CATEGORIES_OBJECTNET3D_20[:-1], index=['mean', 'std'], data=0.)
+            metric_df = pd.merge(metric_df, zeros_df[zeros_df.columns.difference(metric_df.columns)], left_index=True, right_index=True, how='outer')
             logger.info('ObjectNet3D')
             for object_net3d_table in [_TABLE_CATEGORIES_OBJECTNET3D_20, _TABLE_CATEGORIES_OBJECTNET3D_11, _TABLE_CATEGORIES_OBJECTNET3D_9]:
                 metric_df[object_net3d_table[-1]] = [metric_df[object_net3d_table[:-1]].loc['mean'].mean(),
-                                                                 metric_df[object_net3d_table[:-1]].loc['std'].mean()]
+                                                     metric_df[object_net3d_table[:-1]].loc['std'].mean()]
 
                 logger.info(f'ObjectNet3D {len(object_net3d_table[:-1])} ')
 
-                logger.info(tabulate(metric_df[object_net3d_table], headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+                logger.info(tabulate(metric_df[object_net3d_table], headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
                 #
                 # logger.info(f'ObjectNet3D {len(object_net3d_table[:-1])} ')
                 # metric_df[object_net3d_table[-1]] = [
@@ -650,11 +672,11 @@ def tabulate_metrics_for_dataset(metrics_dfs, datasets: List[str], digits=2):
             metric_df[_TABLE_CATEGORIES_CO3D_20[-1]] = [metric_df[_TABLE_CATEGORIES_CO3D_20[:-1]].loc['mean'].mean(),
                                                        metric_df[_TABLE_CATEGORIES_CO3D_20[:-1]].loc['std'].mean()]
             logger.info('Dataset: ZSP, Categories: ZSP')
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_ZSP], headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_ZSP], headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
             logger.info('Dataset: ZSP, Categories: YOLO')
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_YOLO], headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_YOLO], headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
             logger.info(f'Dataset: ZSP, Categories: {len(_TABLE_CATEGORIES_CO3D_20[:-1])}')
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_CO3D_20], headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_CO3D_20], headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
 
         elif datasets[m] == DATASET_CO3D_28:
             metric_df[_TABLE_CATEGORIES_CO3D_20[-1]] = [metric_df[_TABLE_CATEGORIES_CO3D_20[:-1]].loc['mean'].mean(),
@@ -663,15 +685,15 @@ def tabulate_metrics_for_dataset(metrics_dfs, datasets: List[str], digits=2):
                                                        metric_df[_TABLE_CATEGORIES_CO3D_28[:-1]].loc['std'].mean()]
 
             logger.info('Dataset: Ours, Categories: ZSP')
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_ZSP], headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_ZSP], headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
             logger.info('Dataset: Ours, Categories: YOLO')
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_YOLO], headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_YOLO], headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
             logger.info(f'Dataset: Ours, Categories: {len(_TABLE_CATEGORIES_CO3D_28[:-1])}')
-            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_CO3D_28], headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+            logger.info(tabulate(metric_df[_TABLE_CATEGORIES_CO3D_28], headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
 
         else:
             #logger.info(metric_df.to_latex(float_format=".2f"))
-            logger.info(tabulate(metric_df, headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+            logger.info(tabulate(metric_df, headers='keys', tablefmt=tablefmt, floatfmt=f".{digits}f"))
 
 
 @app.command()
