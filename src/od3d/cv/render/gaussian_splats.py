@@ -106,7 +106,7 @@ def render_gaussians(
     N_max = pts3d.shape[1]
     from od3d.cv.geometry.transform import transf3d_broadcast
     pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=cams_tform4x4_obj[:, None])
-    pts3d_mask = pts3d_mask & (pts3d[:, :, 2] > z_near) & (pts3d[:, :, 2] < z_far) # otherwise illegal access memory
+    pts3d_mask = pts3d_mask & (pts3d[:, :, 2] >= z_near) & (pts3d[:, :, 2] <= z_far) # otherwise illegal access memory
 
     feats_splits = int(math.ceil(F / feats_dim_base))
 
@@ -139,7 +139,7 @@ def render_gaussians(
         pts3d_dists = torch.cdist(pts3d_b.clone().detach(), pts3d_b.clone().detach())
         pts3d_dists[pts3d_dists == 0.] = torch.inf
         pts3d_size_b = pts3d_dists.min(dim=-1).values[:, None].expand(N, 3)
-        pts3d_size_b = pts3d_size_b.clamp(0.01, 999999.) # otherwise illegal access memory
+        pts3d_size_b = pts3d_size_b.clamp(1e-5, 1e+5) # otherwise illegal access memory
 
         feats_b = feats[b, pts3d_mask[b]]
         # means2d_b = means2d_buffer[pts3d_mask[b]]
