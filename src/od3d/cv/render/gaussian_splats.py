@@ -162,7 +162,7 @@ def render_gaussians(
 
         for f in range(feats_splits):
             F_f = min((f+1)*feats_dim_base, F) - f*feats_dim_base
-            feats_b_f = torch.zeros(N, feats_dim_base).to(device)
+            feats_b_f = torch.zeros(size=(N, feats_dim_base)).to(device)
             feats_b_f[:, :F_f] = feats_b[:, f*feats_dim_base:f*feats_dim_base + F_f]
 
             # colors_precomp = None
