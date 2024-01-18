@@ -169,8 +169,8 @@ def render_gaussians(
         # viewmatrix = cams_tform4x4_obj[b].T
         viewmatrix = torch.eye(4).to(device)
         campos = viewmatrix.inverse()[3, :3]
-        # projmatrix = getProjectionMatrix(znear=z_near, zfar=z_far, fovX=fovx, fovY=fovy).to(device).T
-        projmatrix = getProjectionMatrixFromIntrinsics(znear=z_near, zfar=z_far, fx=fx, fy=fy, W=image_width, H=image_height, cx=cx, cy=cy).to(device).T
+        projmatrix = getProjectionMatrix(znear=z_near, zfar=z_far, fovX=fovx, fovY=fovy).to(device).T
+        # projmatrix = getProjectionMatrixFromIntrinsics(znear=z_near, zfar=z_far, fx=fx, fy=fy, W=image_width, H=image_height, cx=cx, cy=cy).to(device).T
         fullprojmatrix = (viewmatrix.unsqueeze(0).bmm(projmatrix.unsqueeze(0))).squeeze(0)
         raster_settings = GaussianRasterizationSettings(image_width=image_width,
                                                         image_height=image_height,
