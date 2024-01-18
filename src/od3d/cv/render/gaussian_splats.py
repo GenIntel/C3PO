@@ -79,9 +79,10 @@ def render_gaussians(
         pts3d: torch.Tensor,
         pts3d_mask: torch.Tensor,
         feats: torch.Tensor,
+        pts3d_size_rel_to_neighbor_dist: float=0.5,
         opacity: float=0.1,
-        z_far: float=100.,
-        z_near: float=0.1,
+        z_far: float=10000.,
+        z_near: float=0.01,
         feats_dim_base=32,
 ):
     """
@@ -138,7 +139,7 @@ def render_gaussians(
         pts3d_b = pts3d[b, pts3d_mask[b]].clone()
         pts3d_dists = torch.cdist(pts3d_b.clone().detach(), pts3d_b.clone().detach())
         pts3d_dists[pts3d_dists == 0.] = torch.inf
-        pts3d_size_b = pts3d_dists.min(dim=-1).values[:, None].expand(N, 3)
+        pts3d_size_b = pts3d_dists.min(dim=-1).values[:, None].expand(N, 3) * pts3d_size_rel_to_neighbor_dist
         pts3d_size_b = pts3d_size_b.clamp(1e-5, 1e+5) # otherwise illegal access memory
 
         feats_b = feats[b, pts3d_mask[b]]
@@ -169,8 +170,9 @@ def render_gaussians(
         # viewmatrix = cams_tform4x4_obj[b].T
         viewmatrix = torch.eye(4).to(device)
         campos = viewmatrix.inverse()[3, :3]
-        projmatrix = getProjectionMatrix(znear=z_near, zfar=z_far, fovX=fovx, fovY=fovy).to(device).T
-        # projmatrix = getProjectionMatrixFromIntrinsics(znear=z_near, zfar=z_far, fx=fx, fy=fy, W=image_width, H=image_height, cx=cx, cy=cy).to(device).T
+
+        #projmatrix = getProjectionMatrix(znear=z_near, zfar=z_far, fovX=fovx, fovY=fovy).to(device).T
+        projmatrix = getProjectionMatrixFromIntrinsics(znear=z_near, zfar=z_far, fx=fx, fy=fy, W=image_width, H=image_height, cx=cx, cy=cy).to(device).T
         fullprojmatrix = (viewmatrix.unsqueeze(0).bmm(projmatrix.unsqueeze(0))).squeeze(0)
         raster_settings = GaussianRasterizationSettings(image_width=image_width,
                                                         image_height=image_height,

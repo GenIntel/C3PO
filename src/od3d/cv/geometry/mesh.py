@@ -112,6 +112,7 @@ class Meshes(torch.nn.Module):
     def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None,
                  feats: List[torch.Tensor]=None, geodesic_prob_sigma=0.2,
                  gaussian_splat_enabled=False, gaussian_splat_opacity=0.7,
+                 gaussian_splat_pts3d_size_rel_to_neighbor_dist =0.5,
                  pt3d_raster_perspective_correct=False):
         super().__init__()
 
@@ -122,6 +123,7 @@ class Meshes(torch.nn.Module):
 
         self.gaussian_splat_enabled = gaussian_splat_enabled
         self.gaussian_splat_opacity = gaussian_splat_opacity
+        self.gaussian_splat_pts3d_size_rel_to_neighbor_dist = gaussian_splat_pts3d_size_rel_to_neighbor_dist
         self.pt3d_raster_perspective_correct = pt3d_raster_perspective_correct
 
         self.geodesic_prob_sigma = geodesic_prob_sigma
@@ -844,7 +846,9 @@ class Meshes(torch.nn.Module):
             pts3d_mask = self.mask_verts_not_padded.to(device)[meshes_ids]
             mesh_feats2d_rendered = render_gaussians(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4,
                                                      imgs_size=imgs_sizes, pts3d=pts3d, pts3d_mask=pts3d_mask, feats=feats,
-                                                     opacity=self.gaussian_splat_opacity)
+                                                     opacity=self.gaussian_splat_opacity,
+                                                     pts3d_size_rel_to_neighbor_dist=
+                                                     self.gaussian_splat_pts3d_size_rel_to_neighbor_dist)
 
             if broadcast_batch_and_cams:
                 #logger.info(cams_intr4x4.reshape(meshes_count, cams_count, 4, 4)[:, 0])

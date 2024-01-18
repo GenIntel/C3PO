@@ -114,7 +114,7 @@ class NeMo(OD3D_Method):
         self.meshes.gaussian_splat_opacity = self.config.meshes_gaussian_splat_opacity
         self.meshes.geodesic_prob_sigma = self.config.train.geodesic_prob_sigma
         self.meshes.pt3d_raster_perspective_correct = self.config.meshes_pt3d_raster_perspective_correct
-
+        self.meshes.gaussian_splat_pts3d_size_rel_to_neighbor_dist  = self.config.meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist
         #self.meshes.rgb = (self.meshes.geodesic_prob[3, :, None].repeat(1, 3)).clamp(0, 1)
         # self.meshes.show()
 
