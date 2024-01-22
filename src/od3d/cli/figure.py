@@ -1142,15 +1142,20 @@ def teaser():
 def temps_weight_ablation():
     from od3d.datasets.co3d.enum import MAP_CATEGORIES_OD3D_TO_CO3D
     from od3d.cli.benchmark import get_dataframe
-    align3d_df = get_dataframe(configs=['ablation_name', 'method.dist_appear_weight', 'method.sem_cyclic_weight_temp', 'method.geo_cyclic_weight_temp'],
+    # dino_vits8_acc_dist_appear_weight_05_cyclic_temp_10
+    #dinov2_vitb14_acc_dist_appear_weight_05_cyclic_temp_07
+    name_regex = '12-[12][90].*_CO3D_NeMo_Align3D_geo.*_slurm'
+    name_regex = '01-1[89].*_CO3D_NeMo_Align3D_dino_vits8_acc_dist_appear_weight.*_slurm'
+    piDiv = 6
+    align3d_df = get_dataframe(configs=['ablation_name', 'method.dist_appear_weight', 'method.app_cyclic_weight_temp', 'method.geo_cyclic_weight_temp'],
                                     metrics=['pose/acc_pi6', 'pose/acc_pi18'],
-                                    name_regex='12-[12][90].*_CO3D_NeMo_Align3D_geo.*_slurm')
+                                    name_regex=name_regex)
 
 
     dist_appear_weight = align3d_df['method.dist_appear_weight'].to_numpy()
 
     x = align3d_df['method.geo_cyclic_weight_temp'].to_numpy()
-    y = align3d_df['method.sem_cyclic_weight_temp'].to_numpy()
+    y = align3d_df['method.app_cyclic_weight_temp'].to_numpy()
     import numpy as np
     x_log = torch.from_numpy(x) # torch.log(torch.from_numpy(x)) / torch.log(torch.Tensor([10])).numpy()
     y_log = torch.from_numpy(y) # torch.log(torch.from_numpy(y)) / torch.log(torch.Tensor([10])).numpy()
@@ -1162,7 +1167,7 @@ def temps_weight_ablation():
     xi_log = np.sort(np.unique(x_log)) #  np.arange(x.min(), x.max(), 0.01)
     yi_log = np.sort(np.unique(y_log))
 
-    z = align3d_df['pose/acc_pi6'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
+    z = align3d_df[f'pose/acc_pi{piDiv}'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
     z_max = (z[:, None] * mask_grid_xiyi).max(axis=0).reshape(grid_xiyi.shape[1:])
     dist_appear_weight_max = dist_appear_weight[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
     x_max = x[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
@@ -1255,7 +1260,13 @@ def temp_weight_ablation():
     # align3d_1on1_name_partial = '11-14_1[78].*CO3D_NeMo_Align3D_dist_appear_weight.*'
     align3d_1on1_name_partial = '11-14_2[012].*CO3D_NeMo_Align3D_dist_appear_weight.*'
 
-    align3d_1on1_name_partial = '.*_CO3D_NeMo_Align3D_cyclic_temp_.*_dist_appear_weight_.*_slurm'
+    name_regex = '12-[12][90].*_CO3D_NeMo_Align3D_geo.*_slurm'
+    name_regex = '01-1[89].*_CO3D_NeMo_Align3D_dino_vits8_acc_dist_appear_weight.*_slurm'
+    name_regex = '01-1[89].*_CO3D_NeMo_Align3D_dinov2_vitb14_acc_dist_appear_weight.*_slurm'
+
+    piDiv = 6
+
+    # align3d_1on1_name_partial = '.*_CO3D_NeMo_Align3D_cyclic_temp_.*_dist_appear_weight_.*_slurm'
 
     align3d_1on1_metrics = ['pose/acc_pi6', 'pose/acc_pi18']
     align3d_1on1_columns_map = {}
@@ -1272,11 +1283,12 @@ def temp_weight_ablation():
         align3d_1on1_columns_map[align3d_1on1_metrics[-2]] = category
         align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = category
 
-    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, name_regex=align3d_1on1_name_partial)
+    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, name_regex=name_regex)
 
     x = align3d_1on1_df['method.dist_appear_weight'].to_numpy()
     y = align3d_1on1_df['method.geo_cyclic_weight_temp'].to_numpy()
-    z = align3d_1on1_df['pose/acc_pi6'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
+    z = align3d_1on1_df[f'pose/acc_pi{piDiv}'].to_numpy() # 'pose/acc_pi6' 'pose/acc_pi18'
+    # z = (align3d_1on1_df[f'pose/acc_pi6'].to_numpy() + align3d_1on1_df[f'pose/acc_pi18'].to_numpy()) / 2.# 'pose/acc_pi6' 'pose/acc_pi18'
 
     import matplotlib.pyplot as plt
     import numpy as np
@@ -1332,12 +1344,12 @@ def temp_weight_ablation():
     ax.scatter(*max_coordinates, color='red', marker='o', label='max')
 
     # Annotate the point with a description
-    desc = r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\tau{}=$' + f'{max_y:.1f}' + ', PI/6=' + f'{max_z*100:.1f}%'
+    desc = r'$\alpha{}=$' + f'{max_x:.1f}' + r' , $\tau{}=$' + f'{max_y:.1f}' + f', PI/{piDiv}=' + f'{max_z*100:.1f}%'
     ax.annotate(desc, max_coordinates, textcoords="offset points", xytext=(100, 10), ha='center', fontsize=font_size,
                 color='black')
 
     plt.tight_layout()
-    plt.savefig('ablation_dist_6.eps')
+    plt.savefig(f'ablation_dist_{piDiv}.eps')
     plt.show()
 
     #

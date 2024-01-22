@@ -12,7 +12,7 @@ from typing import List, Dict
 from omegaconf import DictConfig
 import shutil
 
-class OmniObject3D_FrameMeta(OD3D_FrameMetaMaskMixin, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin,
+class ShapeNet_FrameMeta(OD3D_FrameMetaMaskMixin, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin,
                              OD3D_FrameMetaCategoryMixin, OD3D_FrameMeta):
 
     @property
@@ -23,7 +23,7 @@ class OmniObject3D_FrameMeta(OD3D_FrameMetaMaskMixin, OD3D_FrameMetaRGBMixin, OD
     def load_from_raw():
         pass
 
-class OmniObject3D(OD3D_Dataset):
+class ShapeNet(OD3D_Dataset):
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List=None,
                  dict_nested_frames: Dict=None,
@@ -35,8 +35,18 @@ class OmniObject3D(OD3D_Dataset):
                          path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
 
+
+        # directories
+        # images/texture/textureXX.jpg # 0...14
+        # images/texture/texture0.png
+        # models/
+        #   model_normalized.json
+        #   model_normalized.mtl
+        #   model_normalized.obj
+        #   model_normalized.solid.binvox
+        #   model_normalized.surface.binvox
     def get_item(self, item):
-        frame_meta = OmniObject3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
+        frame_meta = ShapeNet_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
         return OD3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                           meta=frame_meta, modalities=self.modalities, categories=self.categories)
 
@@ -45,8 +55,32 @@ class OmniObject3D(OD3D_Dataset):
         # logger.info(OmegaConf.to_yaml(config))
         path_raw = Path(config.path_raw)
         if path_raw.exists() and config.setup.remove_previous:
-            logger.info(f"Removing previous OmniObject3D")
+            logger.info(f"Removing previous ShapeNet")
             shutil.rmtree(path_raw)
+
+        # git config --global credential.helper store
+        # huggingface-cli login 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
+        from huggingface_hub import login
+        login('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', add_to_git_credential=True)
+
+        "https://huggingface.co/datasets/ShapeNet/ShapeNetCore-archive/blob/main/ShapeNetCore.v2.zip"
+
+        # dataset = load_dataset("ShapeNet/ShapeNetCore")
+        # from datasets import load_dataset
+        # --filter=blob:none
+        # dataset = load_dataset('ShapeNet/ShapeNetCore', cache_dir="/scratch/sommerl/repos/NeMo/ShapeNetCore")
+        # git clone --filter=blob:none https://huggingface.co/datasets/ShapeNet/ShapeNetCore
+        # https://huggingface.co/datasets/ShapeNet/ShapeNetCore/tree/main
+        # from datasets import get_dataset_split_names
+        # from datasets import load_dataset_builder
+        # from datasets import load_dataset
+        # from datasets import get_dataset_config_names
+        # "ShapeNet/ShapeNetCore"  "rotten_tomatoes"
+        # ds_builder = load_dataset_builder("ShapeNet/ShapeNetCore")
+        # ds_builder.info.description
+        # ds_builder.info.features
+        # get_dataset_config_names("ShapeNet/ShapeNetCore")
+        # # load_dataset('LOADING_SCRIPT', cache_dir="PATH/TO/MY/CACHE/DIR")
 
         path_raw.mkdir(parents=True, exist_ok=True)
         od3d.io.run_cmd('pip install opendatalab', logger=logger, live=True)

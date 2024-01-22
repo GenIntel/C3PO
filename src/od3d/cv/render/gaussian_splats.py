@@ -138,8 +138,9 @@ def render_gaussians(
 
         pts3d_b = pts3d[b, pts3d_mask[b]].clone()
         pts3d_dists = torch.cdist(pts3d_b.clone().detach(), pts3d_b.clone().detach())
-        pts3d_dists[pts3d_dists == 0.] = torch.inf
+        pts3d_dists.fill_diagonal_(torch.inf)
         pts3d_size_b = pts3d_dists.min(dim=-1).values[:, None].expand(N, 3) * pts3d_size_rel_to_neighbor_dist
+
         pts3d_size_b = pts3d_size_b.clamp(1e-5, 1e+5) # otherwise illegal access memory
 
         feats_b = feats[b, pts3d_mask[b]]
@@ -189,7 +190,8 @@ def render_gaussians(
 
 
         means2d_b = torch.zeros_like(pts3d_b) + 0  # torch.zeros((N, 2)).to(device) # N x 2
-        opacities_b = torch.ones((N, 1)).to(device) * opacity  # N x 1
+        opacities_b = opacity * torch.ones((N, 1)).to(device)  # N x 1
+
         rotations_b = torch.zeros((N, 4)).to(device)  # N x 4 (quaternion) 1 0 0 0
         rotations_b[:, 0] = 1.
 

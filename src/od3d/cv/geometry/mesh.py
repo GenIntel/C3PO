@@ -833,20 +833,23 @@ class Meshes(torch.nn.Module):
                 raise ValueError(f'Set `broadcast_batch_and_cams=True` to allow different number of cameras and meshes')
             render_count = meshes_count
 
-        if self.gaussian_splat_enabled and modality in [MESH_RENDER_MODALITIES.VERTS_NCDS, MESH_RENDER_MODALITIES.RGB, MESH_RENDER_MODALITIES.FEATS]: # MESH_RENDER_MODALITIES.FEATS:
+        if self.gaussian_splat_enabled and modality in \
+                [MESH_RENDER_MODALITIES.VERTS_NCDS, MESH_RENDER_MODALITIES.RGB, MESH_RENDER_MODALITIES.FEATS, MESH_RENDER_MODALITIES.MASK]: # MESH_RENDER_MODALITIES.FEATS:
             from od3d.cv.render.gaussian_splats import render_gaussians
             pts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device).clone().detach()
             if modality == MESH_RENDER_MODALITIES.VERTS_NCDS:
                 feats = self.get_verts_ncds_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
             elif modality == MESH_RENDER_MODALITIES.RGB:
                 feats = self.get_rgb_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
+            elif modality == MESH_RENDER_MODALITIES.MASK:
+                feats = torch.zeros_like(pts3d[..., 0:1])
             else:
                 feats = self.get_feats_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
 
             pts3d_mask = self.mask_verts_not_padded.to(device)[meshes_ids]
             mesh_feats2d_rendered = render_gaussians(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4,
-                                                     imgs_size=imgs_sizes, pts3d=pts3d, pts3d_mask=pts3d_mask, feats=feats,
-                                                     opacity=self.gaussian_splat_opacity,
+                                                     imgs_size=imgs_sizes, pts3d=pts3d, pts3d_mask=pts3d_mask,
+                                                     feats=feats, opacity=self.gaussian_splat_opacity,
                                                      pts3d_size_rel_to_neighbor_dist=
                                                      self.gaussian_splat_pts3d_size_rel_to_neighbor_dist)
 
@@ -942,6 +945,8 @@ class Meshes(torch.nn.Module):
             feats_from_faces = torch.cat([self.get_verts_ncds_from_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0)
 
         mesh_feats2d_rendered = interpolate_face_attributes(fragments.pix_to_face, fragments.bary_coords, feats_from_faces)[:, ..., 0,:].permute(0, 3, 1, 2)
+        #mask = fragments.pix_to_face >= 0
+        #mesh_feats2d_prob = torch.sigmoid(-fragments.dists / blend_params.sigma) * mask
 
         if broadcast_batch_and_cams:
             mesh_feats2d_rendered = mesh_feats2d_rendered.reshape(meshes_count, cams_count, *mesh_feats2d_rendered.shape[-3:])

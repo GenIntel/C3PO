@@ -1,8 +1,8 @@
 # @package _global_
 defaults:
-  - /ablations/score/loss/_default
+  - /ablations/nemo/loss/_default
 
-ablation_name_score_loss: 'geodesic_prob_sigma_0005'
+ablation_name_nemo_loss: 'geodesic_prob_sigma_0005'
 
 method:
   nemo:
