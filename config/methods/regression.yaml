@@ -1,22 +1,23 @@
 defaults:
   - optimizer@train.optimizer: adam
   - scheduler@train.scheduler: multistep
+  - model@model: dinov2_frozen_mlp6d
 
 name: regression
 class_name: Regression
 
-model:
-  backbone:
-    class_name: ResNet
-    layers_returned: [4, 3, 2] # always start with deepest layer...
-  head:
-    class_name: ResNet
-    conv_blocks:
-      out_dims: [2048]
-      strides: [1]
-    fully_connected:
-      out_dim: 3 # None means that there is no linear layer
-    normalize: False
+#model:
+#  backbone:
+#    class_name: ResNet
+#    layers_returned: [4, 3, 2] # always start with deepest layer...
+#  head:
+#    class_name: ResNet
+#    conv_blocks:
+#      out_dims: [2048]
+#      strides: [1]
+#    fully_connected:
+#      out_dim: 3 # None means that there is no linear layer
+#    normalize: False
 
 train:
   split: random # 'random' 'sequences_separated' 'seqences_shared'

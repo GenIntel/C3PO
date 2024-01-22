@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 import torch
 from pytorch3d.renderer.cameras import look_at_view_transform, look_at_rotation
 import math
-from pytorch3d.transforms import axis_angle_to_matrix
+from pytorch3d.transforms import axis_angle_to_matrix, rotation_6d_to_matrix, matrix_to_rotation_6d
 import pytorch3d.transforms
 
 def so3_exp_map(so3_log:torch.Tensor):
@@ -15,6 +15,11 @@ def so3_exp_map(so3_log:torch.Tensor):
 
     return so3_3x3
 
+def rot6d_to_rot3x3(rot6d: torch.Tensor):
+    rot6d_shape = rot6d.shape
+    _rot3x3 = rotation_6d_to_matrix(rot6d.reshape(-1, 6))
+    return _rot3x3.reshape(rot6d_shape[:-1] + torch.Size([3, 3]))
+
 def so3_log_map(so3_3x3: torch.Tensor):
     so3_exp_shape = so3_3x3.shape
 
@@ -23,6 +28,11 @@ def so3_log_map(so3_3x3: torch.Tensor):
     so3_log = so3_log.reshape(so3_exp_shape[:-2] + torch.Size([3]))
 
     return so3_log
+
+def rot3x3_to_rot6d(rot3x3: torch.Tensor):
+    rot3x3_shape = rot3x3.shape
+    _rot6d = matrix_to_rotation_6d(rot3x3.reshape(-1, 3, 3))
+    return _rot6d.reshape(rot3x3_shape[:-2] + torch.Size([6]))
 
 def se3_log_map(se3_exp: torch.Tensor):
     """

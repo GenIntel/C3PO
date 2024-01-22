@@ -1,0 +1,187 @@
+defaults:
+  - logger: wandb
+  - methods@method.regression: regression
+  - datasets@train_datasets.labeled: co3d_no_zsp_50s_aligned # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
+  - datasets@train_datasets.unlabeled: co3d_no_zsp_50s # co3d_50s_no_zsp_aligned co3d_5s_no_zsp_labeled
+  - datasets@val_datasets.main: co3d_no_zsp_5s_labeled_ref
+  - datasets@val_datasets.co3d_zsp: co3dv1_10s_zsp_labeled_cuboid_ref
+  - datasets@val_datasets.pascal3d: pascal3d_val
+  - datasets@val_datasets.objectnet3d: objectnet3d_val
+  - datasets@test_datasets.co3d: co3d_no_zsp_5s_labeled_ref
+  - datasets@test_datasets.co3d_zsp: co3dv1_10s_zsp_labeled_cuboid_ref
+  - datasets@test_datasets.pascal3d: pascal3d_test
+  - datasets@test_datasets.objectnet3d: objectnet3d_test
+  - datasets@texture_dataset: dtd
+  - platform@platform_local: local
+  - platform: local
+
+test_subset_fraction: 1.
+
+categories:
+  - bicycle
+  - truck
+  - train
+  - teddybear
+  - car
+  - bus
+  - motorcycle
+  - keyboard
+  - handbag
+  - remote
+  - airplane
+  - toilet
+  - hairdryer
+  - mouse
+  - toaster
+  - hydrant
+  - chair
+  - laptop
+  - book
+  - backpack
+  - cellphone # from cellphone on, no zsp categories
+  - bench
+  - bottle
+  - couch
+  - cup
+  - suitcase
+  - tv
+
+metrics:
+  - metricA
+  - metricB
+
+aligned_name_ref: '/r0'
+aligned_name_suffix: '_mesh'
+aligned_name: 'latest_50s_to_5s_sota${aligned_name_suffix}${aligned_name_ref}'
+
+method:
+  regression:
+    train:
+      early_stopping: False
+      epochs: 10
+      dataloader:
+        num_workers: 4
+        batch_size: 12
+      transform:
+        class_name: SequentialTransform
+        transforms:
+          - class_name: RandomCenterZoom3D
+            apply_txtr: False
+            config: ${texture_dataset}
+            W: 512
+            H: 512
+            scale_with_mask: 1.
+            scale_selection: 'shorter' # 'shorter' 'larger' 'separate'
+            scale_min: 0.8
+            scale_max: 1.2
+            center_rel_shift_xy_min:
+              - -0.
+              - -0.
+            center_rel_shift_xy_max:
+              - +0.
+              - +0.
+          - class_name: RGB_Random
+    test:
+      transform:
+        class_name: CenterZoom3D
+        W: 512
+        H: 512
+        scale:
+        scale_with_mask: 1.
+        center_rel_shift_xy:
+          - -0.
+          - -0.
+
+    categories: ${categories}
+    #fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
+    path_meshes: ${train_datasets.labeled.path_preprocess}/aligned/${aligned_name}/mesh
+    fpaths_meshes:
+      bicycle: ${..path_meshes}/bicycle/mesh.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
+      truck: ${..path_meshes}/toytruck/mesh.ply
+      train: ${..path_meshes}/toytrain/mesh.ply
+      teddybear: ${..path_meshes}/teddybear/mesh.ply
+      car: ${..path_meshes}/car/mesh.ply
+      bus: ${..path_meshes}/toybus/mesh.ply
+      motorcycle: ${..path_meshes}/motorcycle/mesh.ply
+      keyboard: ${..path_meshes}/keyboard/mesh.ply
+      handbag: ${..path_meshes}/handbag/mesh.ply
+      remote: ${..path_meshes}/remote/mesh.ply
+      airplane: ${..path_meshes}/toyplane/mesh.ply
+      toilet: ${..path_meshes}/toilet/mesh.ply
+      hairdryer: ${..path_meshes}/hairdryer/mesh.ply
+      mouse: ${..path_meshes}/mouse/mesh.ply
+      toaster: ${..path_meshes}/toaster/mesh.ply
+      hydrant: ${..path_meshes}/hydrant/mesh.ply
+      chair: ${..path_meshes}/chair/mesh.ply
+      laptop: ${..path_meshes}/laptop/mesh.ply
+      book: ${..path_meshes}/book/mesh.ply
+      backpack: ${..path_meshes}/backpack/mesh.ply
+      cellphone: ${..path_meshes}/cellphone/mesh.ply
+      microwave: ${..path_meshes}/microwave/mesh.ply
+      bench: ${..path_meshes}/bench/mesh.ply
+      bottle: ${..path_meshes}/bottle/mesh.ply
+      couch: ${..path_meshes}/couch/mesh.ply
+      cup: ${..path_meshes}/cup/mesh.ply
+      suitcase: ${..path_meshes}/suitcase/mesh.ply
+      tv: ${..path_meshes}/tv/mesh.ply
+
+#    inference:
+#      sample:
+#        method: uniform # epnp3d2d uniform
+#        depth_from_box: False
+#        epnp3d2d:
+#          count_cams: 100
+#          count_pts: 4
+#        uniform:
+#          azim:
+#            min: '0.'
+#            max: math.pi * 2 / 8.                 # math.pi * 2 - (math.pi * 2) / 12. # 12
+#            steps: 8               #  12
+#          elev:
+#            min: -math.pi / 2 + math.pi / 8  #-math.pi / 6
+#            max: math.pi / 2  - math.pi / 8 # math.pi / 3
+#            steps: 4
+#
+#          theta:
+#            min: -math.pi + math.pi / 8 # -math.pi / 6
+#            max: math.pi - math.pi / 8 # math.pi / 6
+#            steps: 4
+#      refine:
+#        enabled: True
+#        dims_detached: [ 0, 1, 2 ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
+
+train_datasets:
+  labeled:
+    aligned_name: ${aligned_name}
+    categories: ${categories}
+  unlabeled:
+    categories: ${categories}
+
+val_datasets:
+  main:
+    categories: ${categories}
+  co3d_zsp:
+    categories: ${categories}
+  pascal3d:
+    skip: True
+    categories: ${categories}
+  objectnet3d:
+    skip: True
+    categories: ${categories}
+
+test_datasets:
+  co3d:
+    categories: ${categories}
+  co3d_zsp:
+    categories: ${categories}
+  pascal3d:
+    subset_fraction: ${test_subset_fraction}
+    skip: True
+    categories: ${categories}
+  objectnet3d:
+    subset_fraction: ${test_subset_fraction}
+    skip: True
+    categories: ${categories}
+
+train: True
+test: True

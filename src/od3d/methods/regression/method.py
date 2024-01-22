@@ -6,7 +6,7 @@ import torchvision
 from od3d.methods.method import OD3D_Dataset
 from typing import List
 import torch
-from od3d.cv.geometry.transform import rot3x3, se3_exp_map, se3_log_map, so3_log_map, so3_exp_map, transf4x4_from_rot3x3
+from od3d.cv.geometry.transform import rot3x3, se3_exp_map, se3_log_map, so3_log_map, so3_exp_map, transf4x4_from_rot3x3, rot3x3_to_rot6d, rot6d_to_rot3x3
 from od3d.methods.method import OD3D_Method
 from od3d.models.model import OD3D_Model #  backbones.backbone import OD3D_Backbone
 from pathlib import Path
@@ -48,6 +48,22 @@ class Regression(OD3D_Method):
         self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()))
         self.scheduler = od3d.io.get_obj_from_config(self.optim, config=self.config.train.scheduler)
 
+    def rot_mat_to_repr(self, rot3x3):
+        if self.net.out_dim == 3:
+            return so3_log_map(rot3x3)
+        elif self.net.out_dim == 6:
+            return rot3x3_to_rot6d(rot3x3)
+        else:
+            msg = f'Unknown out_dim {self.net.out_dim}'
+            raise Exception(msg)
+    def rot_repr_to_mat(self, rot_repr):
+        if self.net.out_dim == 3:
+            return so3_exp_map(rot_repr)
+        elif self.net.out_dim == 6:
+            return rot6d_to_rot3x3(rot_repr)
+        else:
+            msg = f'Unknown out_dim {self.net.out_dim}'
+            raise Exception(msg)
 
     def save_checkpoint(self, path_checkpoint: Path):
         torch.save({
@@ -167,7 +183,7 @@ class Regression(OD3D_Method):
         batch.to(device=self.device)
 
         pred = self.net(batch.rgb)
-        loss = (pred - so3_log_map(batch.cam_tform4x4_obj[:, :3, :3])).norm(dim=-1).mean()
+        loss = (pred - self.rot_mat_to_repr(batch.cam_tform4x4_obj[:, :3, :3])).norm(dim=-1).mean()
         loss.backward()
         logger.info(f'loss {loss.item()}')
 
@@ -185,14 +201,14 @@ class Regression(OD3D_Method):
         time_loaded = time.time()
         with torch.no_grad():
             pred = self.net(batch.rgb)
-            cam_rot3x3_obj = so3_exp_map(pred)
+            cam_rot3x3_obj = self.rot_repr_to_mat(pred)
 
         results['time_pose'] = torch.Tensor([time.time() - time_loaded,])
 
         diff_rot3x3 = rot3x3(batch.cam_tform4x4_obj[:, :3, :3].permute(0, 2, 1), cam_rot3x3_obj[:, :3, :3])
 
         try:
-            diff_so3_log = pytorch3d.transforms.so3_log_map(diff_rot3x3)
+            diff_so3_log = so3_log_map(diff_rot3x3)
             diff_rot_angle_rad = torch.norm(diff_so3_log, dim=-1)
         except ValueError:
             logger.warning(
