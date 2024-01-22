@@ -139,7 +139,7 @@ def render_gaussians(
         pts3d_b = pts3d[b, pts3d_mask[b]].clone()
         pts3d_dists = torch.cdist(pts3d_b.clone().detach(), pts3d_b.clone().detach())
         pts3d_dists.fill_diagonal_(torch.inf)
-        pts3d_size_b = pts3d_dists.min(dim=-1).values[:, None].expand(N, 3) * pts3d_size_rel_to_neighbor_dist
+        pts3d_size_b = pts3d_dists.min(dim=-1).values[:, None].mean(dim=0, keepdim=True).expand(N, 3) * pts3d_size_rel_to_neighbor_dist
 
         pts3d_size_b = pts3d_size_b.clamp(1e-5, 1e+5) # otherwise illegal access memory
 
