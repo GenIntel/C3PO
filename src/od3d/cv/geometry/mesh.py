@@ -842,7 +842,7 @@ class Meshes(torch.nn.Module):
             elif modality == MESH_RENDER_MODALITIES.RGB:
                 feats = self.get_rgb_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
             elif modality == MESH_RENDER_MODALITIES.MASK:
-                feats = torch.zeros_like(pts3d[..., 0:1])
+                feats = torch.ones_like(pts3d[..., 0:1])
             else:
                 feats = self.get_feats_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
 
