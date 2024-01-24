@@ -35,13 +35,13 @@ class DINOv2(OD3D_Backbone):
 
         # dino_vits8, dino_vitb8, dino_vits16, dino_vitb16, dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14
         self.dinov2 = 'dinov2' in self.config.hub_model
-        if self.dinov2:
-            self.extractor = torch.hub.load(self.config.hub_repo, self.config.hub_model,
-                                        pretrained=self.config.weights == 'default')
-            self.out_dims = [self.extractor.embed_dim]
-        else: # using keys did not show any improvement
-            self.extractor = ViTExtractor(model_type=self.config.hub_model)
-            self.out_dims = [self.extractor.model.embed_dim]
+        #if self.dinov2:
+        self.extractor = torch.hub.load(self.config.hub_repo, self.config.hub_model,
+                                    pretrained=self.config.weights == 'default')
+        self.out_dims = [self.extractor.embed_dim]
+        #else: # using keys did not show any improvement
+        #    self.extractor = ViTExtractor(model_type=self.config.hub_model)
+        #    self.out_dims = [self.extractor.model.embed_dim]
 
         self.out_downsample_scales = []
         self.downsample_rate = self.config.downsample_rate
