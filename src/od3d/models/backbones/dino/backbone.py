@@ -78,10 +78,10 @@ class DINOv2(OD3D_Backbone):
         if self.dinov2:
             x = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
         else:
-            #x = self.extractor.get_intermediate_layers(x, n=12)[9]  # maximum 12 layers, zsp uses 9
-            #x = x[:, 1:] # remove cls token
+            x = self.extractor.get_intermediate_layers(x, n=12)[9]  # maximum 12 layers, zsp uses 9
+            x = x[:, 1:] # remove cls token
 
-            x = self.extractor.extract_descriptors(batch=x, layer=9, facet='key', bin=False, include_cls=False)
+            #x = self.extractor.extract_descriptors(batch=x, layer=9, facet='key', bin=False, include_cls=False)
             #x = torch.nn.functional.normalize(x, dim=-1)
 
         x = x.reshape(-1, H_out, W_out, self.out_dims[-1]).permute(0, 3, 1, 2)
