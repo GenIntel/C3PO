@@ -10,7 +10,8 @@ import torchvision
 from od3d.models.backbones.backbone import OD3D_Backbone
 from od3d.data.ext_enum import ExtEnum
 from od3d.cv.visual.resize import resize
-# from od3d.models.backbones.dino.dinov1 import ViTExtractor # for selecting keys, querys, values
+
+from od3d.models.backbones.dino.dinov1 import ViTExtractor # for selecting keys, querys, values
 
 class DINOv2_WEIGHTS(str, ExtEnum):
     DEFAULT = 'default'
@@ -29,20 +30,18 @@ class DINOv2(OD3D_Backbone):
             RGB_Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-        self.normalize = self.config.get('normalize', True)
-
         self.layers_returned = config.layers_returned # choose from [1, 2, 3, 4]
         self.layers_count = len(self.layers_returned)
 
         # dino_vits8, dino_vitb8, dino_vits16, dino_vitb16, dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14
         self.dinov2 = 'dinov2' in self.config.hub_model
-        #if self.dinov2:
-        self.extractor = torch.hub.load(self.config.hub_repo, self.config.hub_model,
+        if self.dinov2:
+            self.extractor = torch.hub.load(self.config.hub_repo, self.config.hub_model,
                                         pretrained=self.config.weights == 'default')
-        self.out_dims = [self.extractor.embed_dim]
-        #else: # using keys did not show any improvement
-        #    self.extractor = ViTExtractor(model_type= self.config.hub_model)
-        #    self.out_dims = [self.extractor.model.embed_dim]
+            self.out_dims = [self.extractor.embed_dim]
+        else: # using keys did not show any improvement
+            self.extractor = ViTExtractor(model_type=self.config.hub_model)
+            self.out_dims = [self.extractor.model.embed_dim]
 
         self.out_downsample_scales = []
         self.downsample_rate = self.config.downsample_rate
@@ -79,11 +78,11 @@ class DINOv2(OD3D_Backbone):
         if self.dinov2:
             x = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
         else:
-            x = self.extractor.get_intermediate_layers(x, n=12)[9]  # maximum 12 layers, zsp uses 9
-            x = x[:, 1:] # remove cls token
-            #x = self.extractor.extract_descriptors(batch=x, layer=9, facet='key', bin=False, include_cls=False)
-            if self.normalize:
-                x = torch.nn.functional.normalize(x, dim=-1)
+            #x = self.extractor.get_intermediate_layers(x, n=12)[9]  # maximum 12 layers, zsp uses 9
+            #x = x[:, 1:] # remove cls token
+
+            x = self.extractor.extract_descriptors(batch=x, layer=9, facet='key', bin=False, include_cls=False)
+            #x = torch.nn.functional.normalize(x, dim=-1)
 
         x = x.reshape(-1, H_out, W_out, self.out_dims[-1]).permute(0, 3, 1, 2)
         x_layers = [x]
