@@ -8,6 +8,8 @@ class_name: NeMo
 
 num_noise: 5
 max_group: 512
+bank_feats_normalize: True
+bank_feats_distribution: 'von-mises-fisher' # 'von-mises-fisher', 'gaussian'
 
 categories: ${train_datasets.labeled.categories}
 fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}

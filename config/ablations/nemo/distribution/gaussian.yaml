@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+  - /ablations/nemo/inference/_default
+
+ablation_name_nemo_distribution: 'gaussian'
+
+method:
+  nemo:
+    bank_feats_normalize: False
+    bank_feats_distribution: 'gaussian' # 'von-mises-fisher', 'gaussian'
+    train:
+      T: 1.
+    model:
+        normalize: False

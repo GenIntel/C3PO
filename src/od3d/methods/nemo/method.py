@@ -183,11 +183,31 @@ class NeMo(OD3D_Method):
         self.down_sample_rate = self.net.downsample_rate
 
     def normalize_feats(self):
-        self.clutter_feats.data = self.clutter_feats.detach() / self.clutter_feats.detach().norm(dim=-1, keepdim=True)
-        self.meshes.feats.data = self.meshes.feats.detach() / self.meshes.feats.detach().norm(dim=-1, keepdim=True)
-        # self.meshes.set_feats_cat(self.meshes.feats.detach() / self.meshes.feats.detach().norm(dim=-1, keepdim=True))
-        # logger.info(self.clutter_feats[:1])
-        # logger.info(self.meshes.feats[:1])
+        if self.config.bank_feats_normalize:
+            self.clutter_feats.data = self.clutter_feats.detach() / self.clutter_feats.detach().norm(dim=-1, keepdim=True)
+            self.meshes.feats.data = self.meshes.feats.detach() / self.meshes.feats.detach().norm(dim=-1, keepdim=True)
+            # self.meshes.set_feats_cat(self.meshes.feats.detach() / self.meshes.feats.detach().norm(dim=-1, keepdim=True))
+            # logger.info(self.clutter_feats[:1])
+            # logger.info(self.meshes.feats[:1])
+    def calc_sim(self, comb, featsA, featsB):
+        """
+        Expand and permute a tensor based on the einsum equation.
+
+        Parameters:
+            tensor (torch.Tensor): Input tensor.
+            equation (str): Einsum equation specifying the dimensions.
+
+        Returns:
+            torch.Tensor: Expanded and permuted tensor.
+        """
+        if self.config.bank_feats_distribution == 'von-mises-fisher':
+            return torch.einsum(comb, featsA, featsB)
+        elif self.config.bank_feats_distribution == 'gaussian':
+            from od3d.cv.geometry.dist import einsum_cdist
+            return -einsum_cdist(comb, featsA, featsB)
+        else:
+            msg = f'Unknown distribution {self.config.distribution}'
+            raise NotImplementedError(msg)
 
     def load_checkpoint_old(self, path_checkpoint):
         fpaths_meshes_old = list(self.config.fpaths_meshes.values())
@@ -424,11 +444,11 @@ class NeMo(OD3D_Method):
 
 
         if self.config.train.bank_feats_update == 'loss_gradient':
-            sim = torch.einsum('nc,vc->nv', net_feats, bank_feats)
+            sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats)
         elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
-            sim = torch.einsum('nc,vc->nv', net_feats, torch.nn.functional.normalize(bank_feats, dim=1))
+            sim = self.calc_sim('nc,vc->nv', net_feats, torch.nn.functional.normalize(bank_feats, dim=1))
         elif self.config.train.bank_feats_update == 'moving_average':
-            sim = torch.einsum('nc,vc->nv', net_feats, bank_feats.detach())
+            sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.detach())
             bank_feats_new = self.config.train.alpha * bank_feats[batch_vts_ids].detach() + (1. - self.config.train.alpha) * net_feats.detach()
             batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
@@ -508,7 +528,7 @@ class NeMo(OD3D_Method):
                                        dim=0)
                 # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
                 out_shape = feats2d_net.shape[:1] + torch.Size([1]) + feats2d_net.shape[2:]
-                inner_feats2d_net_bank_vts_max_vals = torch.einsum('bchw,kc->bkhw', feats2d_net, bank_feats).max(dim=1,
+                inner_feats2d_net_bank_vts_max_vals = self.calc_sim('bchw,kc->bkhw', feats2d_net, bank_feats).max(dim=1,
                                                                                                                  keepdim=True).values
                 # inner_feats2d_net_bank_vts_max_vals, inner_feats2d_net_bank_vts_max_ids = inner_feats2d.max(dim=1)
                 # show_img(self.meshes.get_verts_with_mesh_id[mesh_id][inner_feats2d_net_bank_vts_max_ids[0, 0]].permute(2, 0, 1), normalize=True)
@@ -660,7 +680,7 @@ class NeMo(OD3D_Method):
                                        dim=0)
                 # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
                 out_shape = feats2d_net.shape[:1] + torch.Size([1]) + feats2d_net.shape[2:]
-                inner_feats2d_net_bank_vts_max_vals = torch.einsum('bchw,kc->bkhw', feats2d_net, bank_feats).max(dim=1,
+                inner_feats2d_net_bank_vts_max_vals = self.calc_sim('bchw,kc->bkhw', feats2d_net, bank_feats).max(dim=1,
                                                                                                                  keepdim=True).values
                 # inner_feats2d_net_bank_vts_max_vals, inner_feats2d_net_bank_vts_max_ids = inner_feats2d.max(dim=1)
                 # show_img(self.meshes.get_verts_with_mesh_id[mesh_id][inner_feats2d_net_bank_vts_max_ids[0, 0]].permute(2, 0, 1), normalize=True)
@@ -1025,7 +1045,7 @@ class NeMo(OD3D_Method):
     def get_nearest_verts3d_to_feats2d_net(self, feats2d_net, categories_ids, zero_if_sim_clutter_larger=False,
                                            return_sim_texture_and_clutter=False):
         B = len(feats2d_net)
-        sim_nearest_texture_vals, sim_nearest_texture_ids = torch.einsum('bchw,bvc->bvhw', feats2d_net,
+        sim_nearest_texture_vals, sim_nearest_texture_ids = self.calc_sim('bchw,bvc->bvhw', feats2d_net,
                                                                          self.meshes.
                                                                          get_feats_stacked_with_mesh_ids(categories_ids)
                                                                          .detach()).max(dim=1, keepdim=True)
@@ -1035,8 +1055,8 @@ class NeMo(OD3D_Method):
 
         if zero_if_sim_clutter_larger or return_sim_texture_and_clutter:
             sim_clutter = \
-                torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[0]
-            # sim_clutter = torch.einsum('bchw,nc->bnhw', net_feats2d, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
+                self.calc_sim('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[0]
+            # sim_clutter = self.calc_sim('bchw,nc->bnhw', net_feats2d, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
             if zero_if_sim_clutter_larger:
                 sim_nearest_texture_verts3d[sim_clutter[:, 0] > sim_nearest_texture_vals[:, 0]] = 0.
 
@@ -1151,8 +1171,8 @@ class NeMo(OD3D_Method):
             feats2d_net_sampled = None
             logger.error(f'Unexpected dimension of verts2d_mesh {verts2d_mesh.shape}')
         # [verts2d_mesh_mask]
-        sim_clutter = torch.einsum('btvc,nc->bntv', feats2d_net_sampled, self.clutter_feats.detach()).max(dim=1, keepdim=False)[0]
-        sim_texture_multiple_cams = torch.einsum('btvc,bvc->btv', feats2d_net_sampled, feats2d_mesh)
+        sim_clutter = self.calc_sim('btvc,nc->bntv', feats2d_net_sampled, self.clutter_feats.detach()).max(dim=1, keepdim=False)[0]
+        sim_texture_multiple_cams = self.calc_sim('btvc,bvc->btv', feats2d_net_sampled, feats2d_mesh)
         sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
 
         if verts2d_mesh_mask.dim() == 3:
@@ -1209,17 +1229,17 @@ class NeMo(OD3D_Method):
             sim_pxl (torch.Tensor, optional): BxTxHxW, or Bx1xHxW if rendered features is 4-dimensional.
         """
 
-        sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[
+        sim_clutter = self.calc_sim('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).max(dim=1, keepdim=True)[
             0]
 
         # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
 
         if feats2d_rendered.dim() == 5:
             feats2d_rendered_clutter_mask = feats2d_rendered.norm(dim=2) == 0.
-            sim_texture_multiple_cams = torch.einsum('bchw,bvchw->bvhw', feats2d_net, feats2d_rendered)
+            sim_texture_multiple_cams = self.calc_sim('bchw,bvchw->bvhw', feats2d_net, feats2d_rendered)
         else:
             feats2d_rendered_clutter_mask = (feats2d_rendered.norm(dim=1) == 0.)[:, None]
-            sim_texture_multiple_cams = torch.einsum('bchw,bchw->bhw', feats2d_net, feats2d_rendered)[:, None]
+            sim_texture_multiple_cams = self.calc_sim('bchw,bchw->bhw', feats2d_net, feats2d_rendered)[:, None]
 
         # note only for occlusions: either
         # given feats2d_net_mask:
@@ -1421,9 +1441,9 @@ class NeMo(OD3D_Method):
             if self.config.train.visualize.net_feats_nearest_verts:
                 for b in range(len(batch)):
                     if batch.name_unique[b] in visual_names_unique:
-                        clutter_sim, clutter_sim_ids = torch.einsum('bcn,vc->bnv', net_feats2d[b:b + 1].flatten(-2),
+                        clutter_sim, clutter_sim_ids = self.calc_sim('bcn,vc->bnv', net_feats2d[b:b + 1].flatten(-2),
                                                                     self.clutter_feats).max(dim=-1)
-                        net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = torch.einsum('bcn,vc->bnv',
+                        net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = self.calc_sim('bcn,vc->bnv',
                                                                                               net_feats2d[
                                                                                               b:b + 1].flatten(-2),
                                                                                               self.meshes.get_feats_with_mesh_id(
