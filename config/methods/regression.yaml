@@ -20,6 +20,7 @@ class_name: Regression
 #    normalize: False
 
 train:
+  early_stopping: True
   split: random # 'random' 'sequences_separated' 'seqences_shared'
   dataloader:
     num_workers: 4

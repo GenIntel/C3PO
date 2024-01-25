@@ -9,7 +9,7 @@ ablation_name: ${ablation_name_nemo_inference}
 #      # 12-08_10-38-10_Pascal3D_NeMo_epochs100_slurm
 #      # 12-08_10-37-58_Pascal3D_NeMo_epochs150_slurm
 
-train: False
+# train: True
 
 test:
   dataloader:
