@@ -762,7 +762,7 @@ class NeMo(OD3D_Method):
             time_before_pose_iterative = time.time()
             obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
 
-            refine_update_max = self.refine_update_max[batch.label].clone()
+            refine_update_max = self.refine_update_max[batch.label[:1]].clone()
 
             for epoch in range(self.config.inference.optimizer.epochs):
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
