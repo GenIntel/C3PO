@@ -165,6 +165,11 @@ class Meshes(torch.nn.Module):
         meshes_limits = torch.stack(meshes_limits, dim=0)
         return meshes_limits
 
+    def get_ranges(self):
+        meshes_limits = self.get_limits()
+        meshes_range = meshes_limits[:, 1, :] - meshes_limits[:, 0, :]
+        return meshes_range
+
     def init_pt3d(self):
         self.pt3dmeshes = PT3DMeshes(
             verts=[self.get_verts_with_mesh_id(i) for i in range(self.meshes_count)],

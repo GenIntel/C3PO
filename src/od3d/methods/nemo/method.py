@@ -115,6 +115,10 @@ class NeMo(OD3D_Method):
         self.meshes.geodesic_prob_sigma = self.config.train.geodesic_prob_sigma
         self.meshes.pt3d_raster_perspective_correct = self.config.meshes_pt3d_raster_perspective_correct
         self.meshes.gaussian_splat_pts3d_size_rel_to_neighbor_dist  = self.config.meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist
+        self.meshes_ranges = self.meshes.get_ranges().detach().cuda()
+        self.refine_update_max = torch.Tensor(self.config.inference.refine.dims_grad_max).cuda()[None,].expand(self.meshes_ranges.shape[0], 6).clone()
+        self.refine_update_max[:, :3] = self.refine_update_max[:, :3] * self.meshes_ranges
+
         #self.meshes.rgb = (self.meshes.geodesic_prob[3, :, None].repeat(1, 3)).clamp(0, 1)
         # self.meshes.show()
 
@@ -581,7 +585,7 @@ class NeMo(OD3D_Method):
         if self.config.inference.refine.enabled:
             obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=(B, 6)).to(device=cam_tform4x4_obj.device),
                                                 requires_grad=True)
-
+            # transl: 0, 1, 2 rot: 3, 4, 5
             optim_inference = torch.optim.Adam(
                 params=[obj_tform6_tmp],
                 lr=self.config.inference.optimizer.lr,
@@ -591,8 +595,9 @@ class NeMo(OD3D_Method):
             time_before_pose_iterative = time.time()
             cam_tform4x4_obj = tform4x4(cam_tform4x4_obj.detach(), se3_exp_map(obj_tform6_tmp))
 
+            refine_update_max = self.refine_update_max[batch.label].clone()
             for epoch in range(self.config.inference.optimizer.epochs):
-                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
+
                 cam_tform4x4_obj = tform4x4(cam_tform4x4_obj.detach(), se3_exp_map(obj_tform6_tmp.detach()))
                 obj_tform6_tmp.data[:, :] = 0.
                 cam_tform4x4_obj = tform4x4(cam_tform4x4_obj.detach(), se3_exp_map(obj_tform6_tmp))
@@ -622,6 +627,13 @@ class NeMo(OD3D_Method):
                 loss.backward()
                 optim_inference.step()
                 optim_inference.zero_grad()
+
+                # detach update
+                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
+                # clip update
+                refine_update_mask = obj_tform6_tmp.data.abs() > refine_update_max
+                obj_tform6_tmp.data[refine_update_mask] = obj_tform6_tmp.data[refine_update_mask].sign() * refine_update_max[refine_update_mask]
+
 
             cam_tform4x4_obj = tform4x4(cam_tform4x4_obj.detach(), se3_exp_map(obj_tform6_tmp.detach()))
 
@@ -702,7 +714,7 @@ class NeMo(OD3D_Method):
                                                                                        cam_intr4x4=batch.cam_intr4x4, #[:1],
                                                                                        cam_tform4x4_obj=batch.cam_tform4x4_obj, #[:1],
                                                                                        feats2d_net=feats2d_net, #[:1],
-                                                                                       categories_ids=pred_class_ids, #[:1],
+                                                                                       categories_ids=batch.label, #[:1],
                                                                                        feats2d_net_mask=feats2d_net_mask, #[:1],
                                                                                        multiview=True)
 
@@ -711,7 +723,7 @@ class NeMo(OD3D_Method):
             sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                      cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
                                                      cam_intr4x4=b_cams_multiview_intr4x4,
-                                                     categories_ids=pred_class_ids,
+                                                     categories_ids=batch.label,
                                                      broadcast_batch_and_cams=True,
                                                      feats2d_net_mask=feats2d_net_mask,
                                                      pre_rendered=False,
@@ -750,8 +762,9 @@ class NeMo(OD3D_Method):
             time_before_pose_iterative = time.time()
             obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
 
+            refine_update_max = self.refine_update_max[batch.label].clone()
+
             for epoch in range(self.config.inference.optimizer.epochs):
-                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
                 obj_tform6_tmp.data[:, :] = 0.
                 obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp))
@@ -759,7 +772,7 @@ class NeMo(OD3D_Method):
                 sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                                   cam_tform4x4_obj=tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front),
                                                                   cam_intr4x4=batch.cam_intr4x4,
-                                                                  categories_ids=pred_class_ids, return_sim_pxl=True,
+                                                                  categories_ids=batch.label, return_sim_pxl=True,
                                                                   broadcast_batch_and_cams=False,
                                                                   feats2d_net_mask=feats2d_net_mask, pre_rendered=False,
                                                                   only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
@@ -772,7 +785,7 @@ class NeMo(OD3D_Method):
                         blend_rgb(batch.rgb[0], (self.meshes.render_feats(cams_tform4x4_obj=tform4x4_broadcast(batch.cam_tform4x4_obj, obj_tform4x4_cuboid_front)[0:0 + 1],
                                                                           cams_intr4x4=batch.cam_intr4x4[0:0 + 1],
                                                                           imgs_sizes=batch.size,
-                                                                          meshes_ids=pred_class_ids[0:0 + 1],
+                                                                          meshes_ids=batch.label[0:0 + 1],
                                                                           modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[
                             0]).to(dtype=batch.rgb.dtype)), duration=1)
 
@@ -780,6 +793,13 @@ class NeMo(OD3D_Method):
                 loss.backward()
                 optim_inference.step()
                 optim_inference.zero_grad()
+
+                # detach update
+                obj_tform6_tmp.data[:, self.config.inference.refine.dims_detached] = 0.
+                # clip update
+                refine_update_mask = obj_tform6_tmp.data.abs() > refine_update_max
+                obj_tform6_tmp.data[refine_update_mask] = obj_tform6_tmp.data[refine_update_mask].sign() * refine_update_max[refine_update_mask]
+
 
             obj_tform4x4_cuboid_front = tform4x4(obj_tform4x4_cuboid_front.detach(), se3_exp_map(obj_tform6_tmp.detach()))
 
