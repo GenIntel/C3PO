@@ -1822,7 +1822,7 @@ class CO3D_Sequence():
         paths += glob(str(paths_mesh_feats))
         paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, '*', '*', '*', self.name_unique, '*')
         paths += glob(str(paths_dist_mesh_feats))
-        paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, '*', '*', '*', '*', '*', self.name_unique)
+        paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, '*', '*', '*', '*', self.name_unique)
         paths += glob(str(paths_dist_mesh_feats))
         paths_meshs = self.path_preprocess.joinpath('mesh', f'{self.pcl_source}', '*', self.category, self.name)
         paths += glob(str(paths_meshs))
@@ -1833,12 +1833,12 @@ class CO3D_Sequence():
     def remove_mesh_feats_preprocess_dependent_files(self):
         logger.info('removing mesh feats dependen files...')
         from glob import glob
-        paths = []
-        paths_mesh_feats = self.path_mesh_feats.joinpath(self.pcl_source, '*', '*', self.name_unique) #, 'mesh_feats.pt')
+        paths = [] # alpha500/M_dino_vits8_frozen_base_T_centerzoom512_R_acc
+        paths_mesh_feats = self.path_mesh_feats.joinpath(self.pcl_source, self.mesh_name, self.mesh_feats_type, self.name_unique) #, 'mesh_feats.pt')
         paths += glob(str(paths_mesh_feats))
-        paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, '*', '*', '*', self.name_unique, '*')
+        paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, self.mesh_name, self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, self.name_unique, '*')
         paths += glob(str(paths_dist_mesh_feats))
-        paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, '*', '*', '*', '*', '*', self.name_unique)
+        paths_dist_mesh_feats = self.path_dist_verts_mesh_feats.joinpath(self.pcl_source, self.mesh_name, self.mesh_feats_type, self.dist_verts_mesh_feats_reduce_type, '*', self.name_unique)
         paths += glob(str(paths_dist_mesh_feats))
         for path in paths:
             od3d.io.rm_dir(path)
