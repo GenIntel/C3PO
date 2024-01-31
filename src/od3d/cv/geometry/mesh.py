@@ -73,6 +73,7 @@ class Mesh:
 
 
     def write_to_file(self, fpath: Path):
+        logger.info(f'writing mesh to {fpath}')
         fpath.parent.mkdir(parents=True, exist_ok=True)
         save_ply(fpath, verts=self.verts, faces=self.faces)
     def verts_count(self):
