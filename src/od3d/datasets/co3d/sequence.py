@@ -1466,8 +1466,8 @@ class CO3D_Sequence():
 
 
     def preprocess_mesh(self, override=False):
-        if self.fpath_mesh.exists() and not override:
-            logger.warning(f'mesh already exists {self.fpath_mesh}')
+        if self.get_fpath_mesh_pcl().exists() and not override:
+            logger.warning(f'mesh already exists {self.get_fpath_mesh_pcl()}')
             return
         else:
             logger.info(f'preprocessing mesh for {self.name_unique} with type {self.mesh_name}')
@@ -1580,7 +1580,7 @@ class CO3D_Sequence():
         # show_scene(meshes=[obj_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj[::scams], cams_intr4x4=cams_intr4x4[::scams], cams_imgs=rgb[::scams])
         # ## DEBUG BLOCK END
 
-        obj_mesh.write_to_file(fpath=self.fpath_mesh)
+        obj_mesh.write_to_file(fpath=self.get_fpath_mesh_pcl())
 
 
     def get_pcl_clean_with_focus_point_and_plane_removal(self, pts3d, pts3d_colors, cams_tform4x4_obj, pts3d_count_min=10, return_mask=False):
@@ -2110,8 +2110,13 @@ class CO3D_Sequence():
         elif mesh_source == CUBOID_SOURCES.LABELED: # CAM_TFORM_OBJ_SOURCES.DROID_SLAM_LABELED:
             return self.fpath_obj_labeled_cuboid
         else:
-            return self.path_preprocess.joinpath('mesh', f'{self.pcl_source}', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
+            return self.get_fpath_mesh_pcl()
+            #return self.path_preprocess.joinpath('mesh', f'{self.pcl_source}', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
             #return self.path_preprocess.joinpath('mesh', f'{self.mesh_name}', self.category, self.name, f'mesh.ply')
+
+    def get_fpath_mesh_pcl(self):
+        return self.path_preprocess.joinpath('mesh', f'{self.pcl_source}', f'{self.mesh_name}', self.category,
+                                             self.name, f'mesh.ply')
 
     def get_mesh(self, mesh_source: CUBOID_SOURCES, add_rgb_from_pca=False, device='cpu'):
         fpath_mesh = self.get_fpath_mesh(mesh_source=mesh_source)
