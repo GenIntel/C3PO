@@ -15,7 +15,7 @@ metrics:
   - metricB
 
 
-train: True
+train: False
 test: True
 
 train_datasets:
@@ -30,7 +30,7 @@ val_datasets:
 
 test_datasets:
   pascal3d:
-    #subset_fraction: 0.01
+    subset_fraction: 1.
     categories: ${categories}
     #dict_nested_frames:
     #   val:
@@ -39,6 +39,17 @@ test_datasets:
 
 method:
   nemo:
+#    inference:
+#      pre_rendered: False
+#      sample:
+#        method: epnp3d2d # epnp3d2d uniform
+#        depth_from_box: False
+#      refine:
+#        enabled: True
+#        dims_detached: [ ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
+#
+#    checkpoint: ${platform.path_exps}/01-25_23-03-28_Pascal3D_NeMo_von_mises_fisher_normalize_verts_slurm/nemo.ckpt
+    # checkpoint: ${platform.path_exps}/12-08_10-37-47_Pascal3D_NeMo_epochs50_slurm/nemo.ckpt
     # checkpoint: ${platform.path_exps}/11-20_19-29-23_Pascal3D_NeMo_local/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
     train:
       val: True

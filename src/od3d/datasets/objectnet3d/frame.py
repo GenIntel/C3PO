@@ -1,10 +1,11 @@
 import logging
 logger = logging.getLogger(__name__)
 from dataclasses import dataclass
-from od3d.datasets.frame import OD3D_Frame, OD3D_FrameMeta, OD3D_FRAME_MODALITIES,\
+from od3d.datasets.frame_meta import OD3D_FrameMeta, \
     OD3D_FrameMetaMeshsMixin, OD3D_FrameMetaCategoriesMixin, OD3D_FrameMetaRGBMixin, \
     OD3D_FrameMetaSizeMixin, OD3D_FrameMetaBBoxsMixin, OD3D_FrameMetaSubsetMixin, \
     OD3D_FrameMetaCamTform4x4ObjsMixin, OD3D_FrameMetaCamIntr4x4Mixin
+from od3d.datasets.frame import OD3D_Frame, OD3D_FRAME_MODALITIES
 from od3d.datasets.pascal3d.frame import Pascal3DFrame
 from pathlib import Path
 import scipy.io

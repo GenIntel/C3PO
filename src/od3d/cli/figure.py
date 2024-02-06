@@ -1263,8 +1263,12 @@ def temp_weight_ablation():
     name_regex = '12-[12][90].*_CO3D_NeMo_Align3D_geo.*_slurm'
     name_regex = '01-1[89].*_CO3D_NeMo_Align3D_dino_vits8_acc_dist_appear_weight.*_slurm'
     name_regex = '01-1[89].*_CO3D_NeMo_Align3D_dinov2_vitb14_acc_dist_appear_weight.*_slurm'
+    name_regex = '01-22.*_CO3D_NeMo_Align3D_dinov2_vits14_no_norm.*_slurm'
+    name_regex = '01-22.*_CO3D_NeMo_Align3D_dino_vits8_no_norm.*_slurm'
+    name_regex = '01-2[23].*_CO3D_NeMo_Align3D_dinov2_vitb14_no_norm.*_slurm'
+    name_regex = '01-23.*_CO3D_NeMo_Align3D_dist_appear_weight.*_slurm'
 
-    piDiv = 6
+    piDiv = 6 # 6 18
 
     # align3d_1on1_name_partial = '.*_CO3D_NeMo_Align3D_cyclic_temp_.*_dist_appear_weight_.*_slurm'
 

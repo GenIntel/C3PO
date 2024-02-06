@@ -16,7 +16,7 @@ from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
 from od3d.cv.io import read_image, save_image_mask
 from od3d.cv.geometry.mesh import Mesh, Meshes
 
-from od3d.datasets.frame import OD3D_FrameMetaMaskMixin
+from od3d.datasets.frame_meta import OD3D_FrameMetaMaskMixin
 
 
 @dataclass

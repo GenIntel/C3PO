@@ -16,3 +16,5 @@ class OD3D_Head(nn.Module):
         self.normalize = config.normalize
         self.downsample_rate = None
 
+    def forward(self, x):
+        return x[-1]

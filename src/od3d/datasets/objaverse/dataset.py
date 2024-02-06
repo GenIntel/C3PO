@@ -4,8 +4,9 @@ import od3d.io
 
 logger = logging.getLogger(__name__)
 from od3d.datasets.dataset import OD3D_Dataset
-from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame, OD3D_FrameMeta, OD3D_FrameMetaRGBMixin, \
+from od3d.datasets.frame_meta import OD3D_FrameMeta, OD3D_FrameMetaRGBMixin, \
     OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaSizeMixin
+from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame
 #from od3d.datasets.objectnet3d.enum import OBJECTNET3D_CATEOGORIES
 from pathlib import Path
 from typing import List, Dict

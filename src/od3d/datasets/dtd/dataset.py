@@ -8,7 +8,8 @@ import od3d.io
 from pathlib import Path
 import scipy.io
 import torchvision.io
-from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_FrameMeta, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaSubsetMixin, OD3D_Frame
+from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame
+from od3d.datasets.frame_meta import OD3D_FrameMeta, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaSubsetMixin
 from typing import List, Dict
 from pathlib import Path
 import shutil

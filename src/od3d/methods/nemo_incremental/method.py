@@ -38,7 +38,7 @@ from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
-from od3d.datasets.frame import OD3D_Meta
+from od3d.datasets.meta import OD3D_Meta
 
 
 @dataclass

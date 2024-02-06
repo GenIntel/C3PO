@@ -36,8 +36,10 @@ class OD3D_Frames():
     kpts2d_annot_vsbl: None
     kpts_names: None
     kpts3d: None
+    rays_center3d: None
     bbox: None
     mesh: None
+
 
     @staticmethod
     def get_frames_from_list(frames: List[OD3D_Frame], modalities: List[OD3D_FRAME_MODALITIES], dtype, device):
@@ -57,6 +59,12 @@ class OD3D_Frames():
             cam_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0) # .to(device=device)
         else:
             cam_intr4x4 = None
+
+        if OD3D_FRAME_MODALITIES.RAYS_CENTER3D in modalities:
+            rays_center3d = torch.stack([frame.rays_center3d for frame in frames], dim=0)
+        else:
+            rays_center3d = None
+
         if OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ in modalities:
             cam_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0) #.to(device=device)
         else:
@@ -137,7 +145,7 @@ class OD3D_Frames():
         return OD3D_Frames(modalities=modalities, length=length, name=name, name_unique=name_unique, dtype=dtype, device=device, item_id=item_id,
                            path_co3d=path_co3d, size=size, cam_intr4x4=cam_intr4x4, cam_tform4x4_obj=cam_tform4x4_obj,
                            category=category, categories=categories, label=label, sequence_name=sequence_name,
-                           rgb=rgb, depth=depth, mesh=mesh,
+                           rgb=rgb, depth=depth, mesh=mesh, rays_center3d=rays_center3d,
                            mask=mask, depth_mask=depth_mask, kpts2d_annot=kpts2d_annot,
                            kpts2d_annot_vsbl=kpts2d_annot_vsbl, kpts_names=kpts_names, kpts3d=kpts3d, bbox = bbox, sequence=sequence, mask_rgb=mask_rgb)
 
@@ -159,7 +167,8 @@ class OD3D_Frames():
                            kpts_names=self.kpts_names[items] if self.kpts_names is not None else None,
                            kpts3d=self.kpts3d[items] if self.kpts3d is not None else None,
                            bbox =self.bbox[items] if self.bbox is not None else None,
-                           sequence=[self.sequence[item] for item in items] if self.sequence is not None else None)
+                           rays_center3d=self.rays_center3d[items] if self.rays_center3d is not None else None,
+                           sequence=[self.sequence[item] for item in items] if self.sequence is not None else None,)
 
     @property
     def cam_proj4x4_obj(self):

@@ -212,6 +212,11 @@ class OD3D_Dataset(Dataset):
     @staticmethod
     def extract_meta(config: DictConfig):
         raise NotImplementedError
+
+    @staticmethod
+    def record_video(config: DictConfig):
+        raise NotImplementedError
+
     def preprocess(self, config_preprocess: DictConfig):
         raise NotImplementedError
 

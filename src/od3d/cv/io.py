@@ -105,3 +105,33 @@ def image_as_wandb_image(img, caption="Caption Blub"):
         caption=caption
     )
     return img
+
+
+def extract_frames_from_video(fpath_video: Path, path_frames: Path, fps=5):
+    import cv2
+    import time
+
+    vidcap = cv2.VideoCapture(str(fpath_video))
+    vid_fps = vidcap.get(cv2.CAP_PROP_FPS)
+
+    #vidcap.set(cv2.CAP_PROP_FPS, fps)
+    # delete all files in directory path_frmaes
+    from od3d.io import rm_dir
+    rm_dir(path_frames)
+    path_frames.mkdir(parents=True, exist_ok=True)
+
+    #if not path_frames.exists():
+
+    success, image = vidcap.read()
+    count_cap = 0
+    count_store = 0
+    while success:
+        if count_cap % int(vid_fps / fps) == 0:
+            count_store += 1
+            cv2.imwrite(str(path_frames.joinpath(f"frame_{count_store}.jpg")), image)  # save frame as JPEG file
+        #print('Read a new frame: ', success)
+        success, image = vidcap.read()
+        count_cap += 1
+        cv2.waitKey(1)
+
+

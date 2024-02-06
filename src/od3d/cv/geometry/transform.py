@@ -15,6 +15,10 @@ def so3_exp_map(so3_log:torch.Tensor):
 
     return so3_3x3
 
+def so3_exp_map_tform4x4(so3_log:torch.Tensor):
+    so3_3x3 = so3_exp_map(so3_log)
+    return transf4x4_from_rot3x3(so3_3x3)
+
 def rot6d_to_rot3x3(rot6d: torch.Tensor):
     rot6d_shape = rot6d.shape
     _rot3x3 = rotation_6d_to_matrix(rot6d.reshape(-1, 6))

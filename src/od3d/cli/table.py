@@ -309,10 +309,12 @@ def pose_categories(
         dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
         metric: str = typer.Option('pi6', '-m', '--metric'),
         name_regex: str = typer.Option('CO3D_NeMo', '-n', '--name'),
-        age_in_hours: int = typer.Option(24, '-h', '--hours')):
+        age_in_hours: int = typer.Option(48, '-h', '--hours')):
 
     metric = 'pi6' # 'pi6', 'pi12', 'pi18',
-    dataset = 'co3d_20' # 'pascal3d' 'co3d_20' 'co3d_28' 'objectnet3d'
+    datasets = ['objectnet3d', 'pascal3d', 'co3d_20'] # 'pascal3d' 'co3d_20' 'co3d_28' 'objectnet3d'
+    #datasets = ['co3d_28'] # 'pascal3d' 'co3d_20' 'co3d_28' 'objectnet3d'
+
     # tablefmt 'latex', 'plain', 'tsv',
     tablefmt = 'tsv'
 
@@ -321,9 +323,24 @@ def pose_categories(
     name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_slurm'
 
     name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_uniform_refine3d_slurm'
+    name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_slurm'
+    # name_regex = f'.*_CO3D_NeMo_uniform_refine3d_cat1_([a-z]*)_ref([0-9]*)_slurm'
+    name_regex = f'.*_CO3D_NeMo_seqs5_epochs20_cat1_([a-z]*)_ref([0-9]*)_slurm'
+    name_regex = f'.*_CO3D_NeMo_seqs5_epochs20_cat1_([a-z]*)_ref([0-9]*)_slurm'
+
     #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_epnp_refine6d_slurm'
     #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_epnp_refine6d_only_rendered_no_clutter_mesh_slurm'
-    #name_regex = f'.*_CO3D_NeMo_cat1_([a-z]*)_ref([0-9]*)_epnp_refine6d_no_clutter_slurm'
+
+    name_regex = f'.*_CO3D_Regression_cat1_([a-z]*)_ref([0-9]*)_slurm'
+
+    #name_regex = f'.*_CO3D_NeMo_epnp_refine6d_cat1_([a-z]*)_ref([0-9]*)_slurm'
+    name_regex = f'.*_CO3D_NeMo_gaussian_cat1_([a-z]*)_ref([0-9]*)_slurm'
+    # 01-29_10-20-46_CO3D_NeMo_vMF_normalize_verts_cat1_hydrant_ref1_slurm
+
+    name_regex = f'.*_CO3D_NeMo_vMF_normalize_cat1_([a-z]*)_ref([0-9]*)_slurm'
+    name_regex = f'.*_CO3D_NeMo_vMF_normalize_verts_cat1_([a-z]*)_ref([0-9]*)_slurm'
+    # name_regex = f'.*_CO3D_NeMo_vMF_normalize_img_cat1_([a-z]*)_ref([0-9]*)_slurm'
+    # name_regex = f'.*_CO3D_NeMo_vMF_normalize_cat1_([a-z]*)_ref([0-9]*)_slurm'
 
 
     # cat1_hairdryer_ref0_epnp_refine6d_no_clutter_slurm
@@ -345,42 +362,42 @@ def pose_categories(
     #name_regex = '11-14_22-57-20_CO3D_NeMo_Align3D_slurm' # ours 10 to 5
     # name_regex = '11-12_21-21-36_CO3D_ZSP_cross_pascal3d_objectnet3d_local'
     # name_regex = '11-14_23-34-48_CO3D_ZSP_cross_pascal3d_objectnet3d_local'
+    for dataset in datasets:
+        if 'cat1' in name_regex:
+            MAP_DATASET_TO_METRIC = {
+                DATASET_PASCAL3D: f'test/pascal3d_test/pose/acc_{metric}',
+                DATASET_OBJECTNET3D: f'test/objectnet3d_test/pose/acc_{metric}',
+                DATASET_CO3D_28: f'test/co3d_no_zsp_5s_labeled_ref/pose/acc_{metric}',
+                DATASET_CO3D_20: f'test/co3dv1_10s_zsp_labeled_cuboid_ref/pose/acc_{metric}'
+            }
+            metrics_scales = [100]
+            metrics = [MAP_DATASET_TO_METRIC[dataset]]
+            metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales,
+                                                                     age_in_hours=age_in_hours, name_regex=name_regex)
+        else:
+            MAP_DATASET_TO_METRIC = {
+                DATASET_PASCAL3D: f'test/pascal3d_test/pose/prefix/CATEGORY_acc_{metric}',
+                DATASET_OBJECTNET3D: f'test/objectnet3d_test/pose/prefix/CATEGORY_acc_{metric}',
+                DATASET_CO3D_28: f'pose/prefix/CATEGORY_acc_{metric}',
+                DATASET_CO3D_20: f'pose/prefix/CATEGORY_acc_{metric}',
+            }
 
-    if 'cat1' in name_regex:
-        MAP_DATASET_TO_METRIC = {
-            DATASET_PASCAL3D: f'test/pascal3d_test/pose/acc_{metric}',
-            DATASET_OBJECTNET3D: f'test/objectnet3d_test/pose/acc_{metric}',
-            DATASET_CO3D_28: f'test/co3d_no_zsp_5s_labeled_ref/pose/acc_{metric}',
-            DATASET_CO3D_20: f'test/co3dv1_10s_zsp_labeled_cuboid_ref/pose/acc_{metric}'
-        }
-        metrics_scales = [100]
-        metrics = [MAP_DATASET_TO_METRIC[dataset]]
-        metrics_dfs = get_categorical_results_from_multiple_runs(metrics=metrics, metrics_scales=metrics_scales,
-                                                                 age_in_hours=age_in_hours, name_regex=name_regex)
-    else:
-        MAP_DATASET_TO_METRIC = {
-            DATASET_PASCAL3D: f'test/pascal3d_test/pose/prefix/CATEGORY_acc_{metric}',
-            DATASET_OBJECTNET3D: f'test/objectnet3d_test/pose/prefix/CATEGORY_acc_{metric}',
-            DATASET_CO3D_28: f'pose/prefix/CATEGORY_acc_{metric}',
-            DATASET_CO3D_20: f'pose/prefix/CATEGORY_acc_{metric}',
-        }
+            MAP_DATASET_TO_CATEGORIES = {
+                DATASET_PASCAL3D: TABLE_CATEGORIES_PASCAL3D[:-1],
+                DATASET_OBJECTNET3D: TABLE_CATEGORIES_OBJECTNET3D_20[:-1],
+                DATASET_CO3D_28: TABLE_CATEGORIES_CO3D_28[:-1],
+                DATASET_CO3D_20:  TABLE_CATEGORIES_CO3D_20[:-1],
+            }
 
-        MAP_DATASET_TO_CATEGORIES = {
-            DATASET_PASCAL3D: TABLE_CATEGORIES_PASCAL3D[:-1],
-            DATASET_OBJECTNET3D: TABLE_CATEGORIES_OBJECTNET3D_20[:-1],
-            DATASET_CO3D_28: TABLE_CATEGORIES_CO3D_28[:-1],
-            DATASET_CO3D_20:  TABLE_CATEGORIES_CO3D_20[:-1],
-        }
+            metrics_scales = [100]
+            metrics = [MAP_DATASET_TO_METRIC[dataset]]
+            categories = MAP_DATASET_TO_CATEGORIES[dataset]
 
-        metrics_scales = [100]
-        metrics = [MAP_DATASET_TO_METRIC[dataset]]
-        categories = MAP_DATASET_TO_CATEGORIES[dataset]
+            metrics_dfs = get_categorical_results_from_single_runs(metrics_templates=metrics, categories=categories,
+                                                                   age_in_hours=age_in_hours, name_regex=name_regex,
+                                                                   metrics_scales=metrics_scales)
 
-        metrics_dfs = get_categorical_results_from_single_runs(metrics_templates=metrics, categories=categories,
-                                                               age_in_hours=age_in_hours, name_regex=name_regex,
-                                                               metrics_scales=metrics_scales)
-
-    tabulate_metrics_for_dataset(metrics_dfs=metrics_dfs, datasets=[dataset], digits=1, tablefmt=tablefmt)
+        tabulate_metrics_for_dataset(metrics_dfs=metrics_dfs, datasets=[dataset], digits=1, tablefmt=tablefmt)
 
 
 

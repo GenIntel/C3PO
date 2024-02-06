@@ -20,7 +20,7 @@ from pygit2 import Repository
 
 from tabulate import tabulate
 import re
-from od3d.datasets.frame import OD3D_Meta
+from od3d.datasets.meta import OD3D_Meta
 import od3d.io
 
 import seaborn as sns
@@ -524,7 +524,8 @@ def table_multiview():
 @app.command()
 def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         ablation: str = typer.Option(None, '-a', '--ablation'),
-        platform: str = typer.Option('local', '-p', '--platform')):
+        platform: str = typer.Option('local', '-p', '--platform'),
+        sleep_in_mins: int = typer.Option(60, '-s', '--sleep')):
     logging.basicConfig(level=logging.INFO)
 
     file_fpath = Path(__file__).parent.resolve()
@@ -605,7 +606,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
             bench_single_method_slurm(method_cfg)
 
             if (i+1) % 40 == 0:
-                time.sleep(60 * 60)
+                time.sleep(sleep_in_mins * 60)
 
         time.sleep(10)
 

@@ -1,0 +1,63 @@
+import logging
+logger = logging.getLogger(__name__)
+from od3d.datasets.meta import OD3D_Meta
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
+import torch
+from enum import Enum
+
+@dataclass
+class OD3D_Object(ABC):
+    name_unique: str
+    path_raw: Path
+    path_preprocess: Path
+    meta_type = OD3D_Meta
+    @property
+    def meta(self):
+        return self.meta_type.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.name_unique)
+
+    @property
+    def name(self):
+        return self.meta.name
+
+    @property
+    def path_meta(self):
+        return self.path_preprocess.joinpath("meta")
+
+class OD3D_CAM_TFORM_OBJ_TYPES(str, Enum):
+    META = 'meta'
+    SFM = 'sfm'
+
+class OD3D_FRAME_MASK_TYPES(str, Enum):
+    META = 'meta'
+    SAM = 'sam'
+    SAM_SFM_RAYS_CENTER3D = 'sam_sfm_rays_center3d'
+
+class OD3D_MESH_TYPES(str, Enum):
+    META = 'meta'
+    CONVEX500 = 'convex500'
+    ALPHA500 = 'alpha500'
+
+
+class OD3D_SEQUENCE_SFM_TYPES(str, Enum):
+    META = 'meta'
+    DROID = 'droid'
+    COLMAP = 'colmap'
+
+# note these classes can be inherited by frame and sequence classes
+@dataclass
+class OD3D_CamTform4x4ObjTypeMixin(OD3D_Object):
+    cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES #  = OD3D_CAM_TFORM_OBJ_TYPES.META
+
+@dataclass
+class OD3D_MaskTypeMixin(OD3D_Object):
+    mask_type: OD3D_FRAME_MASK_TYPES #  = OD3D_FRAME_MASK_TYPES.META
+
+@dataclass
+class OD3D_MeshTypeMixin(OD3D_Object):
+    mesh_type: OD3D_MESH_TYPES
+
+@dataclass
+class OD3D_SequenceSfMTypeMixin(OD3D_Object):
+    sfm_type: OD3D_SEQUENCE_SFM_TYPES # = OD3D_SEQUENCE_SFM_TYPES.DROID

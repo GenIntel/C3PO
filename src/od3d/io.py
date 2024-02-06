@@ -63,6 +63,7 @@ def move_dir(src: Path, dst: Path):
 def rm_dir(path: Path):
     try:
         logger.info(f'removing directory {path}')
+        path.unlink()
         shutil.rmtree(path)
     except Exception as e:
         logger.warning(e)

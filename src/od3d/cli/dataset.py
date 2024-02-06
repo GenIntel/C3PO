@@ -72,6 +72,14 @@ def preprocess(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
 
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
 
+# @app.command()
+# def record_video(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
+#                  platform: str = typer.Option('local', '-p', '--platform')):
+#     logging.basicConfig(level=logging.INFO)
+#     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+#     OD3D_Dataset.subclasses[config.dataset.class_name].record_video(config.dataset)
+
+
 @app.command()
 def extract_meta(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
                  platform: str = typer.Option('local', '-p', '--platform'),
@@ -243,9 +251,9 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     #for seq in sequences:
     #    logger.info(seq.name_unique)
     #    seq.show(show_imgs=True)
-    #dataset.transform = OD3D_Transform.create_by_name('centerzoom512')
+    dataset.transform = OD3D_Transform.create_by_name('centerzoom512')
     # dataset.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
-    dataset.transform = OD3D_Transform.create_by_name('scale_mask_shorter_1_centerzoom512')
+    #dataset.transform = OD3D_Transform.create_by_name('scale_mask_shorter_1_centerzoom512')
 
     #dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom224')
     #dataset.transform = OD3D_Transform.create_by_name('scalemask1_centerzoom896')

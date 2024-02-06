@@ -22,7 +22,7 @@ from typing import List
 import numpy as np
 from od3d.datasets.co3d.enum import CO3D_FRAME_TYPES, PCL_SOURCES
 
-from od3d.datasets.frame import OD3D_FrameMeta, \
+from od3d.datasets.frame_meta import OD3D_FrameMeta, \
     OD3D_FrameMetaSequenceMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
     OD3D_FrameMetaSizeMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaDepthMixin, OD3D_FrameMetaDepthMaskMixin, \
     OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4Mixin

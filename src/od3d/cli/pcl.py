@@ -1,4 +1,5 @@
-
+import logging
+logger = logging.getLogger(__name__)
 import typer
 from od3d.cv.io import load_ply
 from od3d.cv.geometry.mesh import Meshes
@@ -27,6 +28,15 @@ def show_shapenet():
     lights = PointLights(location=torch.tensor([0.0, 1.0, -2.0], device=device)[None], device=device)
 
     Meshes()
+
+@app.command()
+def show_pts():
+    from pathlib import Path
+    from od3d.cv.io import read_pts3d, read_pts3d_colors, read_pts3d_with_colors_and_normals
+    fpath = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB_Preprocess/droid_slam/elephant/24_01_29__18_10/pcl_clean.ply')
+
+    pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(fpath)
+    show.show_scene(pts3d=[pts3d], pts3d_colors=[pts3d_colors], pts3d_normals=[pts3d_normals])
 
 @app.command()
 def show_scene():
@@ -73,10 +83,12 @@ def show_open3d():
     fpath = '/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/latest_50s_to_5s_mesh/r0/mesh/car/mesh.ply'
     fpath = '/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/aligned/all_20s_to_5s_mesh/r0/mesh/car/mesh.ply'
 
-    # fpath = "/scratch/sommerl/repos/NeMo/third_party/AutoReconoutputs/neusfacto-wbg-reg_sep-plane-nerf_60k_plane-h-ratio-0.3_co3d-scan1_cvpr/neus-facto-wbg-reg_sep-plane-nerf/2023-09-20_211422/extracted_mesh_res-512_max-component.ply"
-    #pcd = o3d.io.read_point_cloud(fpath)
-    mesh = o3d.io.read_triangle_mesh(fpath)
+    from od3d.cv.io import read_pts3d
+    pts3d = read_pts3d(fpath)
+    from kaolin.ops.conversions import pointclouds_to_voxelgrids, voxelgrids_to_trianglemeshes
 
+    # BxNx3
+    mesh = voxelgrids_to_trianglemeshes(pointclouds_to_voxelgrids(pointclouds=pts3d[None,].cuda(), resolution=256))
     #print(pcd)
     print(mesh.is_watertight())
     print(mesh)

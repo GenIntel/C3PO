@@ -25,6 +25,7 @@ dependencies = [
     "pytorch3d@git+https://github.com/facebookresearch/pytorch3d@stable",
     "nvdiffrast@git+https://github.com/NVlabs/nvdiffrast",
     "diff-gaussian-rasterization@git+https://github.com/limpbot/diff-gaussian-rasterization.git",
+    "segment-anything@git+https://github.com/facebookresearch/segment-anything.git",
     "visdom",
     "tqdm",
     "requests",

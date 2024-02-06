@@ -133,6 +133,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                pts3d: Union[torch.Tensor, List[torch.Tensor]]=None,
                pts3d_names: List[str]=None,
                pts3d_colors: Union[torch.Tensor, List]=None,
+               pts3d_normals: Union[torch.Tensor, List] = None,
                lines3d: Union[torch.Tensor, List[torch.Tensor]] = None,
                lines3d_names: List[str] = None,
                lines3d_colors: Union[torch.Tensor, List] = None,
@@ -298,6 +299,9 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 x_offset += x_offset_delta_next
             pts3d_i_o3d.points = open3d.utility.Vector3dVector(_pts3d_i.detach().cpu().numpy())
 
+            if pts3d_normals is not None and len(pts3d_normals) >= i+1 and pts3d_normals[i] is not None:
+                pts3d_i_o3d.normals = open3d.utility.Vector3dVector(pts3d_normals[i].detach().cpu().numpy())
+
             if pts3d_colors is not None and len(pts3d_colors) >= i+1 and pts3d_colors[i] is not None:
                 pts3d_i_color = pts3d_colors[i]
             else:
@@ -326,9 +330,13 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
 
     if return_visualization is False and fpath is None:
         if os.environ.get('DISPLAY'):
+            # advantage: transparent
             open3d.visualization.draw(geometries, show_skybox=False, bg_color=[1., 1., 1., 1.], raw_mode=True)
-            #geometries_list = [geometry['geometry'] for geometry in geometries]
-            #open3d.visualization.draw_plotly(geometries_list, mesh_show_wireframe=False)
+
+            # advantage: normals shown
+            # open3d.visualization.draw_geometries( [geometry['geometry'] for geometry in geometries])
+
+
         else:
             logger.warning('could not visualize with open3d, because env DISPLAY not set, try `export DISPLAY=:0.0;`')
             return

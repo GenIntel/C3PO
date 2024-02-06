@@ -1,19 +1,20 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from pathlib import Path
 import torch
-from omegaconf import OmegaConf, DictConfig
 from od3d.cv.geometry.transform import tform4x4
 from od3d.cv.io import read_image
 import torchvision
 from dataclasses import dataclass
-from typing import List, Union, Dict
+from typing import List, Union
 from enum import Enum
-from abc import ABC, abstractmethod
 from od3d.cv.geometry.mesh import Mesh
-from od3d.data.ext_dicts import unroll_nested_dict, rollup_flattened_dict
-import re
+from od3d.datasets.object import OD3D_Object, OD3D_CamTform4x4ObjTypeMixin, OD3D_MaskTypeMixin, OD3D_MeshTypeMixin, \
+    OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_FRAME_MASK_TYPES
+from od3d.datasets.frame_meta import OD3D_FrameMeta
+from pathlib import Path
+
+# from od3d.datasets.sequence import OD3D_Sequence
 
 class OD3D_FRAME_MODALITIES(str, Enum):
     NAME = 'name'
@@ -36,359 +37,84 @@ class OD3D_FRAME_MODALITIES(str, Enum):
     CUBOID_FRONT_TFORM4x4_OBJ = 'cuboid_front_tform4x4_obj'
     SEQUENCE_NAME = 'sequence_name'
     SEQUENCE = 'sequence'
+    RAYS_CENTER3D = 'rays_center3d'
 
-
-@dataclass
-class OD3D_FrameMetaBBoxMixin():
-    # x0, y0, x1, y1
-    l_bbox: List[float]
-    @property
-    def bbox(self):
-        return torch.Tensor(self.l_bbox)
+class OD3D_FRAME_KPTS2D_ANNOT_TYPES(str, Enum):
+    META = 'meta'
+    LABEL = 'label'
 
 @dataclass
-class OD3D_FrameMetaBBoxsMixin():
-    l_bboxs: List[List[float]]
-    @property
-    def bboxs(self):
-        return torch.Tensor(self.l_bboxs)
+class OD3D_Frame(OD3D_Object):
+    meta_type = OD3D_FrameMeta
 
-    @property
-    def bbox(self):
-        return self.bboxs[0]
+    #@property
+    #def meta(self):
+    #    return OD3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.name_unique)
 
-@dataclass
-class OD3D_FrameKPTS2D3DMixin():
-    l_kpts2d_annot: List[List[float]]
-    l_kpts2d_annot_vsbl: List[bool]
-    l_kpts3d: List[List[float]]
-    kpts_names: List[str]
 
-    @property
-    def kpts2d_annot(self):
-        return torch.Tensor(self.l_kpts2d_annot)
-    @property
-    def kpts2d_annot_vsbl(self):
-        return torch.Tensor(self.l_kpts2d_annot_vsbl).to(dtype=bool)
-    @property
-    def kpts3d(self):
-        return torch.Tensor(self.l_kpts3d)
-
-@dataclass
-class OD3D_FrameMetaSubsetMixin:
-    subset: str
+    # pass
+    # def __init__(self, path_raw: Path, path_preprocess: Path, name_unique: Path, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
+    #     self.path_raw: Path = path_raw
+    #     self.path_preprocess: Path = path_preprocess
+    #     self.all_categories = categories
+    #     self.name_unique = name_unique
+        # self.modalities = modalities
+        #self.meta: OD3D_FrameMetaClasses = meta
+        # self.path_meta: Path = path_meta
+        # #self.category_id = categories.index(self.category)
+        # self.item_id = None
+        # self._rgb = None
+        # self._depth = None
+        # self._depth_mask = None
+        # self._kpts2d_orient = None
+        # self._mesh = None
+        # self._kpts3d = None
 
 @dataclass
-class OD3D_FrameMetaMeshMixin():
-    rfpath_mesh: Path
-
-@dataclass
-class OD3D_FrameMetaMeshsMixin():
-    rfpaths_meshs: List[Path]
+class OD3D_FrameMaskMixin(OD3D_MaskTypeMixin):
+    _mask = None
 
     @property
-    def rfpath_mesh(self):
-        return self.rfpaths_meshs[0]
+    def fpath_mask(self):
+        if self.mask_type == OD3D_FRAME_MASK_TYPES.META:
+            return self.path_raw.joinpath(self.meta.rfpath_mask)
+        else:
+            return self.path_preprocess.joinpath("mask", f"{self.mask_type}", f"{self.name_unique}.png")
 
-@dataclass
-class OD3D_FrameMetaSequenceMixin():
-    sequence_name: str
+    def write_mask(self, value: torch.Tensor):
+        if self.fpath_mask.parent.exists() is False:
+            self.fpath_mask.parent.mkdir(parents=True, exist_ok=True)
+        if value.dtype == torch.bool:
+            value_write = value.to(torch.uint8).detach().cpu() * 255
+        elif value.dtype == torch.uint8:
+            value_write = value.detach().cpu()
+        else:
+            value_write = (value * 255).to(torch.uint8).detach().cpu()
+        torchvision.io.write_png(input=value_write, filename=str(self.fpath_mask))
+        self._mask = value
 
-@dataclass
-class OD3D_FrameMetaCategoryMixin():
-    category: str
-
-@dataclass
-class OD3D_FrameMetaCategoriesMixin:
-    categories: List[str]
-
-    @property
-    def category(self):
-        return self.categories[0]
-
-@dataclass
-class OD3D_FrameMetaCamIntr4x4Mixin:
-    l_cam_intr4x4: List[List[float]]  # torch.Tensor
-
-    @property
-    def cam_intr4x4(self):
-        return torch.Tensor(self.l_cam_intr4x4)
-
-@dataclass
-class OD3D_FrameMetaCamTform4x4ObjMixin:
-    l_cam_tform4x4_obj: List[List[float]]  # torch.Tensor
+    def get_mask(self):
+        if self._mask is None:
+            self._mask = read_image(self.fpath_mask) / 255.
+        return self._mask
 
     @property
-    def cam_tform4x4_obj(self):
-        return torch.Tensor(self.l_cam_tform4x4_obj)
+    def mask(self):
+        return self._mask
+
+    @mask.setter
+    def mask(self, value: torch.Tensor):
+            self._mask = value
 
 @dataclass
-class OD3D_FrameMetaCamTform4x4ObjsMixin:
-    l_cam_tform4x4_objs: List[List[List[float]]]  # torch.Tensor
-
-    @property
-    def cam_tform4x4_objs(self):
-        return torch.Tensor(self.l_cam_tform4x4_objs)
-
-    @property
-    def cam_tform4x4_obj(self):
-        return self.cam_tform4x4_objs[0]
-
-@dataclass
-class OD3D_FrameMetaSizeMixin:
-    l_size: List[float] # torch.Tensor
-    @property
-    def size(self):
-        return torch.Tensor(self.l_size)
-    @property
-    def H(self):
-        return self.size[0]
-    @property
-    def W(self):
-        return self.size[1]
-
-@dataclass
-class OD3D_FrameMetaRGBMixin:
-    rfpath_rgb: Path
-
-@dataclass
-class OD3D_FrameMetaMaskMixin:
-    rfpath_mask: Path
-
-@dataclass
-class OD3D_FrameMetaMasksMixin():
-    rfpaths_masks: List[Path]
-
-    @property
-    def rfpaths_mask(self):
-        return self.rfpaths_masks[0]
-
-@dataclass
-class OD3D_FrameMetaDepthMixin:
-    rfpath_depth: Path
-
-@dataclass
-class OD3D_FrameMetaDepthMaskMixin:
-    rfpath_depth_mask: Path
-
-@dataclass
-class OD3D_FrameMetaPCLMixin:
-    rfpath_pcl: Path
-
-@dataclass
-class OD3D_Meta(ABC):
-    name: str
-
-    # @staticmethod
-    # @abstractmethod
-    @classmethod
-    def load_from_meta_with_rfpath(cls, path_meta: Path, rfpath: Path):
-        return cls(**cls.load_omega_conf_with_rfpath(path_meta=path_meta, rfpath=rfpath))
-        # raise NotImplementedError
-        # each subclass must implement this function with
-        #   SUBCLASS(**SUBCLASS.load_omega_conf_with_rfpath(path_meta=path_meta, rfpath=rfpath))
-
-    # @staticmethod
-    @classmethod
-    def load_from_meta_with_name_unique(cls, path_meta: Path, name_unique: str):
-        rfpath = cls.get_rfpath_from_name_unique(name_unique=name_unique)
-        return cls.load_from_meta_with_rfpath(path_meta=path_meta, rfpath=rfpath)
-
-    @staticmethod
-    @abstractmethod
-    def load_from_raw(**kwargs):
-        raise NotImplementedError
-
-    @property
-    def name_unique(self):
-        return self.name
-
-    @classmethod
-    def get_rfpath_from_name_unique(cls, name_unique: str):
-        return cls.get_rfpath_metas().joinpath(Path(f'{name_unique}.yaml'))
-
-    @classmethod
-    def get_rfpath_metas(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def get_path_metas(cls, path_meta: Path):
-        return path_meta.joinpath(cls.get_rfpath_metas())
-
-    @staticmethod
-    def atoi(text):
-        return int(text) if text.isdigit() else text
-
-    @classmethod
-    def complete_nested_metas(cls, path_meta: Path, dict_nested_metas: Union[Dict, DictConfig, None], parent_key='', separator='/', dict_nested_metas_ban: Union[Dict, DictConfig, None]=None):
-        if dict_nested_metas is None:
-            dict_nested_metas = {'': None}
-            if dict_nested_metas_ban is not None:
-                dict_nested_metas_ban = {'': dict_nested_metas_ban}
-
-        dict_nested_frames_completed = {}
-
-        for key, value in dict_nested_metas.items():
-            new_key = f"{parent_key}{separator}{key}" if parent_key else key
-            if value is None:
-                dir_fpaths = list(
-                    cls.get_path_metas(path_meta=path_meta).joinpath(new_key).iterdir())
-                if dir_fpaths[0].is_dir():
-                    if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
-                        dict_nested_frames_completed[key] = \
-                            cls.complete_nested_metas(path_meta=path_meta, parent_key=new_key,
-                                                      dict_nested_metas={f'{dir_fpath.stem}': None
-                                                                          for dir_fpath in dir_fpaths})
-                    elif dict_nested_metas_ban[key] is not None:
-                        dict_nested_frames_completed[key] = \
-                            cls.complete_nested_metas(path_meta=path_meta, parent_key=new_key,
-                                                      dict_nested_metas={f'{dir_fpath.stem}': None
-                                                                         for dir_fpath in dir_fpaths},
-                                                      dict_nested_metas_ban=dict_nested_metas_ban[key])
-                    else:
-                        pass
-                else:
-                    if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
-                        dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in sorted(dir_fpaths, key=lambda f: [OD3D_Meta.atoi(val) for val in re.split(r'(\d+)', f.stem)])]
-                    elif dict_nested_metas_ban[key] is not None:
-                        dict_nested_frames_completed[key] = [dir_fpath.stem for dir_fpath in sorted(dir_fpaths, key=lambda f: [OD3D_Meta.atoi(val) for val in re.split(r'(\d+)', f.stem)]) if dir_fpath.stem not in dict_nested_metas_ban[key]]
-                    else:
-                        pass
-            elif isinstance(value,  Dict) or isinstance(value, DictConfig):
-                if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
-                    dict_nested_frames_completed[key] = cls.complete_nested_metas(path_meta=path_meta,
-                                                                                  parent_key=new_key,
-                                                                                  dict_nested_metas=value)
-                elif dict_nested_metas_ban[key] is not None:
-                    dict_nested_frames_completed[key] = cls.complete_nested_metas(path_meta=path_meta,
-                                                                                  parent_key=new_key,
-                                                                                  dict_nested_metas=value,
-                                                                                  dict_nested_metas_ban=dict_nested_metas_ban[key])
-                else:
-                    pass
-            else:
-                if dict_nested_metas_ban is None or key not in dict_nested_metas_ban:
-                    dict_nested_frames_completed[key] = value
-                elif dict_nested_metas_ban[key] is not None:
-                    dict_nested_frames_completed[key] = [val for val in value if val not in dict_nested_metas_ban[key]]
-                else:
-                    pass
-
-        if len(dict_nested_frames_completed.keys()) == 1 and '' in dict_nested_frames_completed.keys():
-            dict_nested_frames_completed = dict_nested_frames_completed['']
-        return dict_nested_frames_completed
-
-    @property
-    def rfpath(self):
-        return self.get_rfpath_from_name_unique(self.name_unique)
-
-    @staticmethod
-    def unroll_nested_metas(dict_nested_meta: Dict, separator='/'):
-        dict_frames = unroll_nested_dict(dict_nested_meta, separator=separator)
-        list_frames_names_unique = []
-        for key, frames_names in dict_frames.items():
-            for frame_name in frames_names:
-                frame_name_unique = f"{key}{separator}{frame_name}" if key else frame_name
-                list_frames_names_unique.append(frame_name_unique)
-        return list_frames_names_unique
-
-    @staticmethod
-    def rollup_flattened_frames(list_meta_names_unique: List):
-        dict_frames = {}
-        for frame_name_unique in list_meta_names_unique:
-            frame_name_unique_split = frame_name_unique.split('/')
-            key = '/'.join(frame_name_unique_split[:-1])
-            if key not in dict_frames.keys():
-                dict_frames[key] = []
-            frame_name = frame_name_unique_split[-1]
-            dict_frames[key].append(frame_name)
-        return rollup_flattened_dict(flattened_dict=dict_frames)
-
-    def get_fpath(self, path_meta: Path):
-        return path_meta.joinpath(self.rfpath)
-
-    @staticmethod
-    def load_omega_conf_with_rfpath(path_meta: Path, rfpath: Path):
-        fpath_meta = path_meta.joinpath(rfpath)
-        if not fpath_meta.exists():
-            logger.error(f'Missing meta fpath {fpath_meta}. Preprocess meta before.')
-        return OmegaConf.load(fpath_meta)
-
-    def save(self, path_meta):
-        frame_meta_fpath = self.get_fpath(path_meta=path_meta)
-        frame_meta_config = OmegaConf.structured(self)
-        if not frame_meta_fpath.parent.exists():
-            frame_meta_fpath.parent.mkdir(parents=True)
-        OmegaConf.save(frame_meta_config, frame_meta_fpath, resolve=True)
-@dataclass
-class OD3D_FrameMeta(OD3D_Meta):
-    @classmethod
-    def get_rfpath_metas(cls):
-        return Path("frames")
-
-@dataclass
-class OD3D_SequenceMeta(OD3D_Meta):
-    @classmethod
-    def get_rfpath_metas(cls):
-        return Path("sequences")
-
-OD3D_FrameMetaClasses = Union[OD3D_FrameMeta, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaCategoriesMixin,
-                              OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4Mixin,
-                              OD3D_FrameMetaMaskMixin, OD3D_FrameMetaDepthMaskMixin, OD3D_FrameMetaDepthMixin,
-                              OD3D_FrameMetaPCLMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaRGBMixin,
-                              OD3D_FrameMetaMeshMixin, OD3D_FrameMetaSequenceMixin, OD3D_FrameMetaSubsetMixin,
-                              OD3D_FrameMetaBBoxMixin, OD3D_FrameKPTS2D3DMixin]
-
-class OD3D_Frame():
-
-    def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, meta: OD3D_FrameMetaClasses, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
-        self.meta: OD3D_FrameMetaClasses = meta
-        self.path_raw: Path = path_raw
-        self.path_preprocess: Path = path_preprocess
-        self.path_meta: Path = path_meta
-        self.all_categories = categories
-        #self.category_id = categories.index(self.category)
-        self.modalities = modalities
-        self.item_id = None
-        self._cam_tform4x4_obj = None
-        self._cam_intr4x4 = None
-        self._mask_rgb = None
-        self._size = None
-        self._rgb = None
-        self._mask = None
-        self._depth = None
-        self._depth_mask = None
-        self._kpts2d_orient = None
-        self._bbox = None
-        self._mesh = None
-        self._kpts2d_annot_vsbl = None
-        self._kpts2d_annot = None
-        self._kpts3d = None
-
-    @property
-    def category_id(self):
-        return self.all_categories.index(self.category)
-
-    @property
-    def name_unique(self):
-        return self.meta.name_unique
-
-    @property
-    def mask_rgb(self):
-        if self._mask_rgb is None:
-            self._mask_rgb = torch.ones(size=(1, self.H, self.W), dtype=torch.bool)
-        return self._mask_rgb
-
-    @mask_rgb.setter
-    def mask_rgb(self, value: torch.Tensor):
-        self._mask_rgb = value
+class OD3D_FrameSizeMixin(OD3D_Object):
+    _size = None
 
     @property
     def size(self):
         if self._size is None:
             self._size = self.meta.size
         return self._size
-
     @size.setter
     def size(self, value: torch.Tensor):
         self._size = value
@@ -401,6 +127,67 @@ class OD3D_Frame():
     def W(self):
         return int(self.size[1].item())
 
+@dataclass
+class OD3D_FrameMaskRGBMixin(OD3D_FrameSizeMixin):
+    _mask_rgb = None
+
+    @property
+    def mask_rgb(self):
+        if self._mask_rgb is None:
+            self._mask_rgb = torch.ones(size=(1, self.H, self.W), dtype=torch.bool)
+        return self._mask_rgb
+
+    @mask_rgb.setter
+    def mask_rgb(self, value: torch.Tensor):
+        self._mask_rgb = value
+
+
+
+@dataclass
+class OD3D_FrameCamTform4x4ObjMixin(OD3D_CamTform4x4ObjTypeMixin):
+    _cam_tform4x4_obj = None
+
+    @property
+    def cam_tform4x4_obj(self):
+        if self._cam_tform4x4_obj is None:
+            if self.cam_tform4x4_obj_type == OD3D_CAM_TFORM_OBJ_TYPES.META:
+                self._cam_tform4x4_obj = self.meta.cam_tform4x4_obj
+            elif self.cam_tform4x4_obj_type == OD3D_CAM_TFORM_OBJ_TYPES.SFM:
+                self._cam_tform4x4_obj = self.sequence.get_cam_tform4x4_obj(f"{Path(self.name_unique).stem}")
+            else:
+                raise ValueError(f"cam_tform4x4_obj_type {self.cam_tform4x4_obj_type} not supported")
+        return self._cam_tform4x4_obj
+
+    @cam_tform4x4_obj.setter
+    def cam_tform4x4_obj(self, value: torch.Tensor):
+            self._cam_tform4x4_obj = value
+
+@dataclass
+class OD3D_FrameMeshMixin(OD3D_MeshTypeMixin):
+    _mesh = None
+
+    @property
+    def fpath_mesh(self):
+        if self.mesh_type == OD3D_MESH_TYPES.META:
+            return self.path_raw.joinpath(self.meta.rfpath_mesh)
+        else:
+            return self.path_preprocess.joinpath("mesh", f"{self.mesh_type}", f"{self.name_unique}.ply")
+
+    @property
+    def mesh(self):
+        if self._mesh is None:
+            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh)
+        return self._mesh
+
+    @mesh.setter
+    def mesh(self, value: torch.Tensor):
+            self._mesh = value
+
+
+@dataclass
+class OD3D_FrameCamIntr4x4Mixin(OD3D_Frame):
+    _cam_intr4x4 = None
+
     @property
     def cam_intr4x4(self):
         if self._cam_intr4x4 is None:
@@ -411,20 +198,38 @@ class OD3D_Frame():
     def cam_intr4x4(self, value: torch.Tensor):
             self._cam_intr4x4 = value
 
-    @property
-    def cam_tform4x4_obj(self):
-        if self._cam_tform4x4_obj is None:
-            self._cam_tform4x4_obj = self.meta.cam_tform4x4_obj
-        return self._cam_tform4x4_obj
-
-    @cam_tform4x4_obj.setter
-    def cam_tform4x4_obj(self, value: torch.Tensor):
-            self._cam_tform4x4_obj = value
-
+@dataclass
+class OD3D_CamProj4x4ObjMixin(OD3D_FrameCamTform4x4ObjMixin, OD3D_FrameCamIntr4x4Mixin):
     @property
     def cam_proj4x4_obj(self):
         return tform4x4(self.cam_intr4x4, self.cam_tform4x4_obj)
 
+@dataclass
+class OD3D_FrameCategoryMixin(OD3D_Object):
+    all_categories: List[str]
+
+    @property
+    def category(self):
+        return self.meta.category
+    @property
+    def category_id(self):
+        return self.all_categories.index(self.category)
+
+@dataclass
+class OD3D_FrameCategoriesMixin(OD3D_Object):
+    all_categories: List[str]
+
+    @property
+    def categories(self):
+        return self.meta.categories
+
+    @property
+    def categories_ids(self):
+        return torch.LongTensor([self.all_categories.index(cat) for cat in self.categories])
+
+@dataclass
+class OD3D_FrameBBoxMixin(OD3D_Object):
+    _bbox = None
     @property
     def bbox(self):
         if self._bbox is None:
@@ -435,6 +240,14 @@ class OD3D_Frame():
     def bbox(self, value: torch.Tensor):
             self._bbox = value
 
+
+@dataclass
+class OD3D_FrameKpts2d3dMixin(OD3D_Object):
+    kpts2d_annot_type: OD3D_FRAME_KPTS2D_ANNOT_TYPES
+    _kpts3d = None
+    _kpts2d_annot = None
+    _kpts2d_annot_vsbl = None
+
     @property
     def kpts_names(self):
         return self.meta.kpts_names
@@ -442,8 +255,24 @@ class OD3D_Frame():
     @property
     def kpts2d_annot(self):
         if self._kpts2d_annot is None:
-            self._kpts2d_annot = self.meta.kpts2d_annot
+            if self.kpts2d_annot_type == OD3D_FRAME_KPTS2D_ANNOT_TYPES.META:
+                self._kpts2d_annot = self.meta.kpts2d_annot
+            else:
+                self._kpts2d_annot = torch.load(self.fpath_kpts2d_annot)
         return self._kpts2d_annot
+
+    @property
+    def fpath_kpts2d_annot(self):
+        if self.kpts2d_annot_type == OD3D_FRAME_KPTS2D_ANNOT_TYPES.META:
+            raise ValueError("Meta kpts2d_annot is not saved in a file")
+        else:
+            return self.path_preprocess.joinpath("kpts2d_annot", self.kpts2d_annot_type, f"{self.name_unique}.pt")
+    @property
+    def kpts2d_annot_labeled(self):
+        if self.kpts2d_annot_type == OD3D_FRAME_KPTS2D_ANNOT_TYPES.META:
+            return True
+        else:
+            return
 
     @kpts2d_annot.setter
     def kpts2d_annot(self, value: torch.Tensor):
@@ -469,45 +298,23 @@ class OD3D_Frame():
     def kpts3d(self, value: torch.Tensor):
             self._kpts3d = value
 
-    @property
-    def fpath_mesh(self):
-        return self.path_raw.joinpath(self.meta.rfpath_mesh)
+    # @property
+    # def fpath_kpts2d_orient(self):
+    #     return self.path_preprocess.joinpath("labels", "kpts2d_orient", f"{self.name_unique}.pt")
+    #
+    # @property
+    # def kpts2d_orient_labeled(self):
+    #     return self.fpath_kpts2d_orient.exists()
+    # @property
+    # def kpts2d_orient(self):
+    #     kpts2d_orient = torch.load(self.fpath_kpts2d_orient)
+    #     return kpts2d_orient
 
-    @property
-    def mesh(self):
-        if self._mesh is None:
-            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh)
-        return self._mesh
 
-    @mesh.setter
-    def mesh(self, value: torch.Tensor):
-            self._mesh = value
+#class OD3D_Kpts3dMixin(OD3D_Object):
 
-    @property
-    def fpath_kpts2d_orient(self):
-        return self.path_preprocess.joinpath("labels", "kpts2d_orient", f"{self.name_unique}.pt")
-
-    @property
-    def kpts2d_orient_labeled(self):
-        return self.fpath_kpts2d_orient.exists()
-    @property
-    def kpts2d_orient(self):
-        kpts2d_orient = torch.load(self.fpath_kpts2d_orient)
-        return kpts2d_orient
-
-    @property
-    def fpath_mask(self):
-        return self.path_raw.joinpath(self.meta.rfpath_mask)
-
-    @property
-    def mask(self):
-        if self._mask is None:
-            self._mask = read_image(self.fpath_mask) / 255.
-        return self._mask
-
-    @mask.setter
-    def mask(self, value: torch.Tensor):
-            self._mask = value
+class OD3D_FrameRGBMixin(OD3D_Object):
+    _rgb = None
 
     @property
     def fpath_rgb(self):
@@ -523,6 +330,9 @@ class OD3D_Frame():
     def rgb(self, value: torch.Tensor):
             self._rgb = value
 
+class OD3D_FrameDepthMixin(OD3D_Object):
+    _depth = None
+
     @property
     def fpath_depth(self):
         return self.path_raw.joinpath(self.meta.rfpath_depth)
@@ -537,6 +347,8 @@ class OD3D_Frame():
     def depth(self, value: torch.Tensor):
             self._depth = value
 
+class OD3D_FrameDepthMaskMixin(OD3D_Object):
+    _depth_mask = None
     @property
     def depth_mask(self):
         if self._depth_mask is None:
@@ -547,14 +359,65 @@ class OD3D_Frame():
     def depth_mask(self, value: torch.Tensor):
             self._depth_mask = value
 
-    @property
-    def category(self):
-        return self.meta.category
+@dataclass
+class OD3D_FrameSequenceMixin(OD3D_Object):
+    sequence_type = None #  OD3D_Sequence
 
     @property
-    def name(self):
-        return self.meta.name
+    def sequence_name(self):
+        return self.meta.sequence_name
 
     @property
-    def categories(self):
-        return self.meta.categories
+    def sequence_name_unique(self):
+        return self.meta.sequence_name_unique
+
+    @property
+    def sequence(self):
+        from dataclasses import fields
+        frame_fields = fields(self)
+        sequence_fields_names = [field.name for field in fields(self.sequence_type)]
+        all_attrs_except_name_unique = {field.name: getattr(self, field.name) for field in frame_fields
+                                        if field.name != 'name_unique' and field.name in sequence_fields_names}
+        return self.sequence_type(name_unique=self.sequence_name_unique, **all_attrs_except_name_unique)
+
+@dataclass
+class OD3D_FrameRaysCenter3dMixin(OD3D_FrameSequenceMixin):
+    _rays_center3d = None
+
+    @property
+    def rays_center3d(self):
+        if self._rays_center3d is None:
+            self._rays_center3d = self.sequence.get_sfm_rays_center3d()
+        return self._rays_center3d
+
+@dataclass
+class OD3D_FrameSubsetMixin(OD3D_Object):
+    @property
+    def subset(self):
+        return self.meta.subset
+
+from od3d.datasets.frame_meta import OD3D_FrameMeta
+
+
+
+@dataclass
+class OD3D_FrameCamIntr4x4Mixin(OD3D_Frame):
+    _cam_intr4x4 = None
+
+    @property
+    def cam_intr4x4(self):
+        if self._cam_intr4x4 is None:
+            self._cam_intr4x4 = self.meta.cam_intr4x4
+        return self._cam_intr4x4
+
+    @cam_intr4x4.setter
+    def cam_intr4x4(self, value: torch.Tensor):
+            self._cam_intr4x4 = value
+
+
+OD3D_FrameClasses = Union[OD3D_Object, OD3D_FrameCategoryMixin, OD3D_FrameCategoriesMixin,
+                          OD3D_FrameCamTform4x4ObjMixin, OD3D_CamProj4x4ObjMixin, OD3D_FrameCamIntr4x4Mixin,
+                          OD3D_FrameMaskMixin, OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin,
+                          OD3D_FrameSizeMixin, OD3D_FrameRGBMixin,
+                          OD3D_FrameMeshMixin, OD3D_FrameSequenceMixin, OD3D_FrameSubsetMixin,
+                          OD3D_FrameBBoxMixin, OD3D_FrameKpts2d3dMixin, OD3D_FrameMaskRGBMixin]

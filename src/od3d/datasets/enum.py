@@ -24,6 +24,7 @@ class OD3D_CATEGORIES(str, ExtEnum):
     CUP = "cup"
     DINING_TABLE = "dining_table"
     DONUT = "donut"
+    ELEPHANT = "elephant"
     FRISBEE = "frisbee"
     HAIRDRYER = "hairdryer"
     HANDBAG = "handbag"
@@ -258,5 +259,6 @@ OD3D_CATEGORIES_SIZES_IN_M = {
     OD3D_CATEGORIES.WASHING_MACHINE: 0.9,
     OD3D_CATEGORIES.WATCH: 0.04,
     OD3D_CATEGORIES.WHEELCHAIR: 1,
+    OD3D_CATEGORIES.ELEPHANT: 3.,
 }
 

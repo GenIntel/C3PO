@@ -5,8 +5,9 @@ import od3d.io
 logger = logging.getLogger(__name__)
 import shutil
 from od3d.datasets.dataset import OD3D_Dataset
-from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_FrameMeta, OD3D_FrameMetaSubsetMixin, \
-    OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaCategoriesMixin, OD3D_FrameMetaBBoxsMixin, OD3D_Frame
+from od3d.datasets.frame_meta import OD3D_FrameMeta, OD3D_FrameMetaSubsetMixin, \
+    OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaCategoriesMixin, OD3D_FrameMetaBBoxsMixin
+from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame
 from od3d.datasets.coco.enum import COCO_CATEGORIES, COCO_SUBSETS
 from od3d.io import run_cmd
 

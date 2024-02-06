@@ -16,13 +16,13 @@ from od3d.cv.io import read_image, save_image_mask, write_depth_image, read_dept
 from od3d.cv.geometry.mesh import Mesh, Meshes
 from od3d.cv.geometry.mesh import Meshes, MESH_RENDER_MODALITIES
 
-from od3d.datasets.frame import OD3D_FrameMeta, \
+from od3d.datasets.frame_meta import OD3D_FrameMeta, \
     OD3D_FrameMetaMeshMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
-    OD3D_FrameMetaSizeMixin, OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin, \
+    OD3D_FrameMetaSizeMixin, OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin, \
     OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4Mixin
 
 @dataclass
-class Pascal3DFrameMeta(OD3D_FrameKPTS2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin,
+class Pascal3DFrameMeta(OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin,
                         OD3D_FrameMetaMeshMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaCamTform4x4ObjMixin,
                         OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMeta):
     #complete: bool
