@@ -14,7 +14,7 @@
 ###### BUILD ######
 
 # docker build . -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g)
-#docker build . -t limpbot/droid-slam:v1
+#docker build . -t limpbot/droid-slam:v1 -f ../envs/DROID-SLAM/Dockerfile
 #
 ####### RUN ######
 #
