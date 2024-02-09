@@ -575,8 +575,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshTypeMixin, OD3D_SequenceTformObjMixin):
         elif mesh_type == 'cuboid':
             from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
             cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
-                                              optimize_rot=False,
-                                              optimize_transl=False)
+                                             optimize_rot=False,
+                                             optimize_transl=False,
+                                             vertices_max_count=mesh_vertices_count)
 
             obj_mesh = cuboids.get_mesh_with_id(0)
 
