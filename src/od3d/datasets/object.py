@@ -40,6 +40,7 @@ class OD3D_MESH_TYPES(str, Enum):
     META = 'meta'
     CONVEX500 = 'convex500'
     ALPHA500 = 'alpha500'
+    CUBOID500 = 'cuboid500'
 
 class OD3D_PCL_TYPES(str, Enum):
     META = 'meta'
@@ -48,7 +49,9 @@ class OD3D_PCL_TYPES(str, Enum):
 
 class OD3D_TFROM_OBJ_TYPES(str, Enum):
     RAW = 'raw'
+    CENTER3D = 'center3d'
     LABEL3D = 'label3d'
+    LABEL3D_CUBOID = 'label3d_cuboid'
     # ALIGNED7D = 'aligned7d'
 
 class OD3D_SEQUENCE_SFM_TYPES(str, Enum):

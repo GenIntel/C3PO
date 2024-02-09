@@ -15,6 +15,7 @@ from od3d.datasets.frame import OD3D_Frame, OD3D_FrameSizeMixin, OD3D_FrameRGBMi
 from dataclasses import dataclass
 import numpy as np
 from od3d.datasets.object import OD3D_PCLTypeMixin, OD3D_MeshTypeMixin, OD3D_SequenceSfMTypeMixin
+from od3d.datasets.monolmb.enum import MAP_CATEGORIES_MONOLMB_TO_OD3D
 
 
 @dataclass
@@ -31,6 +32,7 @@ class MonoLMB_Frame(OD3D_FrameMeshMixin, OD3D_FrameRaysCenter3dMixin, OD3D_Frame
                     OD3D_FrameSequenceMixin, OD3D_FrameSizeMixin, OD3D_MeshTypeMixin,
                     OD3D_PCLTypeMixin, OD3D_SequenceSfMTypeMixin, OD3D_Frame):
     meta_type = MonoLMB_FrameMeta
+    map_categories_to_od3d = MAP_CATEGORIES_MONOLMB_TO_OD3D
 
     def __post_init__(self):
         # hack: prevents circular import

@@ -477,12 +477,12 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             if key == 'pcl' and config_preprocess.pcl.get('enabled', False):
                 override = config_preprocess.pcl.get('override', False)
                 self.preprocess_pcl(override=override)
-            if key == 'mesh' and config_preprocess.mesh.get('enabled', False):
-                override = config_preprocess.mesh.get('override', False)
-                self.preprocess_mesh(override=override)
             if key == 'tform_obj' and config_preprocess.tform_obj.get('enabled', False):
                 override = config_preprocess.tform_obj.get('override', False)
                 self.preprocess_tform_obj(override=override)
+            if key == 'mesh' and config_preprocess.mesh.get('enabled', False):
+                override = config_preprocess.mesh.get('override', False)
+                self.preprocess_mesh(override=override)
 
     def get_sequence_by_name_unique(self, name_unique: str):
         raise NotImplementedError

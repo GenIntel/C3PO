@@ -51,9 +51,9 @@ preprocess:
   pcl:
     enabled: False
     override: False
-  mesh:
-    enabled: False
-    override: False
   tform_obj:
     enabled: True
-    override: False
+    override: True
+  mesh:
+    enabled: True
+    override: True

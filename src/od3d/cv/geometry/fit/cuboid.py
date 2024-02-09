@@ -114,7 +114,6 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
     logger.info(cuboid_pts3d_limits)
 
     cuboid = Cuboids.create_dense_from_limits(limits=cuboid_pts3d_limits, verts_count=vertices_max_count)
-
     #from od3d.cv.visual.show import show_scene
     #show_scene(meshes=cuboid, pts3d=[cuboid_pts3d], meshes_add_translation=False, pts3d_add_translation=False)
 

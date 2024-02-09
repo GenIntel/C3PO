@@ -268,6 +268,7 @@ class OD3D_CamProj4x4ObjMixin(OD3D_FrameCamTform4x4ObjMixin, OD3D_FrameCamIntr4x
 @dataclass
 class OD3D_FrameCategoryMixin(OD3D_Object):
     all_categories: List[str]
+    map_categories_to_od3d = None
 
     @property
     def category(self):

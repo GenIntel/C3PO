@@ -8,7 +8,7 @@ from od3d.datasets.frame_meta import OD3D_FrameMeta
 # from od3d.datasets.frame import OD3D_Frame, OD3D_FrameCamIntr4x4Mixin, OD3D_FrameCategoryMixin
 from od3d.datasets.object import OD3D_Object, OD3D_SequenceSfMTypeMixin, OD3D_SEQUENCE_SFM_TYPES, \
     OD3D_PCLTypeMixin, OD3D_PCL_TYPES, OD3D_MeshTypeMixin, OD3D_MESH_TYPES, OD3D_FrameModalitiesMixin, \
-    OD3D_TformObjMixin
+    OD3D_TformObjMixin, OD3D_TFROM_OBJ_TYPES
 from od3d.datasets.sequence_meta import OD3D_SequenceMeta
 from od3d.data.ext_dicts import unroll_nested_dict, rollup_flattened_dict
 from dataclasses import dataclass
@@ -28,9 +28,9 @@ class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object):
     _frames_names = None
     _frames_names_unique = None
 
-    @property
-    def meta(self):
-        return OD3D_SequenceMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.name_unique)
+    # @property
+    # def meta(self):
+    #     return sel.frame_type.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.name_unique)
 
     @property
     def first_frame(self):
@@ -102,6 +102,7 @@ class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object):
 class OD3D_SequenceCategoryMixin(OD3D_Sequence):
     #frame_type = OD3D_FrameCategoryMixin
     all_categories: List[str]
+    map_categories_to_od3d = None
 
     @property
     def category(self):
@@ -284,8 +285,162 @@ class OD3D_SequencePCLMixin(OD3D_PCLTypeMixin, OD3D_SequenceSfMMixin):
                                                 pts3d_normals=pts3d_normals.detach().cpu())
 
 
+from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast
+from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
+
+
 @dataclass
-class OD3D_SequenceMeshMixin(OD3D_MeshTypeMixin, OD3D_SequencePCLMixin):
+class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
+
+    def read_pcl(self, pcl_type=None, device='cpu'):
+        pts3d, pts3d_colors, pts3d_normals = super().read_pcl(pcl_type=pcl_type, device=device)
+
+        tform_obj = self.get_tform_obj()
+        if tform_obj is not None:
+            pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+            pts3d_normals = transf3d_normal_broadcast(normals3d=pts3d_normals, transf4x4=tform_obj)
+
+        if pcl_type is None or pcl_type == self.pcl_type:
+            self.pts3d, self.pts3d_colors, self.pts3d_normals = pts3d, pts3d_colors, pts3d_normals
+        return pts3d, pts3d_colors, pts3d_normals
+
+    # note: all meshes are saved in the labeled format
+    # def read_mesh(self, mesh_type=None):
+    #     mesh = super().read_mesh(mesh_type=mesh_type)
+    #     tform_obj = self.get_tform_obj()
+    #     if tform_obj is not None:
+    #         mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=tform_obj)
+    #     if mesh_type is None or mesh_type == self.mesh_type:
+    #         self.mesh = mesh
+    #     return mesh
+
+    def get_tform_obj(self, tform_obj_type: OD3D_TFROM_OBJ_TYPES=None):
+        if tform_obj_type is None:
+            tform_obj_type = self.tform_obj_type
+
+        if tform_obj_type == OD3D_TFROM_OBJ_TYPES.RAW:
+            return None
+        else:
+            fpath_tform_obj = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
+            if fpath_tform_obj.exists():
+                return torch.load(self.get_fpath_tform_obj(tform_obj_type=tform_obj_type))
+            else:
+                logger.warning(f'tform_obj_type {tform_obj_type} does not exists at {fpath_tform_obj}')
+                return None
+
+    def get_fpath_tform_obj(self, tform_obj_type=None):
+        if tform_obj_type is None:
+            tform_obj_type = self.tform_obj_type
+        return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', f'{self.sfm_type}', f'{self.pcl_type}',
+                                             self.name_unique, 'tform_obj.pt')
+
+    def write_tform_obj(self, tform_obj: torch.Tensor, fpath_tform_obj=None):
+        if fpath_tform_obj is None:
+            fpath_tform_obj = self.get_fpath_tform_obj()
+
+
+        if fpath_tform_obj.parent.exists() is False:
+            fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(tform_obj.detach().cpu(), f=fpath_tform_obj)
+
+    def preprocess_tform_obj(self, override=False, tform_obj_type=None):
+
+        if tform_obj_type is None:
+            tform_obj_type = self.tform_obj_type
+
+        from od3d.cv.label.axis import label_axis_in_pcl
+
+        fpath_tform_obj = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
+        if fpath_tform_obj.exists() and not override:
+            logger.info(f'Label axis already exists {fpath_tform_obj}, override disabled.')
+            return
+
+        if tform_obj_type == OD3D_TFROM_OBJ_TYPES.RAW:
+            logger.info(f'No need to preprocess tform_obj for raw tform_obj type')
+            return
+        elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D:
+            fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
+            cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(cams_count=4, show_imgs=False, cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM)
+            pts3d, pts3d_colors, pts3d_normals = super().read_pcl()
+            while True:
+                prev_tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+                axis_pts3d = label_axis_in_pcl(pts3d=pts3d,
+                                               pts3d_colors=pts3d_colors,
+                                               prev_labeled_pcl_tform_pcl=prev_tform_obj,
+                                               cams_tform4x4_world=cams_tform4x4_world,
+                                               cams_intr4x4=cams_intr4x4,
+                                               cams_imgs=cams_imgs)
+
+                from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
+
+
+                if axis_pts3d is None or axis_pts3d.shape != (3, 2, 3):
+                    if prev_tform_obj is not None:
+                        logger.warning('not overriding previous tform_obj')
+                        break
+
+                    logger.warning(f'axis_pts3d is None or axis_pts3d.shape != (3, 2, 3) {axis_pts3d.shape if axis_pts3d is not None else None}')
+                    continue
+
+                tform_obj = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_pts3d)
+                tform_obj[:3, 3] = -pts3d.mean(dim=0)
+
+                if not (torch.linalg.det(tform_obj[:3, :3]) - 1.).abs() <= 1e-5:
+                    logger.warning(f'determinant is not close to 1. {torch.linalg.det(tform_obj[:3, :3])}')
+                    continue
+
+                self.write_tform_obj(tform_obj=tform_obj, fpath_tform_obj=fpath_tform_obj)
+                break
+        elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID:
+
+            from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
+            from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
+            from od3d.cv.geometry.transform import tform4x4
+
+            size = OD3D_CATEGORIES_SIZES_IN_M[self.map_categories_to_od3d[self.category]]
+
+            self.preprocess_tform_obj(override=override, tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
+
+            tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
+            pts3d, pts3d_colors, pts3d_normals = super().read_pcl()
+            pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d_label3d, size=size,
+                                                          optimize_rot=False,
+                                                          optimize_transl=True)
+            tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
+
+            self.write_tform_obj(tform_obj=tform_obj, fpath_tform_obj=fpath_tform_obj)
+        else:
+            raise NotImplementedError(f'tform_obj_type {tform_obj_type} not implemented')
+
+        # if axis_pcl is not None and axis_pcl.shape == (3, 2, 3):
+        #
+        #     logger.info(f'storing axis labeled, cuboid tform, and cuboid ')
+        #     torch.save(axis_pcl, f=fpath_axis_droid_slam)
+        #
+        #     self.fpath_labeled_obj_tform_obj.parent.mkdir(parents=True, exist_ok=True)
+        #     torch.save(pcl_labeled_tform_pcl, self.fpath_labeled_obj_tform_obj)
+        #
+        #     size = OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_CO3D_TO_OD3D[self.category]]
+        #     pcl_labeled_tform_pts3d = transf3d_broadcast(
+        #         pts3d=self.get_pcl(),
+        #         transf4x4=pcl_labeled_tform_pcl)
+        #     pcl_labeled_cuboid, pcl_labeled_cuboid_tform_pcl_labeled = \
+        #         fit_cuboid_to_pts3d(pts3d=pcl_labeled_tform_pts3d, size=size, optimize_rot=False,
+        #                             optimize_transl=True)
+        #
+        #     self.fpath_obj_labeled_cuboid.parent.mkdir(parents=True, exist_ok=True)
+        #     pcl_labeled_cuboid.write_to_file(fpath=self.fpath_obj_labeled_cuboid)
+        #
+        #     self.fpath_labeled_cuboid_obj_tform_labeled_obj.parent.mkdir(parents=True, exist_ok=True)
+        #     torch.save(pcl_labeled_cuboid_tform_pcl_labeled.detach().cpu(),
+        #                f=self.fpath_labeled_cuboid_obj_tform_labeled_obj)
+        # else:
+        #     logger.info(f'not storing labeled axis.')
+
+
+@dataclass
+class OD3D_SequenceMeshMixin(OD3D_MeshTypeMixin, OD3D_SequenceTformObjMixin):
     mesh = None
 
     def get_fpath_mesh(self, mesh_type=None):
@@ -294,7 +449,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshTypeMixin, OD3D_SequencePCLMixin):
         if mesh_type == OD3D_MESH_TYPES.META:
             return self.path_raw.joinpath(self.meta.rfpath_mesh)
         else:
-            return self.path_preprocess.joinpath("mesh", f'{self.sfm_type}', f'{self.pcl_type}', f'{self.mesh_type}', self.name_unique, 'mesh.ply')
+            return self.path_preprocess.joinpath("mesh", f'{self.mesh_type}', f'{self.tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}', self.name_unique, 'mesh.ply')
 
     @property
     def fpath_mesh(self):
@@ -416,6 +571,15 @@ class OD3D_SequenceMeshMixin(OD3D_MeshTypeMixin, OD3D_SequencePCLMixin):
             verts = (verts[0].to(device=device) + 1) / 2.
 
             obj_mesh = Mesh(verts=voxel_grid_offset[None,] + voxel_grid_range[None,] * verts, faces=faces)
+
+        elif mesh_type == 'cuboid':
+            from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
+            cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
+                                              optimize_rot=False,
+                                              optimize_transl=False)
+
+            obj_mesh = cuboids.get_mesh_with_id(0)
+
         else:
             msg = f'Unknown mesh type {mesh_type}'
             raise Exception(msg)
@@ -439,110 +603,3 @@ class OD3D_SequenceMeshMixin(OD3D_MeshTypeMixin, OD3D_SequencePCLMixin):
         # cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=self.device)
         # show_scene(meshes=[obj_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj[::scams], cams_intr4x4=cams_intr4x4[::scams], cams_imgs=rgb[::scams])
         # ## DEBUG BLOCK END
-
-from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast
-@dataclass
-class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequenceMeshMixin):
-
-    def read_pcl(self, pcl_type=None, device='cpu'):
-        pts3d, pts3d_colors, pts3d_normals = super().read_pcl(pcl_type=pcl_type, device=device)
-
-        tform_obj = self.get_tform_obj()
-        if tform_obj is not None:
-            pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
-            pts3d_normals = transf3d_normal_broadcast(normals3d=pts3d_normals, transf4x4=tform_obj)
-
-        if pcl_type is None or pcl_type == self.pcl_type:
-            self.pts3d, self.pts3d_colors, self.pts3d_normals = pts3d, pts3d_colors, pts3d_normals
-        return pts3d, pts3d_colors, pts3d_normals
-
-    def read_mesh(self, mesh_type=None):
-        mesh = super().read_mesh(mesh_type=mesh_type)
-        tform_obj = self.get_tform_obj()
-        if tform_obj is not None:
-            mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=tform_obj)
-        if mesh_type is None or mesh_type == self.mesh_type:
-            self.mesh = mesh
-        return mesh
-
-    def get_tform_obj(self, tform_obj_type: OD3D_TformObjMixin=None):
-        if tform_obj_type is None:
-            tform_obj_type = self.tform_obj_type
-
-        from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
-        if tform_obj_type == OD3D_TFROM_OBJ_TYPES.RAW:
-            return None
-        else:
-            fpath_tform_obj = self.get_fpath_tform_obj()
-            if fpath_tform_obj.exists():
-                return torch.load(self.get_fpath_tform_obj(tform_obj_type=tform_obj_type))
-            else:
-                logger.warning(f'tform_obj_type {tform_obj_type} does not exists at {self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)}')
-                return None
-
-    def get_fpath_tform_obj(self, tform_obj_type=None):
-        if tform_obj_type is None:
-            tform_obj_type = self.tform_obj_type
-        return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', f'{self.sfm_type}', f'{self.pcl_type}',
-                                             self.name_unique, 'tform_obj.pt')
-
-    def preprocess_tform_obj(self, override=False):
-        from od3d.cv.label.axis import label_axis_in_pcl
-
-        fpath_tform_obj = self.get_fpath_tform_obj()
-        if fpath_tform_obj.exists() and not override:
-            logger.info(f'Label axis already exists {fpath_tform_obj}, override disabled.')
-            return
-
-        fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
-
-        cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(cams_count=4, show_imgs=False, cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM)
-
-        pts3d, pts3d_colors, pts3d_normals = self.get_pcl()
-        while True:
-            axis_pts3d = label_axis_in_pcl(pts3d=pts3d,
-                                           pts3d_colors=pts3d_colors,
-                                           prev_labeled_pcl_tform_pcl=self.get_tform_obj(),
-                                           cams_tform4x4_world=cams_tform4x4_world,
-                                           cams_intr4x4=cams_intr4x4,
-                                           cams_imgs=cams_imgs)
-
-            from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
-
-            if axis_pts3d is None or axis_pts3d.shape != (3, 2, 3):
-                logger.warning(f'axis_pts3d is None or axis_pts3d.shape != (3, 2, 3) {axis_pts3d.shape if axis_pts3d is not None else None}')
-                continue
-
-            tform_obj = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_pts3d)
-
-            if not (torch.linalg.det(tform_obj[:3, :3]) - 1.).abs() <= 1e-5:
-                logger.warning(f'determinant is not close to 1. {torch.linalg.det(tform_obj[:3, :3])}')
-                continue
-
-            torch.save(tform_obj.detach().cpu(), f=fpath_tform_obj)
-            break
-
-        # if axis_pcl is not None and axis_pcl.shape == (3, 2, 3):
-        #
-        #     logger.info(f'storing axis labeled, cuboid tform, and cuboid ')
-        #     torch.save(axis_pcl, f=fpath_axis_droid_slam)
-        #
-        #     self.fpath_labeled_obj_tform_obj.parent.mkdir(parents=True, exist_ok=True)
-        #     torch.save(pcl_labeled_tform_pcl, self.fpath_labeled_obj_tform_obj)
-        #
-        #     size = OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_CO3D_TO_OD3D[self.category]]
-        #     pcl_labeled_tform_pts3d = transf3d_broadcast(
-        #         pts3d=self.get_pcl(),
-        #         transf4x4=pcl_labeled_tform_pcl)
-        #     pcl_labeled_cuboid, pcl_labeled_cuboid_tform_pcl_labeled = \
-        #         fit_cuboid_to_pts3d(pts3d=pcl_labeled_tform_pts3d, size=size, optimize_rot=False,
-        #                             optimize_transl=True)
-        #
-        #     self.fpath_obj_labeled_cuboid.parent.mkdir(parents=True, exist_ok=True)
-        #     pcl_labeled_cuboid.write_to_file(fpath=self.fpath_obj_labeled_cuboid)
-        #
-        #     self.fpath_labeled_cuboid_obj_tform_labeled_obj.parent.mkdir(parents=True, exist_ok=True)
-        #     torch.save(pcl_labeled_cuboid_tform_pcl_labeled.detach().cpu(),
-        #                f=self.fpath_labeled_cuboid_obj_tform_labeled_obj)
-        # else:
-        #     logger.info(f'not storing labeled axis.')

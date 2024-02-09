@@ -265,6 +265,21 @@ class Meshes(torch.nn.Module):
         super()._apply(fn)
         self.init_pt3d()
 
+    def get_mesh_with_id(self, mesh_id):
+        verts = self.get_verts_with_mesh_id(mesh_id)
+        faces = self.get_faces_with_mesh_id(mesh_id)
+
+        if self.rgb is None:
+            rgb = None
+        else:
+            rgb = self.get_rgb_with_mesh_id(mesh_id)
+
+        if self.feats is None:
+            feats = None
+        else:
+            feats = self.get_feats_with_mesh_id(mesh_id=mesh_id)
+        return Mesh(verts=verts, faces=faces, feats=feats, rgb=rgb)
+
     def get_meshes_with_ids(self, meshes_ids=None, clone=False):
         if meshes_ids == None:
             meshes_ids = list(range(len(self)))
