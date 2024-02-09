@@ -7,12 +7,15 @@ from pathlib import Path
 import torch
 from typing import List, Dict
 from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame, OD3D_FrameMeta
+from od3d.datasets.sequence_meta import OD3D_SequenceMetaCategoryMixin
 from od3d.datasets.frames import OD3D_Frames
 from od3d.data import ExtEnum
 import inspect
 from tqdm import tqdm
 import numpy as np
 import od3d.io
+from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES
+from od3d.cv.geometry.transform import proj3d2d_broadcast
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -31,6 +34,8 @@ class OD3D_DATASET_SPLITS(str, ExtEnum):
 
 
 class OD3D_Dataset(Dataset):
+    from od3d.datasets.enum import OD3D_CATEGORIES
+    all_categories = list(OD3D_CATEGORIES)
     subclasses = {}
 
     @classmethod
@@ -79,7 +84,7 @@ class OD3D_Dataset(Dataset):
         self.index_shift = index_shift
         self.modalities = modalities
         self.splits_featured = [OD3D_DATASET_SPLITS.RANDOM]
-        self.categories = categories if categories is not None else []
+        self.categories = categories if categories is not None else self.all_categories
 
         logger.info('completing nested frames..., can take up to 500 seconds...')
         dict_nested_frames = OD3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta,
@@ -113,7 +118,10 @@ class OD3D_Dataset(Dataset):
         return self.frames_count
 
     def get_subset_with_dict_nested_frames(self, dict_nested_frames: Dict):
-        raise NotImplementedError
+        import copy
+        dataset = copy.deepcopy(self)
+        dataset.set_list_frames_unique(list_frames_unique=OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames))
+        return dataset
 
     def set_list_frames_unique(self, list_frames_unique):
         self.list_frames_unique = list_frames_unique
@@ -186,6 +194,9 @@ class OD3D_Dataset(Dataset):
         return frame
 
     def get_item(self, item):
+        return self.get_frame_by_name_unique(name_unique=self.list_frames_unique[item])
+
+    def get_frame_by_name_unique(self, name_unique: str):
         raise NotImplementedError
 
     def get_random_item(self):
@@ -197,8 +208,10 @@ class OD3D_Dataset(Dataset):
                 return i
         return -1
 
-    def collate_fn(self, frames: List[OD3D_Frame], device='cpu', dtype=torch.float32):
-        frames = OD3D_Frames.get_frames_from_list(frames, modalities=self.modalities, dtype=dtype, device=device)
+    def collate_fn(self, frames: List[OD3D_Frame], device='cpu', dtype=torch.float32, modalities=None):
+        if modalities is None:
+            modalities = self.modalities
+        frames = OD3D_Frames.get_frames_from_list(frames, modalities=modalities, dtype=dtype, device=device)
         return frames
 
     def get_dataloader(self, batch_size=1, shuffle=False):
@@ -218,11 +231,62 @@ class OD3D_Dataset(Dataset):
         raise NotImplementedError
 
     def preprocess(self, config_preprocess: DictConfig):
-        raise NotImplementedError
+        logger.info("preprocess")
+        for key in config_preprocess.keys():
+            if key == 'mask' and config_preprocess.mask.get('enabled', False):
+                override = config_preprocess.mask.get('override', False)
+                self.preprocess_mask(override=override)
+
+    def preprocess_mask(self, override=False, remove_previous=False):
+        logger.info("preprocess masks...")
+        from functools import partial
+
+        dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False,
+                                                 collate_fn=partial(self.collate_fn,
+                                                                    modalities=[OD3D_FRAME_MODALITIES.RGB,
+                                                                                OD3D_FRAME_MODALITIES.MASK,
+                                                                                OD3D_FRAME_MODALITIES.RAYS_CENTER3D,
+                                                                                OD3D_FRAME_MODALITIES.CAM_INTR4X4,
+                                                                                OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ])
+                                                 )
+        logging.info(f"Dataset contains {len(self)} frames.")
+
+        from od3d.models.model import OD3D_Model
+        model = OD3D_Model.create_by_name('sam')
+        model.cuda()
+        model.eval()
+        self.transform = model.transform
+
+        for batch in iter(dataloader):
+            logger.info(f'{batch.name_unique[0]}')  # sequence_name[0]}')
+            if torch.cuda.is_available():
+                batch.to(device='cuda:0')
+                # batch.cam_proj4x4_obj batch.rays_center3d
+                frames = [self.get_frame_by_name_unique(name_unique=name_unique) for name_unique in batch.name_unique]
+
+                if frames[0].fpath_mask.exists() and not override:
+                    logger.info(f"masks exists, at least at {frames[0].fpath_mask}, skip preprocess mask")
+                    return
+
+                if frames[0].mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D:
+                    center_pxl2d = proj3d2d_broadcast(proj4x4=batch.cam_proj4x4_obj, pts3d=batch.rays_center3d)
+                elif frames[0].mask_type == OD3D_FRAME_MASK_TYPES.SAM:
+                    center_pxl2d = batch.size[None, [1,0]] / 2
+                else:
+                    raise ValueError(f"mask_type {frames[0].mask_type} not supported")
+                masks, scores, logits = model(batch.rgb, center_pxl2d)
+
+                for b in range(len(batch.name_unique)):
+                    masks_b = masks[b]
+                    frame = frames[b]
+                    sam_lvl = scores[b].argmax()
+                    mask = masks[b, sam_lvl:sam_lvl+1]
+                    # from od3d.cv.visual.draw import draw_pixels
+                    # mask = draw_pixels(mask, pxls=center_pxl2d[b:b+1])
+                    frame.write_mask(mask)
 
     def visualize(self, item: int):
         raise NotImplementedError
-
 
     @property
     def path_meta(self):
@@ -275,3 +339,151 @@ class OD3D_Dataset(Dataset):
                 dict_frames_stacked[category] = torch.stack(list(dict_frames[category]), dim=0)
 
         return dict_frames_stacked
+
+class OD3D_SequenceDataset(OD3D_Dataset):
+    def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES],
+                 path_raw: Path, path_preprocess: Path,
+                 categories: List=None,
+                 dict_nested_frames: Dict=None,
+                 dict_nested_frames_ban: Dict=None,
+                 transform=None, index_shift=0, subset_fraction=1.):
+
+
+        self.categories = categories if categories is not None else self.all_categories
+        self.path_raw = Path(path_raw)
+        self.path_preprocess = Path(path_preprocess)
+        self.modalities = modalities
+
+        logger.info("filtering sequences...")
+        self.dict_category_sequences_names = self.filter_dict_nested_sequences(dict_nested_frames=dict_nested_frames,
+                                                                               dict_nested_frames_ban=dict_nested_frames_ban)
+
+        logger.info(f'sequences filtered')
+        sequences_filtered_str = '\n'
+        for category in self.dict_category_sequences_names.keys():
+            if len(self.dict_category_sequences_names[category]) > 0:
+                sequences_filtered_str += category + ': \n'
+                for sequence_name in self.dict_category_sequences_names[category]:
+                    sequences_filtered_str += f"  '{sequence_name}':\n"
+        logger.info(sequences_filtered_str)
+
+        logger.info(f'Found sequences per category')
+
+        dict_nested_frames_seqs_filtered = {}
+        for category in self.dict_category_sequences_names.keys(): #.keys():
+            logger.info(f'{category}: {len(self.dict_category_sequences_names[category])}')
+            if len(self.dict_category_sequences_names[category]) == 0:
+                continue
+            if dict_nested_frames is not None and category in dict_nested_frames.keys():
+                dict_nested_frames_seqs_filtered[category] = dict_nested_frames[category]
+            else:
+                if dict_nested_frames is None:
+                    dict_nested_frames_seqs_filtered[category] = None
+                else:
+                    # category not in dict_nested_frames
+                    dict_nested_frames_seqs_filtered[category] = {}
+
+            for sequence_name in self.dict_category_sequences_names[category]:
+                if dict_nested_frames is not None and category in dict_nested_frames.keys() and dict_nested_frames[category] is not None and sequence_name in dict_nested_frames[category]:
+                    dict_nested_frames_seqs_filtered[category][sequence_name] = dict_nested_frames[category][sequence_name]
+                else:
+                    if dict_nested_frames is None or (category in dict_nested_frames and dict_nested_frames_seqs_filtered[category] is None):
+                        if not isinstance(dict_nested_frames_seqs_filtered[category], dict):
+                            dict_nested_frames_seqs_filtered[category] = {}
+                        dict_nested_frames_seqs_filtered[category][sequence_name] = None
+                    else:
+                        # category / sequence not in dict_nested_frames
+                        dict_nested_frames_seqs_filtered[category][sequence_name] = []
+        dict_nested_frames = dict_nested_frames_seqs_filtered
+        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities, path_raw=path_raw,
+                         path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
+                         subset_fraction=subset_fraction)
+
+    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
+        logger.info("filtering frames...")
+        if dict_nested_frames is not None:
+            dict_nested_sequences = {}
+            for category, dict_sequence_frames in dict_nested_frames.items():
+                if category not in self.categories:
+                    continue
+                dict_nested_sequences[category] = []
+
+                if dict_sequence_frames is not None:
+                    for sequence, frames in dict_sequence_frames.items():
+                        dict_nested_sequences[category].append(sequence)
+                else:
+                    dict_nested_sequences[category] = None
+        else:
+            dict_nested_sequences = None
+
+        dict_nested_sequences_ban = None
+        if dict_nested_frames_ban is not None:
+            for category, dict_sequence_frames in dict_nested_frames_ban.items():
+                if dict_sequence_frames is not None:
+                    for sequence, frames in dict_sequence_frames.items():
+                        if frames is None:
+                            if dict_nested_sequences_ban is None:
+                                dict_nested_sequences_ban = {}
+                            if category not in dict_nested_sequences_ban.keys():
+                                dict_nested_sequences_ban[category] = []
+                            dict_nested_sequences_ban[category].append(sequence)
+                else:
+                    if dict_nested_sequences_ban is None:
+                        dict_nested_sequences_ban = {}
+                    dict_nested_sequences_ban[category] = None
+
+        # get sequences
+        dict_nested_sequences = OD3D_SequenceMetaCategoryMixin.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_sequences, dict_nested_metas_ban=dict_nested_sequences_ban)
+
+        return dict_nested_sequences
+
+    def preprocess_sfm(self, override=False):
+        logger.info("preprocess sfm...")
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
+            sequence = self.get_sequence_by_name_unique(name_unique=sequence_name_unique)
+            sequence.preprocess_sfm(override=override)
+
+    def preprocess_pcl(self, override=False):
+        logger.info("preprocess pcl...")
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
+            sequence = self.get_sequence_by_name_unique(name_unique=sequence_name_unique)
+            sequence.preprocess_pcl(override=override)
+
+    def preprocess_mesh(self, override=False):
+        logger.info("preprocess mesh...")
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
+            sequence = self.get_sequence_by_name_unique(name_unique=sequence_name_unique)
+            sequence.preprocess_mesh(override=override)
+
+    def preprocess_tform_obj(self, override=False):
+        logger.info("preprocess tform obj...")
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
+            sequence = self.get_sequence_by_name_unique(name_unique=sequence_name_unique)
+            sequence.preprocess_tform_obj(override=override)
+
+    def preprocess(self, config_preprocess: DictConfig):
+        logger.info("preprocess")
+        for key in config_preprocess.keys():
+            if key == 'sfm' and config_preprocess.sfm.get('enabled', False):
+                override = config_preprocess.sfm.get('override', False)
+                self.preprocess_sfm(override=override)
+            if key == 'mask' and config_preprocess.mask.get('enabled', False):
+                override = config_preprocess.mask.get('override', False)
+                self.preprocess_mask(override=override)
+            if key == 'pcl' and config_preprocess.pcl.get('enabled', False):
+                override = config_preprocess.pcl.get('override', False)
+                self.preprocess_pcl(override=override)
+            if key == 'mesh' and config_preprocess.mesh.get('enabled', False):
+                override = config_preprocess.mesh.get('override', False)
+                self.preprocess_mesh(override=override)
+            if key == 'tform_obj' and config_preprocess.tform_obj.get('enabled', False):
+                override = config_preprocess.tform_obj.get('override', False)
+                self.preprocess_tform_obj(override=override)
+
+    def get_sequence_by_name_unique(self, name_unique: str):
+        raise NotImplementedError
+

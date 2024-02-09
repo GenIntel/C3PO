@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import torch
 from enum import Enum
+from typing import List
+# from od3d.datasets.frame import OD3D_FRAME_MODALITIES
 
 @dataclass
 class OD3D_Object(ABC):
@@ -39,11 +41,28 @@ class OD3D_MESH_TYPES(str, Enum):
     CONVEX500 = 'convex500'
     ALPHA500 = 'alpha500'
 
+class OD3D_PCL_TYPES(str, Enum):
+    META = 'meta'
+    SFM = 'sfm'
+    SFM_MASK = 'sfm_mask'
+
+class OD3D_TFROM_OBJ_TYPES(str, Enum):
+    RAW = 'raw'
+    LABEL3D = 'label3d'
+    # ALIGNED7D = 'aligned7d'
 
 class OD3D_SEQUENCE_SFM_TYPES(str, Enum):
     META = 'meta'
     DROID = 'droid'
     COLMAP = 'colmap'
+
+@dataclass
+class OD3D_TformObjMixin():
+    tform_obj_type: OD3D_TFROM_OBJ_TYPES
+
+@dataclass
+class OD3D_FrameModalitiesMixin():
+    modalities: List
 
 # note these classes can be inherited by frame and sequence classes
 @dataclass
@@ -59,5 +78,11 @@ class OD3D_MeshTypeMixin(OD3D_Object):
     mesh_type: OD3D_MESH_TYPES
 
 @dataclass
+class OD3D_PCLTypeMixin(OD3D_Object):
+    pcl_type: OD3D_PCL_TYPES
+
+
+@dataclass
 class OD3D_SequenceSfMTypeMixin(OD3D_Object):
     sfm_type: OD3D_SEQUENCE_SFM_TYPES # = OD3D_SEQUENCE_SFM_TYPES.DROID
+

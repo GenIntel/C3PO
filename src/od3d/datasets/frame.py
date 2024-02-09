@@ -2,7 +2,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import torch
-from od3d.cv.geometry.transform import tform4x4
+from od3d.cv.geometry.transform import tform4x4, inv_tform4x4
 from od3d.cv.io import read_image
 import torchvision
 from dataclasses import dataclass
@@ -10,11 +10,9 @@ from typing import List, Union
 from enum import Enum
 from od3d.cv.geometry.mesh import Mesh
 from od3d.datasets.object import OD3D_Object, OD3D_CamTform4x4ObjTypeMixin, OD3D_MaskTypeMixin, OD3D_MeshTypeMixin, \
-    OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_FRAME_MASK_TYPES
+    OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_FrameModalitiesMixin, OD3D_TformObjMixin
 from od3d.datasets.frame_meta import OD3D_FrameMeta
 from pathlib import Path
-
-# from od3d.datasets.sequence import OD3D_Sequence
 
 class OD3D_FRAME_MODALITIES(str, Enum):
     NAME = 'name'
@@ -22,21 +20,44 @@ class OD3D_FRAME_MODALITIES(str, Enum):
     CAM_TFORM4X4_OBJ = 'cam_tform4x4_obj'
     CAM_TFORM4X4_OBJS = 'cam_tform4x4_objs'
     CATEGORY = 'category'
+    CATEGORY_ID = 'category_id'
     CATEGORIES = 'categories'
     PCL = 'pcl'
+    SIZE = 'size'
     RGB = 'rgb'
+    RGB_MASK = 'rgb_mask'
     MASK = 'mask'
     MASKS = 'masks'
     DEPTH = 'depth'
     DEPTH_MASK = 'depth_mask'
     MESH = 'mesh'
     MESHS = 'meshs'
-    KPTS = 'kpts'
+    KPTS2D_ANNOT = 'kpts2d_annot'
+    KPTS2D_ANNOT_VSBL = 'kpts2d_annot_vsbl'
+    KPTS3D = 'kpts3d'
+    KPTS_NAMES = 'kpts_names'
     BBOX = 'bbox'
     BBOXS = 'bboxs'
-    CUBOID_FRONT_TFORM4x4_OBJ = 'cuboid_front_tform4x4_obj'
-    SEQUENCE_NAME = 'sequence_name'
     SEQUENCE = 'sequence'
+    SEQUENCE_NAME_UNIQUE = 'sequence_name_unique'
+    FRAME = 'frame'
+    FRAME_NAME_UNIQUE = 'frame_name_unique'
+    RAYS_CENTER3D = 'rays_center3d'
+
+class OD3D_FRAME_MODALITIES_STACKABLE(str, Enum):
+    CAM_INTR4X4 = 'cam_intr4x4'
+    CAM_TFORM4X4_OBJ = 'cam_tform4x4_obj'
+    CAM_TFORM4X4_OBJS = 'cam_tform4x4_objs'
+    CATEGORY_ID = 'category_id'
+    SIZE = 'size'
+    RGB = 'rgb'
+    RGB_MASK = 'rgb_mask'
+    MASK = 'mask'
+    MASKS = 'masks'
+    DEPTH = 'depth'
+    DEPTH_MASK = 'depth_mask'
+    BBOX = 'bbox'
+    BBOXS = 'bboxs'
     RAYS_CENTER3D = 'rays_center3d'
 
 class OD3D_FRAME_KPTS2D_ANNOT_TYPES(str, Enum):
@@ -44,13 +65,65 @@ class OD3D_FRAME_KPTS2D_ANNOT_TYPES(str, Enum):
     LABEL = 'label'
 
 @dataclass
-class OD3D_Frame(OD3D_Object):
+class OD3D_Frame(OD3D_FrameModalitiesMixin, OD3D_Object):
     meta_type = OD3D_FrameMeta
 
+    def get_modality(self, modality: OD3D_FRAME_MODALITIES):
+        if modality in self.modalities:
+            if modality == OD3D_FRAME_MODALITIES.CAM_INTR4X4:
+                return self.cam_intr4x4
+            elif modality == OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ:
+                return self.get_cam_tform4x4_obj()
+            elif modality == OD3D_FRAME_MODALITIES.CATEGORY:
+                return self.category
+            elif modality == OD3D_FRAME_MODALITIES.CATEGORY_ID:
+                return self.category_id
+            elif modality == OD3D_FRAME_MODALITIES.CATEGORIES:
+                return self.categories
+            elif modality == OD3D_FRAME_MODALITIES.PCL:
+                return self.get_pcl()
+            elif modality == OD3D_FRAME_MODALITIES.SIZE:
+                return self.size
+            elif modality == OD3D_FRAME_MODALITIES.RGB:
+                return self.get_rgb()
+            elif modality == OD3D_FRAME_MODALITIES.RGB_MASK:
+                return self.get_rgb_mask()
+            elif modality == OD3D_FRAME_MODALITIES.MASK:
+                return self.get_mask()
+            elif modality == OD3D_FRAME_MODALITIES.DEPTH:
+                return self.get_depth()
+            elif modality == OD3D_FRAME_MODALITIES.DEPTH_MASK:
+                return self.get_depth_mask()
+            elif modality == OD3D_FRAME_MODALITIES.MESH:
+                return self.get_mesh()
+            elif modality == OD3D_FRAME_MODALITIES.BBOX:
+                return self.bbox
+            elif modality == OD3D_FRAME_MODALITIES.BBOXS:
+                return self.bboxs
+            elif modality == OD3D_FRAME_MODALITIES.KPTS2D_ANNOT:
+                return self.kpts2d_annot
+            elif modality == OD3D_FRAME_MODALITIES.KPTS2D_ANNOT_VSBL:
+                return self.kpts2d_annot_vsbl
+            elif modality == OD3D_FRAME_MODALITIES.KPTS3D:
+                return self.kpts3d
+            elif modality == OD3D_FRAME_MODALITIES.KPTS_NAMES:
+                return self.kpts_names
+            elif modality == OD3D_FRAME_MODALITIES.RAYS_CENTER3D:
+                return self.rays_center3d
+            elif modality == OD3D_FRAME_MODALITIES.SEQUENCE:
+                return self.sequence
+            elif modality == OD3D_FRAME_MODALITIES.SEQUENCE_NAME_UNIQUE:
+                return self.sequence.name_unique
+            elif modality == OD3D_FRAME_MODALITIES.FRAME:
+                return self
+            elif modality == OD3D_FRAME_MODALITIES.FRAME_NAME_UNIQUE:
+                return self.name_unique
+
+        logger.warning(f"modality {modality} not supported")
+        return None
     #@property
     #def meta(self):
     #    return OD3D_FrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.name_unique)
-
 
     # pass
     # def __init__(self, path_raw: Path, path_preprocess: Path, name_unique: Path, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
@@ -70,9 +143,11 @@ class OD3D_Frame(OD3D_Object):
         # self._mesh = None
         # self._kpts3d = None
 
+
+
 @dataclass
 class OD3D_FrameMaskMixin(OD3D_MaskTypeMixin):
-    _mask = None
+    mask = None
 
     @property
     def fpath_mask(self):
@@ -91,20 +166,12 @@ class OD3D_FrameMaskMixin(OD3D_MaskTypeMixin):
         else:
             value_write = (value * 255).to(torch.uint8).detach().cpu()
         torchvision.io.write_png(input=value_write, filename=str(self.fpath_mask))
-        self._mask = value
+        self.mask = value
 
     def get_mask(self):
-        if self._mask is None:
-            self._mask = read_image(self.fpath_mask) / 255.
-        return self._mask
-
-    @property
-    def mask(self):
-        return self._mask
-
-    @mask.setter
-    def mask(self, value: torch.Tensor):
-            self._mask = value
+        if self.mask is None:
+            self.mask = read_image(self.fpath_mask) / 255.
+        return self.mask
 
 @dataclass
 class OD3D_FrameSizeMixin(OD3D_Object):
@@ -128,61 +195,55 @@ class OD3D_FrameSizeMixin(OD3D_Object):
         return int(self.size[1].item())
 
 @dataclass
-class OD3D_FrameMaskRGBMixin(OD3D_FrameSizeMixin):
-    _mask_rgb = None
+class OD3D_FrameRGBMaskMixin(OD3D_FrameSizeMixin):
+    rgb_mask = None
 
-    @property
-    def mask_rgb(self):
-        if self._mask_rgb is None:
-            self._mask_rgb = torch.ones(size=(1, self.H, self.W), dtype=torch.bool)
-        return self._mask_rgb
-
-    @mask_rgb.setter
-    def mask_rgb(self, value: torch.Tensor):
-        self._mask_rgb = value
-
+    def get_mask_rgb(self):
+        if self.rgb_mask is None:
+            self.rgb_mask = torch.ones(size=(1, self.H, self.W), dtype=torch.bool)
+        return self.rgb_mask
 
 
 @dataclass
 class OD3D_FrameCamTform4x4ObjMixin(OD3D_CamTform4x4ObjTypeMixin):
-    _cam_tform4x4_obj = None
+    cam_tform4x4_obj = None
 
-    @property
-    def cam_tform4x4_obj(self):
-        if self._cam_tform4x4_obj is None:
-            if self.cam_tform4x4_obj_type == OD3D_CAM_TFORM_OBJ_TYPES.META:
-                self._cam_tform4x4_obj = self.meta.cam_tform4x4_obj
-            elif self.cam_tform4x4_obj_type == OD3D_CAM_TFORM_OBJ_TYPES.SFM:
-                self._cam_tform4x4_obj = self.sequence.get_cam_tform4x4_obj(f"{Path(self.name_unique).stem}")
-            else:
-                raise ValueError(f"cam_tform4x4_obj_type {self.cam_tform4x4_obj_type} not supported")
-        return self._cam_tform4x4_obj
 
-    @cam_tform4x4_obj.setter
-    def cam_tform4x4_obj(self, value: torch.Tensor):
-            self._cam_tform4x4_obj = value
+    def read_cam_tform4x4_obj(self, cam_tform4x4_obj_type = None):
+        if cam_tform4x4_obj_type is None:
+            cam_tform4x4_obj_type = self.cam_tform4x4_obj_type
+
+        if cam_tform4x4_obj_type == OD3D_CAM_TFORM_OBJ_TYPES.META:
+            cam_tform4x4_obj = self.meta.cam_tform4x4_obj
+        elif cam_tform4x4_obj_type == OD3D_CAM_TFORM_OBJ_TYPES.SFM:
+            cam_tform4x4_obj = self.sequence.get_sfm_cam_tform4x4_obj(f"{Path(self.name_unique).stem}")
+        else:
+            raise ValueError(f"cam_tform4x4_obj_type {self.cam_tform4x4_obj_type} not supported")
+
+        if cam_tform4x4_obj_type == self.cam_tform4x4_obj_type:
+            self.cam_tform4x4_obj = cam_tform4x4_obj
+        return cam_tform4x4_obj
+
+    def get_cam_tform4x4_obj(self, cam_tform4x4_obj_type = None):
+        if self.cam_tform4x4_obj is not None and (cam_tform4x4_obj_type is None or self.cam_tform4x4_obj_type == cam_tform4x4_obj_type):
+            cam_tform4x4_obj = self.cam_tform4x4_obj
+        else:
+            cam_tform4x4_obj = self.read_cam_tform4x4_obj(cam_tform4x4_obj_type=cam_tform4x4_obj_type)
+        return cam_tform4x4_obj
 
 @dataclass
 class OD3D_FrameMeshMixin(OD3D_MeshTypeMixin):
-    _mesh = None
+    mesh: Mesh = None
 
     @property
     def fpath_mesh(self):
-        if self.mesh_type == OD3D_MESH_TYPES.META:
-            return self.path_raw.joinpath(self.meta.rfpath_mesh)
-        else:
-            return self.path_preprocess.joinpath("mesh", f"{self.mesh_type}", f"{self.name_unique}.ply")
+        return self.get_fpath_mesh()
 
-    @property
-    def mesh(self):
-        if self._mesh is None:
-            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh)
-        return self._mesh
+    def get_fpath_mesh(self, mesh_type=None):
+        return self.sequence.get_fpath_mesh(mesh_type=mesh_type)
 
-    @mesh.setter
-    def mesh(self, value: torch.Tensor):
-            self._mesh = value
-
+    def get_mesh(self):
+        return self.sequence.get_mesh()
 
 @dataclass
 class OD3D_FrameCamIntr4x4Mixin(OD3D_Frame):
@@ -314,50 +375,38 @@ class OD3D_FrameKpts2d3dMixin(OD3D_Object):
 #class OD3D_Kpts3dMixin(OD3D_Object):
 
 class OD3D_FrameRGBMixin(OD3D_Object):
-    _rgb = None
+    rgb = None
 
     @property
     def fpath_rgb(self):
         return self.path_raw.joinpath(self.meta.rfpath_rgb)
 
-    @property
-    def rgb(self):
-        if self._rgb is None:
-            self._rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB)
-        return self._rgb
+    def get_rgb(self):
+        if self.rgb is None:
+            self.rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB)
+        return self.rgb
 
-    @rgb.setter
-    def rgb(self, value: torch.Tensor):
-            self._rgb = value
 
 class OD3D_FrameDepthMixin(OD3D_Object):
-    _depth = None
+    depth = None
 
     @property
     def fpath_depth(self):
         return self.path_raw.joinpath(self.meta.rfpath_depth)
 
-    @property
-    def depth(self):
-        if self._depth is None:
-            self._depth = torchvision.io.read_image(str(self.fpath_depth), mode=torchvision.io.ImageReadMode.UNCHANGED)
-        return self._depth
+    def get_depth(self):
+        if self.depth is None:
+            self.depth = torchvision.io.read_image(str(self.fpath_depth), mode=torchvision.io.ImageReadMode.UNCHANGED)
+        return self.depth
 
-    @depth.setter
-    def depth(self, value: torch.Tensor):
-            self._depth = value
 
 class OD3D_FrameDepthMaskMixin(OD3D_Object):
-    _depth_mask = None
-    @property
-    def depth_mask(self):
-        if self._depth_mask is None:
-            self._depth_mask = read_image(self.path_raw.joinpath(self.meta.rfpath_depth_mask))
-        return self._depth_mask
+    depth_mask = None
 
-    @depth_mask.setter
-    def depth_mask(self, value: torch.Tensor):
-            self._depth_mask = value
+    def get_depth_mask(self):
+        if self.depth_mask is None:
+            self.depth_mask = read_image(self.path_raw.joinpath(self.meta.rfpath_depth_mask))
+        return self.depth_mask
 
 @dataclass
 class OD3D_FrameSequenceMixin(OD3D_Object):
@@ -415,9 +464,28 @@ class OD3D_FrameCamIntr4x4Mixin(OD3D_Frame):
             self._cam_intr4x4 = value
 
 
+@dataclass
+class OD3D_FrameTformObjMixin(OD3D_TformObjMixin, OD3D_FrameCamTform4x4ObjMixin, OD3D_Frame):
+
+    def read_cam_tform4x4_obj(self, cam_tform4x4_obj_type = None):
+        cam_tform4x4_obj = super().read_cam_tform4x4_obj(cam_tform4x4_obj_type=cam_tform4x4_obj_type)
+
+        tform_obj = self.sequence.get_tform_obj()
+        if tform_obj is not None:
+            cam_tform4x4_obj = tform4x4(cam_tform4x4_obj, inv_tform4x4(tform_obj))
+
+        # note: note alignment of droid slam may include scale, therefore remove this scale.
+        # note: projection does not change as we scale the depth z to the object as well
+        scale = cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+        cam_tform4x4_obj[:3] = cam_tform4x4_obj[:3] / scale
+
+        if cam_tform4x4_obj_type is None or cam_tform4x4_obj_type == self.cam_tform4x4_obj_type:
+            self.cam_tform4x4_obj = cam_tform4x4_obj
+        return cam_tform4x4_obj
+
 OD3D_FrameClasses = Union[OD3D_Object, OD3D_FrameCategoryMixin, OD3D_FrameCategoriesMixin,
                           OD3D_FrameCamTform4x4ObjMixin, OD3D_CamProj4x4ObjMixin, OD3D_FrameCamIntr4x4Mixin,
                           OD3D_FrameMaskMixin, OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin,
                           OD3D_FrameSizeMixin, OD3D_FrameRGBMixin,
                           OD3D_FrameMeshMixin, OD3D_FrameSequenceMixin, OD3D_FrameSubsetMixin,
-                          OD3D_FrameBBoxMixin, OD3D_FrameKpts2d3dMixin, OD3D_FrameMaskRGBMixin]
+                          OD3D_FrameBBoxMixin, OD3D_FrameKpts2d3dMixin, OD3D_FrameRGBMaskMixin]

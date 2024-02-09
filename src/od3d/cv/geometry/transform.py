@@ -439,6 +439,13 @@ def depth2normals_grid(depth, cam_intr4x4, shift=1):
     # pts3d = pts3d_homog.expand(*shape_first_dims, 3, H, W) * depth.expand(*shape_first_dims, 1, H, W)
     # return pts3d
 
+
+def transf3d_normal_broadcast(normals3d, transf4x4):
+    shape_first_dims = torch.broadcast_shapes(normals3d.shape[:-1], transf4x4.shape[:-2])
+    transf4x4_zero_transl = transf4x4.clone()
+    transf4x4_zero_transl[..., :3, 3] = 0.
+    return transf3d(normals3d.expand(*shape_first_dims, 3), transf4x4_zero_transl.expand(*shape_first_dims, 4, 4))
+
 def transf3d_broadcast(pts3d, transf4x4):
     shape_first_dims = torch.broadcast_shapes(pts3d.shape[:-1], transf4x4.shape[:-2])
     return transf3d(pts3d.expand(*shape_first_dims, 3), transf4x4.expand(*shape_first_dims, 4, 4))

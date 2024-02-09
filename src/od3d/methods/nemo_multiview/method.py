@@ -134,7 +134,7 @@ class NeMo_MultiView(NeMo):
         time_loaded = time.time()
         with torch.no_grad():
             feats2d_net = self.net(batch.rgb)
-            feats2d_net_mask = resize(batch.mask_rgb, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+            feats2d_net_mask = resize(batch.rgb_mask, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
             if self.config.inference.use_mask_object:
                 feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
                                                                   W_out=feats2d_net.shape[3])

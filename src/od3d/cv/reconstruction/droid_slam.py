@@ -1,6 +1,5 @@
 import logging
 logger = logging.getLogger(__name__)
-from od3d.cv.reconstruction.clean import get_pcl_clean_with_masks
 from pathlib import Path
 import torch
 import os
@@ -12,6 +11,7 @@ from od3d.cv.io import write_pts3d_with_colors_and_normals
 import re
 import numpy as np
 
+
 def atoi(text):
     return int(text) if text.isdigit() else text
 
@@ -19,14 +19,15 @@ def sorted_image_list(image_list):
     return sorted(image_list, key=lambda f: [atoi(val) for val in re.split(r'(\d+)', Path(f).stem)])
 
 def run_droid_slam(path_rgbs:Path, path_out_root:Path, rpath_out:Path, cam_intr4x4: torch.Tensor, path_masks=None,
-                   pts3d_count_min = 10, pts3d_max_count = 20000, pts3d_prob_thresh = 0.6):
+                   pts3d_count_min = 10, pts3d_max_count = 20000, pts3d_prob_thresh = 0.6,
+                   pcl_fname='pcl.ply', rays_center3d_fname='rays_center3d.pt', cam_tform_obj_dname='cam_tform4x4_obj'):
 
     stride = "1"
     image_tag = "limpbot/droid-slam:v1"
     path_out = path_out_root.joinpath(rpath_out)
-    fpath_out_pcl = path_out.joinpath('pcl_obj.ply')
-    fpath_out_center3d = path_out.joinpath('rays_center3d.pt')
-    path_out_cam_tform_obj = path_out.joinpath('cam_tform4x4_obj')
+    fpath_out_pcl = path_out.joinpath(pcl_fname)
+    fpath_out_center3d = path_out.joinpath(rays_center3d_fname)
+    path_out_cam_tform_obj = path_out.joinpath(cam_tform_obj_dname)
 
     fx = cam_intr4x4[0][0]
     fy = cam_intr4x4[1][1]
@@ -138,27 +139,28 @@ def run_droid_slam(path_rgbs:Path, path_out_root:Path, rpath_out:Path, cam_intr4
     # open3d.visualization.draw_geometries([o3d_pcl])
     ## DEBUG BLOCK END
 
-    if path_masks is not None:
-        masks = torch.stack([read_image(fpath_mask) for fpath_mask in sorted_image_list(list(path_masks.iterdir()))], dim=0).to(device=device)[partial_tstamps]
-    else:
-        masks = torch.ones_like(rgbs[:, :1]).to(device=device)
-
-    cams_intr4x4 = torch.stack([cam_intr4x4 for _ in range(len(cams_tform4x4_obj))], dim=0).to(device=device)
-    pts3d_obj, pts3d_obj_mask = get_pcl_clean_with_masks(pcl=pts3d, masks=masks,
-                                                             cams_intr4x4=cams_intr4x4,
-                                                             cams_tform4x4_obj=cams_tform4x4_obj,
-                                                             pts3d_prob_thresh=pts3d_prob_thresh,
-                                                             pts3d_max_count=pts3d_max_count,
-                                                             pts3d_count_min=pts3d_count_min,
-                                                             return_mask=True)
+    #if path_masks is not None:
+    #    masks = torch.stack([read_image(fpath_mask) for fpath_mask in sorted_image_list(list(path_masks.iterdir()))], dim=0).to(device=device)[partial_tstamps]
+    #else:
+    #    masks = torch.ones_like(rgbs[:, :1]).to(device=device)
+    #
+    #cams_intr4x4 = torch.stack([cam_intr4x4 for _ in range(len(cams_tform4x4_obj))], dim=0).to(device=device)
+    # pts3d_obj, pts3d_obj_mask = get_pcl_clean_with_masks(pcl=pts3d, masks=masks,
+    #                                                      cams_intr4x4=cams_intr4x4,
+    #                                                      cams_tform4x4_obj=cams_tform4x4_obj,
+    #                                                      pts3d_prob_thresh=pts3d_prob_thresh,
+    #                                                      pts3d_max_count=pts3d_max_count,
+    #                                                      pts3d_count_min=pts3d_count_min,
+    #                                                      return_mask=True)
 
     # pts3d_clean, pts3d_clean_mask = self.get_pcl_clean_with_focus_point_and_plane_removal(
     #     pts3d=pts3d, pts3d_colors=pts3d_colors, cams_tform4x4_obj=cams_tform4x4_obj,
     #     pts3d_count_min=pts3d_count_min, return_mask=True
     # )
 
-    pts3d_colors_obj = pts3d_colors[pts3d_obj_mask]
-    pts3d_normals_obj = pts3d_normals[pts3d_obj_mask]
+    pts3d_obj = pts3d
+    pts3d_colors_obj = pts3d_colors # [pts3d_obj_mask]
+    pts3d_normals_obj = pts3d_normals # [pts3d_obj_mask]
 
     ## DEBUG BLOCK START
     # scams = 30

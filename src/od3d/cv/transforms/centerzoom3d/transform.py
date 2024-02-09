@@ -38,10 +38,10 @@ class CenterZoom3D(OD3D_Transform):
         # logger.info(f"Frame name {self.name}")
         # _, _, _, _ = frame.size, frame.cam_intr4x4, frame.cam_tform4x4_obj, frame.cam_proj4x4_obj
 
-        if frame.cam_tform4x4_obj[2, 3] <= 0.:
+        if frame.get_cam_tform4x4_obj()[2, 3] <= 0.:
             logger.warning(f"dist <= 0")
 
-        if self.center_use_mask and (frame.mask > 0.5).sum() > 0:
+        if self.center_use_mask and (frame.get_mask() > 0.5).sum() > 0:
             mask = frame.mask > 0.5
             mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
             mask_pxl2d = mask_pxl2d[mask[0]]
@@ -128,23 +128,23 @@ class CenterZoom3D(OD3D_Transform):
             center2d_shifted[1] += frame.H * self.center_rel_shift_xy[1]
 
 
-        frame.mask_rgb, _ = crop(frame.mask_rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
+        frame.mask_rgb, _ = crop(frame.get_mask_rgb(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
 
         if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
-            frame.mask, _ = crop(img=frame.mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
+            frame.mask, _ = crop(img=frame.get_mask(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
 
         if OD3D_FRAME_MODALITIES.DEPTH in frame.modalities:
-            frame.depth, _ = crop(img=frame.depth, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_depth)
+            frame.depth, _ = crop(img=frame.get_depth(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_depth)
 
         if OD3D_FRAME_MODALITIES.DEPTH_MASK in frame.modalities:
-            frame.depth_mask, _ = crop(img=frame.depth_mask, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
+            frame.depth_mask, _ = crop(img=frame.get_depth_mask(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
 
         #mix_real_with_synthetic, cam_crop_tform_cam = crop(img=mix_real_with_synthetic, center=center, H_out=H_out, W_out=W_out, scale=scale, ctx=self.txtr)
         if self.apply_txtr:
-            frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale,
+            frame.rgb, cam_crop_tform_cam = crop(img=frame.get_rgb(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale,
                                                   ctx=self.dtd.get_random_item().rgb, mode=self.mode_rgb)
         else:
-            frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale,
+            frame.rgb, cam_crop_tform_cam = crop(img=frame.get_rgb(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale,
                                                  ctx=None, mode=self.mode_rgb)
 
         frame.size[0:1] = self.H
@@ -163,7 +163,7 @@ class CenterZoom3D(OD3D_Transform):
             frame.bbox[[0, 2]] = frame.bbox[[0, 2]] + cam_crop_tform_cam[0, 2]
             frame.bbox[[1, 3]] = frame.bbox[[1, 3]] + cam_crop_tform_cam[1, 2]
 
-        if OD3D_FRAME_MODALITIES.KPTS in frame.modalities:
+        if OD3D_FRAME_MODALITIES.KPTS2D_ANNOT in frame.modalities:
             frame.kpts2d_annot = frame.kpts2d_annot * scale[None,]
             frame.kpts2d_annot = frame.kpts2d_annot + cam_crop_tform_cam[:2, 2]
 

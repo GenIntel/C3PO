@@ -7,8 +7,10 @@ modalities:
     - 'cam_intr4x4'
     - 'cam_tform4x4_obj'
     - 'rays_center3d'
+    - 'mask'
     - 'category'
     - 'rgb'
+    - 'mesh'
     #- 'mask'
     #- 'sequence_name'
     #- 'sequence'
@@ -44,19 +46,14 @@ preprocess:
     enabled: False
     override: False
   mask:
+    enabled: False
+    override: False
+  pcl:
+    enabled: False
+    override: False
+  mesh:
+    enabled: False
+    override: False
+  tform_obj:
     enabled: True
     override: False
-
-
-#dict_nested_frames:
-#  car:
-#    '185_19982_37678':
-#    '206_21799_45886':
-#    '194_20939_43630':
-#    '194_20900_41097':
-#    '116_13655_29006':
-#    '206_21810_45890':
-#    '106_12650_23736':
-#    '206_21805_45881':
-#    '216_22836_48452':
-#    '216_22808_47498':

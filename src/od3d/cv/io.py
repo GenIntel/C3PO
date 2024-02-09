@@ -11,6 +11,9 @@ import numpy as np
 
 import cv2
 
+def get_default_device():
+    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 def read_pts3d_colors(fpath: Path):
     pcd = o3d.io.read_point_cloud(str(fpath))
     return torch.from_numpy(np.asarray(pcd.colors)).to(torch.float)
