@@ -476,7 +476,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                 sequence2 = self.get_sequence_by_name_unique(name_unique=sequence_name_unique2)
                 sequence1.preprocess_mesh_feats_dist(sequence=sequence2, override=override)
 
-    def preprocess_tform_obj(self, override=False):`
+    def preprocess_tform_obj(self, override=False):
         logger.info("preprocess tform obj...")
         from od3d.datasets.sequence_meta import OD3D_SequenceMeta
         for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
