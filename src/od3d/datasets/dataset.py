@@ -16,6 +16,7 @@ import numpy as np
 import od3d.io
 from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES
 from od3d.cv.geometry.transform import proj3d2d_broadcast
+from od3d.datasets.sequence import OD3D_Sequence
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -37,6 +38,7 @@ class OD3D_Dataset(Dataset):
     from od3d.datasets.enum import OD3D_CATEGORIES
     all_categories = list(OD3D_CATEGORIES)
     subclasses = {}
+    frame_type = OD3D_Frame
 
     @classmethod
     def create_from_config(cls, config: DictConfig, transform=None):
@@ -87,14 +89,16 @@ class OD3D_Dataset(Dataset):
         self.categories = categories if categories is not None else self.all_categories
 
         logger.info('completing nested frames..., can take up to 500 seconds...')
-        dict_nested_frames = OD3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta,
-                                                                  dict_nested_metas=dict_nested_frames, dict_nested_metas_ban=dict_nested_frames_ban)
+        dict_nested_frames = self.frame_type.meta_type.complete_nested_metas(path_meta=self.path_meta,
+                                                                             dict_nested_metas=dict_nested_frames,
+                                                                             dict_nested_metas_ban=
+                                                                             dict_nested_frames_ban)
 
 
         dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames)
 
         logger.info('unrolling nested frames...')
-        list_frames_unique = OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames)
+        list_frames_unique = self.frame_type.meta_type.unroll_nested_metas(dict_nested_meta=dict_nested_frames)
 
         logger.info('filtering frames...')
         list_frames_unique = self.filter_list_frames_unique(list_frames_unique)
@@ -341,7 +345,11 @@ class OD3D_Dataset(Dataset):
 
         return dict_frames_stacked
 
+
+
 class OD3D_SequenceDataset(OD3D_Dataset):
+    sequence_type = OD3D_Sequence
+
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES],
                  path_raw: Path, path_preprocess: Path,
                  categories: List=None,
@@ -437,6 +445,66 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         dict_nested_sequences = OD3D_SequenceMetaCategoryMixin.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_sequences, dict_nested_metas_ban=dict_nested_sequences_ban)
 
         return dict_nested_sequences
+
+
+    def get_subset_by_sequences(self, dict_category_sequences: Dict[str, List[str]], frames_count_max_per_sequence=None):
+        dict_nested_frames = {}
+        for cat, seqs in dict_category_sequences.items():
+            dict_nested_frames[cat] = {}
+            for seq in seqs:
+                 dict_nested_frames[cat][seq] = None
+        return OD3D_SequenceDataset(
+            name=self.name, modalities=self.modalities, path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+            categories=self.categories, dict_nested_frames=dict_nested_frames, transform=self.transform,
+            index_shift=self.index_shift)
+
+    def get_split_sequences_shared(self, fraction1: float):
+        dict_category_sequence_name_frames_names_subsetA = {}
+        dict_category_sequence_name_frames_names_subsetB = {}
+        dict_category_sequence_name_frames_names = self.frame_type.meta_type.rollup_flattened_frames(self.list_frames_unique)
+        #dict_category_sequence_name_frames_names = self.list_categories_sequences_names_frames_names_to_dict(self.list_frames_unique)
+        for category, dict_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
+            dict_category_sequence_name_frames_names_subsetA[category] = {}
+            dict_category_sequence_name_frames_names_subsetB[category] = {}
+            for sequence_name, frames_names in dict_sequence_name_frames_names.items():
+                frames_names = sorted(frames_names, key=lambda fn: int(fn))
+                cutoff = int(len(frames_names) * fraction1)
+                dict_category_sequence_name_frames_names_subsetA[category][sequence_name] = frames_names[:cutoff]
+                dict_category_sequence_name_frames_names_subsetB[category][sequence_name] = frames_names[cutoff:]
+
+        return self.get_split_from_dicts(dict_category_sequence_name_frames_names_subsetA, dict_category_sequence_name_frames_names_subsetB)
+
+    def get_split_sequences_separated(self, fraction1: float):
+        dict_category_sequence_name_frames_names_subsetA = {}
+        dict_category_sequence_name_frames_names_subsetB = {}
+
+        dict_category_sequence_name_frames_names = self.frame_type.meta_type.rollup_flattened_frames(self.list_frames_unique)
+        #dict_category_sequence_name_frames_names = self.list_categories_sequences_names_frames_names_to_dict(self.list_frames_unique)
+        for category, dict_sequence_name_frames_names in dict_category_sequence_name_frames_names.items():
+            seqs_names = list(dict_sequence_name_frames_names.keys())
+            cutoff = int(len(seqs_names) * fraction1)
+            dict_category_sequence_name_frames_names_subsetA[category] = {s: dict_sequence_name_frames_names[s] for s in seqs_names[:cutoff]}
+            dict_category_sequence_name_frames_names_subsetB[category] = {s: dict_sequence_name_frames_names[s] for s in seqs_names[cutoff:]}
+
+        return self.get_split_from_dicts(dict_category_sequence_name_frames_names_subsetA, dict_category_sequence_name_frames_names_subsetB)
+
+    def get_subset_with_dict_nested_frames(self, dict_nested_frames):
+        return OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                    path_preprocess=self.path_preprocess, categories=self.categories,
+                    dict_nested_frames=dict_nested_frames, transform=self.transform, index_shift=self.index_shift)
+
+    def get_split_from_dicts(self, dict_nested_frames_subsetA, dict_nested_frames_subsetB):
+        co3d_subsetA = OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                                            path_preprocess=self.path_preprocess, categories=self.categories,
+                                            dict_nested_frames=dict_nested_frames_subsetA, transform=self.transform,
+                                            index_shift=self.index_shift)
+
+        co3d_subsetB = OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+                                            path_preprocess=self.path_preprocess, categories=self.categories,
+                                            dict_nested_frames=dict_nested_frames_subsetB,
+                                            transform=self.transform, index_shift=self.index_shift)
+
+        return co3d_subsetA, co3d_subsetB
 
     def preprocess_sfm(self, override=False):
         logger.info("preprocess sfm...")

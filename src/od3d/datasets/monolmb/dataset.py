@@ -1,8 +1,8 @@
 import logging
 logger = logging.getLogger(__name__)
 
-import od3d.datasets.monolmb.frame # import MonoLMB_Frame, MonoLMB_FrameMeta
-import od3d.datasets.monolmb.sequence # import MonoLMB_Sequence
+from od3d.datasets.monolmb.frame import MonoLMB_Frame, MonoLMB_FrameMeta
+from od3d.datasets.monolmb.sequence import MonoLMB_Sequence
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_SequenceDataset
 from od3d.datasets.object import OD3D_FRAME_MASK_TYPES, OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_PCL_TYPES, \
@@ -16,6 +16,8 @@ import shutil
 class MonoLMB(OD3D_SequenceDataset):
     from od3d.datasets.monolmb.enum import MONOLMB_CATEGORIES
     all_categories = list(MONOLMB_CATEGORIES)
+    sequence_type = MonoLMB_Sequence # od3d.datasets.monolmb.sequence.MonoLMB_Sequence
+    frame_type = MonoLMB_Frame # od3d.datasets.monolmb.frame.MonoLMB_Frame
 
     def path_videos(self):
         return MonoLMB.get_path_videos(self.path_raw)
@@ -32,32 +34,32 @@ class MonoLMB(OD3D_SequenceDataset):
         return path_raw.joinpath('frames')
 
     def get_frame_by_name_unique(self, name_unique):
-        return od3d.datasets.monolmb.frame.MonoLMB_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
-                                                         name_unique=name_unique, all_categories=self.categories,
-                                                         mask_type=OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D,
-                                                         cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM,
-                                                         mesh_type=OD3D_MESH_TYPES.CUBOID500,
-                                                         mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
-                                                         mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
-                                                         pcl_type=OD3D_PCL_TYPES.SFM_MASK,
-                                                         sfm_type=OD3D_SEQUENCE_SFM_TYPES.DROID,
-                                                         modalities=self.modalities,
-                                                         tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D,)
+        return self.frame_type(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+                               name_unique=name_unique, all_categories=self.categories,
+                               mask_type=OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D,
+                               cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM,
+                               mesh_type=OD3D_MESH_TYPES.CUBOID500,
+                               mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+                               mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
+                               pcl_type=OD3D_PCL_TYPES.SFM_MASK,
+                               sfm_type=OD3D_SEQUENCE_SFM_TYPES.DROID,
+                               modalities=self.modalities,
+                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D,)
 
     def get_sequence_by_name_unique(self, name_unique):
-        return od3d.datasets.monolmb.sequence.MonoLMB_Sequence(name_unique=name_unique,
-                                                        path_raw=self.path_raw,
-                                                        path_preprocess=self.path_preprocess,
-                                                        all_categories=self.categories,
-                                                        mask_type=OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D,
-                                                        cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM,
-                                                        mesh_type=OD3D_MESH_TYPES.CUBOID500,
-                                                        mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
-                                                        mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
-                                                        pcl_type=OD3D_PCL_TYPES.SFM_MASK,
-                                                        sfm_type=OD3D_SEQUENCE_SFM_TYPES.DROID,
-                                                        modalities=self.modalities,
-                                                        tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D,)
+        return self.sequence_type(name_unique=name_unique,
+                                  path_raw=self.path_raw,
+                                  path_preprocess=self.path_preprocess,
+                                  all_categories=self.categories,
+                                  mask_type=OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D,
+                                  cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM,
+                                  mesh_type=OD3D_MESH_TYPES.CUBOID500,
+                                  mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+                                  mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
+                                  pcl_type=OD3D_PCL_TYPES.SFM_MASK,
+                                  sfm_type=OD3D_SEQUENCE_SFM_TYPES.DROID,
+                                  modalities=self.modalities,
+                                  tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D,)
 
     @staticmethod
     def setup(config: DictConfig):
@@ -121,7 +123,7 @@ class MonoLMB(OD3D_SequenceDataset):
                     from od3d.cv.io import read_image
                     H, W = read_image(fpath_frame).shape[1:]
                     l_size = torch.LongTensor([H, W]).tolist()
-                    frame_meta = od3d.datasets.monolmb.frame.MonoLMB_FrameMeta.load_from_raw(
+                    frame_meta = MonoLMB_FrameMeta.load_from_raw(
                         name=fpath_frame.stem, category=category, sequence_name=sequence_name,
                         rfpath_rgb=Path(fpath_frame.relative_to(path_raw)), l_size=l_size)
 
