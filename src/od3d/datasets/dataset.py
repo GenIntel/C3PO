@@ -208,6 +208,7 @@ class OD3D_Dataset(Dataset):
                 return i
         return -1
 
+
     def collate_fn(self, frames: List[OD3D_Frame], device='cpu', dtype=torch.float32, modalities=None):
         if modalities is None:
             modalities = self.modalities
@@ -215,7 +216,7 @@ class OD3D_Dataset(Dataset):
         return frames
 
     def get_dataloader(self, batch_size=1, shuffle=False):
-        dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False, collate_fn=self.collate_fn)
+        dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=batch_size, shuffle=shuffle, collate_fn=self.collate_fn)
         return dataloader
 
     @staticmethod
@@ -458,7 +459,24 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             sequence = self.get_sequence_by_name_unique(name_unique=sequence_name_unique)
             sequence.preprocess_mesh(override=override)
 
-    def preprocess_tform_obj(self, override=False):
+    def preprocess_mesh_feats(self, override=False):
+        logger.info("preprocess mesh feats...")
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
+            sequence = self.get_sequence_by_name_unique(name_unique=sequence_name_unique)
+            sequence.preprocess_mesh_feats(override=override)
+
+    def preprocess_mesh_feats_dist(self, override=False):
+        logger.info("preprocess mesh feats dist...")
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        sequences_names_unique = OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names)
+        for sequence_name_unique1 in sequences_names_unique:
+            for sequence_name_unique2 in sequences_names_unique:
+                sequence1 = self.get_sequence_by_name_unique(name_unique=sequence_name_unique1)
+                sequence2 = self.get_sequence_by_name_unique(name_unique=sequence_name_unique2)
+                sequence1.preprocess_mesh_feats_dist(sequence=sequence2, override=override)
+
+    def preprocess_tform_obj(self, override=False):`
         logger.info("preprocess tform obj...")
         from od3d.datasets.sequence_meta import OD3D_SequenceMeta
         for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
@@ -483,7 +501,12 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             if key == 'mesh' and config_preprocess.mesh.get('enabled', False):
                 override = config_preprocess.mesh.get('override', False)
                 self.preprocess_mesh(override=override)
-
+            if key == 'mesh_feats' and config_preprocess.mesh_feats.get('enabled', False):
+                override = config_preprocess.mesh_feats.get('override', False)
+                self.preprocess_mesh_feats(override=override)
+            if key == 'mesh_feats_dist' and config_preprocess.mesh_feats_dist.get('enabled', False):
+                override = config_preprocess.mesh_feats_dist.get('override', False)
+                self.preprocess_mesh_feats_dist(override=override)
     def get_sequence_by_name_unique(self, name_unique: str):
         raise NotImplementedError
 

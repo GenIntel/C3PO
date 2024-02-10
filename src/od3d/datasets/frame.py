@@ -10,7 +10,9 @@ from typing import List, Union
 from enum import Enum
 from od3d.cv.geometry.mesh import Mesh
 from od3d.datasets.object import OD3D_Object, OD3D_CamTform4x4ObjTypeMixin, OD3D_MaskTypeMixin, OD3D_MeshTypeMixin, \
-    OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_FrameModalitiesMixin, OD3D_TformObjMixin
+    OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_FrameModalitiesMixin, OD3D_TformObjMixin, \
+    OD3D_MeshFeatsTypeMixin
+
 from od3d.datasets.frame_meta import OD3D_FrameMeta
 from pathlib import Path
 
@@ -232,7 +234,7 @@ class OD3D_FrameCamTform4x4ObjMixin(OD3D_CamTform4x4ObjTypeMixin):
         return cam_tform4x4_obj
 
 @dataclass
-class OD3D_FrameMeshMixin(OD3D_MeshTypeMixin):
+class OD3D_FrameMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin):
     mesh: Mesh = None
 
     @property
@@ -384,7 +386,7 @@ class OD3D_FrameRGBMixin(OD3D_Object):
 
     def get_rgb(self):
         if self.rgb is None:
-            self.rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB)
+            self.rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB) / 255.
         return self.rgb
 
 

@@ -42,6 +42,19 @@ class OD3D_MESH_TYPES(str, Enum):
     ALPHA500 = 'alpha500'
     CUBOID500 = 'cuboid500'
 
+class OD3D_MESH_FEATS_TYPES(str, Enum):
+    M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC = 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_acc'
+    M_DINOV2_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC = 'M_dinov2_frozen_base_no_norm_T_centerzoom512_R_acc'
+    M_DINOV2_FROZEN_BASE_T_CENTERZOOM512_R_ACC = 'M_dinov2_frozen_base_T_centerzoom512_R_acc'
+    M_DINO_VITS8_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC = 'M_dino_vits8_frozen_base_no_norm_T_centerzoom512_R_acc'
+    M_RESNET50_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC = 'M_resnet50_frozen_base_no_norm_T_centerzoom512_R_acc'
+
+class OD3D_MESH_FEATS_DIST_REDUCE_TYPES(str, Enum):
+    AVG = 'avg'
+    AVG50 = 'avg50'
+    MIN = 'min'
+    MIN_AVG = 'min_avg'
+
 class OD3D_PCL_TYPES(str, Enum):
     META = 'meta'
     SFM = 'sfm'
@@ -79,6 +92,12 @@ class OD3D_MaskTypeMixin(OD3D_Object):
 @dataclass
 class OD3D_MeshTypeMixin(OD3D_Object):
     mesh_type: OD3D_MESH_TYPES
+
+@dataclass
+class OD3D_MeshFeatsTypeMixin(OD3D_Object):
+    mesh_feats_type: OD3D_MESH_FEATS_TYPES
+    mesh_feats_dist_reduce_type: OD3D_MESH_FEATS_DIST_REDUCE_TYPES
+
 
 @dataclass
 class OD3D_PCLTypeMixin(OD3D_Object):

@@ -6,7 +6,7 @@ import od3d.datasets.monolmb.sequence # import MonoLMB_Sequence
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_SequenceDataset
 from od3d.datasets.object import OD3D_FRAME_MASK_TYPES, OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_PCL_TYPES, \
-    OD3D_SEQUENCE_SFM_TYPES, OD3D_TFROM_OBJ_TYPES
+    OD3D_SEQUENCE_SFM_TYPES, OD3D_TFROM_OBJ_TYPES, OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES
 from od3d.datasets.sequence_meta import OD3D_SequenceMetaCategoryMixin
 
 from pathlib import Path
@@ -37,6 +37,8 @@ class MonoLMB(OD3D_SequenceDataset):
                                                          mask_type=OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D,
                                                          cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM,
                                                          mesh_type=OD3D_MESH_TYPES.CUBOID500,
+                                                         mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+                                                         mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
                                                          pcl_type=OD3D_PCL_TYPES.SFM_MASK,
                                                          sfm_type=OD3D_SEQUENCE_SFM_TYPES.DROID,
                                                          modalities=self.modalities,
@@ -50,6 +52,8 @@ class MonoLMB(OD3D_SequenceDataset):
                                                         mask_type=OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D,
                                                         cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM,
                                                         mesh_type=OD3D_MESH_TYPES.CUBOID500,
+                                                        mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+                                                        mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
                                                         pcl_type=OD3D_PCL_TYPES.SFM_MASK,
                                                         sfm_type=OD3D_SEQUENCE_SFM_TYPES.DROID,
                                                         modalities=self.modalities,
