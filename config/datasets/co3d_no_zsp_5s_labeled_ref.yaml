@@ -6,16 +6,16 @@ name: co3d_no_zsp_5s_labeled_ref
 sequences_count_max_per_category: 20
 sequences_sort_pcl_score: True
 
-preprocess:
-  pcl:
-    enabled: False
-    override: False
-  mesh:
-    enabled: False
-    override: False
-  label:
-    enabled: False
-    override: False
+#preprocess:
+#  pcl:
+#    enabled: False
+#    override: False
+#  mesh:
+#    enabled: False
+#    override: False
+#  label:
+#    enabled: False
+#    override: False
 
 #  mesh:
 #    enabled: True
