@@ -100,7 +100,8 @@ class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
         return self.frame_type(name_unique=frame_name_unique, **all_attrs_except_name_unique)
 
 
-    def get_cams(self, cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES=None, cams_count=5, show_imgs=True):
+    def read_cams(self, cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES=None, tform_obj_type= None, cams_count=5,
+                  show_imgs=True):
         cams_tform4x4_world = []
         cams_intr4x4 = []
         cams_imgs = []
@@ -112,11 +113,31 @@ class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
         for c in range(0, frames_count, step_size):
             frame = self.get_frame_by_index(c)
             cams_tform4x4_world.append(
-                frame.get_cam_tform4x4_obj(cam_tform4x4_obj_type=cam_tform4x4_obj_type))
+                frame.read_cam_tform4x4_obj(cam_tform4x4_obj_type=cam_tform4x4_obj_type, tform_obj_type=tform_obj_type))
 
-            cams_intr4x4.append(frame.cam_intr4x4)
+            cams_intr4x4.append(frame.read_cam_intr4x4())
             if show_imgs:
-                cams_imgs.append(frame.rgb)
+                cams_imgs.append(frame.get_rgb())
+        return cams_tform4x4_world, cams_intr4x4, cams_imgs
+
+    def get_cams(self, cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES=None, tform_obj_type=None, cams_count=5,
+                 show_imgs=True):
+        cams_tform4x4_world = []
+        cams_intr4x4 = []
+        cams_imgs = []
+        frames_count = len(self.frames_names)
+        if cams_count == -1:
+            step_size = 1
+        else:
+            step_size = (frames_count // cams_count) + 1
+        for c in range(0, frames_count, step_size):
+            frame = self.get_frame_by_index(c)
+            cams_tform4x4_world.append(
+                frame.get_cam_tform4x4_obj(cam_tform4x4_obj_type=cam_tform4x4_obj_type, tform_obj_type=tform_obj_type))
+
+            cams_intr4x4.append(frame.get_cam_intr4x4())
+            if show_imgs:
+                cams_imgs.append(frame.get_rgb())
         return cams_tform4x4_world, cams_intr4x4, cams_imgs
 
 @dataclass
@@ -140,10 +161,7 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
 
     @property
     def path_sfm(self):
-        if self.sfm_type == OD3D_SEQUENCE_SFM_TYPES.META:
-            return self.path_raw.joinpath(self.meta.rfpath_sfm)
-        else:
-            return self.path_sfm_root.joinpath(self.name_unique)
+        return self.path_sfm_root.joinpath(self.name_unique)
 
     @property
     def path_sfm_root(self):
@@ -199,7 +217,7 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
 
             from od3d.cv.reconstruction.droid_slam import run_droid_slam
             run_droid_slam(path_rgbs=path_in, path_out_root=path_out_root, rpath_out=rpath_out,
-                           cam_intr4x4=self.first_frame.cam_intr4x4, pcl_fname=self.fname_sfm_pcl,
+                           cam_intr4x4=self.first_frame.get_cam_intr4x4(), pcl_fname=self.fname_sfm_pcl,
                            rays_center3d_fname=self.fname_sfm_rays_center3d,
                            cam_tform_obj_dname=self.dname_sfm_cams_tform4x4_obj )
         else:
@@ -220,10 +238,13 @@ from od3d.cv.geometry.mesh import Mesh
 from od3d.cv.geometry.downsample import random_sampling, voxel_downsampling
 
 from od3d.cv.io import get_default_device
+from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast
+from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
+
 
 
 @dataclass
-class OD3D_SequencePCLMixin(OD3D_PCLTypeMixin, OD3D_SequenceSfMMixin):
+class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_SequenceSfMMixin):
     pts3d = None
     pts3d_colors = None
     pts3d_normals = None
@@ -231,14 +252,6 @@ class OD3D_SequencePCLMixin(OD3D_PCLTypeMixin, OD3D_SequenceSfMMixin):
     @property
     def fpath_pcl(self):
         return self.get_fpath_pcl()
-
-    @property
-    def fname_sfm_mask_pcl(self):
-        return 'pcl_mask.ply'
-
-    @property
-    def fpath_sfm_mask_pcl(self):
-        return self.path_sfm.joinpath(self.fname_sfm_mask_pcl)
 
     def get_fpath_pcl(self, pcl_type=None):
         if pcl_type is None:
@@ -248,14 +261,20 @@ class OD3D_SequencePCLMixin(OD3D_PCLTypeMixin, OD3D_SequenceSfMMixin):
             return self.path_raw.joinpath(self.meta.rfpath_pcl)
         elif pcl_type == OD3D_PCL_TYPES.SFM:
             return self.fpath_sfm_pcl
-        elif pcl_type == OD3D_PCL_TYPES.SFM_MASK:
-            return self.fpath_sfm_mask_pcl
         else:
-            raise NotImplementedError(f'pcl_source {pcl_type} not implemented')
+            return self.path_preprocess.joinpath("pcl", f'{pcl_type}', f'{self.sfm_type}', self.name_unique, 'pcl.ply')
 
-    def read_pcl(self, pcl_type=None, device='cpu'):
-        pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(fpath=self.get_fpath_pcl(pcl_type=pcl_type), device=device)
-        if pcl_type is None or pcl_type == self.pcl_type:
+    def read_pcl(self, pcl_type=None, device='cpu', tform_obj_type: OD3D_TFROM_OBJ_TYPES=None):
+        fpath_pcl = self.get_fpath_pcl(pcl_type=pcl_type)
+        pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(fpath=fpath_pcl, device=device)
+
+        tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+        if tform_obj is not None:
+            tform_obj = tform_obj.to(device=device)
+            pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+            pts3d_normals = transf3d_normal_broadcast(normals3d=pts3d_normals, transf4x4=tform_obj)
+
+        if (pcl_type is None or pcl_type == self.pcl_type) and (tform_obj_type == self.tform_obj_type or tform_obj_type is None):
             self.pts3d, self.pts3d_colors, self.pts3d_normals = pts3d, pts3d_colors, pts3d_normals
         return pts3d, pts3d_colors, pts3d_normals
 
@@ -276,20 +295,28 @@ class OD3D_SequencePCLMixin(OD3D_PCLTypeMixin, OD3D_SequenceSfMMixin):
         elif self.pcl_type == OD3D_PCL_TYPES.SFM:
             logger.info('no need to preprocess pcl for sfm pcl type')
             return
-        elif self.pcl_type == OD3D_PCL_TYPES.SFM_MASK:
+        elif self.pcl_type == OD3D_PCL_TYPES.SFM_MASK or self.pcl_type == OD3D_PCL_TYPES.META_MASK:
+            if self.pcl_type == OD3D_PCL_TYPES.SFM_MASK:
+                pcl_type_in = OD3D_PCL_TYPES.SFM
+            elif self.pcl_type == OD3D_PCL_TYPES.META_MASK:
+                pcl_type_in = OD3D_PCL_TYPES.META
+            else:
+                raise NotImplementedError
 
-            if not override and self.fpath_sfm_mask_pcl.exists():
-                logger.info(f'fpath sfm mask pcl already exists at {self.fpath_sfm_mask_pcl}')
+            fpath_pcl_out = self.get_fpath_pcl(pcl_type=self.pcl_type)
+
+            if not override and fpath_pcl_out.exists():
+                logger.info(f'fpath sfm mask pcl already exists at {fpath_pcl_out}')
                 return
 
             frames = self.get_frames()
             device = get_default_device()
 
             masks = torch.stack([frame.get_mask() for frame in frames], dim=0).to(device=device)
-            cams_intr4x4 = torch.stack([frame.cam_intr4x4 for frame in frames], dim=0).to(device=device)
-            cams_tform4x4_obj = torch.stack([frame.cam_tform4x4_obj for frame in frames], dim=0).to(device=device)
+            cams_intr4x4 = torch.stack([frame.read_cam_intr4x4() for frame in frames], dim=0).to(device=device)
+            cams_tform4x4_obj = torch.stack([frame.read_cam_tform4x4_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW) for frame in frames], dim=0).to(device=device)
 
-            pts3d, pts3d_colors, pts3d_normals = self.get_pcl(pcl_type=OD3D_PCL_TYPES.SFM, clone=True, device=device)
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(pcl_type=pcl_type_in, device=device, tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
             pts3d, pts3d_mask = get_pcl_clean_with_masks(pcl=pts3d, masks=masks,
                                                          cams_intr4x4=cams_intr4x4,
                                                          cams_tform4x4_obj=cams_tform4x4_obj,
@@ -300,40 +327,27 @@ class OD3D_SequencePCLMixin(OD3D_PCLTypeMixin, OD3D_SequenceSfMMixin):
             pts3d_colors = pts3d_colors[pts3d_mask]
             pts3d_normals = pts3d_normals[pts3d_mask]
 
-            write_pts3d_with_colors_and_normals(fpath=self.fpath_sfm_mask_pcl,
+            write_pts3d_with_colors_and_normals(fpath=fpath_pcl_out,
                                                 pts3d=pts3d.detach().cpu(),
                                                 pts3d_colors=pts3d_colors.detach().cpu(),
                                                 pts3d_normals=pts3d_normals.detach().cpu())
 
 
-from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast
-from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
 
-
-@dataclass
-class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
-
-    def read_pcl(self, pcl_type=None, device='cpu'):
-        pts3d, pts3d_colors, pts3d_normals = super().read_pcl(pcl_type=pcl_type, device=device)
-
-        tform_obj = self.get_tform_obj()
-        if tform_obj is not None:
-            pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
-            pts3d_normals = transf3d_normal_broadcast(normals3d=pts3d_normals, transf4x4=tform_obj)
-
-        if pcl_type is None or pcl_type == self.pcl_type:
-            self.pts3d, self.pts3d_colors, self.pts3d_normals = pts3d, pts3d_colors, pts3d_normals
-        return pts3d, pts3d_colors, pts3d_normals
-
-    # note: all meshes are saved in the labeled format
-    # def read_mesh(self, mesh_type=None):
-    #     mesh = super().read_mesh(mesh_type=mesh_type)
-    #     tform_obj = self.get_tform_obj()
-    #     if tform_obj is not None:
-    #         mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=tform_obj)
-    #     if mesh_type is None or mesh_type == self.mesh_type:
-    #         self.mesh = mesh
-    #     return mesh
+# @dataclass
+# class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
+#
+#
+#
+#     # note: all meshes are saved in the labeled format
+#     # def read_mesh(self, mesh_type=None):
+#     #     mesh = super().read_mesh(mesh_type=mesh_type)
+#     #     tform_obj = self.get_tform_obj()
+#     #     if tform_obj is not None:
+#     #         mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=tform_obj)
+#     #     if mesh_type is None or mesh_type == self.mesh_type:
+#     #         self.mesh = mesh
+#     #     return mesh
 
     def get_tform_obj(self, tform_obj_type: OD3D_TFROM_OBJ_TYPES=None):
         if tform_obj_type is None:
@@ -352,7 +366,7 @@ class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
     def get_fpath_tform_obj(self, tform_obj_type=None):
         if tform_obj_type is None:
             tform_obj_type = self.tform_obj_type
-        return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', f'{self.sfm_type}', f'{self.pcl_type}',
+        return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
                                              self.name_unique, 'tform_obj.pt')
 
     def write_tform_obj(self, tform_obj: torch.Tensor, fpath_tform_obj=None):
@@ -381,10 +395,13 @@ class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
             return
         elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D:
             fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
-            cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(cams_count=4, show_imgs=False, cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM)
-            pts3d, pts3d_colors, pts3d_normals = super().read_pcl()
+            cams_tform4x4_world, cams_intr4x4, cams_imgs = self.read_cams(cams_count=4, show_imgs=True, tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
+
             while True:
+                from od3d.cv.geometry.transform import inv_tform4x4
                 prev_tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+                #prev_tform_obj = torch.eye(4).to(device=prev_tform_obj.device)
                 axis_pts3d = label_axis_in_pcl(pts3d=pts3d,
                                                pts3d_colors=pts3d_colors,
                                                prev_labeled_pcl_tform_pcl=prev_tform_obj,
@@ -393,7 +410,6 @@ class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
                                                cams_imgs=cams_imgs)
 
                 from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
-
 
                 if axis_pts3d is None or axis_pts3d.shape != (3, 2, 3):
                     if prev_tform_obj is not None:
@@ -423,7 +439,8 @@ class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
             self.preprocess_tform_obj(override=override, tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
 
             tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
-            pts3d, pts3d_colors, pts3d_normals = super().read_pcl()
+
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
             pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
             _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d_label3d, size=size,
                                                           optimize_rot=False,
@@ -461,7 +478,7 @@ class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
 
 
 @dataclass
-class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_SequenceTformObjMixin):
+class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_SequencePCLMixin):
     mesh = None
     mesh_feats = None
     mesh_feats_viewpoint = None
@@ -472,7 +489,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_type == OD3D_MESH_TYPES.META:
             return self.path_raw.joinpath(self.meta.rfpath_mesh)
         else:
-            return self.path_preprocess.joinpath("mesh", f'{mesh_type}', f'{self.tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}', self.name_unique, 'mesh.ply')
+            return self.path_preprocess.joinpath("mesh", f'{mesh_type}', f'{self.pcl_type}', f'{self.sfm_type}', self.name_unique, 'mesh.ply')
 
     @property
     def fpath_mesh(self):
@@ -485,7 +502,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         return mesh
 
     def get_mesh(self, mesh_type=None, clone=False):
-        if (mesh_type is None or  mesh_type == self.mesh_type) and self.mesh is not None:
+        if (mesh_type is None or mesh_type == self.mesh_type) and self.mesh is not None:
             mesh = self.mesh
         else:
             mesh = self.read_mesh(mesh_type=mesh_type)

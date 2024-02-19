@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 from od3d.cv.geometry.transform import tform4x4
 from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_FRAME_MODALITIES_STACKABLE, OD3D_Frame
+from od3d.datasets.sequence import OD3D_Sequence
 from typing import List
 from od3d.cv.geometry.mesh import Meshes, MESH_RENDER_MODALITIES
 from dataclasses import dataclass
@@ -25,8 +26,8 @@ class OD3D_Frames():
     categories: List[List[str]] = None
     dtype: torch.dtype = None
     device: torch.device = None
-    sequence_name: str = None
-    sequence = None
+    sequence_name_unique: str = None
+    sequence: OD3D_Sequence = None
     rgb: torch.Tensor = None
     mask_rgb: torch.Tensor = None
     depth: torch.Tensor = None
@@ -82,9 +83,9 @@ class OD3D_Frames():
                 else:
                     modality_data = [modality_data[item] for item in items] if modality_data is not None else None
             modality_kwargs[modality] = modality_data
-        return OD3D_Frames(modalities=self.modalities, length=len(items), name=[self.name[item] for item in items], name_unique=[self.name_unique[item] for item in items], dtype=self.dtype, device=self.device,
-                           item_id=self.item_id[items],
-                           path_co3d=self.path_co3d, size=self.size, **modality_kwargs)
+        return OD3D_Frames(modalities=self.modalities, length=len(items), name=[self.name[item] for item in items],
+                           name_unique=[self.name_unique[item] for item in items], dtype=self.dtype, device=self.device,
+                           item_id=self.item_id[items], path_co3d=self.path_co3d, size=self.size, **modality_kwargs)
 
     @property
     def cam_proj4x4_obj(self):
@@ -167,13 +168,13 @@ class OD3D_Frames():
                 imgs_sizes=self.size, meshes_ids=torch.LongTensor([0]),
                 modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0] * 255).to(dtype=self.rgb.dtype, device=img.device))
 
-        elif self.sequence is not None and self.sequence[0].cuboid_labeled:
-            # if self.sequence_name
-            img = blend_rgb(img, (self.sequence[0].cuboid.render_feats(
-                                    cams_tform4x4_obj=self.cam_tform4x4_obj[:1],
-                                    cams_intr4x4=self.cam_intr4x4[:1],
-                                    imgs_sizes=self.size, meshes_ids=torch.LongTensor([0]),
-                                    modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=self.rgb.dtype, device=img.device))
+        # elif self.sequence is not None and self.sequence[0].cuboid_labeled:
+        #     # if self.sequence_name
+        #     img = blend_rgb(img, (self.sequence[0].cuboid.render_feats(
+        #                             cams_tform4x4_obj=self.cam_tform4x4_obj[:1],
+        #                             cams_intr4x4=self.cam_intr4x4[:1],
+        #                             imgs_sizes=self.size, meshes_ids=torch.LongTensor([0]),
+        #                             modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(dtype=self.rgb.dtype, device=img.device))
 
 
         #mix_real_with_synthetic = draw_pixels(mix_real_with_synthetic,

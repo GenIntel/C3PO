@@ -17,6 +17,8 @@ import od3d.io
 from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES
 from od3d.cv.geometry.transform import proj3d2d_broadcast
 from od3d.datasets.sequence import OD3D_Sequence
+from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+
 
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
@@ -546,7 +548,6 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
     def preprocess_tform_obj(self, override=False):
         logger.info("preprocess tform obj...")
-        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
         for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
             sequence = self.get_sequence_by_name_unique(name_unique=sequence_name_unique)
             sequence.preprocess_tform_obj(override=override)
@@ -578,3 +579,8 @@ class OD3D_SequenceDataset(OD3D_Dataset):
     def get_sequence_by_name_unique(self, name_unique: str):
         raise NotImplementedError
 
+    def get_sequences(self):
+        sequences = []
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
+            sequences.append(self.get_sequence_by_name_unique(name_unique=sequence_name_unique))
+        return sequences

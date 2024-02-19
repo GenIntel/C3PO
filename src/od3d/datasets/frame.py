@@ -73,7 +73,7 @@ class OD3D_Frame(OD3D_FrameModalitiesMixin, OD3D_Object):
     def get_modality(self, modality: OD3D_FRAME_MODALITIES):
         if modality in self.modalities:
             if modality == OD3D_FRAME_MODALITIES.CAM_INTR4X4:
-                return self.cam_intr4x4
+                return self.get_cam_intr4x4()
             elif modality == OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ:
                 return self.get_cam_tform4x4_obj()
             elif modality == OD3D_FRAME_MODALITIES.CATEGORY:
@@ -249,23 +249,23 @@ class OD3D_FrameMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin):
 
 @dataclass
 class OD3D_FrameCamIntr4x4Mixin(OD3D_Frame):
-    _cam_intr4x4 = None
+    cam_intr4x4 = None
 
-    @property
-    def cam_intr4x4(self):
-        if self._cam_intr4x4 is None:
-            self._cam_intr4x4 = self.meta.cam_intr4x4
-        return self._cam_intr4x4
+    def get_cam_intr4x4(self):
+        if self.cam_intr4x4 is None:
+            self.cam_intr4x4 = self.meta.cam_intr4x4
+        return self.cam_intr4x4
 
-    @cam_intr4x4.setter
-    def cam_intr4x4(self, value: torch.Tensor):
-            self._cam_intr4x4 = value
+    def read_cam_intr4x4(self):
+        if self.cam_intr4x4 is None:
+            self.cam_intr4x4 = self.meta.cam_intr4x4.clone()
+        return self.cam_intr4x4
 
 @dataclass
 class OD3D_CamProj4x4ObjMixin(OD3D_FrameCamTform4x4ObjMixin, OD3D_FrameCamIntr4x4Mixin):
     @property
     def cam_proj4x4_obj(self):
-        return tform4x4(self.cam_intr4x4, self.cam_tform4x4_obj)
+        return tform4x4(self.get_cam_intr4x4(), self.get_cam_tform4x4_obj())
 
 @dataclass
 class OD3D_FrameCategoryMixin(OD3D_Object):
@@ -386,7 +386,7 @@ class OD3D_FrameRGBMixin(OD3D_Object):
 
     def get_rgb(self):
         if self.rgb is None:
-            self.rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB) / 255.
+            self.rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB)
         return self.rgb
 
 
@@ -470,10 +470,10 @@ class OD3D_FrameCamIntr4x4Mixin(OD3D_Frame):
 @dataclass
 class OD3D_FrameTformObjMixin(OD3D_TformObjMixin, OD3D_FrameCamTform4x4ObjMixin, OD3D_Frame):
 
-    def read_cam_tform4x4_obj(self, cam_tform4x4_obj_type = None):
+    def read_cam_tform4x4_obj(self, cam_tform4x4_obj_type=None, tform_obj_type =None):
         cam_tform4x4_obj = super().read_cam_tform4x4_obj(cam_tform4x4_obj_type=cam_tform4x4_obj_type)
 
-        tform_obj = self.sequence.get_tform_obj()
+        tform_obj = self.sequence.get_tform_obj(tform_obj_type=tform_obj_type)
         if tform_obj is not None:
             cam_tform4x4_obj = tform4x4(cam_tform4x4_obj, inv_tform4x4(tform_obj))
 
@@ -482,7 +482,7 @@ class OD3D_FrameTformObjMixin(OD3D_TformObjMixin, OD3D_FrameCamTform4x4ObjMixin,
         scale = cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
         cam_tform4x4_obj[:3] = cam_tform4x4_obj[:3] / scale
 
-        if cam_tform4x4_obj_type is None or cam_tform4x4_obj_type == self.cam_tform4x4_obj_type:
+        if (cam_tform4x4_obj_type is None or cam_tform4x4_obj_type == self.cam_tform4x4_obj_type) and (tform_obj_type == self.tform_obj_type or tform_obj_type is None) :
             self.cam_tform4x4_obj = cam_tform4x4_obj
         return cam_tform4x4_obj
 

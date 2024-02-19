@@ -5,32 +5,42 @@ import torch
 from pathlib import Path
 
 from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES
-from od3d.datasets.frame_meta import OD3D_FrameMeta, OD3D_FrameMetaRGBMixin,  \
-    OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaSequenceMixin
+from od3d.datasets.frame_meta import OD3D_FrameMeta, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaDepthMixin,  \
+    OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaSequenceMixin, \
+    OD3D_FrameMetaDepthMaskMixin, OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaCamTform4x4ObjMixin
 
 from od3d.datasets.frame import OD3D_Frame, OD3D_FrameSizeMixin, OD3D_FrameRGBMixin, OD3D_FrameMaskMixin, \
     OD3D_FrameRGBMaskMixin, OD3D_FrameRaysCenter3dMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, \
     OD3D_FrameSequenceMixin, OD3D_FrameCategoryMixin, OD3D_FrameCamIntr4x4Mixin, OD3D_FrameCamTform4x4ObjMixin, \
-    OD3D_CamProj4x4ObjMixin, OD3D_FRAME_MASK_TYPES
+    OD3D_CamProj4x4ObjMixin, OD3D_FRAME_MASK_TYPES, OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin
 from dataclasses import dataclass
 import numpy as np
 from od3d.datasets.object import OD3D_PCLTypeMixin, OD3D_MeshTypeMixin, OD3D_SequenceSfMTypeMixin
 from od3d.datasets.co3d.enum import MAP_CATEGORIES_CO3D_TO_OD3D
-
+from od3d.datasets.co3d.enum import CO3D_FRAME_TYPES
+from od3d.cv.io import read_image, read_co3d_depth_image
 
 @dataclass
-class CO3D_FrameMeta(OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaCategoryMixin,
-                        OD3D_FrameMetaSequenceMixin, OD3D_FrameMeta):
-
-    @staticmethod
-    def load_from_raw(name: str, category: str, sequence_name: str, rfpath_rgb: Path, l_size: List):
-        return CO3D_FrameMeta(rfpath_rgb=rfpath_rgb, category=category, sequence_name=sequence_name, l_size=l_size, name=name)
+class CO3D_FrameMeta(OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaDepthMaskMixin,
+                     OD3D_FrameMetaDepthMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin,
+                     OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaSequenceMixin, OD3D_FrameMeta):
+    depth_scale: float
+    frame_type: CO3D_FRAME_TYPES
+    pass
+@staticmethod
+def load_from_raw(name: str, category: str, sequence_name: str, rfpath_rgb: Path, rfpath_mask: Path,
+                  rfpath_depth: Path, rfpath_depth_mask: Path, l_size: List, l_cam_intr4x4: List,
+                  l_cam_tform4x4_obj: List, depth_scale: float, frame_type: CO3D_FRAME_TYPES):
+    return CO3D_FrameMeta(rfpath_rgb=rfpath_rgb, category=category, sequence_name=sequence_name, l_size=l_size,
+                          name=name, rfpath_mask=rfpath_mask, rfpath_depth=rfpath_depth,
+                          rfpath_depth_mask=rfpath_depth_mask, l_cam_intr4x4=l_cam_intr4x4,
+                          l_cam_tform4x4_obj=l_cam_tform4x4_obj, depth_scale=depth_scale, frame_type=frame_type)
 
 @dataclass
 class CO3D_Frame(OD3D_FrameMeshMixin, OD3D_FrameRaysCenter3dMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x4ObjMixin,
-                    OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameCategoryMixin,
-                    OD3D_FrameSequenceMixin, OD3D_FrameSizeMixin, OD3D_MeshTypeMixin,
-                    OD3D_PCLTypeMixin, OD3D_SequenceSfMTypeMixin, OD3D_Frame):
+                 OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameDepthMixin,
+                 OD3D_FrameDepthMaskMixin, OD3D_FrameCategoryMixin, OD3D_FrameSequenceMixin, OD3D_FrameSizeMixin,
+                 OD3D_MeshTypeMixin, OD3D_PCLTypeMixin, OD3D_SequenceSfMTypeMixin, OD3D_Frame):
     meta_type = CO3D_FrameMeta
     map_categories_to_od3d = MAP_CATEGORIES_CO3D_TO_OD3D
 
@@ -39,7 +49,10 @@ class CO3D_Frame(OD3D_FrameMeshMixin, OD3D_FrameRaysCenter3dMixin, OD3D_FrameTfo
         from od3d.datasets.co3d.sequence import CO3D_Sequence
         self.sequence_type = CO3D_Sequence
 
-
+    def get_depth(self):
+        if self.depth is None:
+            self.depth = read_co3d_depth_image(self.fpath_depth) * self.meta.depth_scale
+        return self.depth
 
 
 # from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES
@@ -52,7 +65,7 @@ class CO3D_Frame(OD3D_FrameMeshMixin, OD3D_FrameRaysCenter3dMixin, OD3D_FrameTfo
 # import torch
 # from od3d.cv.geometry.transform import transf4x4_from_rot3x3_and_transl3
 # from pathlib import Path
-# from od3d.cv.io import read_image, read_co3d_depth_image
+#
 #
 # from od3d.cv.geometry.transform import inv_tform4x4
 #

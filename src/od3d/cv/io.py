@@ -26,6 +26,8 @@ def read_pts3d_with_colors_and_normals(fpath: Path, device='cpu'):
     pcd = o3d.io.read_point_cloud(str(fpath))
     pts3d = torch.from_numpy(np.asarray(pcd.points)).to(dtype=torch.float, device=device)
     pts3d_colors = torch.from_numpy(np.asarray(pcd.colors)).to(dtype=torch.float, device=device)
+    if not pcd.has_normals():
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
     pts3d_normals = torch.from_numpy(np.asarray(pcd.normals)).to(dtype=torch.float, device=device)
     return pts3d, pts3d_colors, pts3d_normals
 
@@ -39,12 +41,16 @@ def write_pts3d_with_colors(pts3d: torch.Tensor, pts3d_colors: torch.Tensor, fpa
     o3d.io.write_point_cloud(filename=str(fpath), pointcloud=pcd)
 
 def write_pts3d_with_colors_and_normals(pts3d: torch.Tensor, pts3d_colors: torch.Tensor, pts3d_normals: torch.Tensor, fpath: Path):
+    fpath.parent.mkdir(parents=True, exist_ok=True)
+
     pcd = o3d.geometry.PointCloud()
 
     # Set the point cloud data
     pcd.points = o3d.utility.Vector3dVector(pts3d.detach().cpu().numpy())
     pcd.colors = o3d.utility.Vector3dVector(pts3d_colors.detach().cpu().numpy())
     pcd.normals = o3d.utility.Vector3dVector(pts3d_normals.detach().cpu().numpy())
+    if not pcd.has_normals():
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
     o3d.io.write_point_cloud(filename=str(fpath), pointcloud=pcd)
 
 

@@ -57,6 +57,7 @@ class OD3D_MESH_FEATS_DIST_REDUCE_TYPES(str, Enum):
 
 class OD3D_PCL_TYPES(str, Enum):
     META = 'meta'
+    META_MASK = 'meta_mask'
     SFM = 'sfm'
     SFM_MASK = 'sfm_mask'
 

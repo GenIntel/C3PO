@@ -39,21 +39,21 @@ class MonoLMB_Frame(OD3D_FrameMeshMixin, OD3D_FrameRaysCenter3dMixin, OD3D_Frame
         from od3d.datasets.monolmb.sequence import MonoLMB_Sequence
         self.sequence_type = MonoLMB_Sequence
 
-    @property
-    def cam_intr4x4(self):
-        if self._cam_intr4x4 is None:
-            self._cam_intr4x4 = torch.eye(4)
+    def get_cam_intr4x4(self):
+        if self.cam_intr4x4 is None:
+            self.cam_intr4x4 = self.read_cam_intr4x4()
+        return self.cam_intr4x4
+
+    def read_cam_intr4x4(self):
+        if self.cam_intr4x4 is None:
+            self.cam_intr4x4 = torch.eye(4)
             px = self.meta.l_size[1] / 2
             py = self.meta.l_size[0] / 2
-            fov = 1.7 # fov in radians
+            fov = 1.7  # fov in radians
             fx = max(self.meta.l_size[0], self.meta.l_size[1]) / np.tan(fov / 2)
             fy = fx
-            self._cam_intr4x4[0, 0] = fx
-            self._cam_intr4x4[1, 1] = fy
-            self._cam_intr4x4[0, 2] = px
-            self._cam_intr4x4[1, 2] = py
-        return self._cam_intr4x4
-
-    @cam_intr4x4.setter
-    def cam_intr4x4(self, value: torch.Tensor):
-       self._cam_intr4x4 = value
+            self.cam_intr4x4[0, 0] = fx
+            self.cam_intr4x4[1, 1] = fy
+            self.cam_intr4x4[0, 2] = px
+            self.cam_intr4x4[1, 2] = py
+        return self.cam_intr4x4.clone()

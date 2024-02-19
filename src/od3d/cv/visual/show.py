@@ -476,6 +476,9 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
                     cam_img = cams_imgs[i]
                     h_resize = 1.
                     w_resize = 1.
+
+                if cam_img.dtype == torch.float:
+                    cam_img = (cam_img.clone() * 255)
                 depth_scale = (cams_imgs_depth_scale * cam_tform4x4_obj[2, 3])  #  * 10 * cam_tform4x4_obj[2, 3]
                 depth = open3d.geometry.Image(((torch.ones(size=cam_img.shape[1:])).cpu().detach().numpy() * 255).astype(np.uint8))
                 img = open3d.geometry.Image((cam_img.permute(1, 2, 0).contiguous().cpu().detach().numpy()).astype(np.uint8))

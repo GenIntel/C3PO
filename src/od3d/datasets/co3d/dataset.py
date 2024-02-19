@@ -19,34 +19,33 @@ class CO3D(OD3D_SequenceDataset):
     sequence_type = CO3D_Sequence # od3d.datasets.monolmb.sequence.MonoLMB_Sequence
     frame_type = CO3D_Frame # od3d.datasets.monolmb.frame.MonoLMB_Frame
 
-
     def get_frame_by_name_unique(self, name_unique):
         return self.frame_type(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                                name_unique=name_unique, all_categories=self.categories,
-                               mask_type=OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D,
-                               cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM,
+                               mask_type=OD3D_FRAME_MASK_TYPES.META,
+                               cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.META,
                                mesh_type=OD3D_MESH_TYPES.CUBOID500,
                                mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
                                mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
-                               pcl_type=OD3D_PCL_TYPES.SFM_MASK,
-                               sfm_type=OD3D_SEQUENCE_SFM_TYPES.DROID,
+                               pcl_type=OD3D_PCL_TYPES.META_MASK,
+                               sfm_type=OD3D_SEQUENCE_SFM_TYPES.META,
                                modalities=self.modalities,
-                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D,)
+                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID,)
 
     def get_sequence_by_name_unique(self, name_unique):
         return self.sequence_type(name_unique=name_unique,
                                   path_raw=self.path_raw,
                                   path_preprocess=self.path_preprocess,
                                   all_categories=self.categories,
-                                  mask_type=OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D,
-                                  cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.SFM,
+                                  mask_type=OD3D_FRAME_MASK_TYPES.META,
+                                  cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.META,
                                   mesh_type=OD3D_MESH_TYPES.CUBOID500,
                                   mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
                                   mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
-                                  pcl_type=OD3D_PCL_TYPES.SFM_MASK,
-                                  sfm_type=OD3D_SEQUENCE_SFM_TYPES.DROID,
+                                  pcl_type=OD3D_PCL_TYPES.META_MASK,
+                                  sfm_type=OD3D_SEQUENCE_SFM_TYPES.META,
                                   modalities=self.modalities,
-                                  tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D,)
+                                  tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID,)
 
 #
 # from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_DATASET_SPLITS

@@ -4,28 +4,39 @@ from dataclasses import dataclass
 
 from od3d.datasets.co3d.frame import CO3D_Frame
 from od3d.datasets.sequence import OD3D_SequenceMeshMixin, OD3D_MESH_TYPES, OD3D_PCL_TYPES, OD3D_Sequence, \
-    OD3D_SequenceCategoryMixin, OD3D_SequenceSfMMixin, OD3D_SEQUENCE_SFM_TYPES, OD3D_SequenceTformObjMixin
+    OD3D_SequenceCategoryMixin, OD3D_SequenceSfMMixin, OD3D_SEQUENCE_SFM_TYPES
 from od3d.datasets.sequence_meta import OD3D_SequenceMeta, OD3D_SequenceMetaCategoryMixin
 
 from od3d.datasets.object import OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin
 from od3d.datasets.co3d.enum import MAP_CATEGORIES_CO3D_TO_OD3D
+from pathlib import Path
 
 @dataclass
 class CO3D_SequenceMeta(OD3D_SequenceMetaCategoryMixin, OD3D_SequenceMeta):
+    pcl_pts_count: int
+    pcl_quality_score: float
+    rfpath_pcl: Path
+    viewpoint_quality_score: float
 
     @staticmethod
-    def load_from_raw(category: str, name: str):
-        return CO3D_SequenceMeta(category=category, name=name)
+    def load_from_raw(category: str, name: str, pcl_pts_count: int, pcl_quality_score: float, rfpath_pcl: Path,
+                      viewpoint_quality_score: float):
+        return CO3D_SequenceMeta(category=category, name=name, pcl_pts_count=pcl_pts_count,
+                                 pcl_quality_score=pcl_quality_score, rfpath_pcl=rfpath_pcl,
+                                 viewpoint_quality_score=viewpoint_quality_score)
 
 @dataclass
-class CO3D_Sequence(OD3D_SequenceMeshMixin, OD3D_SequenceTformObjMixin, OD3D_SequenceCategoryMixin,
+class CO3D_Sequence(OD3D_SequenceMeshMixin, OD3D_SequenceCategoryMixin,
                        OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin, OD3D_Sequence):
     frame_type = CO3D_Frame
     map_categories_to_od3d = MAP_CATEGORIES_CO3D_TO_OD3D
     meta_type = CO3D_SequenceMeta
 
 
-
+    #
+    # @property
+    # def fname_sfm_pcl(self):
+    #     return 'pointcloud.ply'
 
 
 # from os import pread
