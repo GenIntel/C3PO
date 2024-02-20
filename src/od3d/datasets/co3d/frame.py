@@ -42,7 +42,7 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaCamTform4x4Obj
         category = frame_annotation.image.path.split('/')[0]
         sequence_name = frame_annotation.sequence_name
         if frame_annotation.meta is not None:
-            co3d_frame_type = frame_annotation.meta['frame_type']
+            co3d_frame_type = CO3D_FRAME_TYPES(frame_annotation.meta['frame_type'])
         else:
             co3d_frame_type = CO3D_FRAME_TYPES.CO3DV1
         name = f'{frame_annotation.frame_number}'
