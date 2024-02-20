@@ -7,5 +7,5 @@ class RGB_Normalize(OD3D_Transform):
         self.normalize = Normalize(mean=mean, std=std)
 
     def __call__(self, frame):
-        frame._rgb = self.normalize(frame.rgb)
+        frame.rgb = self.normalize(frame.get_rgb())
         return frame
