@@ -4,13 +4,13 @@ defaults:
 name: co3d_10s_zsp_labeled
 
 
-preprocess:
-  pcl:
-    enabled: False
-    override: False
-  mesh:
-    enabled: False
-    override: False
+#preprocess:
+#  pcl:
+#    enabled: False
+#    override: False
+#  mesh:
+#    enabled: False
+#    override: False
 
 #  label:
 #    enabled: True

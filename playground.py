@@ -2,6 +2,7 @@ import torch
 from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
 from pathlib import Path
 path = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta/sfm_mask')
+path = Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/tform_obj/label3d/meta_mask/meta')
 for category in path.iterdir():
     for sequence in category.iterdir():
         #fpath_in = '/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta/sfm_mask/bottle/38_1661_5028/axis.pt'

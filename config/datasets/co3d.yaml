@@ -9,6 +9,7 @@ modalities:
     - 'category'
     - 'cam_intr4x4'
     - 'cam_tform4x4_obj'
+    - 'rays_center3d'
     - 'category'
     - 'rgb'
     - 'mask'
@@ -38,20 +39,20 @@ extract_meta:
 
 preprocess:
   sfm:
-    enabled: False
+    enabled: True
     override: False
   mask:
-    enabled: False
+    enabled: True
     override: False
   pcl:
     enabled: True
     override: False
   tform_obj:
     enabled: True
-    override: False
+    override: True
   mesh:
     enabled: True
-    override: False
+    override: True
   mesh_feats:
     enabled: False
     override: False

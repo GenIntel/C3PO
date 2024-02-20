@@ -26,7 +26,7 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaCamTform4x4Obj
                      OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaSequenceMixin, OD3D_FrameMeta):
     depth_scale: float
     frame_type: CO3D_FRAME_TYPES
-    pass
+
 @staticmethod
 def load_from_raw(name: str, category: str, sequence_name: str, rfpath_rgb: Path, rfpath_mask: Path,
                   rfpath_depth: Path, rfpath_depth_mask: Path, l_size: List, l_cam_intr4x4: List,

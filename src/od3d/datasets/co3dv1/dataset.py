@@ -19,21 +19,46 @@ from od3d.datasets.co3d.sequence import CO3D_Sequence, CO3D_SequenceMeta
 from tqdm import tqdm
 from typing import List
 
+class CO3Dv1_Frame(CO3D_Frame):
+    def __post_init__(self):
+        # hack: prevents circular import
+        self.sequence_type = CO3Dv1_Sequence
 
-from od3d.cv.geometry.points_alignment import get_pca_tform_world
-from od3d.cv.geometry.transform import transf3d_broadcast, tform4x4, inv_tform4x4
-from od3d.cv.geometry.primitives import Cuboids
-from od3d.cv.geometry.points_alignment import icp
+class CO3Dv1_Sequence(CO3D_Sequence):
 
-from dataclasses import dataclass
-import torch.utils.data
-from od3d.cv.geometry.downsample import voxel_downsampling, random_sampling
-import od3d.io
-import open3d
-import torch
-from pytorch3d.io import load_ply, save_ply
+    def __post_init__(self):
+        # hack: override frame_type otherwise set in CO3D_Sequence
+        self.frame_type = CO3Dv1_Frame
+
+    def get_min_HW(self):
+        H = 999999999
+        W = 999999999
+        for f_id in range(len(self.frames_names)):
+            frame = self.get_frame_by_index(f_id)
+            frame_H = frame.H
+            frame_W = frame.W
+            if frame_H < H:
+                H = frame_H
+            if frame_W < W:
+                W = frame_W
+        return H, W
+
+    def get_sfm_HW(self):
+        H = 999999999
+        W = 999999999
+        for f_id in range(len(self.frames_names)):
+            frame = self.get_frame_by_index(f_id)
+            frame_H = frame.H - frame.H % 8  # 8 required fore droid slam to work
+            frame_W = frame.W - frame.W % 8  # 8 required fore droid slam to work
+            if frame_H < H:
+                H = frame_H
+            if frame_W < W:
+                W = frame_W
+        return H, W
 
 class CO3Dv1(CO3D):
+    sequence_type = CO3Dv1_Sequence # od3d.datasets.monolmb.sequence.MonoLMB_Sequence
+    frame_type = CO3Dv1_Frame # od3d.datasets.monolmb.frame.MonoLMB_Frame
 
     @staticmethod
     def setup(config: DictConfig):
@@ -136,77 +161,166 @@ class CO3Dv1(CO3D):
                 frame_meta = CO3D_FrameMeta.load_from_raw(frame_annotation=frame_annotation)
                 frame_meta.save(path_meta=path_meta)
 
-    def get_sequence_by_category_and_name(self, category, name):
-        sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta, category=category, name=name)
-        return CO3Dv1_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
-                               meta=sequence_meta, modalities=self.modalities, categories=self.categories,
-                               mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
-                               cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
-                               aligned_name=self.aligned_name, mesh_name=self.mesh_name)
 
-    def get_frame_by_meta(self, frame_meta: CO3D_FrameMeta):
-        return CO3Dv1_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
-                          meta=frame_meta, modalities=self.modalities, categories=self.categories,
-                          cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source,
-                          aligned_name=self.aligned_name, mesh_name=self.mesh_name, pcl_source=self.pcl_source)
-
-class CO3Dv1_Frame(CO3D_Frame):
-
-    @property
-    def sequence(self):
-        if self._sequence is None:
-            from od3d.datasets.co3d.sequence import CO3D_Sequence, CO3D_SequenceMeta
-            sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta,
-                                                                                    category=self.category,
-                                                                                    name=self.meta.sequence_name)
-            self._sequence = CO3Dv1_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
-                                           path_meta=self.path_meta, meta=sequence_meta, modalities=self.modalities,
-                                           categories=self.all_categories, cam_tform_obj_source=self.cam_tform_obj_source,
-                                           aligned_name=self.aligned_name, mesh_name=self.mesh_name,
-                                           cuboid_source=self.cuboid_source, pcl_source=self.pcl_source)
-        return self._sequence
-
-class CO3Dv1_Sequence(CO3D_Sequence):
+    #
+    # def get_sequence_by_category_and_name(self, category, name):
+    #     sequence_meta = CO3D_SequenceMeta.load_from_meta_with_category_and_name(path_meta=self.path_meta, category=category, name=name)
+    #     return CO3Dv1_Sequence(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+    #                            meta=sequence_meta, modalities=self.modalities, categories=self.categories,
+    #                            mesh_feats_type=self.mesh_feats_type, dist_verts_mesh_feats_reduce_type=self.dist_verts_mesh_feats_reduce_type, cuboid_source=self.cuboid_source,
+    #                            cam_tform_obj_source=self.cam_tform_obj_source, pcl_source=self.pcl_source,
+    #                            aligned_name=self.aligned_name, mesh_name=self.mesh_name)
+    #
+    # def get_frame_by_meta(self, frame_meta: CO3D_FrameMeta):
+    #     return CO3Dv1_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+    #                       meta=frame_meta, modalities=self.modalities, categories=self.categories,
+    #                       cuboid_source=self.cuboid_source, cam_tform_obj_source=self.cam_tform_obj_source,
+    #                       aligned_name=self.aligned_name, mesh_name=self.mesh_name, pcl_source=self.pcl_source)
 
 
-    def run_droid_slam(self):
-        from od3d.io import run_cmd
-        stride = "1"
-        image_tag = "limpbot/droid-slam:v1"
-        path_co3d_in = self.path_raw.joinpath(self.name_unique, 'images')
-        path_out_root = self.path_preprocess.joinpath('droid_slam')
-        rpath_out = self.name_unique
-        path_out = path_out_root.joinpath(rpath_out)
-        path_in = path_out.joinpath('images')
-        if not path_in.exists():
-            path_in.mkdir(parents=True, exist_ok=True)
+    # def preprocess_sfm(self, override=False):
+    #     if not override and self.path_sfm.exists():
+    #         logger.info(f'path sfm already exists at {self.path_sfm}')
+    #         return
+    #     else:
+    #         logger.info(f'preprocessing sfm for {self.name_unique} with type {self.sfm_type}')
+    #
+    #     if self.sfm_type == OD3D_SEQUENCE_SFM_TYPES.DROID:
+    #
+    #         path_out_root = self.path_sfm_root #  self.path_preprocess.joinpath('droid_slam')
+    #         rpath_out = Path(self.name_unique)
+    #
+    #         path_out = path_out_root.joinpath(rpath_out)
+    #         path_in = path_out.joinpath('images')
+    #
+    #         H = 999999999
+    #         W = 999999999
+    #         for f_id in range(len(self.frames_names)):
+    #             frame = self.get_frame_by_index(f_id)
+    #             frame_H = frame.H - frame.H % 8  # 8 required fore droid slam to work
+    #             frame_W = frame.W - frame.W % 8  # 8 required fore droid slam to work
+    #             if frame_H < H:
+    #                 H = frame_H
+    #             if frame_W < W:
+    #                 W = frame_W
+    #
+    #         for f_id in range(len(self.frames_names)):
+    #             frame = self.get_frame_by_index(f_id)
+    #             rgb = frame.rgb[:, :H, :W].clone()
+    #             torchvision.io.image.write_jpeg(rgb, filename=str(path_in.joinpath(f'{f_id:05d}' + '.jpg')))
+    #
+    #         #from od3d.models.model import OD3D_Model
+    #         #from od3d.cv.transforms.transform import OD3D_Transform
+    #         #from od3d.cv.transforms.sequential import SequentialTransform
+    #         #model = OD3D_Model.create_by_name('sam')
+    #         #model.cuda()
+    #         #model.eval()
+    #         #transform = SequentialTransform([OD3D_Transform.create_by_name(''), model.transform])
+    #
+    #         from od3d.cv.reconstruction.droid_slam import run_droid_slam
+    #         run_droid_slam(path_rgbs=path_in, path_out_root=path_out_root, rpath_out=rpath_out,
+    #                        cam_intr4x4=self.first_frame.get_cam_intr4x4(), pcl_fname=self.fname_sfm_pcl,
+    #                        rays_center3d_fname=self.fname_sfm_rays_center3d,
+    #                        cam_tform_obj_dname=self.dname_sfm_cams_tform4x4_obj )
+    #     else:
+    #         raise NotImplementedError(f'sfm_type {self.sfm_type} not implemented')
+    #
+    #
+    # def preprocess_pcl(self, override=False):
+    #     from od3d.datasets.object import OD3D_SEQUENCE_SFM_TYPES, OD3D_PCL_TYPES, OD3D_TFROM_OBJ_TYPES
+    #     from od3d.cv.io import get_default_device
+    #     from od3d.cv.reconstruction.clean import get_pcl_clean_with_masks
+    #     from od3d.cv.io import write_pts3d_with_colors_and_normals
+    #
+    #     if self.pcl_type == OD3D_PCL_TYPES.META:
+    #         logger.info('no need to preprocess pcl for meta pcl type')
+    #         return
+    #     elif self.pcl_type == OD3D_PCL_TYPES.SFM:
+    #         logger.info('no need to preprocess pcl for sfm pcl type')
+    #         return
+    #     elif self.pcl_type == OD3D_PCL_TYPES.SFM_MASK or self.pcl_type == OD3D_PCL_TYPES.META_MASK:
+    #         if self.pcl_type == OD3D_PCL_TYPES.SFM_MASK:
+    #             pcl_type_in = OD3D_PCL_TYPES.SFM
+    #         elif self.pcl_type == OD3D_PCL_TYPES.META_MASK:
+    #             pcl_type_in = OD3D_PCL_TYPES.META
+    #         else:
+    #             raise NotImplementedError
+    #
+    #         fpath_pcl_out = self.get_fpath_pcl(pcl_type=self.pcl_type)
+    #
+    #         if not override and fpath_pcl_out.exists():
+    #             logger.info(f'fpath sfm mask pcl already exists at {fpath_pcl_out}')
+    #             return
+    #
+    #         frames = self.get_frames()
+    #         device = get_default_device()
+    #         H = min([frame.H for frame in frames])
+    #         W = min([frame.W for frame in frames])
+    #         masks = torch.stack([frame.get_mask()[:, :H, :W] for frame in frames], dim=0).to(device=device)
+    #         cams_intr4x4 = torch.stack([frame.read_cam_intr4x4() for frame in frames], dim=0).to(device=device)
+    #         cams_tform4x4_obj = torch.stack([frame.read_cam_tform4x4_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW) for frame in frames], dim=0).to(device=device)
+    #
+    #         pts3d, pts3d_colors, pts3d_normals = self.read_pcl(pcl_type=pcl_type_in, device=device, tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
+    #         pts3d, pts3d_mask = get_pcl_clean_with_masks(pcl=pts3d, masks=masks,
+    #                                                      cams_intr4x4=cams_intr4x4,
+    #                                                      cams_tform4x4_obj=cams_tform4x4_obj,
+    #                                                      pts3d_prob_thresh=0.6,
+    #                                                      pts3d_max_count=20000,
+    #                                                      pts3d_count_min=10,
+    #                                                      return_mask=True)
+    #         pts3d_colors = pts3d_colors[pts3d_mask]
+    #         pts3d_normals = pts3d_normals[pts3d_mask]
+    #
+    #         write_pts3d_with_colors_and_normals(fpath=fpath_pcl_out,
+    #                                             pts3d=pts3d.detach().cpu(),
+    #                                             pts3d_colors=pts3d_colors.detach().cpu(),
+    #                                             pts3d_normals=pts3d_normals.detach().cpu())
 
-        H = 999999999
-        W = 999999999
-        for f_id in range(len(self.frames_names)):
-            frame = self.get_frame_by_index(f_id)
-            frame_H = frame.H - frame.H % 8  # 8 required fore droid slam to work
-            frame_W = frame.W - frame.W % 8  # 8 required fore droid slam to work
-            if frame_H < H:
-                H = frame_H
-            if frame_W < W:
-                W = frame_W
-
-        for f_id in range(len(self.frames_names)):
-            frame = self.get_frame_by_index(f_id)
-            rgb = frame.rgb[:, :H, :W].clone()
-            torchvision.io.image.write_jpeg(rgb, filename=str(path_in.joinpath(f'{f_id:05d}' + '.jpg')))
-
-        fx = self.first_frame.meta.l_cam_intr4x4[0][0]
-        fy = self.first_frame.meta.l_cam_intr4x4[1][1]
-        cx = self.first_frame.meta.l_cam_intr4x4[0][2]
-        cy = self.first_frame.meta.l_cam_intr4x4[1][2]
-        if not path_out.exists():
-            path_out.mkdir(parents=True, exist_ok=True)
-        run_cmd(cmd=f'echo "{fx} {fy} {cx} {cy}" > {path_out_root}/{rpath_out}/calib.txt', logger=logger)
-        run_cmd(
-            cmd=f'docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT={rpath_out} -e STRIDE={stride} -v {path_in}:/home/appuser/in -v {path_out_root}:/home/appuser/DROID-SLAM/reconstructions/out -t {image_tag}',
-            logger=logger, live=True)
+    #
+    #
+    # def run_droid_slam(self):
+    #     path_out_root = self.path_preprocess.joinpath('droid_slam')
+    #     rpath_out = self.name_unique
+    #     path_out = path_out_root.joinpath(rpath_out)
+    #     path_in = path_out.joinpath('images')
+    #     if not path_in.exists():
+    #         path_in.mkdir(parents=True, exist_ok=True)
+    #
+    #     H = 999999999
+    #     W = 999999999
+    #     for f_id in range(len(self.frames_names)):
+    #         frame = self.get_frame_by_index(f_id)
+    #         frame_H = frame.H - frame.H % 8  # 8 required fore droid slam to work
+    #         frame_W = frame.W - frame.W % 8  # 8 required fore droid slam to work
+    #         if frame_H < H:
+    #             H = frame_H
+    #         if frame_W < W:
+    #             W = frame_W
+    #
+    #     for f_id in range(len(self.frames_names)):
+    #         frame = self.get_frame_by_index(f_id)
+    #         rgb = frame.rgb[:, :H, :W].clone()
+    #         torchvision.io.image.write_jpeg(rgb, filename=str(path_in.joinpath(f'{f_id:05d}' + '.jpg')))
+    #
+    #     from od3d.cv.reconstruction.droid_slam import run_droid_slam
+    #     run_droid_slam(path_rgbs=path_in, path_out_root=path_out_root, rpath_out=rpath_out,
+    #                    cam_intr4x4=self.first_frame.get_cam_intr4x4(), pcl_fname=self.fname_sfm_pcl,
+    #                    rays_center3d_fname=self.fname_sfm_rays_center3d,
+    #                    cam_tform_obj_dname=self.dname_sfm_cams_tform4x4_obj)
+    #
+        #
+        # fx = self.first_frame.meta.l_cam_intr4x4[0][0]
+        # fy = self.first_frame.meta.l_cam_intr4x4[1][1]
+        # cx = self.first_frame.meta.l_cam_intr4x4[0][2]
+        # cy = self.first_frame.meta.l_cam_intr4x4[1][2]
+        # if not path_out.exists():
+        #     path_out.mkdir(parents=True, exist_ok=True)
+        # run_cmd(cmd=f'echo "{fx} {fy} {cx} {cy}" > {path_out_root}/{rpath_out}/calib.txt', logger=logger)
+        # run_cmd(
+        #     cmd=f'docker run --user=$(id -u):$(id -g) --gpus all -e RPATH_OUT={rpath_out} -e STRIDE={stride} -v {path_in}:/home/appuser/in -v {path_out_root}:/home/appuser/DROID-SLAM/reconstructions/out -t {image_tag}',
+        #     logger=logger, live=True)
+        #
+        #
 
     """
     def preprocess_mesh(self):

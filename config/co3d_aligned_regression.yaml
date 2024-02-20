@@ -52,7 +52,7 @@ metrics:
 
 aligned_name_ref: '/r0'
 aligned_name_suffix: '_mesh'
-aligned_name: 'latest_50s_to_5s_sota${aligned_name_suffix}${aligned_name_ref}'
+aligned_name: 'latest_50s_to_5s_sota_ref_86_64${aligned_name_suffix}${aligned_name_ref}'
 
 method:
   regression:

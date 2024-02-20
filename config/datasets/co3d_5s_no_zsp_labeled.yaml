@@ -16,6 +16,8 @@ preprocess:
   droid_slam:
     enabled: False
     override: False
+
+
 mesh_name: 'alpha500' # 'convex500', 'voxel500' 'poisson500', 'alpha500'
 
 #mesh_feats_type: 'dinov2_acc' # 'dinov2_avg', 'dinov2_acc'

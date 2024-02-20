@@ -3,10 +3,10 @@ defaults:
 
 name: co3dv1_10s_zsp_labeled_cuboid_ref
 
-pcl_source: 'co3d_clean'
-cuboid_source: 'zsp_ref_cuboid' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
-cam_tform_obj_source: 'zsp_labeled_cuboid_ref' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
-
+#pcl_source: 'co3d_clean'
+#cuboid_source: 'zsp_ref_cuboid' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
+#cam_tform_obj_source: 'zsp_labeled_cuboid_ref' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
+#
 
 
 #modalities:
@@ -20,10 +20,10 @@ cam_tform_obj_source: 'zsp_labeled_cuboid_ref' # 'droid_slam_zsp_labeled' 'droid
 #    - 'sequence_name'
 #    - 'sequence'
 #    - 'mesh'
-#frames_count_max_per_sequence: 3
+# frames_count_max_per_sequence: 3
 #
 #categories:
-##  - bicycle
+#  - bicycle
 ##  - toytruck
 ##  - toytrain
 ##  - teddybear

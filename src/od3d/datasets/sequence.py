@@ -159,6 +159,12 @@ class OD3D_SequenceCategoryMixin(OD3D_Sequence):
 class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
     #frame_type = OD3D_FrameCamIntr4x4Mixin
 
+    def get_min_HW(self):
+        return None, None
+
+    def get_sfm_HW(self):
+        return None, None
+
     @property
     def path_sfm(self):
         return self.path_sfm_root.joinpath(self.name_unique)
@@ -207,6 +213,18 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
             path_out_root = self.path_sfm_root #  self.path_preprocess.joinpath('droid_slam')
             rpath_out = Path(self.name_unique)
 
+            # note: this is only required if the frames have different sizes
+            H, W = self.get_sfm_HW()
+            if H is not None and W is not None:
+                path_out = path_out_root.joinpath(rpath_out)
+                path_in = path_out.joinpath('images')
+
+                import torchvision
+                for f_id in range(len(self.frames_names)):
+                    frame = self.get_frame_by_index(f_id)
+                    rgb = frame.rgb[:, :H, :W].clone()
+                    torchvision.io.image.write_jpeg(rgb, filename=str(path_in.joinpath(f'{f_id:05d}' + '.jpg')))
+
             #from od3d.models.model import OD3D_Model
             #from od3d.cv.transforms.transform import OD3D_Transform
             #from od3d.cv.transforms.sequential import SequentialTransform
@@ -220,6 +238,19 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
                            cam_intr4x4=self.first_frame.get_cam_intr4x4(), pcl_fname=self.fname_sfm_pcl,
                            rays_center3d_fname=self.fname_sfm_rays_center3d,
                            cam_tform_obj_dname=self.dname_sfm_cams_tform4x4_obj )
+        elif self.sfm_type == OD3D_SEQUENCE_SFM_TYPES.META:
+
+            from od3d.cv.geometry.fit.rays_center3d import fit_rays_center3d
+            logger.info('only need to preprocess rays center3d for meta sfm type')
+
+            frames = self.get_frames()
+            device = get_default_device()
+            cams_tform4x4_obj = torch.stack([frame.read_cam_tform4x4_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW) for frame in frames], dim=0).to(device=device)
+            center3d = fit_rays_center3d(cams_tform4x4_obj=cams_tform4x4_obj)
+            self.fpath_sfm_rays_center3d.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(center3d.detach().cpu(), f=self.fpath_sfm_rays_center3d)
+
+            return
         else:
             raise NotImplementedError(f'sfm_type {self.sfm_type} not implemented')
 
@@ -312,7 +343,13 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             frames = self.get_frames()
             device = get_default_device()
 
-            masks = torch.stack([frame.get_mask() for frame in frames], dim=0).to(device=device)
+            H, W = self.get_min_HW()
+            # note: this is only required if the frames have different sizes
+            if H is not None and W is not None:
+                masks = torch.stack([frame.get_mask()[:, :H, :W] for frame in frames], dim=0).to(device=device)
+            else:
+                masks = torch.stack([frame.get_mask() for frame in frames], dim=0).to(device=device)
+
             cams_intr4x4 = torch.stack([frame.read_cam_intr4x4() for frame in frames], dim=0).to(device=device)
             cams_tform4x4_obj = torch.stack([frame.read_cam_tform4x4_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW) for frame in frames], dim=0).to(device=device)
 
@@ -378,6 +415,16 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
         torch.save(tform_obj.detach().cpu(), f=fpath_tform_obj)
 
+
+    def get_sequence_by_name_unique(self, sequence_name_unique: str):
+        from dataclasses import fields
+        frame_fields = fields(self)
+        sequence_fields_names = [field.name for field in fields(self.__class__)]
+        all_attrs_except_name_unique = {field.name: getattr(self, field.name) for field in frame_fields
+                                        if field.name != 'name_unique' and field.name in sequence_fields_names}
+        return self.__class__(name_unique=sequence_name_unique, **all_attrs_except_name_unique)
+
+
     def preprocess_tform_obj(self, override=False, tform_obj_type=None):
 
         if tform_obj_type is None:
@@ -387,12 +434,66 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
 
         fpath_tform_obj = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
         if fpath_tform_obj.exists() and not override:
-            logger.info(f'Label axis already exists {fpath_tform_obj}, override disabled.')
+            logger.info(f'Label tform_obj already exists {fpath_tform_obj}, override disabled.')
             return
 
         if tform_obj_type == OD3D_TFROM_OBJ_TYPES.RAW:
             logger.info(f'No need to preprocess tform_obj for raw tform_obj type')
             return
+        elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP:
+            from od3d.io import read_json
+            from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
+
+            ref_seq_name_unique = self.category + '/' + sorted(
+                list(Path('third_party/zero-shot-pose/data/class_labels').joinpath(self.category).iterdir()))[0].stem
+            ref_seq = self.get_sequence_by_name_unique(ref_seq_name_unique)
+            ref_seq.preprocess_tform_obj(override=False, tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID)
+            label3d_cuboid_tform_obj_ref = ref_seq.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID)
+            scale = label3d_cuboid_tform_obj_ref[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+            label3d_cuboid_tform_obj_ref[:3] = label3d_cuboid_tform_obj_ref[:3] / scale
+
+            fpath_zsp = Path('third_party/zero-shot-pose/data/class_labels').joinpath(self.name_unique + '.json')
+            zsp_tform_obj = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_zsp)['trans'])))
+            zsp_tform_obj = zsp_tform_obj.to(torch.float)
+            scale = zsp_tform_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+            zsp_tform_obj[:3] = zsp_tform_obj[:3] / scale
+
+            fpath_zsp_ref = Path('third_party/zero-shot-pose/data/class_labels').joinpath(ref_seq_name_unique + '.json')
+            zsp_tform_obj_ref = inv_tform4x4(torch.from_numpy(np.array(read_json(fpath_zsp_ref)['trans'])))
+            zsp_tform_obj_ref = zsp_tform_obj_ref.to(torch.float)
+            scale = zsp_tform_obj_ref[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+            zsp_tform_obj_ref[:3] = zsp_tform_obj_ref[:3] / scale
+
+            zsp_obj_ref_tform_obj = tform4x4(inv_tform4x4(zsp_tform_obj_ref), zsp_tform_obj)
+
+            label_tform_obj = tform4x4(label3d_cuboid_tform_obj_ref, zsp_obj_ref_tform_obj)
+            # note: as zsp does not offer scale, we cannot retrieve actual translation, therefore we use this pcl center
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
+            label_tform_obj[:3, 3] = -pts3d.mean(dim=0)
+
+            self.write_tform_obj(tform_obj=label_tform_obj, fpath_tform_obj=fpath_tform_obj)
+
+        elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP_CUBOID:
+
+            from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
+            from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
+            from od3d.cv.geometry.transform import tform4x4
+
+            size = OD3D_CATEGORIES_SIZES_IN_M[self.map_categories_to_od3d[self.category]]
+
+            self.preprocess_tform_obj(override=override, tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP)
+
+            tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP)
+
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP)
+            pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d_label3d, size=size,
+                                                          optimize_rot=False,
+                                                          optimize_transl=True)
+            tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
+
+            self.write_tform_obj(tform_obj=tform_obj, fpath_tform_obj=fpath_tform_obj)
+
         elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D:
             fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
             cams_tform4x4_world, cams_intr4x4, cams_imgs = self.read_cams(cams_count=4, show_imgs=True, tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)

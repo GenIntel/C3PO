@@ -64,6 +64,8 @@ class OD3D_PCL_TYPES(str, Enum):
 class OD3D_TFROM_OBJ_TYPES(str, Enum):
     RAW = 'raw'
     CENTER3D = 'center3d'
+    LABEL3D_ZSP = 'label3d_zsp'
+    LABEL3D_ZSP_CUBOID = 'label3d_zsp_cuboid'
     LABEL3D = 'label3d'
     LABEL3D_CUBOID = 'label3d_cuboid'
     # ALIGNED7D = 'aligned7d'

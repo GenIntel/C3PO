@@ -30,7 +30,7 @@ class CO3D(OD3D_SequenceDataset):
                                pcl_type=OD3D_PCL_TYPES.META_MASK,
                                sfm_type=OD3D_SEQUENCE_SFM_TYPES.META,
                                modalities=self.modalities,
-                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID,)
+                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP,)
 
     def get_sequence_by_name_unique(self, name_unique):
         return self.sequence_type(name_unique=name_unique,
@@ -45,7 +45,7 @@ class CO3D(OD3D_SequenceDataset):
                                   pcl_type=OD3D_PCL_TYPES.META_MASK,
                                   sfm_type=OD3D_SEQUENCE_SFM_TYPES.META,
                                   modalities=self.modalities,
-                                  tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID,)
+                                  tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP,)
 
 #
 # from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_DATASET_SPLITS
