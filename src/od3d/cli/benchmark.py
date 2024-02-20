@@ -6,7 +6,7 @@ from omegaconf import OmegaConf
 from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
-from od3d.benchmark.run import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
+from od3d.benchmark.run import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, torque_run_method_or_cmd, slurm_run_method_or_cmd
 from od3d.benchmark.benchmark import get_timestamp_as_string, get_timestamp_from_string
 import json
 app = typer.Typer()
@@ -601,9 +601,9 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         elif method_cfg.platform.link == 'local-docker':
             bench_single_method_local_docker(method_cfg)
         elif method_cfg.platform.link == 'torque':
-            bench_single_method_torque(method_cfg)
+            torque_run_method_or_cmd(method_cfg)
         elif method_cfg.platform.link == 'slurm':
-            bench_single_method_slurm(method_cfg)
+            slurm_run_method_or_cmd(method_cfg)
 
             if (i+1) % 40 == 0:
                 time.sleep(sleep_in_mins * 60)
@@ -657,7 +657,7 @@ def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
             cfg_old.run_name = timestamp_str + run_name[len(timestamp_str):]
 
             logger.info(f'restarting {run_name}...')
-            bench_single_method_slurm(cfg_old)
+            slurm_run_method_or_cmd(cfg_old)
         except Exception as e:
             logger.info(e)
     logger.info(runs_names)

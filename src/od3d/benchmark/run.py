@@ -21,13 +21,15 @@ def bench_single_method_local_docker(cfg: DictConfig):
     # 3. from inside docker: run od3d bench single -f `path-to-config`
     # TODO
     raise NotImplementedError
-def bench_single_method_torque(cfg: DictConfig):
+def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
     # 1. save config
     # 2. setup od3d on torque
     # 3. execute script with command: run od3d bench single -f `path-to-config`
-    # TODO
 
-    job_name = cfg.run_name
+    if cmd is None:
+        job_name = cfg.run_name
+    else:
+        job_name = cmd.replace(' ', '_')
 
     from pathlib import Path
     local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
@@ -42,6 +44,9 @@ def bench_single_method_torque(cfg: DictConfig):
 
     remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'config_{job_name}.yaml')
     remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'run_{job_name}.sh')
+
+    if cmd is None:
+        cmd = f'od3d bench single-local -c {remote_tmp_config_fpath}'
 
     with open(local_tmp_script_fpath, 'w') as rsh:
 
@@ -188,7 +193,8 @@ rm "{cfg.platform.path_od3d}/installing.txt"
 
 od3d debug hello-world
 
-od3d bench single-local -c {remote_tmp_config_fpath}
+{cmd}
+
 #PYTHONUNBUFFERED=1 
 #CUDA_VISIBLE_DEVICES=1
 
@@ -199,12 +205,16 @@ exit 0
     #subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
     subprocess.run(f'ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', capture_output=True, shell=True)
 
-def bench_single_method_slurm(cfg: DictConfig):
+def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
     # 1. save config
     # 2. setup od3d on slurm
     # 3. execute script with command: run od3d bench single -f `path-to-config`
 
-    job_name = cfg.run_name
+    if cmd is None:
+        job_name = cfg.run_name
+    else:
+        job_name = cmd.replace(' ', '_')
+
     from pathlib import Path
     local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
     if not local_tmp_config_fpath.resolve().parent.exists():
@@ -217,6 +227,9 @@ def bench_single_method_slurm(cfg: DictConfig):
 
     remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'config_{job_name}.yaml')
     remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'run_{job_name}.sh')
+
+    if cmd is None:
+        cmd = f'od3d bench single-local -c {remote_tmp_config_fpath}'
 
     with open(local_tmp_script_fpath, 'w') as rsh:
         gpu_count = cfg.platform.gpu_count
@@ -339,7 +352,7 @@ rm "{cfg.platform.path_od3d}/installing.txt"
 
 od3d debug hello-world
 
-od3d bench single-local -c {remote_tmp_config_fpath}
+{cmd}
 
 exit 0
         '''
