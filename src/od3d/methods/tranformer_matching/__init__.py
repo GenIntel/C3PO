@@ -1,0 +1,1 @@
+from od3d.methods.transformer_matching.method import TransformerMatching
