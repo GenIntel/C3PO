@@ -357,9 +357,9 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                  categories: List=None,
                  dict_nested_frames: Dict=None,
                  dict_nested_frames_ban: Dict=None,
-                 transform=None, index_shift=0, subset_fraction=1.):
+                 transform=None, index_shift=0, subset_fraction=1., frames_count_max_per_sequence=None):
 
-
+        self.frames_count_max_per_sequence = frames_count_max_per_sequence
         self.categories = categories if categories is not None else self.all_categories
         self.path_raw = Path(path_raw)
         self.path_preprocess = Path(path_preprocess)
@@ -409,6 +409,34 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities, path_raw=path_raw,
                          path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
+
+    def filter_dict_nested_frames(self, dict_nested_frames: Dict[str, Dict[str, List[str]]]):
+        dict_nested_frames = super().filter_dict_nested_frames(dict_nested_frames=dict_nested_frames)
+
+        frames_count_max_per_sequence = self.frames_count_max_per_sequence
+
+        # filter frames to exist in sequences:
+        dict_nested_frames_filtered = {}
+        for category, sequences in self.dict_category_sequences_names.items():
+            dict_nested_frames_filtered[category] = {}
+            for sequence in sequences:
+                dict_nested_frames_filtered[category][sequence] = dict_nested_frames[category][sequence]
+        dict_nested_frames = dict_nested_frames_filtered
+
+        if frames_count_max_per_sequence is not None:
+            dict_nested_frames = self.frame_type.meta_type.complete_nested_metas(path_meta=self.path_meta,
+                                                                                 dict_nested_metas=dict_nested_frames)
+            dict_nested_frames_filtered = {}
+            for category, dict_sequence_name_frames_names in dict_nested_frames.items():
+                for sequence_name, frames_names in dict_sequence_name_frames_names.items():
+                    frames_names_filtered = self.sequence_type.get_subset_frames_names_uniform(frames_names, count_max_per_sequence=frames_count_max_per_sequence)
+                    if category not in dict_nested_frames_filtered.keys():
+                        dict_nested_frames_filtered[category] = {}
+                    dict_nested_frames_filtered[category][sequence_name] = frames_names_filtered
+            dict_nested_frames = dict_nested_frames_filtered
+
+        return dict_nested_frames
+
 
     def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
         logger.info("filtering frames...")

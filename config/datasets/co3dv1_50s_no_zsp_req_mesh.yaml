@@ -1,9 +1,0 @@
-defaults:
-  - co3dv1_50s_no_zsp
-
-cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
-cam_tform_obj_source: 'droid_slam' # 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
-
-sequences_require_mesh: True # True
-sequences_require_pcl: True # True
-sequences_require_gt_pose: False

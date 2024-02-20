@@ -15,6 +15,7 @@ from od3d.datasets.object import OD3D_Object, OD3D_CamTform4x4ObjTypeMixin, OD3D
 
 from od3d.datasets.frame_meta import OD3D_FrameMeta
 from pathlib import Path
+import numpy as np
 
 class OD3D_FRAME_MODALITIES(str, Enum):
     NAME = 'name'

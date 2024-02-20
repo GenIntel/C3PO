@@ -18,6 +18,7 @@ from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 from od3d.datasets.co3d.sequence import CO3D_Sequence, CO3D_SequenceMeta
 from tqdm import tqdm
 from typing import List
+from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
 
 class CO3Dv1_Frame(CO3D_Frame):
     def __post_init__(self):
@@ -57,8 +58,9 @@ class CO3Dv1_Sequence(CO3D_Sequence):
         return H, W
 
 class CO3Dv1(CO3D):
-    sequence_type = CO3Dv1_Sequence # od3d.datasets.monolmb.sequence.MonoLMB_Sequence
-    frame_type = CO3Dv1_Frame # od3d.datasets.monolmb.frame.MonoLMB_Frame
+    sequence_type = CO3Dv1_Sequence
+    frame_type = CO3Dv1_Frame
+    tform_obj_type = OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP_CUBOID
 
     @staticmethod
     def setup(config: DictConfig):

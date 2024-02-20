@@ -8,44 +8,47 @@ from od3d.datasets.co3d.sequence import CO3D_Sequence
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_SequenceDataset
 from od3d.datasets.object import OD3D_FRAME_MASK_TYPES, OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_PCL_TYPES, \
     OD3D_SEQUENCE_SFM_TYPES, OD3D_TFROM_OBJ_TYPES, OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES
-from od3d.datasets.sequence_meta import OD3D_SequenceMetaCategoryMixin
-
-from pathlib import Path
-from omegaconf import DictConfig
-import shutil
 
 class CO3D(OD3D_SequenceDataset):
     all_categories = list(CO3D_CATEGORIES)
-    sequence_type = CO3D_Sequence # od3d.datasets.monolmb.sequence.MonoLMB_Sequence
-    frame_type = CO3D_Frame # od3d.datasets.monolmb.frame.MonoLMB_Frame
+    sequence_type = CO3D_Sequence
+    frame_type = CO3D_Frame
+    tform_obj_type = OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID
+    sfm_type = OD3D_SEQUENCE_SFM_TYPES.META
+    cam_tform_obj_type = OD3D_CAM_TFORM_OBJ_TYPES.META
+    mask_type = OD3D_FRAME_MASK_TYPES.META
+    pcl_type = OD3D_PCL_TYPES.META_MASK
+    mesh_type = OD3D_MESH_TYPES.CUBOID500
+    mesh_feats_type = OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC
+    mesh_feats_dist_reduce_type = OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG
 
     def get_frame_by_name_unique(self, name_unique):
         return self.frame_type(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
                                name_unique=name_unique, all_categories=self.categories,
-                               mask_type=OD3D_FRAME_MASK_TYPES.META,
-                               cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.META,
-                               mesh_type=OD3D_MESH_TYPES.CUBOID500,
-                               mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
-                               mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
-                               pcl_type=OD3D_PCL_TYPES.META_MASK,
-                               sfm_type=OD3D_SEQUENCE_SFM_TYPES.META,
+                               mask_type=self.mask_type,
+                               cam_tform4x4_obj_type=self.cam_tform_obj_type,
+                               mesh_type=self.mesh_type,
+                               mesh_feats_type=self.mesh_feats_type,
+                               mesh_feats_dist_reduce_type=self.mesh_feats_dist_reduce_type,
+                               pcl_type=self.pcl_type,
+                               sfm_type=self.sfm_type,
                                modalities=self.modalities,
-                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP,)
+                               tform_obj_type=self.tform_obj_type)
 
     def get_sequence_by_name_unique(self, name_unique):
         return self.sequence_type(name_unique=name_unique,
                                   path_raw=self.path_raw,
                                   path_preprocess=self.path_preprocess,
                                   all_categories=self.categories,
-                                  mask_type=OD3D_FRAME_MASK_TYPES.META,
-                                  cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.META,
-                                  mesh_type=OD3D_MESH_TYPES.CUBOID500,
-                                  mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
-                                  mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
-                                  pcl_type=OD3D_PCL_TYPES.META_MASK,
-                                  sfm_type=OD3D_SEQUENCE_SFM_TYPES.META,
+                                  mask_type=self.mask_type,
+                                  cam_tform4x4_obj_type=self.cam_tform_obj_type,
+                                  mesh_type=self.mesh_type,
+                                  mesh_feats_type=self.mesh_feats_type,
+                                  mesh_feats_dist_reduce_type=self.mesh_feats_dist_reduce_type,
+                                  pcl_type=self.pcl_type,
+                                  sfm_type=self.sfm_type,
                                   modalities=self.modalities,
-                                  tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP,)
+                                  tform_obj_type=self.tform_obj_type)
 
 #
 # from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_DATASET_SPLITS
