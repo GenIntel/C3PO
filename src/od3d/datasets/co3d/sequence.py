@@ -10,6 +10,9 @@ from od3d.datasets.sequence_meta import OD3D_SequenceMeta, OD3D_SequenceMetaCate
 from od3d.datasets.object import OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin
 from od3d.datasets.co3d.enum import MAP_CATEGORIES_CO3D_TO_OD3D
 from pathlib import Path
+from co3d.dataset.data_types import (
+    load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
+)
 
 @dataclass
 class CO3D_SequenceMeta(OD3D_SequenceMetaCategoryMixin, OD3D_SequenceMeta):
@@ -19,8 +22,20 @@ class CO3D_SequenceMeta(OD3D_SequenceMetaCategoryMixin, OD3D_SequenceMeta):
     viewpoint_quality_score: float
 
     @staticmethod
-    def load_from_raw(category: str, name: str, pcl_pts_count: int, pcl_quality_score: float, rfpath_pcl: Path,
-                      viewpoint_quality_score: float):
+    def load_from_raw(sequence_annotation: SequenceAnnotation):
+        name = sequence_annotation.sequence_name
+        category = sequence_annotation.category
+        if sequence_annotation.point_cloud is not None:
+            rfpath_pcl = sequence_annotation.point_cloud.path
+            pcl_pts_count = sequence_annotation.point_cloud.n_points
+            pcl_quality_score = sequence_annotation.point_cloud.quality_score
+        else:
+            rfpath_pcl = Path('None')
+            pcl_pts_count = 0
+            pcl_quality_score = float('nan')
+
+        viewpoint_quality_score = sequence_annotation.viewpoint_quality_score
+
         return CO3D_SequenceMeta(category=category, name=name, pcl_pts_count=pcl_pts_count,
                                  pcl_quality_score=pcl_quality_score, rfpath_pcl=rfpath_pcl,
                                  viewpoint_quality_score=viewpoint_quality_score)

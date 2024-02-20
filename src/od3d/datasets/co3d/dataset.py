@@ -1,13 +1,27 @@
 import logging
 logger = logging.getLogger(__name__)
 
+from od3d.datasets.frame import OD3D_FRAME_MODALITIES
 from od3d.datasets.co3d.enum import CO3D_CATEGORIES
 from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
 from od3d.datasets.co3d.sequence import CO3D_Sequence
+from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_FRAME_TYPES, CO3D_FRAME_SPLITS, CO3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_CO3D, FEATURE_TYPES, REDUCE_TYPES, ALLOW_LIST_FRAME_TYPES, PCL_SOURCES
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_SequenceDataset
 from od3d.datasets.object import OD3D_FRAME_MASK_TYPES, OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_PCL_TYPES, \
     OD3D_SEQUENCE_SFM_TYPES, OD3D_TFROM_OBJ_TYPES, OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES
+from pathlib import Path
+from typing import List, Dict
+
+from co3d.dataset.data_types import (
+    load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
+)
+from od3d.datasets.co3d.frame import CO3D_Frame, CO3D_FrameMeta
+from od3d.datasets.co3d.sequence import CO3D_Sequence, CO3D_SequenceMeta
+from od3d.io import run_cmd
+from omegaconf import DictConfig
+import shutil
+from tqdm import tqdm
 
 class CO3D(OD3D_SequenceDataset):
     all_categories = list(CO3D_CATEGORIES)
@@ -21,6 +35,25 @@ class CO3D(OD3D_SequenceDataset):
     mesh_type = OD3D_MESH_TYPES.CUBOID500
     mesh_feats_type = OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC
     mesh_feats_dist_reduce_type = OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG
+
+    def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
+                 categories: List[CO3D_CATEGORIES]=None,
+                 dict_nested_frames: Dict[str, Dict[str, List[str]]]=None,
+                 dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None,
+                 frames_count_max_per_sequence=None, transform=None, index_shift=0, subset_fraction=1.,
+                 mesh_type=OD3D_MESH_TYPES.CUBOID500,
+                 mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+                 mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,):
+
+        super().__init__(categories=categories, name=name, modalities=modalities, path_raw=path_raw,
+                         path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction,
+                         index_shift=index_shift, dict_nested_frames=dict_nested_frames,
+                         dict_nested_frames_ban=dict_nested_frames_ban,
+                         frames_count_max_per_sequence=frames_count_max_per_sequence)
+
+        self.mesh_type = mesh_type
+        self.mesh_feats_type = mesh_feats_type
+        self.mesh_feats_dist_reduce_type = mesh_feats_dist_reduce_type
 
     def get_frame_by_name_unique(self, name_unique):
         return self.frame_type(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
@@ -49,6 +82,109 @@ class CO3D(OD3D_SequenceDataset):
                                   sfm_type=self.sfm_type,
                                   modalities=self.modalities,
                                   tform_obj_type=self.tform_obj_type)
+
+    @staticmethod
+    def setup(config: DictConfig):
+
+        # logger.info(OmegaConf.to_yaml(config))
+        path_raw = Path(config.path_raw)
+        if path_raw.exists() and config.setup.remove_previous:
+            logger.info(f"Removing previous CO3D")
+            shutil.rmtree(path_raw)
+
+        if path_raw.exists() and not config.setup.override:
+            logger.info(f"Found CO3D dataset at {path_raw}")
+        else:
+            path_co3d_repo = path_raw.joinpath('co3d')
+            path_co3d_repo.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Cloning CO3D github repository to {path_co3d_repo}")
+            run_cmd(cmd=f'cd {path_raw} && git clone git@github.com:facebookresearch/co3d.git', live=True, logger=logger)
+            logger.info(f"Downloading CO3D dataset at {path_raw}")
+            run_cmd(cmd=f'python {path_co3d_repo.joinpath("co3d/download_dataset.py")} --download_folder {path_raw}', live=True, logger=logger)
+            # --n_download_workers 1 --n_extract_workers 1
+
+    @staticmethod
+    def extract_meta(config: DictConfig):
+        path = Path(config.path_raw)
+        path_meta = CO3D.get_path_meta(config=config)
+
+        dict_nested_frames = config.get('dict_nested_frames', None)
+        dict_nested_frames_banned = config.get('dict_nested_frames_ban', None)
+        preprocess_meta_override = config.get('extract_meta', False).get('override', False)
+        preprocess_meta_remove_previous = config.get('extract_meta', False).get('remove_previous', False)
+
+        categories = list(dict_nested_frames.keys()) if dict_nested_frames is not None else CO3D_CATEGORIES.list()
+        sequences_count_max_per_category = config.get("sequences_count_max_per_category", None)
+
+        if preprocess_meta_remove_previous:
+            if path_meta.exists():
+                shutil.rmtree(path_meta)
+
+        for category in categories:
+            logger.info(f'preprocess meta for class {category}')
+            sequence_annotations = load_dataclass_jgzip(
+                f"{path}/{category}/sequence_annotations.jgz", List[SequenceAnnotation]
+            )
+
+            sequences_names = list(dict_nested_frames[category].keys()) if dict_nested_frames is not None and category in dict_nested_frames.keys() and dict_nested_frames[category] is not None else None
+            if sequences_names is None and (dict_nested_frames is None or (category in dict_nested_frames.keys() and dict_nested_frames[category] is None)):
+                sequences_names = [sequence_annoation.sequence_name for sequence_annoation in tqdm(sequence_annotations)]
+            if dict_nested_frames_banned is not None and category in dict_nested_frames_banned.keys() and dict_nested_frames_banned[category] is not None:
+                sequences_names = list(filter(lambda seq: seq not in dict_nested_frames_banned[category].keys(), sequences_names))
+
+            logger.info('reading sequence annotations...')
+            seq_count_per_class = 0
+            read_sequences = []
+            for sequence_annoation in tqdm(sequence_annotations):
+                if sequences_names is not None and sequence_annoation.sequence_name not in sequences_names:
+                    continue
+
+                read_sequences.append(sequence_annoation.sequence_name)
+                seq_count_per_class += 1
+                if sequences_count_max_per_category is not None:
+                    if seq_count_per_class > sequences_count_max_per_category:
+                        break
+
+                sequence_name = str(sequence_annoation.sequence_name)
+                sequence_meta_fpath = CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta,
+                                                                                                       category=category,
+                                                                                                       name=sequence_name)
+
+                if sequence_meta_fpath.exists() and not preprocess_meta_override:
+                    continue
+
+                sequence_meta = CO3D_SequenceMeta.load_from_raw(sequence_annotation=sequence_annoation)
+
+                if len(list(path.joinpath(sequence_meta.name_unique, "images").iterdir())) > 0:
+                    # filtering sequences with no rgb images
+                    sequence_meta.save(path_meta=path_meta)
+
+            cls_frame_annotations = load_dataclass_jgzip(
+                f"{path}/{category}/frame_annotations.jgz", List[FrameAnnotation]
+            )
+            cls_frame_annotations = [fa for fa in cls_frame_annotations if fa.meta[
+                'frame_type'] in ALLOW_LIST_FRAME_TYPES]
+
+            logger.info('reading frame annotations...')
+            for frame_annotation in tqdm(cls_frame_annotations):
+                if sequences_names is not None and frame_annotation.sequence_name not in sequences_names:
+                    continue
+
+                if frame_annotation.sequence_name not in read_sequences:
+                    continue
+
+                frame_name = str(frame_annotation.frame_number)
+                sequence_name = str(frame_annotation.sequence_name)
+                frame_meta_fpath = CO3D_FrameMeta.get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta=path_meta,
+                                                                                                             category=category,
+                                                                                                             sequence_name=sequence_name,
+                                                                                                             name=frame_name)
+                if frame_meta_fpath.exists() and not preprocess_meta_override:
+                    continue
+
+
+                frame_meta = CO3D_FrameMeta.load_from_raw(frame_annotation=frame_annotation)
+                frame_meta.save(path_meta=path_meta)
 
 #
 # from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES, OD3D_DATASET_SPLITS
@@ -422,108 +558,7 @@ class CO3D(OD3D_SequenceDataset):
 #                 dict_nested_sequences[category] = [sequence.name for sequence in sequences]
 #         return dict_nested_sequences
 #
-#     @staticmethod
-#     def setup(config: DictConfig):
-#
-#         # logger.info(OmegaConf.to_yaml(config))
-#         path_raw = Path(config.path_raw)
-#         if path_raw.exists() and config.setup.remove_previous:
-#             logger.info(f"Removing previous CO3D")
-#             shutil.rmtree(path_raw)
-#
-#         if path_raw.exists() and not config.setup.override:
-#             logger.info(f"Found CO3D dataset at {path_raw}")
-#         else:
-#             path_co3d_repo = path_raw.joinpath('co3d')
-#             path_co3d_repo.mkdir(parents=True, exist_ok=True)
-#             logger.info(f"Cloning CO3D github repository to {path_co3d_repo}")
-#             run_cmd(cmd=f'cd {path_raw} && git clone git@github.com:facebookresearch/co3d.git', live=True, logger=logger)
-#             logger.info(f"Downloading CO3D dataset at {path_raw}")
-#             run_cmd(cmd=f'python {path_co3d_repo.joinpath("co3d/download_dataset.py")} --download_folder {path_raw}', live=True, logger=logger)
-#             # --n_download_workers 1 --n_extract_workers 1
-#
-#     @staticmethod
-#     def extract_meta(config: DictConfig):
-#         path = Path(config.path_raw)
-#         path_meta = CO3D.get_path_meta(config=config)
-#
-#         dict_nested_frames = config.get('dict_nested_frames', None)
-#         dict_nested_frames_banned = config.get('dict_nested_frames_ban', None)
-#         preprocess_meta_override = config.get('extract_meta', False).get('override', False)
-#         preprocess_meta_remove_previous = config.get('extract_meta', False).get('remove_previous', False)
-#
-#         categories = list(dict_nested_frames.keys()) if dict_nested_frames is not None else CO3D_CATEGORIES.list()
-#         sequences_count_max_per_category = config.get("sequences_count_max_per_category", None)
-#
-#         if preprocess_meta_remove_previous:
-#             if path_meta.exists():
-#                 shutil.rmtree(path_meta)
-#
-#         for category in categories:
-#             logger.info(f'preprocess meta for class {category}')
-#             sequence_annotations = load_dataclass_jgzip(
-#                 f"{path}/{category}/sequence_annotations.jgz", List[SequenceAnnotation]
-#             )
-#
-#             sequences_names = list(dict_nested_frames[category].keys()) if dict_nested_frames is not None and category in dict_nested_frames.keys() and dict_nested_frames[category] is not None else None
-#             if sequences_names is None and (dict_nested_frames is None or (category in dict_nested_frames.keys() and dict_nested_frames[category] is None)):
-#                 sequences_names = [sequence_annoation.sequence_name for sequence_annoation in tqdm(sequence_annotations)]
-#             if dict_nested_frames_banned is not None and category in dict_nested_frames_banned.keys() and dict_nested_frames_banned[category] is not None:
-#                 sequences_names = list(filter(lambda seq: seq not in dict_nested_frames_banned[category].keys(), sequences_names))
-#
-#             logger.info('reading sequence annotations...')
-#             seq_count_per_class = 0
-#             read_sequences = []
-#             for sequence_annoation in tqdm(sequence_annotations):
-#                 if sequences_names is not None and sequence_annoation.sequence_name not in sequences_names:
-#                     continue
-#
-#                 read_sequences.append(sequence_annoation.sequence_name)
-#                 seq_count_per_class += 1
-#                 if sequences_count_max_per_category is not None:
-#                     if seq_count_per_class > sequences_count_max_per_category:
-#                         break
-#
-#                 sequence_name = str(sequence_annoation.sequence_name)
-#                 sequence_meta_fpath = CO3D_SequenceMeta.get_fpath_sequence_meta_with_category_and_name(path_meta=path_meta,
-#                                                                                                        category=category,
-#                                                                                                        name=sequence_name)
-#
-#                 if sequence_meta_fpath.exists() and not preprocess_meta_override:
-#                     continue
-#
-#                 sequence_meta = CO3D_SequenceMeta.load_from_raw(sequence_annotation=sequence_annoation)
-#
-#                 if len(list(path.joinpath(sequence_meta.name_unique, "images").iterdir())) > 0:
-#                     # filtering sequences with no rgb images
-#                     sequence_meta.save(path_meta=path_meta)
-#
-#             cls_frame_annotations = load_dataclass_jgzip(
-#                 f"{path}/{category}/frame_annotations.jgz", List[FrameAnnotation]
-#             )
-#             cls_frame_annotations = [fa for fa in cls_frame_annotations if fa.meta[
-#                 'frame_type'] in ALLOW_LIST_FRAME_TYPES]
-#
-#             logger.info('reading frame annotations...')
-#             for frame_annotation in tqdm(cls_frame_annotations):
-#                 if sequences_names is not None and frame_annotation.sequence_name not in sequences_names:
-#                     continue
-#
-#                 if frame_annotation.sequence_name not in read_sequences:
-#                     continue
-#
-#                 frame_name = str(frame_annotation.frame_number)
-#                 sequence_name = str(frame_annotation.sequence_name)
-#                 frame_meta_fpath = CO3D_FrameMeta.get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta=path_meta,
-#                                                                                                              category=category,
-#                                                                                                              sequence_name=sequence_name,
-#                                                                                                              name=frame_name)
-#                 if frame_meta_fpath.exists() and not preprocess_meta_override:
-#                     continue
-#
-#
-#                 frame_meta = CO3D_FrameMeta.load_from_raw(frame_annotation=frame_annotation)
-#                 frame_meta.save(path_meta=path_meta)
+
 #
 #
 #
