@@ -248,6 +248,11 @@ class OD3D_Dataset(Dataset):
         logger.info("preprocess masks...")
         from functools import partial
 
+        first_frame_fpath_mask = self.get_frame_by_name_unique(self.list_frames_unique[0]).fpath_mask
+        if first_frame_fpath_mask.exists() and not override:
+            logger.info(f"masks exists, at least at {first_frame_fpath_mask}, skip preprocess mask")
+            return
+
         dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False,
                                                  collate_fn=partial(self.collate_fn,
                                                                     modalities=[OD3D_FRAME_MODALITIES.RGB,
@@ -270,10 +275,6 @@ class OD3D_Dataset(Dataset):
                 batch.to(device='cuda:0')
                 # batch.cam_proj4x4_obj batch.rays_center3d
                 frames = [self.get_frame_by_name_unique(name_unique=name_unique) for name_unique in batch.name_unique]
-
-                if frames[0].fpath_mask.exists() and not override:
-                    logger.info(f"masks exists, at least at {frames[0].fpath_mask}, skip preprocess mask")
-                    return
 
                 if frames[0].mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D:
                     center_pxl2d = proj3d2d_broadcast(proj4x4=batch.cam_proj4x4_obj, pts3d=batch.rays_center3d)
