@@ -10,7 +10,6 @@ from od3d.models.backbones.backbone import OD3D_Backbone
 from od3d.models.heads.head import OD3D_Head
 from pathlib import Path
 
-
 class OD3D_Model(nn.Module):
 
     def __init__(self, config: DictConfig):
@@ -28,6 +27,22 @@ class OD3D_Model(nn.Module):
         else:
             self.out_dim = self.backbone.out_dims[-1]
             self.downsample_rate = self.backbone.downsample_rate
+
+        if config.get("nemo_checkpoint", None) is not None:
+            self.load_nemo_checkpoint(config.nemo_checkpoint)
+        elif config.get("nemo_checkpoint_old", None) is not None:
+            self.load_nemo_checkpoint_old(config.nemo_checkpoint_old)
+
+
+    def load_nemo_checkpoint_old(self, path_nemo_checkpoint):
+        checkpoint = torch.load(path_nemo_checkpoint, map_location="cuda:0")
+        self.backbone.net = torch.nn.DataParallel(self.backbone.net).cuda()
+        self.backbone.net.load_state_dict(checkpoint["state"], strict=False)
+        self.backbone.net = self.backbone.net.module
+
+    def load_nemo_checkpoint(self, path_nemo_checkpoint):
+        checkpoint = torch.load(path_nemo_checkpoint)
+        self.load_state_dict(checkpoint['net_state_dict'])
 
     @staticmethod
     def create_by_name(name: str):

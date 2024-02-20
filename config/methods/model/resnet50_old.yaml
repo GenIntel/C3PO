@@ -1,5 +1,6 @@
 backbone:
   class_name: ResNetOld
+  downsample_rate: 16 # 8, 14, 16,
   freeze: False
 head:
   class_name: ResNet

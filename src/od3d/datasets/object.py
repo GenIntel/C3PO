@@ -48,6 +48,7 @@ class OD3D_MESH_FEATS_TYPES(str, Enum):
     M_DINOV2_FROZEN_BASE_T_CENTERZOOM512_R_ACC = 'M_dinov2_frozen_base_T_centerzoom512_R_acc'
     M_DINO_VITS8_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC = 'M_dino_vits8_frozen_base_no_norm_T_centerzoom512_R_acc'
     M_RESNET50_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC = 'M_resnet50_frozen_base_no_norm_T_centerzoom512_R_acc'
+    M_NEMO_OLD_T_CENTERZOOM512_R_ACC = 'M_nemo_old_T_centerzoom512_R_acc'
 
 class OD3D_MESH_FEATS_DIST_REDUCE_TYPES(str, Enum):
     AVG = 'avg'
