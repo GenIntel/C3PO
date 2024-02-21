@@ -55,6 +55,7 @@ def run(platform: str = typer.Option(None, '-p', '--platform'),
     run_cmd(f'od3d platform rsync-configs -p {platform}', logger=logger)
 
     config = od3d.io.load_hierarchical_config(platform=platform)
+
     with open_dict(config):
         config.branch = Repository('.').head.shorthand  # 'master'
 
@@ -76,7 +77,7 @@ def status(platform: str = typer.Option(None, '-p', '--platform')):
         for slurm_job in slurm_jobs:
             logger.info(slurm_job)
     elif platform == 'torque':
-        torque_result = subprocess.run(f'ssh torque "qstat -a -u $(whoami)"', capture_output=True, shell=True)
+        torque_result = subprocess.run(f"ssh torque 'qstat -a -u $(whoami)'", capture_output=True, shell=True)
         torque_jobs = torque_result.stdout.decode("utf-8").split("\n")
         for torque_job in torque_jobs:
             logger.info(torque_job)

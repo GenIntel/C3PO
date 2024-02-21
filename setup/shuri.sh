@@ -11,7 +11,7 @@ export CUDA_HOME
 export LD_LIBRARY_PATH
 export FORCE_CUDA
 export TORCH_CUDA_ARCH_LIST
-./misc/software/cuda/add_environment_cuda11.7.sh
+#./misc/software/cuda/add_environment_cuda11.7.sh
 
 pip install -U wheel
 pip install -U fvcore

@@ -45,7 +45,8 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
 
 
     remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'config_{job_name}.yaml')
-    remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'run_{job_name}.sh')
+    remote_tmp_script_fpath_parent = Path(cfg.platform.path_home).joinpath('tmp')
+    remote_tmp_script_fpath = remote_tmp_script_fpath_parent.joinpath(f'run_{job_name}.sh')
 
     if cmd is None:
         cmd = f'od3d bench single-local -c {remote_tmp_config_fpath}'
@@ -137,7 +138,7 @@ pip install -e {cfg.platform.path_od3d}
 #PBS -N {job_name}
 #PBS -S /bin/bash
 #PBS -l nodes={node_count}:ppn={cpu_count}{gpu_cfg_str}{gpu_mem_cfg_str}{cuda_cfg_str},mem={ram},walltime={walltime}
-#PBS -q default-cpu
+#PBS -q {cfg.platform.queue}
 #PBS -m a
 #PBS -M {cfg.platform.username}@informatik.uni-freiburg.de
 #PBS -j oe
@@ -206,7 +207,10 @@ exit 0
     #subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
     #subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
 
-    run_cmd(f'scp {local_tmp_script_fpath} torque:{remote_tmp_script_fpath} && scp {local_tmp_config_fpath} torque:{remote_tmp_config_fpath} && ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', logger=logger)
+    run_cmd(f'ssh torque "mkdir -p {remote_tmp_script_fpath_parent}"', logger=logger)
+    run_cmd(f'scp {local_tmp_script_fpath} torque:{remote_tmp_script_fpath}', logger=logger)
+    run_cmd(f'scp {local_tmp_config_fpath} torque:{remote_tmp_config_fpath}', logger=logger)
+    run_cmd(f'ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', logger=logger)
 
 def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
     # 1. save config
@@ -229,7 +233,8 @@ def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
         local_tmp_script_fpath.parent.mkdir(parents=True)
 
     remote_tmp_config_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'config_{job_name}.yaml')
-    remote_tmp_script_fpath = Path(cfg.platform.path_home).joinpath('tmp', f'run_{job_name}.sh')
+    remote_tmp_script_fpath_parent = Path(cfg.platform.path_home).joinpath('tmp')
+    remote_tmp_script_fpath = remote_tmp_script_fpath_parent.joinpath(f'run_{job_name}.sh')
 
     if cmd is None:
         cmd = f'od3d bench single-local -c {remote_tmp_config_fpath}'
@@ -360,9 +365,10 @@ od3d debug hello-world
 exit 0
         '''
         rsh.write(script_as_string)
-    #subprocess.run(f'scp {remote_tmp_script_fpath} slurm:{remote_tmp_script_fpath}', capture_output=True, shell=True)
-    #subprocess.run(f'scp {remote_tmp_config_fpath} slurm:{remote_tmp_config_fpath}', capture_output=True, shell=True)
-    run_cmd(f'scp {local_tmp_script_fpath} slurm:{remote_tmp_script_fpath} && scp {local_tmp_config_fpath} slurm:{remote_tmp_config_fpath} && ssh slurm "sbatch {remote_tmp_script_fpath}"', logger=logger)
+    run_cmd(f'ssh slurm "mkdir -p {remote_tmp_script_fpath_parent}"', logger=logger)
+    run_cmd(f'scp {local_tmp_script_fpath} slurm:{remote_tmp_script_fpath}', logger=logger)
+    run_cmd(f'scp {local_tmp_config_fpath} slurm:{remote_tmp_config_fpath}', logger=logger)
+    run_cmd(f'ssh slurm "sbatch {remote_tmp_script_fpath}"', logger=logger)
 
     # ws_allocate {cfg.platform.ws_name} 100 -m sommerl@informatik.uni-freiburg.de
     # ws_allocate od3d 100 -m sommerl@informatik.uni-freiburg.de # /work/dlclarge1/sommerl-od3d
