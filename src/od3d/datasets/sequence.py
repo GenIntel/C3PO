@@ -578,6 +578,7 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
         #     logger.info(f'not storing labeled axis.')
 
 
+from od3d.cv.geometry.mesh import Meshes
 @dataclass
 class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_SequencePCLMixin):
     mesh = None
@@ -591,6 +592,16 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             return self.path_raw.joinpath(self.meta.rfpath_mesh)
         else:
             return self.path_preprocess.joinpath("mesh", f'{mesh_type}', f'{self.pcl_type}', f'{self.sfm_type}', self.name_unique, 'mesh.ply')
+
+    def write_aligned_mesh_and_tform_obj(self, mesh: Meshes, aligned_obj_tform_obj: torch.Tensor, aligned_name: str):
+        mesh_type = f'aligned_N_{aligned_name}'
+        fpath_mesh_aligned = self.get_fpath_mesh(mesh_type=mesh_type)
+        mesh.write_to_file(fpath=fpath_mesh_aligned)
+
+        tform_obj_type = mesh_type
+        fpath_tform_obj_aligned = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
+        fpath_tform_obj_aligned.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(aligned_obj_tform_obj.detach().cpu(), f=fpath_tform_obj_aligned)
 
     @property
     def fpath_mesh(self):
