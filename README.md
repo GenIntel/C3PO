@@ -2,6 +2,13 @@
 
 ## Installation
 
+### Clone
+
+1. Repository   
+`git clone git@github.com:Generative-Vision-Robust-Learning/od3d.git`  
+
+2. Submodules   
+`git submodule update --init --recursive`
 
 ### Install
 
@@ -39,13 +46,17 @@ Packages require CUDA_HOME path
 
     `pip install git+https://github.com/Generative-Vision-Robust-Learning/od3d.git`
 
-### Clone
+### Configuration Files
 
-1. Repository   
-`git clone git@github.com:Generative-Vision-Robust-Learning/od3d.git`  
+`config/credentials/default.yaml`  
+`config/platform/local.yaml`  
+`config/platform/torque.yaml`  
+`config/platform/slurm.yaml`  
 
-2. Submodules   
-`git submodule update --init --recursive`
+check if works
+
+`od3d platform run -p torque`  
+`od3d platform run -p slurm`
 
 ## Usage
 
