@@ -1,0 +1,29 @@
+Host freiburg
+    HostName lmblogin.informatik.uni-freiburg.de
+    Port 2122
+
+Host dacky
+    HostName dacky
+    ProxyJump freiburg
+    Port 2122
+
+Host shuri
+    HostName shuri
+    Port 2122
+
+Host ducky
+    HostName ducky
+    ProxyJump freiburg
+    Port 2122
+
+Host torque
+    HostName lmbtorque
+    ProxyJump freiburg
+    Port 2122
+
+Host slurm
+    HostName kis3bat1.rz.ki.privat
+    # ProxyJump freiburg
+
+Host github.com
+    Port 22
