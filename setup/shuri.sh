@@ -2,7 +2,7 @@
 python3 -m venv venv_od3d
 source venv_od3d/bin/activate
 pip3 install pip --upgrade
-CUDA_HOME=/misc/software/cuda/cuda-11.7
+CUDA_HOME=/usr/local/cuda-11.7
 PATH=${CUDA_HOME}/bin:${PATH}
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CUDA_HOME}/lib64
 TORCH_CUDA_ARCH_LIST="5.0;6.0;6.1;7.0;7.5;8.0;8.6+PTX"
@@ -11,7 +11,7 @@ export CUDA_HOME
 export LD_LIBRARY_PATH
 export FORCE_CUDA
 export TORCH_CUDA_ARCH_LIST
-./misc/software/cuda/add_environment_cuda11.7.sh
+#./misc/software/cuda/add_environment_cuda11.7.sh
 
 pip install -U wheel
 pip install -U fvcore
