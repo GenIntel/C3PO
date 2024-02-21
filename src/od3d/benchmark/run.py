@@ -3,6 +3,8 @@ logger = logging.getLogger(__name__)
 import subprocess
 from omegaconf import DictConfig, OmegaConf
 from od3d.benchmark.benchmark import OD3D_Benchmark
+from od3d.io import run_cmd
+
 
 def bench_single_method_local(config: DictConfig):
     benchmark = OD3D_Benchmark(config=config)
@@ -203,7 +205,8 @@ exit 0
         rsh.write(script_as_string)
     #subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
     #subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
-    subprocess.run(f'ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', capture_output=True, shell=True)
+
+    run_cmd(f'scp {local_tmp_script_fpath} torque:{remote_tmp_script_fpath} && scp {local_tmp_config_fpath} torque:{remote_tmp_config_fpath} && ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', logger=logger)
 
 def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
     # 1. save config
@@ -359,8 +362,7 @@ exit 0
         rsh.write(script_as_string)
     #subprocess.run(f'scp {remote_tmp_script_fpath} slurm:{remote_tmp_script_fpath}', capture_output=True, shell=True)
     #subprocess.run(f'scp {remote_tmp_config_fpath} slurm:{remote_tmp_config_fpath}', capture_output=True, shell=True)
-
-    subprocess.run(f'ssh slurm "sbatch {remote_tmp_script_fpath}"', capture_output=True, shell=True)
+    run_cmd(f'scp {local_tmp_script_fpath} slurm:{remote_tmp_script_fpath} && scp {local_tmp_config_fpath} slurm:{remote_tmp_config_fpath} && ssh slurm "sbatch {remote_tmp_script_fpath}"', logger=logger)
 
     # ws_allocate {cfg.platform.ws_name} 100 -m sommerl@informatik.uni-freiburg.de
     # ws_allocate od3d 100 -m sommerl@informatik.uni-freiburg.de # /work/dlclarge1/sommerl-od3d
