@@ -52,6 +52,7 @@ Packages require CUDA_HOME path
 `config/platform/local.yaml`  
 `config/platform/torque.yaml`  
 `config/platform/slurm.yaml`  
+`~/.ssh/config` from `config/platform/ssh-config-template`  
 
 check if works
 
