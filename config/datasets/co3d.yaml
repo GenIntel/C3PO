@@ -18,14 +18,16 @@ modalities:
     - 'mesh'
 
 mesh_type: 'alpha500' # 'cuboid500' 'convex500', 'voxel500' 'poisson500', 'alpha500', 'cuboid1000'
+
 mesh_feats_type: 'M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc' # dinov2_vitb14_frozen_base_no_norm M_dinov2_frozen_base_T_centerzoom512_R_acc, M_nemo_old_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm'
+
 mesh_feats_dist_reduce_type: 'min_avg' # 'avg', 'min', 'min_avg'
 
 frames_count_max_per_sequence:
 block_negative_depth: False
 
-path_raw: ${platform.path_datasets}/CO3D
-path_preprocess: ${platform.path_datasets}/CO3D_Preprocess
+path_raw: ${platform.path_datasets_raw}/CO3D
+path_preprocess: ${platform.path_datasets_raw}/CO3D_Preprocess
 
 setup:
   enabled: False
@@ -48,7 +50,7 @@ preprocess:
     enabled: True
     override: False
   tform_obj:
-    enabled: True
+    enabled: False
     override: False
   mesh:
     enabled: True

@@ -4,7 +4,8 @@ pull_od3d: True
 pull_od3d_submodules: True
 install_od3d: True
 path_od3d: /work/dlclarge1/sommerl-od3d/od3d
-path_datasets: /work/dlclarge1/sommerl-od3d/datasets
+path_datasets_raw: /work/dlclarge1/sommerl-od3d/datasets
+path_datasets_preprocess: /work/dlclarge1/sommerl-od3d/datasets #for student: create your own directory in dlclarge
 path_exps: /work/dlclarge1/sommerl-od3d/exps
 path_cuda: /work/dlclarge1/sommerl-od3d/cudas/cuda-11.7 # should be cuda-11.7
 path_home: /ihome/sommerl

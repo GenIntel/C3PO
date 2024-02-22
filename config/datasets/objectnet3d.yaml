@@ -15,8 +15,8 @@ modalities:
   # - 'bboxs'
   # - 'meshs'
 
-path_raw: ${platform.path_datasets}/ObjectNet3D
-path_preprocess: ${platform.path_datasets}/ObjectNet3D_Preprocess
+path_raw: ${platform.path_datasets_raw}/ObjectNet3D
+path_preprocess: ${platform.path_datasets_preprocess}/ObjectNet3D_Preprocess
 
 setup:
   enabled: False

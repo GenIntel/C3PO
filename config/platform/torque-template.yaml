@@ -3,9 +3,9 @@ path_od3d: /home/sommerl/od3d
 pull_od3d: True
 pull_od3d_submodules: True
 install_od3d: True
-#path_datasets: /misc/lmbraid19/sommerl/datasets
 #path_exps: /misc/lmbraid19/sommerl/exps
-path_datasets: /misc/lmbraid19/sommerl/datasets
+path_datasets_raw: /misc/lmbraid19/sommerl/datasets
+path_datasets_preprocess: /misc/lmbraid19/sommerl/datasets # for student: /misc/student/srinivap/datasets_preprocess
 path_exps: /misc/lmbraid19/sommerl/exps
 path_cuda: /misc/software/cuda/cuda-11.7 # should be cuda-11.7
 path_home: /home/sommerl

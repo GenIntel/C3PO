@@ -5,8 +5,8 @@ modalities:
     - 'rgb'
     - 'size'
 
-path_raw: ${platform.path_datasets}/DTD
-path_preprocess: ${platform.path_datasets}/DTD_Preprocess
+path_raw: ${platform.path_datasets_raw}/DTD
+path_preprocess: ${platform.path_datasets_preprocess}/DTD_Preprocess
 
 
 setup:
