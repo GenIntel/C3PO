@@ -120,8 +120,8 @@ modalities:
     ...
     
     
-path_raw: ${platform.path_datasets}/EXAMPLE
-path_preprocess: ${platform.path_datasets}/EXAMPLE_Preprocess
+path_raw: ${platform.path_datasets_raw}/EXAMPLE
+path_preprocess: ${platform.path_datasets_preprocess}/EXAMPLE_Preprocess
 
 setup_remove_previous: False
 setup_override: False
