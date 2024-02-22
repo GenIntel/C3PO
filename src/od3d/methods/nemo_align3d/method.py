@@ -140,8 +140,6 @@ class NeMo_Align3D(OD3D_Method):
         src_sequences = dataset_src.get_sequences()
         ref_sequences = dataset_ref.get_sequences()
 
-        #sequences = src_sequences + ref_sequences
-
         # tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
         logger.info('loading mesh feats...')
         #self.sequences_mesh_feats = [seq.feats for seq in self.sequences]
@@ -158,34 +156,13 @@ class NeMo_Align3D(OD3D_Method):
         ref_instances_count_per_category = [(ref_map_seq_to_cat == c).sum().item() for c in range(categories_count)]
 
         logger.info('loading meshes...')
-        src_meshes = Meshes.load_from_meshes([seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT) for seq in src_sequences], device=self.device)
-        ref_meshes = Meshes.load_from_meshes([seq.get_mesh(mesh_source=CUBOID_SOURCES.DEFAULT) for seq in ref_sequences], device=self.device)
-
-        # note: first get mesh to get DROID_SLAM tforms
-        if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-            for seq in src_sequences:
-                _ = seq.co3dv1_zsp_obj_tform_obj
-
-        if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-            for seq in ref_sequences:
-                _ = seq.co3dv1_zsp_obj_tform_obj
-
-        # if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
-        #     for seq1 in ref_sequences:
-        #         for seq2 in ref_sequences:
-        #             _ = seq1.get_dist_viewpoints_matched_to_other_sequence(seq2)
+        src_meshes = Meshes.load_from_meshes([seq.get_mesh() for seq in src_sequences], device=self.device)
+        ref_meshes = Meshes.load_from_meshes([seq.get_mesh() for seq in ref_sequences], device=self.device)
 
         src_instances_count = len(src_meshes)
         ref_instances_count = len(ref_meshes)
 
-        #self.meshes_verts_aggregated_features = [vert_feats for mesh_feats in self.sequences_mesh_feats for vert_feats in mesh_feats]
-        #dtype = self.meshes_verts_aggregated_features[0].dtype
-        #vertices_count = len(self.meshes_verts_aggregated_features)
         dtype = src_meshes.verts.dtype
-        src_vertices_count = len(src_meshes.verts)
-        ref_vertices_count = len(ref_meshes.verts)
-        #self.sequences_meshes.rgb = self.sequences_meshes.get_verts_ncds_cat_with_mesh_ids()
-        #self.sequences_meshes.show()
 
         src_sequences_mesh_ids_for_verts = src_meshes.get_mesh_ids_for_verts()
         ref_sequences_mesh_ids_for_verts = ref_meshes.get_mesh_ids_for_verts()
@@ -199,23 +176,6 @@ class NeMo_Align3D(OD3D_Method):
             logger.info(f'category id {cat_id} name {category}')
             src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
             ref_instance_ids = torch.LongTensor(list(range(ref_instances_count)))
-
-            src_category_instance_ids = src_instance_ids[src_map_seq_to_cat == cat_id]
-            ref_category_instance_ids = ref_instance_ids[ref_map_seq_to_cat == cat_id]
-
-            # this ensures that we first label the axis, which are required later to fit the cuboid
-            if self.config.gt_cam_tform_obj_source is not None and (dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID):
-                _ = src_sequences[
-                    src_category_instance_ids[0]].labeled_obj_tform_obj.to(dtype=dtype, device=self.device)
-                _ = src_sequences[
-                    src_category_instance_ids[0]].labeled_cuboid_obj_tform_labeled_obj.to(dtype=dtype, device=self.device)
-            if self.config.gt_cam_tform_obj_source is not None and (dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID):
-                _ = ref_sequences[
-                    ref_category_instance_ids[0]].labeled_obj_tform_obj.to(dtype=dtype, device=self.device)
-                _ = ref_sequences[
-                    ref_category_instance_ids[0]].labeled_cuboid_obj_tform_labeled_obj.to(dtype=dtype,
-                                                                                          device=self.device)
-
 
             results_diff_log_rot[category] = torch.zeros(
                 size=(ref_instances_count_per_category[cat_id], src_instances_count_per_category[cat_id])).to(
@@ -262,7 +222,7 @@ class NeMo_Align3D(OD3D_Method):
                                 # TODO: reference points from multiple point clouds have different scale and therefore problematic to fit with correspondences over multiple points
                                 pts_ref = torch.cat([transf3d_broadcast(pts3d=ref_meshes.verts[ref_sequences_mesh_ids_for_verts == _ref_mesh_id].clone(), transf4x4=all_pred_ref_tform_src[category][0, _r]) if _ref_mesh_id != src_mesh_id else torch.zeros((0, 3), device=self.device) for _r, _ref_mesh_id in enumerate(ref_mesh_ids)], dim=0)
 
-                                dist_src_ref = torch.cat([src_sequences[src_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
+                                dist_src_ref = torch.cat([src_sequences[src_mesh_id].read_mesh_feats_dist(
                                     ref_sequences[_ref_mesh_id]).to(device=self.device, dtype=dtype) if _ref_mesh_id != src_mesh_id else torch.zeros((pts_src.shape[0], 0), device=self.device)  for _ref_mesh_id in ref_mesh_ids], dim=-1)
 
                                 logger.info(f'category: {category}, pts-src: {pts_src.shape}, pts-ref: {pts_ref.shape}')
@@ -305,7 +265,7 @@ class NeMo_Align3D(OD3D_Method):
 
                                 logger.info(f'category: {category}, pts-src: {pts_src.shape}, pts-ref: {pts_ref.shape}')
 
-                                dist_ref_src = ref_sequences[ref_mesh_id].get_dist_verts_mesh_feats_to_other_sequence(
+                                dist_ref_src = ref_sequences[ref_mesh_id].read_mesh_feats_dist(
                                     src_sequences[src_mesh_id]).to(device=self.device, dtype=dtype)
 
                                 # division by two to normalize to 0. - 1.
@@ -356,48 +316,13 @@ class NeMo_Align3D(OD3D_Method):
                                 all_pred_pose_dist_appear[category][r, s] = pose_dist_appear
                                 pred_ref_tform_src = src_tform4x4_ref.clone()
                                 pred_ref_tform_src = inv_tform4x4(src_tform4x4_ref).clone()
-                                #pred_ref_tform_src[:3, :3] /= torch.linalg.norm(pred_ref_tform_src[:3, :3], dim=-1, keepdim=True)
                                 all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
-                        if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
-                            ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)
-                        elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                            ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)
-                        else:
-                            ref_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
-                            logger.warning('No gt available for reference.')
+                        gt_ref_tform_src = torch.eye(4).to(device=self.device)
 
-                        if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
-                            src_labeled_obj_tform_obj = src_sequences[src_mesh_id].labeled_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)
-                        elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                            src_labeled_obj_tform_obj = src_sequences[src_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)
-                        else:
-                            src_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
-                            logger.warning('No gt available for source.')
-
-                        gt_ref_tform_src = tform4x4(inv_tform4x4(ref_labeled_obj_tform_obj), src_labeled_obj_tform_obj)
-                        # if self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
-                        #     gt_ref_tform_src = tform4x4(
-                        #         inv_tform4x4(ref_sequences[ref_mesh_id].co3dv1_zsp_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype)),
-                        #        src_sequences[src_mesh_id].co3dv1_zsp_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
-                        # elif self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or self.config.gt_cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
-                        #     gt_ref_tform_src = tform4x4(
-                        #         inv_tform4x4(ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(
-                        #         device=self.device, dtype=pred_ref_tform_src.dtype)),
-                        #         src_sequences[src_mesh_id].labeled_obj_tform_obj.to(device=self.device, dtype=pred_ref_tform_src.dtype))
-                        # else:
-                        #     gt_ref_tform_src = torch.eye(4).to(device=self.device)
-                        #     if self.config.gt_cam_tform_obj_source is not None:
-                        #         logger.warning('No gt available ')
                         diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
                         logger.info(diff_rot_angle_rad)
                         results_diff_log_rot[category][r, s] = diff_rot_angle_rad
-
-
-                        #from od3d.cv.geometry.transform import transf3d_broadcast
-                        #if r == 0:
-                        #    verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=pred_ref_tform_src)
-                        #    self.meshes.verts[src_vertices] = verts
 
 
         results = OD3D_Results()
@@ -432,34 +357,10 @@ class NeMo_Align3D(OD3D_Method):
             category_results_mean.log()
             logger.info(category_results_mean)
 
-            #if self.config.use_gt_src:
-            #    category_results[f'rot_diff_rad'] = category_results[f'rot_diff_rad'][None,]
-            #category_results[f'pose_sim_geo'] = category_results[f'pose_sim_geo'][None,]
-            #category_results[f'pose_sim_appear'] = category_results[f'pose_sim_appear'][None,]
-            #results += category_results_mean # category_results
-            #
-            # category_results_ref = OD3D_Results()
-            # # excluding diagonal entries as these are predicted transformation between same instance
-            # if self.config.use_gt_src:
-            #     category_results_ref[f'rot_diff_rad'] = results_diff_log_rot[category][0, 1:]
-            # category_results_ref[f'pose_sim_geo'] = 1.0 - all_pred_pose_dist_geo[category][0, 1:]
-            # category_results_ref[f'pose_sim_appear'] = 1.0 - all_pred_pose_dist_appear[category][0, 1:]
-            #
-            # results_ref += category_results_ref
-            # category_results_ref = category_results_ref.add_prefix(category)
-            # category_results_ref_mean = category_results_ref.mean()
-            # category_results_ref_mean.log_with_prefix(prefix=f'only_to_ref')
-
         results_mean = results.mean()
-        #results_ref_mean = results_ref.mean()
         results_mean.log()
         logger.info(results_mean)
-        #results_ref_mean.log_with_prefix(prefix='only_to_ref')
 
-
-        # if r == 0:
-        #    verts = transf3d_broadcast(pts3d=self.meshes.get_verts_with_mesh_id(src_mesh_id), transf4x4=pred_ref_tform_src)
-        #    self.meshes.verts[src_vertices] = verts
 
         ref_meshes.rgb = ref_meshes.get_verts_ncds_cat_with_mesh_ids()
         src_meshes.rgb = src_meshes.get_verts_ncds_cat_with_mesh_ids()
@@ -468,11 +369,11 @@ class NeMo_Align3D(OD3D_Method):
         ref_instance_ids = torch.LongTensor(list(range(ref_instances_count)))
         src_instance_ids = torch.LongTensor(list(range(src_instances_count)))
 
-        for suffix in ['', '_filtered', '_mesh', '_mesh_filtered']:
-            for ref_instance_id_in_category in range(max(ref_instances_count_per_category)):
-                aligned_name = f'{self.config.aligned_name}{suffix}/r{ref_instance_id_in_category}'
-                aligned_path = dataset_src.path_preprocess.joinpath('aligned', aligned_name)
-                od3d.io.rm_dir(aligned_path)
+        # for suffix in ['', '_filtered', '_mesh', '_mesh_filtered']:
+        #     for ref_instance_id_in_category in range(max(ref_instances_count_per_category)):
+        #         aligned_name = f'{self.config.aligned_name}{suffix}/r{ref_instance_id_in_category}'
+        #         aligned_path = dataset_src.path_preprocess.joinpath('aligned', aligned_name)
+        #         od3d.io.rm_dir(aligned_path)
 
         for cat_id, category in enumerate(categories):
             logger.info(f'category {category}')
@@ -486,8 +387,6 @@ class NeMo_Align3D(OD3D_Method):
             for ref_instance_id_in_category, ref_instance_id in enumerate(ref_category_instance_ids):
                 aligned_name = f'{self.config.aligned_name}/r{ref_instance_id_in_category}'
                 aligned_filtered_name = f'{self.config.aligned_name}_filtered/r{ref_instance_id_in_category}'
-                aligned_mesh_name = f'{self.config.aligned_name}_mesh/r{ref_instance_id_in_category}'
-                aligned_mesh_filtered_name = f'{self.config.aligned_name}_mesh_filtered/r{ref_instance_id_in_category}'
 
                 # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6 | 0.95 0.76 | 0.92 0.53 | 0.91 0.55
                 if self.config.gt_cam_tform_obj_source is not None:
@@ -499,97 +398,35 @@ class NeMo_Align3D(OD3D_Method):
                 accurate_sim_appear = (1.0 - all_pred_pose_dist_appear[category][ref_instance_id_in_category, :]) > 0.50
                 accurate_sim = accurate_sim_geo * accurate_sim_appear
 
-                #if self.config.use_gt_src:
-                if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED:
-                    obj_labeled_cuboid_tform_obj = ref_sequences[ref_instance_id].co3dv1_zsp_obj_tform_obj.to(
-                            device=self.device, dtype=dtype)
-                    logger.warning('aligned cuboid does not exist.')
-                elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                    obj_labeled_cuboid_tform_obj = ref_sequences[ref_instance_id].zsp_labeled_cuboid_ref_tform_obj.to(
-                            device=self.device, dtype=dtype)
-                    logger.warning('aligned cuboid does not exist.')
-                elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED:
-                    obj_labeled_cuboid_tform_obj = ref_sequences[ref_instance_id].labeled_cuboid_obj_tform_obj.to(dtype=dtype, device=self.device)
-                    ref_aligned_mesh = Meshes.load_from_meshes([ref_sequences[ref_instance_id].get_mesh(CUBOID_SOURCES.DEFAULT)], device=self.device).get_meshes_with_ids(clone=True)
-                    ref_aligned_mesh.verts.data = transf3d_broadcast(pts3d=ref_aligned_mesh.verts, transf4x4=obj_labeled_cuboid_tform_obj)
-
-                    # Meshes.load_from_meshes([seq.mesh for seq in ref_sequences], device=self.device)
-                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_mesh_name,
-                                                                        cuboid=ref_aligned_mesh)
-                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_mesh_filtered_name,
-                                                                        cuboid=ref_aligned_mesh)
-
-
-                    aligned_cuboid = ref_sequences[ref_instance_id].obj_labeled_cuboid
-                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_name,
-                                                                        cuboid=aligned_cuboid)
-                    ref_sequences[ref_instance_id].write_aligned_cuboid(aligned_name=aligned_filtered_name,
-                                                                        cuboid=aligned_cuboid)
-                else:
-                    obj_labeled_cuboid_tform_obj = torch.eye(4).to(device=self.device)
-                    if self.config.gt_cam_tform_obj_source is not None:
-                        msg = f'No gt for {self.config.gt_cam_tform_obj_source}'
-                        raise Exception(msg)
-                #else:
-                #    droid_slam_labeled_cuboid_tform_droid_slam = torch.eye(4).to(device=self.device)
-
-
-
                 pts3d = []
                 pts3d_colors = []
-
-                # pts3d.append(transf3d_broadcast(
-                #     pts3d=ref_sequences[ref_category_instance_ids[0]].get_pcl(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(
-                #         device=self.device, dtype=dtype), transf4x4=droid_slam_labeled_cuboid_tform_droid_slam))
-                #
-                # pts3d_colors.append(
-                #     ref_sequences[ref_category_instance_ids[0]].get_pcl_colors(pcl_source=PCL_SOURCES.DROID_SLAM_CLEAN).to(
-                #         device=self.device, dtype=dtype))
-                #
-                # ref_vertices_mask = ref_sequences_mesh_ids_for_verts == ref_category_instance_ids[0]
-                # ref_meshes.verts[ref_vertices_mask] = transf3d_broadcast(
-                #     pts3d=ref_meshes.get_verts_with_mesh_id(ref_category_instance_ids[0]),
-                #     transf4x4=droid_slam_labeled_cuboid_tform_droid_slam)
 
                 src_meshes_cloned = []
                 ref_meshes_cloned = []
                 for src_instance_id_in_category, src_instance_id in enumerate(src_category_instance_ids):
-                    ref_mesh_cloned = ref_meshes.get_meshes_with_ids(meshes_ids=[ref_instance_id], clone=True)
-                    src_mesh_cloned = src_meshes.get_meshes_with_ids(meshes_ids=[src_instance_id], clone=True)
-
                     # prediction
-                    aligned_cuboid_tform_src = tform4x4(obj_labeled_cuboid_tform_obj, all_pred_ref_tform_src[category][ref_instance_id_in_category, src_instance_id_in_category]) # droid_slam_labeled_cuboid_tform_droid_slam
-                    aligned_cuboid_tform_ref = obj_labeled_cuboid_tform_obj
-
-
-                    ref_verts_ncds = transf3d_broadcast(pts3d=ref_mesh_cloned.verts.clone(), transf4x4=aligned_cuboid_tform_ref).detach()
-                    ref_verts_ncds = (ref_verts_ncds - ref_verts_ncds.min(dim=0, keepdim=True).values) / (1e-10 + ref_verts_ncds.max(dim=0, keepdim=True).values - ref_verts_ncds.min(dim=0, keepdim=True).values)
-                    ref_verts_ncds = (ref_verts_ncds + 1.) / 2.
+                    aligned_cuboid_tform_src = all_pred_ref_tform_src[category][ref_instance_id_in_category, src_instance_id_in_category]
 
                     src_vertices_mask = src_sequences_mesh_ids_for_verts == src_instance_id
                     ref_vertices_mask = ref_sequences_mesh_ids_for_verts == ref_instance_id
-                    ref_mesh_cloned.verts[:] = transf3d_broadcast(pts3d=ref_mesh_cloned.verts.clone() + all_pred_ref_pts_offset[category][src_instance_id_in_category][ref_vertices_mask], transf4x4=aligned_cuboid_tform_ref).detach()
 
-                    # ground truth
-                    # droid_slam_labeled_cuboid_tform_droid_slam_instance = self.sequences[instance_id].zsp_labeled_cuboid_ref_tform_droid_slam_obj.to(device=self.device)
+                    ref_mesh_cloned = ref_meshes.get_meshes_with_ids(meshes_ids=[ref_instance_id], clone=True)
+                    ref_mesh_cloned.verts[:] = (ref_mesh_cloned.verts + all_pred_ref_pts_offset[category][src_instance_id_in_category][ref_vertices_mask]).detach()
+                    src_mesh_cloned = src_meshes.get_meshes_with_ids(meshes_ids=[src_instance_id], clone=True)
+                    src_mesh_cloned.verts[:] = (transf3d_broadcast(src_mesh_cloned.verts, aligned_cuboid_tform_src)).detach()
+
+                    ref_verts_ncds = ref_mesh_cloned.verts.clone().detach()
+                    ref_verts_ncds = (ref_verts_ncds - ref_verts_ncds.min(dim=0, keepdim=True).values) / (1e-10 + ref_verts_ncds.max(dim=0, keepdim=True).values - ref_verts_ncds.min(dim=0, keepdim=True).values)
+                    ref_verts_ncds = (ref_verts_ncds + 1.) / 2.
 
                     if accurate_sim[src_instance_id_in_category]:
-                        src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_filtered_name,
-                                                                                   aligned_obj_tform_obj=aligned_cuboid_tform_src)
-                        src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_mesh_filtered_name,
-                                                                                   aligned_obj_tform_obj=aligned_cuboid_tform_src)
+                        src_sequences[src_instance_id].write_aligned_mesh_and_tform_obj(mesh=ref_mesh_cloned, aligned_obj_tform_obj=aligned_cuboid_tform_src, aligned_name=aligned_filtered_name)
 
-                    src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_name, aligned_obj_tform_obj=aligned_cuboid_tform_src)
-                    src_sequences[src_instance_id].write_aligned_obj_tform_obj(aligned_name=aligned_mesh_name, aligned_obj_tform_obj=aligned_cuboid_tform_src)
+                    src_sequences[src_instance_id].write_aligned_mesh_and_tform_obj(mesh=ref_mesh_cloned, aligned_obj_tform_obj=aligned_cuboid_tform_src, aligned_name=aligned_name)
 
-
-                    dist_verts_ref = src_sequences[src_instance_id].get_dist_verts_mesh_feats_to_other_sequence(ref_sequences[ref_instance_id]).to(device=self.device, dtype=dtype)
+                    dist_verts_ref = src_sequences[src_instance_id].read_mesh_feats_dist(ref_sequences[ref_instance_id]).to(device=self.device, dtype=dtype)
                     dist_verts_ref = dist_verts_ref / 2.
                     dists_verts_min_ref_vertices = dist_verts_ref.min(dim=-1)[1]
-
-                    src_mesh_cloned.verts[:] = transf3d_broadcast(pts3d=src_mesh_cloned.verts, transf4x4=aligned_cuboid_tform_src)
-
-
 
                     _, dist_ref_geometry_weight, dist_ref_appear_weight = score_tform4x4_fit(pts=src_mesh_cloned.verts,
                                                                                              tform4x4=torch.eye(4)[None,].to(device=self.device),
@@ -604,7 +441,6 @@ class NeMo_Align3D(OD3D_Method):
                     dist_ref_geometry_weight = dist_ref_geometry_weight / dist_ref_geometry_weight.max()
                     dist_ref_appear_weight = dist_ref_appear_weight / dist_ref_appear_weight.max()
 
-
                     ref_mesh_cloned.rgb[:] = ref_verts_ncds
                     src_mesh_cloned.rgb[:] = ref_verts_ncds[dists_verts_min_ref_vertices]
                     src_mesh_cloned.rgb *= dist_ref_appear_weight[0, :src_mesh_cloned.rgb.shape[0], None]
@@ -612,8 +448,14 @@ class NeMo_Align3D(OD3D_Method):
                     #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                     #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
 
-                    pts3d.append(transf3d_broadcast(pts3d=src_sequences[src_instance_id].get_pcl().to(device=self.device, dtype=dtype), transf4x4=aligned_cuboid_tform_src))
-                    pts3d_colors.append(src_sequences[src_instance_id].get_pcl_colors().to(device=self.device, dtype=dtype))
+                    src_pts3d, src_pts3d_colors, src_pts3d_normals = src_sequences[src_instance_id].get_pcl(clone=True)
+                    src_pts3d = src_pts3d.to(device=self.device, dtype=dtype)
+                    src_pts3d_colors = src_pts3d_colors.to(device=self.device, dtype=dtype)
+                    src_pts3d_normals = src_pts3d_normals.to(device=self.device, dtype=dtype)
+                    src_pts3d = transf3d_broadcast(src_pts3d, aligned_cuboid_tform_src).detach()
+
+                    pts3d.append(src_pts3d)
+                    pts3d_colors.append(src_pts3d_colors)
 
                     src_meshes_cloned.append(src_mesh_cloned)
                     ref_meshes_cloned.append(ref_mesh_cloned)

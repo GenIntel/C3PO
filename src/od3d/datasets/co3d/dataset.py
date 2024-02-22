@@ -25,6 +25,7 @@ from tqdm import tqdm
 
 class CO3D(OD3D_SequenceDataset):
     all_categories = list(CO3D_CATEGORIES)
+    map_od3d_categories = MAP_CATEGORIES_OD3D_TO_CO3D
     sequence_type = CO3D_Sequence
     frame_type = CO3D_Frame
     tform_obj_type = OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID
