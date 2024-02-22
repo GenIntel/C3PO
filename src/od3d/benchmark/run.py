@@ -208,9 +208,10 @@ exit 0
     #subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
     #subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
 
-    run_cmd(f'ssh torque "mkdir -p {remote_tmp_script_fpath_parent}"', logger=logger)
-    run_cmd(f'scp {local_tmp_script_fpath} torque:{remote_tmp_script_fpath}', logger=logger)
-    run_cmd(f'scp {local_tmp_config_fpath} torque:{remote_tmp_config_fpath}', logger=logger)
+    if not cfg.platform.shared_home_with_local:
+        run_cmd(f'ssh torque "mkdir -p {remote_tmp_script_fpath_parent}"', logger=logger)
+        run_cmd(f'scp {local_tmp_script_fpath} torque:{remote_tmp_script_fpath}', logger=logger)
+        run_cmd(f'scp {local_tmp_config_fpath} torque:{remote_tmp_config_fpath}', logger=logger)
     run_cmd(f'ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', logger=logger)
 
 def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
@@ -367,9 +368,10 @@ od3d debug hello-world
 exit 0
         '''
         rsh.write(script_as_string)
-    run_cmd(f'ssh slurm "mkdir -p {remote_tmp_script_fpath_parent}"', logger=logger)
-    run_cmd(f'scp {local_tmp_script_fpath} slurm:{remote_tmp_script_fpath}', logger=logger)
-    run_cmd(f'scp {local_tmp_config_fpath} slurm:{remote_tmp_config_fpath}', logger=logger)
+    if not cfg.platform.shared_home_with_local:
+        run_cmd(f'ssh slurm "mkdir -p {remote_tmp_script_fpath_parent}"', logger=logger)
+        run_cmd(f'scp {local_tmp_script_fpath} slurm:{remote_tmp_script_fpath}', logger=logger)
+        run_cmd(f'scp {local_tmp_config_fpath} slurm:{remote_tmp_config_fpath}', logger=logger)
     run_cmd(f'ssh slurm "sbatch {remote_tmp_script_fpath}"', logger=logger)
 
     # ws_allocate {cfg.platform.ws_name} 100 -m sommerl@informatik.uni-freiburg.de

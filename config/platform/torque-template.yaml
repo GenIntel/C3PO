@@ -1,4 +1,5 @@
 link: torque
+shared_home_with_local: False
 path_od3d: /home/sommerl/od3d
 pull_od3d: True
 pull_od3d_submodules: True
