@@ -23,8 +23,8 @@ dist_verts_mesh_feats_reduce_type: 'min' # 'avg', 'min'
 frames_count_max_per_sequence:
 block_negative_depth: False
 
-path_raw: ${platform.path_datasets}/MonoLMB
-path_preprocess: ${platform.path_datasets}/MonoLMB_Preprocess
+path_raw: ${platform.path_datasets_raw}/MonoLMB
+path_preprocess: ${platform.path_datasets_preprocess}/MonoLMB_Preprocess
 
 setup:
   enabled: False

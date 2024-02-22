@@ -29,8 +29,8 @@ modalities:
 #frames_count_max_per_sequence:
 #block_negative_depth: False
 
-path_raw: ${platform.path_datasets}/Objectron
-path_preprocess: ${platform.path_datasets}/Objectron_Preprocess
+path_raw: ${platform.path_datasets_raw}/Objectron
+path_preprocess: ${platform.path_datasets_preprocess}/Objectron_Preprocess
 
 setup:
   enabled: False

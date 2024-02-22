@@ -15,13 +15,13 @@ modalities:
 name: ood_cv
 class_name: OOD_CV
 
-path_raw: ${platform.path_datasets}/OOD_CV
-path_preprocess: ${platform.path_datasets}/OOD_CV_Preprocess
+path_raw: ${platform.path_datasets_raw}/OOD_CV
+path_preprocess: ${platform.path_datasets_preprocess}/OOD_CV_Preprocess
 
 url_pascal3d_occ_script: https://raw.githubusercontent.com/Angtian/OccludedPASCAL3D/master/download_FG.sh
 
 rpath_pascal3d_raw: PASCAL3D+_release1.1
-path_pascal3d_raw: ${platform.path_datasets}/${.rpath_pascal3d_raw}
+path_pascal3d_raw: ${platform.path_datasets_raw}/${.rpath_pascal3d_raw}
 
 
 
