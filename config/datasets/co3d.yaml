@@ -50,7 +50,7 @@ preprocess:
     enabled: True
     override: False
   tform_obj:
-    enabled: False
+    enabled: True
     override: False
   mesh:
     enabled: True
