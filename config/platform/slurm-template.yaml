@@ -6,7 +6,7 @@ install_od3d: True
 path_od3d: /work/dlclarge1/sommerl-od3d/od3d
 path_datasets: /work/dlclarge1/sommerl-od3d/datasets
 path_exps: /work/dlclarge1/sommerl-od3d/exps
-path_cuda: /work/dlclarge1/sommerl-od3d/cudas/cuda-11.7
+path_cuda: /work/dlclarge1/sommerl-od3d/cudas/cuda-11.7 # should be cuda-11.7
 path_home: /ihome/sommerl
 url_od3d: git@github.com:Generative-Vision-Robust-Learning/od3d.git
 partition: lmb_gpu-rtx2080 # lmb_gpu-teslaP100 lmb_gpu-1080ti, lmb_gpu-rtx2080, testdlc_gpu-rtx2080, alldlc_gpu-rtx3080, alldlc_gpu-rtx2080, lmbdlc_gpu-rtx2080
