@@ -111,7 +111,8 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
             # https://github.com/isl-org/Open3D/blob/main/util/install_deps_ubuntu.sh (most likely clang version)
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
-pip install torch
+pip install wheel
+pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu117
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 pip install -e {cfg.platform.path_od3d}
 # pip uninstall open3d -y
@@ -179,7 +180,7 @@ cd {cfg.platform.path_od3d}
 {pull_od3d_submodules_cmds_str}
 
 # Install OD3D in venv
-VENV_NAME=venv310
+VENV_NAME=venv_od3d
 export VENV_NAME
 if [[ -d "${{VENV_NAME}}" ]]; then
     echo "Venv already exists at {cfg.platform.path_od3d}/${{VENV_NAME}}."
@@ -270,7 +271,8 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
             # https://github.com/isl-org/Open3D/blob/main/util/install_deps_ubuntu.sh (most likely clang version)
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
-pip install torch
+pip install wheel
+pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu117
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 pip install -e {cfg.platform.path_od3d}
 # pip uninstall open3d -y
@@ -343,7 +345,7 @@ cd {cfg.platform.path_od3d}
 {pull_od3d_submodules_cmds_str}
 
 # Install OD3D in venv
-VENV_NAME=venv310
+VENV_NAME=venv_od3d
 export VENV_NAME
 if [[ -d "${{VENV_NAME}}" ]]; then
     echo "Venv already exists at {cfg.platform.path_od3d}/${{VENV_NAME}}."
