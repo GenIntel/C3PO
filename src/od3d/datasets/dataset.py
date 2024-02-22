@@ -38,6 +38,7 @@ class OD3D_DATASET_SPLITS(str, ExtEnum):
 
 class OD3D_Dataset(Dataset):
     from od3d.datasets.enum import OD3D_CATEGORIES
+    map_od3d_categories = None
     all_categories = list(OD3D_CATEGORIES)
     subclasses = {}
     frame_type = OD3D_Frame
@@ -73,7 +74,18 @@ class OD3D_Dataset(Dataset):
                  categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1.,
                  dict_nested_frames: Dict=None, dict_nested_frames_ban: Dict=None):
 
+
+
         logger.info(f'init dataset {name}...')
+
+
+        if categories is not None:
+            if self.map_od3d_categories is not None:
+                self.categories = [self.map_od3d_categories[category] if category not in self.all_categories else category for category in categories]
+            else:
+                self.categories = categories
+        else:
+            self.categories = self.all_categories
 
         self.name = name
         self.path_raw: Path = Path(path_raw)
@@ -88,7 +100,6 @@ class OD3D_Dataset(Dataset):
         self.index_shift = index_shift
         self.modalities = modalities
         self.splits_featured = [OD3D_DATASET_SPLITS.RANDOM]
-        self.categories = categories if categories is not None else self.all_categories
 
         logger.info('completing nested frames..., can take up to 500 seconds...')
         dict_nested_frames = self.frame_type.meta_type.complete_nested_metas(path_meta=self.path_meta,
