@@ -372,7 +372,13 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                  transform=None, index_shift=0, subset_fraction=1., frames_count_max_per_sequence=None):
 
         self.frames_count_max_per_sequence = frames_count_max_per_sequence
-        self.categories = categories if categories is not None else self.all_categories
+        if categories is not None:
+            if self.map_od3d_categories is not None:
+                self.categories = [self.map_od3d_categories[category] if category not in self.all_categories else category for category in categories]
+            else:
+                self.categories = categories
+        else:
+            self.categories = self.all_categories
         self.path_raw = Path(path_raw)
         self.path_preprocess = Path(path_preprocess)
         self.modalities = modalities
