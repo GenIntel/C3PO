@@ -2,9 +2,9 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: monolmb
-  - datasets@train_datasets.labeled: monolmb #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
-  - datasets@val_datasets.main:
-  - datasets@test_datasets.monolmb: monolmb
+  - datasets@train_datasets.labeled: monolmb_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+  - datasets@val_datasets.main: monolmb_test
+  - datasets@test_datasets.monolmb: monolmb_test
   - datasets@texture_dataset: dtd
   - platform@platform_local: local
   - platform: local
@@ -22,6 +22,14 @@ method:
     fpaths_meshes:
       elephant: ${..path_meshes}/cuboid500/sfm_mask/droid/elephant/24_01_29__18_10/mesh.ply
     categories: ${categories}
+    inference:
+      pre_rendered: False
+      sample:
+        method: epnp3d2d # epnp3d2d uniform
+        depth_from_box: False
+        epnp3d2d:
+          count_cams: 100
+          count_pts: 4
 
 train_datasets:
   labeled:
