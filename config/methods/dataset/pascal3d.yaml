@@ -8,13 +8,6 @@ train:
         num_workers: 4
         batch_size: 12 # artur: 24/32 wufei: 108
         pin_memory: True
-    transform:
-      random_color: True
-      random_center_zoom3d:
-        apply_txtr: True
-        config: ${texture_dataset}
-        W: 512
-        H: 512
 
 test:
     dataloader:

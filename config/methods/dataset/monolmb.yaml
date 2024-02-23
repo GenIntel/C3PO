@@ -12,4 +12,3 @@ test:
         num_workers: 4
         batch_size: 4
         pin_memory: True
-
