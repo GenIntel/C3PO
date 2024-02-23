@@ -94,7 +94,7 @@ class OD3D_Dataset(Dataset):
 
         if transform is None:
             from od3d.cv.transforms.rgb_uint8_to_float import RGB_UInt8ToFloat
-            transform = RGB_UInt8ToFloat
+            transform = RGB_UInt8ToFloat()
 
         self.transform = transform
         self.index_shift = index_shift
@@ -259,39 +259,62 @@ class OD3D_Dataset(Dataset):
         logger.info("preprocess masks...")
         from functools import partial
 
-        first_frame_fpath_mask = self.get_frame_by_name_unique(self.list_frames_unique[0]).fpath_mask
+        first_frame = self.get_frame_by_name_unique(self.list_frames_unique[0])
+        first_frame_fpath_mask = first_frame.fpath_mask
+        mask_type = first_frame.mask_type
         if first_frame_fpath_mask.exists() and not override:
             logger.info(f"masks exists, at least at {first_frame_fpath_mask}, skip preprocess mask")
             return
 
+        modalities = [OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.CAM_INTR4X4,
+                      OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ, OD3D_FRAME_MODALITIES.SIZE]
+        if mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D:
+            modalities.append(OD3D_FRAME_MODALITIES.RAYS_CENTER3D)
+        elif mask_type == OD3D_FRAME_MASK_TYPES.MESH:
+            modalities.append(OD3D_FRAME_MODALITIES.MESH)
+        elif mask_type == OD3D_FRAME_MASK_TYPES.SAM:
+            pass
+        else:
+            raise NotImplementedError
+
+        modalities_orig = self.modalities
+        self.modalities = modalities
         dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False,
-                                                 collate_fn=partial(self.collate_fn,
-                                                                    modalities=[OD3D_FRAME_MODALITIES.RGB,
-                                                                                OD3D_FRAME_MODALITIES.RAYS_CENTER3D,
-                                                                                OD3D_FRAME_MODALITIES.CAM_INTR4X4,
-                                                                                OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ])
-                                                 )
+                                                 collate_fn=partial(self.collate_fn, modalities=modalities))
         logging.info(f"Dataset contains {len(self)} frames.")
 
-        from od3d.models.model import OD3D_Model
-        model = OD3D_Model.create_by_name('sam')
-        model.cuda()
-        model.eval()
-        self.transform = model.transform
+        if mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D or mask_type == OD3D_FRAME_MASK_TYPES.SAM:
+            from od3d.models.model import OD3D_Model
+            model = OD3D_Model.create_by_name('sam')
+            model.cuda()
+            model.eval()
+            self.transform = model.transform
+        else:
+            pass
 
+        from od3d.cv.io import get_default_device
+        device = get_default_device()
         for batch in iter(dataloader):
             logger.info(f'{batch.name_unique[0]}')  # sequence_name[0]}')
-            if torch.cuda.is_available():
-                batch.to(device='cuda:0')
-                # batch.cam_proj4x4_obj batch.rays_center3d
-                frames = [self.get_frame_by_name_unique(name_unique=name_unique) for name_unique in batch.name_unique]
+            frames = [self.get_frame_by_name_unique(name_unique=name_unique) for name_unique in batch.name_unique]
+            batch.to(device=device)
 
-                if frames[0].mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D:
+            if mask_type == OD3D_FRAME_MASK_TYPES.MESH:
+                masks = batch.mesh.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj.to(device=device),
+                                                cams_intr4x4=batch.cam_intr4x4.to(device=device),
+                                                imgs_sizes=batch.size.to(device=device), modality='mask')
+
+                for b in range(len(batch.name_unique)):
+                    frame = frames[b]
+                    mask = masks[b]
+                    frame.write_mask(mask)
+            else:
+                if mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D:
                     center_pxl2d = proj3d2d_broadcast(proj4x4=batch.cam_proj4x4_obj, pts3d=batch.rays_center3d)
-                elif frames[0].mask_type == OD3D_FRAME_MASK_TYPES.SAM:
+                elif mask_type == OD3D_FRAME_MASK_TYPES.SAM:
                     center_pxl2d = batch.size[None, [1,0]] / 2
                 else:
-                    raise ValueError(f"mask_type {frames[0].mask_type} not supported")
+                    raise ValueError(f"mask_type {mask_type} not supported")
                 masks, scores, logits = model(batch.rgb, center_pxl2d)
 
                 for b in range(len(batch.name_unique)):
@@ -302,6 +325,7 @@ class OD3D_Dataset(Dataset):
                     # from od3d.cv.visual.draw import draw_pixels
                     # mask = draw_pixels(mask, pxls=center_pxl2d[b:b+1])
                     frame.write_mask(mask)
+        self.modalities = modalities_orig
 
     def visualize(self, item: int):
         raise NotImplementedError

@@ -156,6 +156,8 @@ class OD3D_FrameMaskMixin(OD3D_MaskTypeMixin):
     def fpath_mask(self):
         if self.mask_type == OD3D_FRAME_MASK_TYPES.META:
             return self.path_raw.joinpath(self.meta.rfpath_mask)
+        elif self.mask_type == OD3D_FRAME_MASK_TYPES.MESH:
+            return self.path_preprocess.joinpath("mask", f"{self.mask_type}", self.mesh_type_unique, f"{self.name_unique}.png")
         else:
             return self.path_preprocess.joinpath("mask", f"{self.mask_type}", f"{self.name_unique}.png")
 
@@ -241,6 +243,9 @@ class OD3D_FrameMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin):
     @property
     def fpath_mesh(self):
         return self.get_fpath_mesh()
+
+    def read_mesh(self, mesh_type=None):
+        return self.sequence.read_mesh()
 
     def get_fpath_mesh(self, mesh_type=None):
         return self.sequence.get_fpath_mesh(mesh_type=mesh_type)

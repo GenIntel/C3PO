@@ -53,7 +53,7 @@ preprocess:
     override: False
     remove_previous: False
   mask:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
   depth:

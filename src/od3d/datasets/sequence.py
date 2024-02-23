@@ -386,35 +386,11 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
 #     #         self.mesh = mesh
 #     #     return mesh
 
-    def get_tform_obj(self, tform_obj_type: OD3D_TFROM_OBJ_TYPES=None):
-        if tform_obj_type is None:
-            tform_obj_type = self.tform_obj_type
-
-        if tform_obj_type == OD3D_TFROM_OBJ_TYPES.RAW:
-            return None
-        else:
-            fpath_tform_obj = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
-            if fpath_tform_obj.exists():
-                return torch.load(self.get_fpath_tform_obj(tform_obj_type=tform_obj_type))
-            else:
-                logger.warning(f'tform_obj_type {tform_obj_type} does not exists at {fpath_tform_obj}')
-                return None
-
     def get_fpath_tform_obj(self, tform_obj_type=None):
         if tform_obj_type is None:
             tform_obj_type = self.tform_obj_type
         return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
                                              self.name_unique, 'tform_obj.pt')
-
-    def write_tform_obj(self, tform_obj: torch.Tensor, fpath_tform_obj=None):
-        if fpath_tform_obj is None:
-            fpath_tform_obj = self.get_fpath_tform_obj()
-
-
-        if fpath_tform_obj.parent.exists() is False:
-            fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(tform_obj.detach().cpu(), f=fpath_tform_obj)
-
 
     def get_sequence_by_name_unique(self, sequence_name_unique: str):
         from dataclasses import fields
@@ -585,13 +561,21 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
     mesh_feats = None
     mesh_feats_viewpoint = None
 
+    def get_mesh_type_unique(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_type == OD3D_MESH_TYPES.META:
+            return Path('').joinpath(f'{mesh_type}')
+        else:
+            return Path('').joinpath(f'{mesh_type}', f'{self.pcl_type}', f'{self.sfm_type}')
+
     def get_fpath_mesh(self, mesh_type=None):
         if mesh_type is None:
             mesh_type = self.mesh_type
         if mesh_type == OD3D_MESH_TYPES.META:
             return self.path_raw.joinpath(self.meta.rfpath_mesh)
         else:
-            return self.path_preprocess.joinpath("mesh", f'{mesh_type}', f'{self.pcl_type}', f'{self.sfm_type}', self.name_unique, 'mesh.ply')
+            return self.path_preprocess.joinpath("mesh", self.get_mesh_type_unique(mesh_type), self.name_unique, 'mesh.ply')
 
     def write_aligned_mesh_and_tform_obj(self, mesh: Meshes, aligned_obj_tform_obj: torch.Tensor, aligned_name: str):
         mesh_type = f'aligned_N_{aligned_name}'

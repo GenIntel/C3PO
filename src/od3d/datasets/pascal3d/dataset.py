@@ -18,38 +18,8 @@ from typing import Dict
 import inspect
 
 class Pascal3D(OD3D_Dataset):
-
-    CATEGORIES = PASCAL3D_CATEGORIES
-    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
-
-    def __init__(
-        self,
-        name: str,
-        modalities: List[OD3D_FRAME_MODALITIES],
-        path_raw: Path,
-        path_preprocess: Path,
-        path_cuboids: Path,
-        categories: List[PASCAL3D_CATEGORIES] = None,
-        dict_nested_frames: Dict[str, Dict[str, List[str]]] = None,
-        dict_nested_frames_ban: Dict[str, Dict[str, List[str]]] = None,
-        transform=None,
-        subset_fraction=1.,
-        index_shift=0,
-    ):
-        if categories is not None:
-            categories = [self.MAP_OD3D_CATEGORIES.get(category, category) if category not in self.CATEGORIES.list() else category for category in categories]
-        else:
-            categories = self.CATEGORIES.list()
-
-        super().__init__(categories=categories, name=name, modalities=modalities, path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction, index_shift=index_shift, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban)
-
-        self.path_cuboids = Path(path_cuboids)
-
-    def get_subset_with_dict_nested_frames(self, dict_nested_frames):
-        return Pascal3D(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
-                        path_preprocess=self.path_preprocess, categories=self.categories,
-                        dict_nested_frames=dict_nested_frames, transform=self.transform, index_shift=self.index_shift,
-                        path_cuboids=self.path_cuboids)
+    all_categories = list(PASCAL3D_CATEGORIES)
+    frame_type = Pascal3DFrame
 
     @staticmethod
     def setup(config):
@@ -120,7 +90,8 @@ class Pascal3D(OD3D_Dataset):
             frames_names = list(filter(lambda f: f in config.frames, frames_names))
 
         for i in tqdm(range(len(frames_names))):
-            fpath = path_meta.joinpath(Pascal3DFrameMeta.get_rfpath_from_name_unique(name_unique=Pascal3DFrameMeta.get_name_unique_from_category_subset_name(subset=frames_subsets[i],
+            fpath = path_meta.joinpath(Pascal3DFrameMeta.get_rfpath_from_name_unique(name_unique=
+                                                                                     Pascal3DFrameMeta.get_name_unique_from_category_subset_name(subset=frames_subsets[i],
                                                                                                                                                              category=frames_categories[i], name=frames_names[i])))
             if not fpath.exists() or config.extract_meta.override:
 
@@ -149,7 +120,7 @@ class Pascal3D(OD3D_Dataset):
             elif key == 'mask' and config_preprocess.mask.get('enabled', False):
                 override = config_preprocess.mask.get('override', False)
                 remove_previous = config_preprocess.mask.get('remove_previous', False)
-                self.preprocess_masks(override=override, remove_previous=remove_previous)
+                self.preprocess_mask(override=override, remove_previous=remove_previous)
             elif key == 'depth' and config_preprocess.depth.get('enabled', False):
                 override = config_preprocess.depth.get('override', False)
                 remove_previous = config_preprocess.mask.get('remove_previous', False)
@@ -188,11 +159,14 @@ class Pascal3D(OD3D_Dataset):
                 fpath.parent.mkdir(parents=True, exist_ok=True)
                 save_ply(fpath, verts=meshes.verts, faces=meshes.faces)
 
-    def preprocess_masks(self, override=False, remove_previous=False):
-        logger.info('preprocess masks...')
-        for frame_id in tqdm(range(len(self))):
-            frame = self.get_item(frame_id)
-            frame.preprocess_mask(override=override)
+
+
+
+    # def preprocess_masks(self, override=False, remove_previous=False):
+    #     logger.info('preprocess masks...')
+    #     for frame_id in tqdm(range(len(self))):
+    #         frame = self.get_item(frame_id)
+    #         frame.preprocess_mask(override=override)
 
     def preprocess_depths(self, override=False, remove_previous=False):
         logger.info('preprocess depths...')
@@ -201,11 +175,27 @@ class Pascal3D(OD3D_Dataset):
             frame.preprocess_depth(override=override)
     ##### DATASET PROPERTIES
 
-    def get_item(self, item):
-        frame_meta = Pascal3DFrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
-        return Pascal3DFrame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
-                             path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
-                             categories=self.categories)
+
+    def get_frame_by_name_unique(self, name_unique):
+        from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_MESH_TYPES, \
+            OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES, \
+            OD3D_TFROM_OBJ_TYPES
+        return self.frame_type(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+                               name_unique=name_unique, all_categories=self.categories,
+                               mask_type=OD3D_FRAME_MASK_TYPES.MESH,
+                               cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.META,
+                               mesh_type=OD3D_MESH_TYPES.META,
+                               mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+                               mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
+                               modalities=self.modalities,
+                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,)
+
+
+    # def get_item(self, item):
+    #     frame_meta = Pascal3DFrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
+    #     return Pascal3DFrame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+    #                          path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
+    #                          categories=self.categories)
 
     @property
     def path_meshes(self):

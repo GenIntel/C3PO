@@ -34,6 +34,7 @@ class OD3D_CAM_TFORM_OBJ_TYPES(str, Enum):
 class OD3D_FRAME_MASK_TYPES(str, Enum):
     META = 'meta'
     SAM = 'sam'
+    MESH = 'mesh'
     SAM_SFM_RAYS_CENTER3D = 'sam_sfm_rays_center3d'
 
 class OD3D_MESH_TYPES(str, Enum):
@@ -80,6 +81,30 @@ class OD3D_SEQUENCE_SFM_TYPES(str, Enum):
 class OD3D_TformObjMixin():
     tform_obj_type: OD3D_TFROM_OBJ_TYPES
 
+    def get_tform_obj(self, tform_obj_type: OD3D_TFROM_OBJ_TYPES = None):
+        if tform_obj_type is None:
+            tform_obj_type = self.tform_obj_type
+
+        if tform_obj_type == OD3D_TFROM_OBJ_TYPES.RAW:
+            return None
+        else:
+            fpath_tform_obj = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
+            if fpath_tform_obj.exists():
+                return torch.load(self.get_fpath_tform_obj(tform_obj_type=tform_obj_type))
+            else:
+                logger.warning(f'tform_obj_type {tform_obj_type} does not exists at {fpath_tform_obj}')
+                return None
+
+    def get_fpath_tform_obj(self, tform_obj_type=None):
+        raise NotImplementedError
+
+    def write_tform_obj(self, tform_obj: torch.Tensor, fpath_tform_obj=None):
+        if fpath_tform_obj is None:
+            fpath_tform_obj = self.get_fpath_tform_obj()
+        if fpath_tform_obj.parent.exists() is False:
+            fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(tform_obj.detach().cpu(), f=fpath_tform_obj)
+
 @dataclass
 class OD3D_FrameModalitiesMixin():
     modalities: List
@@ -96,6 +121,15 @@ class OD3D_MaskTypeMixin(OD3D_Object):
 @dataclass
 class OD3D_MeshTypeMixin(OD3D_Object):
     mesh_type: OD3D_MESH_TYPES
+
+    @property
+    def mesh_type_unique(self):
+        return self.get_mesh_type_unique()
+
+    def get_mesh_type_unique(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        return Path('').joinpath(f'{mesh_type}')
 
 @dataclass
 class OD3D_MeshFeatsTypeMixin(OD3D_Object):

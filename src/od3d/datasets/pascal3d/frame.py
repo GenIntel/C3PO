@@ -21,18 +21,11 @@ from od3d.datasets.frame_meta import OD3D_FrameMeta, \
     OD3D_FrameMetaSizeMixin, OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin, \
     OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaCamIntr4x4Mixin
 
+
 @dataclass
 class Pascal3DFrameMeta(OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin,
                         OD3D_FrameMetaMeshMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaCamTform4x4ObjMixin,
                         OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMeta):
-    #complete: bool
-    #incomplete_reason: str
-
-    """
-    @staticmethod
-    def load_from_meta_with_rfpath(path_meta: Path, rfpath: Path):
-        return Pascal3DFrameMeta(**Pascal3DFrameMeta.load_omega_conf_with_rfpath(path_meta=path_meta, rfpath=rfpath))
-    """
 
     @property
     def name_unique(self):
@@ -176,140 +169,106 @@ class Pascal3DFrameMeta(OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD
                                                           rpath_meshes=rpath_meshes, category=category, subset=subset,
                                                           path_raw=path_raw)
 
-    """
-    @staticmethod
-    def get_dict_subset_category_frames_names(
-            categories: List[PASCAL3D_CATEGORIES], path_meta: Path,
-            dict_subset_category_frames_names=None):
-        if dict_subset_category_frames_names is None:
-            dict_subset_category_frames_names = {}
-            # get subsets
-            subsets = [fpath.stem for fpath in list(Pascal3DFrameMeta.get_path_frames(path_meta=path_meta).iterdir())]
-            for subset in subsets:
-                dict_subset_category_frames_names[subset] = None
-
-        for subset, dict_category_frames_names in dict_subset_category_frames_names.items():
-            if dict_category_frames_names is None:
-                dict_category_frames_names = {category: None for category in categories}
-                dict_subset_category_frames_names[subset] = dict_category_frames_names
-            for category in categories:
-                if dict_category_frames_names[category] is None:
-                    frames_names = [fpath.stem for fpath in list(Pascal3DFrameMeta.
-                                                                 get_path_frames_meta_with_subset_category(
-                                                                        path_meta=path_meta, subset=subset,
-                                                                        category=category).iterdir())]
-                else:
-                    frames_names = dict_category_frames_names[category]
-                dict_subset_category_frames_names[subset][category] = frames_names
-        return dict_subset_category_frames_names
-
-    @staticmethod
-    def get_dict_subset_category_frames_names_with_names_unique(self, names_unique: List[str]):
-        dict_subset_category_frames_names = {}
-        for name_unique in names_unique:
-            subset, category, name = name_unique.split('/')
-            if subset not in dict_subset_category_frames_names.keys():
-                dict_subset_category_frames_names[subset] = {}
-            if category not in dict_subset_category_frames_names[subset].keys():
-                dict_subset_category_frames_names[subset][category] = []
-            dict_subset_category_frames_names[subset][category].append(name)
-        return dict_subset_category_frames_names
 
 
-    @staticmethod
-    def load_from_meta_with_name_unique(path_meta: Path, name_unique: str):
-        subset, category, name = name_unique.split('/')
-        rfpath = Pascal3DFrameMeta.get_rfpath_frame_meta_with_subset_category_name(subset=subset, category=category,
-                                                                                   name=name)
-        return Pascal3DFrameMeta.load_from_meta_with_rfpath(path_meta=path_meta, rfpath=rfpath)
-    @staticmethod
-    def load_from_meta_with_subset_category_name(path_meta: Path, subset: str, category: str, name: str):
-        rfpath = Pascal3DFrameMeta.get_rfpath_frame_meta_with_subset_category_name(subset=subset, category=category,
-                                                                                   name=name)
-        return Pascal3DFrameMeta.load_from_meta_with_rfpath(path_meta=path_meta, rfpath=rfpath)
+from od3d.datasets.pascal3d.enum import MAP_CATEGORIES_PASCAL3D_TO_OD3D
+from od3d.datasets.frame import OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x4ObjMixin, \
+    OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin, \
+    OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin, OD3D_Frame
 
+from od3d.datasets.object import OD3D_MESH_TYPES
 
-    def get_fpath(self, path_meta):
-        return Pascal3DFrameMeta.get_fpath_frame_meta_with_category_name(path_meta=path_meta, subset=self.subset, category=self.category, name=self.name)
+from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
 
-    @staticmethod
-    def get_fpath_frame_meta_with_category_name(path_meta: Path, subset: str, category: str, name: str):
-        return path_meta.joinpath(Pascal3DFrameMeta.get_rfpath_frame_meta_with_subset_category_name(subset=subset, category=category, name=name))
+@dataclass
+class Pascal3DFrame(OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x4ObjMixin,
+                    OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameDepthMixin,
+                    OD3D_FrameDepthMaskMixin, OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin, OD3D_Frame):
+    meta_type = Pascal3DFrameMeta
+    map_categories_to_od3d = MAP_CATEGORIES_PASCAL3D_TO_OD3D
 
-    @staticmethod
-    def get_path_frames_meta_with_subset_category(path_meta: Path, subset: str, category: str):
-        return path_meta.joinpath(Pascal3DFrameMeta.get_rpath_frames_meta_with_subset_category(subset=subset, category=category))
+    # def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
+    #     super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
+    #     self.path_meshes = path_meshes
 
-    @staticmethod
-    def get_rfpath_frame_meta_with_subset_category_name(subset: str, category: str, name: str):
-        return Pascal3DFrameMeta.get_rpath_frames_meta_with_subset_category(subset=subset, category=category).joinpath(name + '.yaml')
+    def get_fpath_mesh(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_type == OD3D_MESH_TYPES.META:
+            return self.path_raw.joinpath(self.meta.rfpath_mesh)
+        else:
+            return self.path_preprocess.joinpath("mesh", f'{mesh_type}', self.category, 'mesh.ply')
 
-    @staticmethod
-    def get_rpath_frames_meta_with_subset_category(subset: str, category: str):
-        return Pascal3DFrameMeta.get_rfpath_frames().joinpath(subset).joinpath(category)
+    def read_mesh(self, mesh_type=None):
+        mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type), scale=PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category])
+        if mesh_type is None or mesh_type == self.mesh_type:
+            self.mesh = mesh
+        return mesh
 
+    def get_mesh(self, mesh_type=None, clone=False):
+        if (mesh_type is None or mesh_type == self.mesh_type) and self.mesh is not None:
+            mesh = self.mesh
+        else:
+            mesh = self.read_mesh(mesh_type=mesh_type)
 
-    @staticmethod
-    def get_frames_names_from_subset_and_category_from_raw(path_pascal3d_raw, subset, category):
-        fpath_frame_names_partial = path_pascal3d_raw.joinpath("Image_sets", f"{category}_imagenet_{subset}.txt")
-        with fpath_frame_names_partial.open() as f:
-            frame_names_partial = f.read().splitlines()
-        return frame_names_partial
+        if not clone:
+            return mesh
+        else:
+            return mesh.clone()
 
-    @staticmethod
-    def get_frames_names_from_subsets_and_cateogories_from_raw(path_pascal3d_raw, subsets, categories):
-        frames_names = []
-        frames_categories = []
-        frames_subsets = []
-        for subset in subsets:
-            for category in categories:
-                frame_names_partial = Pascal3DFrameMeta.get_frames_names_from_subset_and_category_from_raw(path_pascal3d_raw=path_pascal3d_raw, subset=subset, category=category)
-                frames_names += frame_names_partial
-                frames_categories += [category] * len(frame_names_partial)
-                frames_subsets += [subset] * len(frame_names_partial)
+    def read_cam_tform4x4_obj_raw(self):
+        cam_tform4x4_obj = torch.Tensor(self.meta.cam_tform4x4_obj)
+        cam_tform4x4_obj[2, 3] *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
+        return cam_tform4x4_obj
 
-        return frames_subsets, frames_categories, frames_names
-        """
+    def get_fpath_tform_obj(self, tform_obj_type=None):
+        if tform_obj_type is None:
+            tform_obj_type = self.tform_obj_type
+        return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', 'tform_obj.pt')
 
-class Pascal3DFrame(OD3D_Frame):
-    def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
-        super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
-        self.path_meshes = path_meshes
+    def read_cam_tform4x4_obj(self, cam_tform4x4_obj_type=None, tform_obj_type =None):
+        cam_tform4x4_obj = self.read_cam_tform4x4_obj_raw()
 
-    @property
-    def cam_tform4x4_obj(self):
-        if self._cam_tform4x4_obj is None:
-            self._cam_tform4x4_obj = torch.Tensor(self.meta.l_cam_tform4x4_obj)
-            self._cam_tform4x4_obj[2, 3] *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
-        return self._cam_tform4x4_obj
+        tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+        if tform_obj is not None:
+            cam_tform4x4_obj = tform4x4(cam_tform4x4_obj, inv_tform4x4(tform_obj))
 
-    @property
-    def fpath_mask(self):
-        return self.path_preprocess.joinpath('mask', self.meta.name_unique + '.png')
+        # note: note alignment of droid slam may include scale, therefore remove this scale.
+        # note: projection does not change as we scale the depth z to the object as well
+        scale = cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+        cam_tform4x4_obj[:3] = cam_tform4x4_obj[:3] / scale
 
-    @property
-    def mask(self):
-        if self._mask is None:
-            fpath = self.fpath_mask
-            if not fpath.exists():
-                self.preprocess_mask()
-            self._mask = read_image(fpath) == 255
-        return self._mask
-    @mask.setter
-    def mask(self, value: torch.Tensor):
-            self._mask = value
+        if (cam_tform4x4_obj_type is None or cam_tform4x4_obj_type == self.cam_tform4x4_obj_type) and (tform_obj_type == self.tform_obj_type or tform_obj_type is None) :
+            self.cam_tform4x4_obj = cam_tform4x4_obj
+        return cam_tform4x4_obj
 
-    def preprocess_mask(self, override=False):
-        if not self.fpath_mask.exists() or override:
-            if torch.cuda.is_available():
-                device = 'cuda:0'
-            else:
-                device = 'cpu'
-            meshes = Meshes.load_from_meshes([self.mesh], device=device)
-            mask = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
-                                       cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
-                                       imgs_sizes=self.size.to(device=device), modality='mask')[0]
-            save_image_mask(mask, path=self.fpath_mask)
+    # @property
+    # def fpath_mask(self):
+    #     return self.path_preprocess.joinpath('mask', self.meta.name_unique + '.png')
+
+    # @property
+    # def mask(self):
+    #     if self._mask is None:
+    #         fpath = self.fpath_mask
+    #         if not fpath.exists():
+    #             self.preprocess_mask()
+    #         self._mask = read_image(fpath) == 255
+    #     return self._mask
+    # @mask.setter
+    # def mask(self, value: torch.Tensor):
+    #         self._mask = value
+
+    # def preprocess_mask(self, override=False):
+    #     if not self.fpath_mask.exists() or override:
+    #         if torch.cuda.is_available():
+    #             device = 'cuda:0'
+    #         else:
+    #             device = 'cpu'
+    #         meshes = Meshes.load_from_meshes([self.mesh], device=device)
+    #         mask = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
+    #                                    cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
+    #                                    imgs_sizes=self.size.to(device=device), modality='mask')[0]
+    #         save_image_mask(mask, path=self.fpath_mask)
 
     @property
     def kpts3d(self):
@@ -362,11 +321,6 @@ class Pascal3DFrame(OD3D_Frame):
     def depth_mask(self, value: torch.Tensor):
             self._depth_mask = value
 
-    @property
-    def mesh(self):
-        if self._mesh is None:
-            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh, scale=PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category])
-        return self._mesh
 
     @staticmethod
     def calc_cam_tform_obj(azimuth, elevation, theta, distance):
