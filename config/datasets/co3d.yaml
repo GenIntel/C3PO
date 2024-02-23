@@ -43,22 +43,22 @@ extract_meta:
 
 preprocess:
   sfm:
-    enabled: False
+    enabled: True
     override: False
   mask:
-    enabled: False
+    enabled: True
     override: False
   pcl:
-    enabled: False
+    enabled: True
     override: False
   tform_obj:
     enabled: True
     override: False
   mesh:
-    enabled: False
+    enabled: True
     override: False
   mesh_feats:
-    enabled: False
+    enabled: True
     override: False
   mesh_feats_dist:
     enabled: False

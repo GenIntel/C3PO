@@ -144,3 +144,6 @@ config/credentials/default.yaml
 config/platform/local.yaml
 config/platform/slurm.yaml
 config/platform/torque.yaml
+
+# vscode
+.vscode/launch.json
