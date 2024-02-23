@@ -267,7 +267,6 @@ class OD3D_Dataset(Dataset):
         dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False,
                                                  collate_fn=partial(self.collate_fn,
                                                                     modalities=[OD3D_FRAME_MODALITIES.RGB,
-                                                                                OD3D_FRAME_MODALITIES.MASK,
                                                                                 OD3D_FRAME_MODALITIES.RAYS_CENTER3D,
                                                                                 OD3D_FRAME_MODALITIES.CAM_INTR4X4,
                                                                                 OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ])
@@ -501,10 +500,12 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             dict_nested_frames[cat] = {}
             for seq in seqs:
                  dict_nested_frames[cat][seq] = None
-        return OD3D_SequenceDataset(
-            name=self.name, modalities=self.modalities, path_raw=self.path_raw, path_preprocess=self.path_preprocess,
-            categories=self.categories, dict_nested_frames=dict_nested_frames, transform=self.transform,
-            index_shift=self.index_shift)
+
+        return self.get_subset_with_dict_nested_frames(dict_nested_frames)
+        #return OD3D_SequenceDataset(
+        #    name=self.name, modalities=self.modalities, path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+        #    categories=self.categories, dict_nested_frames=dict_nested_frames, transform=self.transform,
+        #    index_shift=self.index_shift)
 
     def get_split_sequences_shared(self, fraction1: float):
         dict_category_sequence_name_frames_names_subsetA = {}
@@ -536,21 +537,14 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
         return self.get_split_from_dicts(dict_category_sequence_name_frames_names_subsetA, dict_category_sequence_name_frames_names_subsetB)
 
-    def get_subset_with_dict_nested_frames(self, dict_nested_frames):
-        return OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
-                    path_preprocess=self.path_preprocess, categories=self.categories,
-                    dict_nested_frames=dict_nested_frames, transform=self.transform, index_shift=self.index_shift)
+    #def get_subset_with_dict_nested_frames(self, dict_nested_frames):
+    #    return OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+    #                path_preprocess=self.path_preprocess, categories=self.categories,
+    #                dict_nested_frames=dict_nested_frames, transform=self.transform, index_shift=self.index_shift)
 
     def get_split_from_dicts(self, dict_nested_frames_subsetA, dict_nested_frames_subsetB):
-        co3d_subsetA = OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
-                                            path_preprocess=self.path_preprocess, categories=self.categories,
-                                            dict_nested_frames=dict_nested_frames_subsetA, transform=self.transform,
-                                            index_shift=self.index_shift)
-
-        co3d_subsetB = OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
-                                            path_preprocess=self.path_preprocess, categories=self.categories,
-                                            dict_nested_frames=dict_nested_frames_subsetB,
-                                            transform=self.transform, index_shift=self.index_shift)
+        co3d_subsetA = self.get_subset_with_dict_nested_frames(dict_nested_frames_subsetA)
+        co3d_subsetB = self.get_subset_with_dict_nested_frames(dict_nested_frames_subsetB)
 
         return co3d_subsetA, co3d_subsetB
 

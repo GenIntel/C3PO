@@ -1,4 +1,5 @@
 link: slurm
+shared_home_with_local: False
 ws_name: od3d # /work/dlclarge1/sommerl-od3d
 pull_od3d: True
 pull_od3d_submodules: True

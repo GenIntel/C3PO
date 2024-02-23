@@ -299,6 +299,7 @@ class NeMo_Align3D(OD3D_Method):
                                                                             pts_weight=self.config.refine_pts_weight,
                                                                             arap_weight=self.config.refine_arap_weight,
                                                                             arap_geo_std=self.config.refine_arap_geo_std,
+                                                                            reg_weight=self.config.refine_reg_weight,
                                                                             return_pts_offset=True)
 
                                     all_pred_ref_pts_offset[category][s][ref_vertices_mask] = ref_pts_offset

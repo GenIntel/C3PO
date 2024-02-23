@@ -201,7 +201,7 @@ class OD3D_FrameSizeMixin(OD3D_Object):
 class OD3D_FrameRGBMaskMixin(OD3D_FrameSizeMixin):
     rgb_mask = None
 
-    def get_mask_rgb(self):
+    def get_rgb_mask(self):
         if self.rgb_mask is None:
             self.rgb_mask = torch.ones(size=(1, self.H, self.W), dtype=torch.bool)
         return self.rgb_mask

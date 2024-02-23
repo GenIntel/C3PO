@@ -6,37 +6,6 @@ name: co3d_no_zsp_20s
 sequences_count_max_per_category: 20
 sequences_sort_pcl_score: True
 
-preprocess:
-  pcl:
-    enabled: False
-    override: False
-  mesh:
-    enabled: False
-    override: False
-  label:
-    enabled: False
-    override: False
-#  mesh:
-#    enabled: True
-#    override: False
-
-#frames_count_max_per_sequence: 1
-#modalities:
-#    - 'size'
-#    - 'category'
-#    - 'cam_intr4x4'
-#    - 'cam_tform4x4_obj'
-#    - 'category'
-#    - 'rgb'
-#    - 'mask'
-#    - 'sequence_name'
-#    - 'sequence'
-#    - 'mesh'
-
-cuboid_source: 'default' #  'default', 'aligned', 'zsp_ref_cuboid', 'labeled'
-cam_tform_obj_source: 'pcl' # 'droid_slam_zsp_labeled' 'droid_slam_labeled' 'droid_slam_aligned' 'droid_slam'
-pcl_source: 'co3d_clean' # 'co3d_clean' 'droid_slam_clean'
-
 sequences_require_good_cam_movement: True
 sequences_require_mesh: False
 sequences_require_pcl: True
