@@ -491,6 +491,15 @@ class OD3D_FrameTformObjMixin(OD3D_TformObjMixin, OD3D_FrameCamTform4x4ObjMixin,
         if (cam_tform4x4_obj_type is None or cam_tform4x4_obj_type == self.cam_tform4x4_obj_type) and (tform_obj_type == self.tform_obj_type or tform_obj_type is None) :
             self.cam_tform4x4_obj = cam_tform4x4_obj
         return cam_tform4x4_obj
+    
+    
+    def get_cam_tform4x4_obj(self, cam_tform4x4_obj_type = None,  tform_obj_type =None):
+        if self.cam_tform4x4_obj is not None and (cam_tform4x4_obj_type is None or self.cam_tform4x4_obj_type == cam_tform4x4_obj_type)  and (tform_obj_type == self.tform_obj_type or tform_obj_type is None):
+            cam_tform4x4_obj = self.cam_tform4x4_obj
+        else:
+            cam_tform4x4_obj = self.read_cam_tform4x4_obj(cam_tform4x4_obj_type=cam_tform4x4_obj_type, tform_obj_type=tform_obj_type)
+        return cam_tform4x4_obj
+
 
 OD3D_FrameClasses = Union[OD3D_Object, OD3D_FrameCategoryMixin, OD3D_FrameCategoriesMixin,
                           OD3D_FrameCamTform4x4ObjMixin, OD3D_CamProj4x4ObjMixin, OD3D_FrameCamIntr4x4Mixin,
