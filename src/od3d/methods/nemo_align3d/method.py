@@ -139,6 +139,14 @@ class NeMo_Align3D(OD3D_Method):
 
         src_sequences = dataset_src.get_sequences()
         ref_sequences = dataset_ref.get_sequences()
+        for src_sequence in src_sequences:
+            src_sequence.preprocess_mesh_feats()
+        for ref_sequence in ref_sequences:
+            ref_sequence.preprocess_mesh_feats()
+        for src_sequence in src_sequences:
+            for ref_sequence in ref_sequences:
+                src_sequence.preprocess_mesh_feats_dist(sequence=ref_sequence)
+                ref_sequence.preprocess_mesh_feats_dist(sequence=src_sequence)
 
         # tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
         logger.info('loading mesh feats...')
