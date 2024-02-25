@@ -128,7 +128,7 @@ class CenterZoom3D(OD3D_Transform):
             center2d_shifted[1] += frame.H * self.center_rel_shift_xy[1]
 
 
-        frame.mask_rgb, _ = crop(frame.get_rgb_mask(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
+        frame.rgb_mask, _ = crop(frame.get_rgb_mask(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
 
         if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
             frame.mask, _ = crop(img=frame.get_mask(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
