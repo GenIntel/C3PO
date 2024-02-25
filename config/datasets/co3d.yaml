@@ -61,7 +61,7 @@ preprocess:
     enabled: True
     override: False
   mesh_feats_dist:
-    enabled: True
+    enabled: False
     override: False
 
 #sequences_require_good_cam_movement: False
