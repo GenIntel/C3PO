@@ -7,13 +7,9 @@ modalities:
   - 'mask'
   - 'cam_intr4x4'
   - 'cam_tform4x4_obj'
-  - 'categories'
   - 'size'
+  - 'bbox'
   # - 'mesh'
-  # - 'bbox'
-  # - 'cam_tform4x4_objs'
-  # - 'bboxs'
-  # - 'meshs'
 
 path_raw: ${platform.path_datasets_raw}/ObjectNet3D
 path_preprocess: ${platform.path_datasets_preprocess}/ObjectNet3D_Preprocess
@@ -37,16 +33,16 @@ preprocess:
     enabled: False
     override: False
     remove_previous: False
+  cuboid:
+    enabled: True
+    override: False
+    remove_previous: False
   mask:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
   depth:
-    enabled: False
-    override: False
-    remove_previous: False
-  cuboid:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
 

@@ -160,116 +160,83 @@ class ObjectNet3D_FrameMeta(OD3D_FrameMetaCamTform4x4ObjsMixin, OD3D_FrameMetaMe
         return ObjectNet3D_FrameMeta.get_path_metas(path_meta=path_meta).joinpath(subset)
 
 
-class ObjectNet3D_Frame(OD3D_Frame):
-    def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: ObjectNet3D_FrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
-        super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
-        self.meta: ObjectNet3D_FrameMeta = meta
-        self.path_meshes: Path = path_meshes
-        self._bbox = None
-        #self._kpts2d_annot = None
-        #self._kpts2d_annot_vsbl = None
-        #self._kpts3d = None
-        self._mesh = None
+from od3d.datasets.frame import OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x4ObjMixin, \
+    OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin, \
+    OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin, OD3D_Frame, OD3D_FrameBBoxMixin, OD3D_FrameKpts2d3dMixin
 
-    @property
-    def fpath_mask(self):
-        return self.path_preprocess.joinpath('mask', self.meta.name_unique + '.png')
+from od3d.datasets.object import OD3D_MESH_TYPES
+from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
+from od3d.datasets.objectnet3d.enum import MAP_CATEGORIES_OBJECTNET3D_TO_OD3D, OBJECTNET3D_SCALE_NORMALIZE_TO_REAL
+@dataclass
+class ObjectNet3D_Frame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin,
+                    OD3D_CamProj4x4ObjMixin, OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin,
+                    OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin, OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin,
+                    OD3D_Frame):
+    meta_type = ObjectNet3D_FrameMeta
+    map_categories_to_od3d = MAP_CATEGORIES_OBJECTNET3D_TO_OD3D
 
-    @property
-    def mask(self):
-        if self._mask is None:
-            fpath = self.fpath_mask
-            if not fpath.exists():
-                self.preprocess_mask()
-            self._mask = read_image(fpath) == 255
-        return self._mask
-    @mask.setter
-    def mask(self, value: torch.Tensor):
-            self._mask = value
+    @staticmethod
+    def get_rpath_raw_categorical_meshes(category: str):
+        return Path("CAD", "off", f'{category}')
 
-    def preprocess_mask(self, override=False):
-        if not self.fpath_mask.exists() or override:
-            if torch.cuda.is_available():
-                device = 'cuda:0'
-            else:
-                device = 'cpu'
-            meshes = Meshes.load_from_meshes([self.mesh], device=device)
-            mask = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
-                                       cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
-                                       imgs_sizes=self.size.to(device=device), modality='mask')[0]
-            write_mask_image(mask, path=self.fpath_mask)
+    @staticmethod
+    def get_rfpath_pp_categorical_mesh(mesh_type: OD3D_MESH_TYPES, category: str):
+        return Path("mesh", f'{mesh_type}', f'{category}', 'mesh.ply')
 
-    @property
-    def fpath_depth(self):
-        return self.path_preprocess.joinpath('depth', self.meta.name_unique + '.png')
-    @property
-    def depth(self):
-        if self._depth is None:
-            fpath = self.fpath_depth
-            if not fpath.exists():
-                self.preprocess_depth()
-            self._depth = read_depth_image(fpath)
-        return self._depth
+    def get_fpath_mesh(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_type == OD3D_MESH_TYPES.META:
+            return self.path_raw.joinpath(self.meta.rfpath_mesh)
+        else:
+            return self.path_preprocess.joinpath(self.get_rfpath_pp_categorical_mesh(mesh_type=mesh_type, category=self.category))
 
-    @depth.setter
-    def depth(self, value: torch.Tensor):
-            self._depth = value
+    def read_mesh(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_type == OD3D_MESH_TYPES.META:
+            mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type), scale=OBJECTNET3D_SCALE_NORMALIZE_TO_REAL[self.category])
+        else:
+            # note: preprocessed meshes are in real scale
+            mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type))
 
-    def preprocess_depth(self, override=False):
-        if not self.fpath_depth.exists() or override:
-            if torch.cuda.is_available():
-                device = 'cuda:0'
-            else:
-                device = 'cpu'
-            meshes = Meshes.load_from_meshes([self.mesh], device=device)
-            depth = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
-                                        cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
-                                        imgs_sizes=self.size.to(device=device), modality=MESH_RENDER_MODALITIES.DEPTH)[
-                0]
-            write_depth_image(depth, path=self.fpath_depth)
+        if mesh_type is None or mesh_type == self.mesh_type:
+            self.mesh = mesh
+        return mesh
 
-    @property
-    def depth_mask(self):
-        if self._depth_mask is None:
-            self._depth_mask = self.depth != 0.
-        return self._depth_mask
+    def get_mesh(self, mesh_type=None, clone=False):
+        if (mesh_type is None or mesh_type == self.mesh_type) and self.mesh is not None:
+            mesh = self.mesh
+        else:
+            mesh = self.read_mesh(mesh_type=mesh_type)
 
-    @depth_mask.setter
-    def depth_mask(self, value: torch.Tensor):
-            self._depth_mask = value
+        if not clone:
+            return mesh
+        else:
+            return mesh.clone()
 
-    @property
-    def cam_tform4x4_obj(self):
-        if self._cam_tform4x4_obj is None:
-            self._cam_tform4x4_obj = torch.Tensor(self.meta.cam_tform4x4_obj)
-            self._cam_tform4x4_obj[2, 3] *= OBJECTNET3D_SCALE_NORMALIZE_TO_REAL[self.category]
-        return self._cam_tform4x4_obj
-    # @property
-    # def kpts_names(self):
-    #     return self.meta.kpts_names
-    # @property
-    # def kpts2d_annot(self):
-    #     if self._kpts2d_annot is None:
-    #         self._kpts2d_annot = torch.Tensor(self.meta.l_kpts2d_annot)
-    #     return self._kpts2d_annot
-    #
-    # @property
-    # def kpts2d_annot_vsbl(self):
-    #     if self._kpts2d_annot_vsbl is None:
-    #         self._kpts2d_annot_vsbl = torch.Tensor(self.meta.l_kpts2d_annot_vsbl).to(dtype=bool)
-    #     return self._kpts2d_annot_vsbl
-    # @property
-    # def kpts3d(self):
-    #     if self._kpts3d is None:
-    #         self._kpts3d = torch.Tensor(self.meta.l_kpts3d) * PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
-    #     return self._kpts3d
-    @property
-    def fpath_mesh(self):
-        "/misc/lmbraid19/sommerl/datasets/ObjectNet3D/CAD/CAD/car/06.off"
-        return self.path_meshes.joinpath('off', self.meta.rfpath_mesh.parent.name, self.meta.rfpath_mesh.name)
-        # return self.path_meshes.joinpath(self.meta.rfpath_mesh)
-    @property
-    def mesh(self):
-        if self._mesh is None:
-            self._mesh = Mesh.load_from_file(fpath=self.fpath_mesh, scale=OBJECTNET3D_SCALE_NORMALIZE_TO_REAL[self.category])
-        return self._mesh
+    def read_cam_tform4x4_obj_raw(self):
+        cam_tform4x4_obj = torch.Tensor(self.meta.cam_tform4x4_obj)
+        cam_tform4x4_obj[2, 3] *= OBJECTNET3D_SCALE_NORMALIZE_TO_REAL[self.category]
+        return cam_tform4x4_obj
+
+    def get_fpath_tform_obj(self, tform_obj_type=None):
+        if tform_obj_type is None:
+            tform_obj_type = self.tform_obj_type
+        return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', 'tform_obj.pt')
+
+    def read_cam_tform4x4_obj(self, cam_tform4x4_obj_type=None, tform_obj_type =None):
+        cam_tform4x4_obj = self.read_cam_tform4x4_obj_raw()
+
+        tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+        if tform_obj is not None:
+            cam_tform4x4_obj = tform4x4(cam_tform4x4_obj, inv_tform4x4(tform_obj))
+
+        # note: note alignment of droid slam may include scale, therefore remove this scale.
+        # note: projection does not change as we scale the depth z to the object as well
+        scale = cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+        cam_tform4x4_obj[:3] = cam_tform4x4_obj[:3] / scale
+
+        if (cam_tform4x4_obj_type is None or cam_tform4x4_obj_type == self.cam_tform4x4_obj_type) and (tform_obj_type == self.tform_obj_type or tform_obj_type is None) :
+            self.cam_tform4x4_obj = cam_tform4x4_obj
+        return cam_tform4x4_obj
