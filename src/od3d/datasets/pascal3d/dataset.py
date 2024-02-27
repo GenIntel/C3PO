@@ -22,6 +22,7 @@ from od3d.datasets.object import OD3D_MESH_TYPES
 
 
 class Pascal3D(OD3D_Dataset):
+    map_od3d_categories = MAP_CATEGORIES_OD3D_TO_PASCAL3D
     all_categories = list(PASCAL3D_CATEGORIES)
     frame_type = Pascal3DFrame
 
