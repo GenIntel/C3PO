@@ -5,7 +5,9 @@ modalities:
     - 'rgb'
     - 'category'
     - 'mask'
-    - 'kpts'
+    - 'kpts2d_annot'
+    - 'kpts2d_annot_vsbl'
+    - 'kpts3d'
     - 'cam_intr4x4'
     - 'cam_tform4x4_obj'
     - 'size'
@@ -53,7 +55,7 @@ preprocess:
     override: False
     remove_previous: False
   mask:
-    enabled: True
+    enabled: False
     override: False
     remove_previous: False
   depth:

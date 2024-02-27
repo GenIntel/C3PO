@@ -13,7 +13,7 @@ from od3d.cv.geometry.transform import transf4x4_from_spherical
 from od3d.datasets.dataset import OD3D_Frames, OD3D_FRAME_MODALITIES
 from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL, PASCAL3D_CATEGORIES
 from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
-from od3d.cv.io import read_image, save_image_mask
+from od3d.cv.io import read_image, write_mask_image
 from od3d.cv.geometry.mesh import Mesh, Meshes
 
 from od3d.datasets.frame_meta import OD3D_FrameMetaMaskMixin

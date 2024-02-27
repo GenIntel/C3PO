@@ -87,11 +87,11 @@ def write_depth_image(img: torch.Tensor, path: Path):
     cv2.imwrite(str(path), depth.detach().cpu().numpy().astype(np.uint16))
 
 
-def save_image_mask(img: torch.Tensor, path: Path):
+def write_mask_image(img: torch.Tensor, path: Path):
     transform = transforms.Compose([
         transforms.ToPILImage()
     ])
-    img = transform(img.to(torch.uint8) * 255)
+    img = transform((img * 255).to(torch.uint8))
 
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path)

@@ -37,6 +37,10 @@ class OD3D_FRAME_MASK_TYPES(str, Enum):
     MESH = 'mesh'
     SAM_SFM_RAYS_CENTER3D = 'sam_sfm_rays_center3d'
 
+class OD3D_FRAME_DEPTH_TYPES(str, Enum):
+    META = 'meta'
+    MESH = 'mesh'
+
 class OD3D_MESH_TYPES(str, Enum):
     META = 'meta'
     CONVEX500 = 'convex500'
@@ -112,11 +116,15 @@ class OD3D_FrameModalitiesMixin():
 # note these classes can be inherited by frame and sequence classes
 @dataclass
 class OD3D_CamTform4x4ObjTypeMixin(OD3D_Object):
-    cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES #  = OD3D_CAM_TFORM_OBJ_TYPES.META
+    cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES
 
 @dataclass
 class OD3D_MaskTypeMixin(OD3D_Object):
-    mask_type: OD3D_FRAME_MASK_TYPES #  = OD3D_FRAME_MASK_TYPES.META
+    mask_type: OD3D_FRAME_MASK_TYPES
+
+@dataclass
+class OD3D_DepthTypeMixin(OD3D_Object):
+    depth_type: OD3D_FRAME_DEPTH_TYPES
 
 @dataclass
 class OD3D_MeshTypeMixin(OD3D_Object):

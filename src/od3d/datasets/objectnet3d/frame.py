@@ -14,7 +14,7 @@ import torch
 import math
 from typing import List
 from omegaconf import OmegaConf
-from od3d.cv.io import read_image, save_image_mask
+from od3d.cv.io import read_image, write_mask_image
 from od3d.cv.geometry.mesh import Mesh, Meshes, MESH_RENDER_MODALITIES
 from od3d.cv.io import read_depth_image, write_depth_image
 
@@ -197,7 +197,7 @@ class ObjectNet3D_Frame(OD3D_Frame):
             mask = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
                                        cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
                                        imgs_sizes=self.size.to(device=device), modality='mask')[0]
-            save_image_mask(mask, path=self.fpath_mask)
+            write_mask_image(mask, path=self.fpath_mask)
 
     @property
     def fpath_depth(self):

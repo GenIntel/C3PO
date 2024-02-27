@@ -12,7 +12,7 @@ import numpy as np
 from od3d.cv.geometry.transform import transf4x4_from_spherical
 from od3d.datasets.dataset import OD3D_Frames, OD3D_FRAME_MODALITIES
 from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL, PASCAL3D_CATEGORIES
-from od3d.cv.io import read_image, save_image_mask, write_depth_image, read_depth_image
+from od3d.cv.io import read_image, write_mask_image, write_depth_image, read_depth_image
 from od3d.cv.geometry.mesh import Mesh, Meshes
 from od3d.cv.geometry.mesh import Meshes, MESH_RENDER_MODALITIES
 
@@ -174,22 +174,18 @@ class Pascal3DFrameMeta(OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD
 from od3d.datasets.pascal3d.enum import MAP_CATEGORIES_PASCAL3D_TO_OD3D
 from od3d.datasets.frame import OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x4ObjMixin, \
     OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin, \
-    OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin, OD3D_Frame
+    OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin, OD3D_Frame, OD3D_FrameBBoxMixin, OD3D_FrameKpts2d3dMixin
 
 from od3d.datasets.object import OD3D_MESH_TYPES
-
 from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
 
 @dataclass
-class Pascal3DFrame(OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x4ObjMixin,
-                    OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameDepthMixin,
-                    OD3D_FrameDepthMaskMixin, OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin, OD3D_Frame):
+class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_FrameKpts2d3dMixin,
+                    OD3D_CamProj4x4ObjMixin, OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin,
+                    OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin, OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin,
+                    OD3D_Frame):
     meta_type = Pascal3DFrameMeta
     map_categories_to_od3d = MAP_CATEGORIES_PASCAL3D_TO_OD3D
-
-    # def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
-    #     super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories)
-    #     self.path_meshes = path_meshes
 
     def get_fpath_mesh(self, mesh_type=None):
         if mesh_type is None:
@@ -242,85 +238,9 @@ class Pascal3DFrame(OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x
             self.cam_tform4x4_obj = cam_tform4x4_obj
         return cam_tform4x4_obj
 
-    # @property
-    # def fpath_mask(self):
-    #     return self.path_preprocess.joinpath('mask', self.meta.name_unique + '.png')
-
-    # @property
-    # def mask(self):
-    #     if self._mask is None:
-    #         fpath = self.fpath_mask
-    #         if not fpath.exists():
-    #             self.preprocess_mask()
-    #         self._mask = read_image(fpath) == 255
-    #     return self._mask
-    # @mask.setter
-    # def mask(self, value: torch.Tensor):
-    #         self._mask = value
-
-    # def preprocess_mask(self, override=False):
-    #     if not self.fpath_mask.exists() or override:
-    #         if torch.cuda.is_available():
-    #             device = 'cuda:0'
-    #         else:
-    #             device = 'cpu'
-    #         meshes = Meshes.load_from_meshes([self.mesh], device=device)
-    #         mask = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
-    #                                    cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
-    #                                    imgs_sizes=self.size.to(device=device), modality='mask')[0]
-    #         save_image_mask(mask, path=self.fpath_mask)
-
-    @property
-    def kpts3d(self):
-        if self._kpts3d is None:
-            self._kpts3d = self.meta.kpts3d * PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
-        return self._kpts3d
-
-
-    @property
-    def fpath_mesh(self):
-        return self.path_meshes.parent.joinpath(self.meta.rfpath_mesh)
-
-
-    @property
-    def fpath_depth(self):
-        return self.path_preprocess.joinpath('depth', self.meta.name_unique + '.png')
-
-    @property
-    def depth(self):
-        if self._depth is None:
-            fpath = self.fpath_depth
-            if not fpath.exists():
-                self.preprocess_depth(override=True)
-            self._depth = read_depth_image(fpath)
-        return self._depth
-
-    @depth.setter
-    def depth(self, value: torch.Tensor):
-            self._depth = value
-
-    def preprocess_depth(self, override=False):
-        if not self.fpath_depth.exists() or override:
-            if torch.cuda.is_available():
-                device = 'cuda:0'
-            else:
-                device = 'cpu'
-            meshes = Meshes.load_from_meshes([self.mesh], device=device)
-            depth = meshes.render_feats(cams_tform4x4_obj=self.cam_tform4x4_obj[None,].to(device=device),
-                                       cams_intr4x4=self.cam_intr4x4[None,].to(device=device),
-                                       imgs_sizes=self.size.to(device=device), modality=MESH_RENDER_MODALITIES.DEPTH)[0]
-
-            write_depth_image(depth, path=self.fpath_depth)
-    @property
-    def depth_mask(self):
-        if self._depth_mask is None:
-            self._depth_mask = self.depth != 0.
-        return self._depth_mask
-
-    @depth_mask.setter
-    def depth_mask(self, value: torch.Tensor):
-            self._depth_mask = value
-
+    def read_kpts3d(self):
+        kpts3d = self.meta.kpts3d.clone() * PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
+        return kpts3d
 
     @staticmethod
     def calc_cam_tform_obj(azimuth, elevation, theta, distance):

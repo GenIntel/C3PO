@@ -159,12 +159,12 @@ class CenterZoom3D(OD3D_Transform):
 
         if OD3D_FRAME_MODALITIES.BBOX in frame.modalities:
             # x_min, y_min, x_max, y_max
-            frame.bbox = (frame.bbox.reshape(2, 2) * scale[None,]).flatten()
+            frame.bbox = (frame.get_bbox().reshape(2, 2) * scale[None,]).flatten()
             frame.bbox[[0, 2]] = frame.bbox[[0, 2]] + cam_crop_tform_cam[0, 2]
             frame.bbox[[1, 3]] = frame.bbox[[1, 3]] + cam_crop_tform_cam[1, 2]
 
         if OD3D_FRAME_MODALITIES.KPTS2D_ANNOT in frame.modalities:
-            frame.kpts2d_annot = frame.kpts2d_annot * scale[None,]
+            frame.kpts2d_annot = frame.get_kpts2d_annot() * scale[None,]
             frame.kpts2d_annot = frame.kpts2d_annot + cam_crop_tform_cam[:2, 2]
 
         # assumption: depth of all image points is the same (which of course does only approximately holds)

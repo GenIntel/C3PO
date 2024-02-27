@@ -14,7 +14,7 @@ import inspect
 from tqdm import tqdm
 import numpy as np
 import od3d.io
-from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES
+from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES, OD3D_FRAME_DEPTH_TYPES
 from od3d.cv.geometry.transform import proj3d2d_broadcast
 from od3d.datasets.sequence import OD3D_Sequence
 from od3d.datasets.sequence_meta import OD3D_SequenceMeta
@@ -255,6 +255,8 @@ class OD3D_Dataset(Dataset):
                 override = config_preprocess.mask.get('override', False)
                 self.preprocess_mask(override=override)
 
+
+
     def preprocess_mask(self, override=False, remove_previous=False):
         logger.info("preprocess masks...")
         from functools import partial
@@ -326,6 +328,54 @@ class OD3D_Dataset(Dataset):
                     # mask = draw_pixels(mask, pxls=center_pxl2d[b:b+1])
                     frame.write_mask(mask)
         self.modalities = modalities_orig
+
+
+    def preprocess_depth(self, override=False, remove_previous=False):
+        logger.info("preprocess depth...")
+        from functools import partial
+
+        first_frame = self.get_frame_by_name_unique(self.list_frames_unique[0])
+        first_frame_fpath_depth = first_frame.fpath_depth
+        depth_type = first_frame.depth_type
+        if first_frame_fpath_depth.exists() and not override:
+            logger.info(f"masks exists, at least at {first_frame_fpath_depth}, skip preprocess mask")
+            return
+
+        modalities = [OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.CAM_INTR4X4,
+                      OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ, OD3D_FRAME_MODALITIES.SIZE]
+        if depth_type == OD3D_FRAME_DEPTH_TYPES.MESH:
+            modalities.append(OD3D_FRAME_MODALITIES.MESH)
+        else:
+            raise NotImplementedError
+
+        modalities_orig = self.modalities
+        self.modalities = modalities
+        dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False,
+                                                 collate_fn=partial(self.collate_fn, modalities=modalities))
+        logging.info(f"Dataset contains {len(self)} frames.")
+
+        from od3d.cv.io import get_default_device
+        device = get_default_device()
+        for batch in iter(dataloader):
+            logger.info(f'{batch.name_unique[0]}')  # sequence_name[0]}')
+            frames = [self.get_frame_by_name_unique(name_unique=name_unique) for name_unique in batch.name_unique]
+            batch.to(device=device)
+
+            if depth_type == OD3D_FRAME_MASK_TYPES.MESH:
+                depths = batch.mesh.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj.to(device=device),
+                                                 cams_intr4x4=batch.cam_intr4x4.to(device=device),
+                                                 imgs_sizes=batch.size.to(device=device), modality='depth')
+
+                depths_masks = batch.mesh.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj.to(device=device),
+                                                 cams_intr4x4=batch.cam_intr4x4.to(device=device),
+                                                 imgs_sizes=batch.size.to(device=device), modality='mask')
+
+                for b in range(len(batch.name_unique)):
+                    frame = frames[b]
+                    depth = depths[b]
+                    depth_mask = depths_masks[b]
+                    frame.write_depth(depth)
+                    frame.write_depth_mask(depth_mask)
 
     def visualize(self, item: int):
         raise NotImplementedError

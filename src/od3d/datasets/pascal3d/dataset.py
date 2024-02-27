@@ -4,6 +4,8 @@ import torch.nn
 from typing import List, Tuple
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES
+from od3d.datasets.frame import OD3D_FRAME_KPTS2D_ANNOT_TYPES
+from od3d.datasets.object import OD3D_FRAME_DEPTH_TYPES
 from omegaconf import DictConfig
 from pathlib import Path
 import od3d.io
@@ -102,12 +104,7 @@ class Pascal3D(OD3D_Dataset):
                 if frame_meta is not None:
                     frame_meta.save(path_meta=path_meta)
 
-    @staticmethod
-    def get_rpath_meshes():
-        return Path("CAD")
-    @staticmethod
-    def get_path_meshes(path_raw: Path):
-        return path_raw.joinpath(Pascal3D.get_rpath_meshes())
+
 
     ##### PREPROCESS
     def preprocess(self, config_preprocess: DictConfig):
@@ -123,8 +120,8 @@ class Pascal3D(OD3D_Dataset):
                 self.preprocess_mask(override=override, remove_previous=remove_previous)
             elif key == 'depth' and config_preprocess.depth.get('enabled', False):
                 override = config_preprocess.depth.get('override', False)
-                remove_previous = config_preprocess.mask.get('remove_previous', False)
-                self.preprocess_depths(override=override, remove_previous=remove_previous)
+                remove_previous = config_preprocess.depth.get('remove_previous', False)
+                self.preprocess_depth(override=override, remove_previous=remove_previous)
 
     def preprocess_cuboids(self, override=False, remove_previous=False):
         logger.info('preprocess cuboids...')
@@ -168,11 +165,11 @@ class Pascal3D(OD3D_Dataset):
     #         frame = self.get_item(frame_id)
     #         frame.preprocess_mask(override=override)
 
-    def preprocess_depths(self, override=False, remove_previous=False):
-        logger.info('preprocess depths...')
-        for frame_id in tqdm(range(len(self))):
-            frame = self.get_item(frame_id)
-            frame.preprocess_depth(override=override)
+    # def preprocess_depths(self, override=False, remove_previous=False):
+    #     logger.info('preprocess depths...')
+    #     for frame_id in tqdm(range(len(self))):
+    #         frame = self.get_item(frame_id)
+    #         frame.preprocess_depth(override=override)
     ##### DATASET PROPERTIES
 
 
@@ -188,7 +185,9 @@ class Pascal3D(OD3D_Dataset):
                                mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
                                mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
                                modalities=self.modalities,
-                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,)
+                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,
+                               depth_type=OD3D_FRAME_DEPTH_TYPES.MESH,
+                               kpts2d_annot_type=OD3D_FRAME_KPTS2D_ANNOT_TYPES.META,)
 
 
     # def get_item(self, item):
@@ -196,6 +195,13 @@ class Pascal3D(OD3D_Dataset):
     #     return Pascal3DFrame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
     #                          path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
     #                          categories=self.categories)
+
+    @staticmethod
+    def get_rpath_meshes():
+        return Path("CAD")
+    @staticmethod
+    def get_path_meshes(path_raw: Path):
+        return path_raw.joinpath(Pascal3D.get_rpath_meshes())
 
     @property
     def path_meshes(self):
