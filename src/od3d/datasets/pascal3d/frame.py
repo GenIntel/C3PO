@@ -187,16 +187,29 @@ class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObj
     meta_type = Pascal3DFrameMeta
     map_categories_to_od3d = MAP_CATEGORIES_PASCAL3D_TO_OD3D
 
+    @staticmethod
+    def get_rpath_raw_categorical_meshes(category: str):
+        return Path("CAD", f'{category}')
+
+    @staticmethod
+    def get_rfpath_pp_categorical_mesh(mesh_type: OD3D_MESH_TYPES, category: str):
+        return Path("mesh", f'{mesh_type}', f'{category}', 'mesh.ply')
+
     def get_fpath_mesh(self, mesh_type=None):
         if mesh_type is None:
             mesh_type = self.mesh_type
         if mesh_type == OD3D_MESH_TYPES.META:
             return self.path_raw.joinpath(self.meta.rfpath_mesh)
         else:
-            return self.path_preprocess.joinpath("mesh", f'{mesh_type}', self.category, 'mesh.ply')
+            return self.path_preprocess.joinpath(self.get_rfpath_pp_categorical_mesh(mesh_type=mesh_type, category=self.category))
 
     def read_mesh(self, mesh_type=None):
-        mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type), scale=PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category])
+        if mesh_type == OD3D_MESH_TYPES.META:
+            mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type), scale=PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category])
+        else:
+            # note: preprocessed meshes are in real scale
+            mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type))
+
         if mesh_type is None or mesh_type == self.mesh_type:
             self.mesh = mesh
         return mesh

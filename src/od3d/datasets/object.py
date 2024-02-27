@@ -45,7 +45,9 @@ class OD3D_MESH_TYPES(str, Enum):
     META = 'meta'
     CONVEX500 = 'convex500'
     ALPHA500 = 'alpha500'
+    CUBOID250 = 'cuboid250'
     CUBOID500 = 'cuboid500'
+    CUBOID1000 = 'cuboid1000'
 
 class OD3D_MESH_FEATS_TYPES(str, Enum):
     M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC = 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_acc'

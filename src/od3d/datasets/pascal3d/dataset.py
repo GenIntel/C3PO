@@ -18,6 +18,8 @@ from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
 from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS, PASCAL3D_SCALE_NORMALIZE_TO_REAL, MAP_CATEGORIES_OD3D_TO_PASCAL3D
 from typing import Dict
 import inspect
+from od3d.datasets.object import OD3D_MESH_TYPES
+
 
 class Pascal3D(OD3D_Dataset):
     all_categories = list(PASCAL3D_CATEGORIES)
@@ -54,6 +56,7 @@ class Pascal3D(OD3D_Dataset):
 
         dict_nested_frames = dict_nested_frames_filtered
         return dict_nested_frames
+
 
 
     #### PREPROCESS META
@@ -113,7 +116,7 @@ class Pascal3D(OD3D_Dataset):
             if key == 'cuboid' and config_preprocess.cuboid.get('enabled', False):
                 override = config_preprocess.cuboid.get('override', False)
                 remove_previous = config_preprocess.cuboid.get('remove_previous', False)
-                self.preprocess_cuboids(override=override, remove_previous=remove_previous)
+                self.preprocess_cuboid(override=override, remove_previous=remove_previous)
             elif key == 'mask' and config_preprocess.mask.get('enabled', False):
                 override = config_preprocess.mask.get('override', False)
                 remove_previous = config_preprocess.mask.get('remove_previous', False)
@@ -123,56 +126,44 @@ class Pascal3D(OD3D_Dataset):
                 remove_previous = config_preprocess.depth.get('remove_previous', False)
                 self.preprocess_depth(override=override, remove_previous=remove_previous)
 
-    def preprocess_cuboids(self, override=False, remove_previous=False):
-        logger.info('preprocess cuboids...')
-        perc_axis_coverage = 0.99
-        verts_count = 1000
+    def preprocess_cuboid(self, override=False, remove_previous=False):
+        logger.info('preprocess cuboid...')
 
-        for path_meshes_category in tqdm(self.path_meshes.iterdir()):
-            if not path_meshes_category.is_dir():
-                continue
+        for category in self.categories:
+            mesh_types = [OD3D_MESH_TYPES.CUBOID250, OD3D_MESH_TYPES.CUBOID500, OD3D_MESH_TYPES.CUBOID1000]
+            for mesh_type in mesh_types:
+                fpath_mesh_out = self.path_preprocess.joinpath(Pascal3DFrame.get_rfpath_pp_categorical_mesh(mesh_type=mesh_type, category=category))
 
-            fpath = self.path_cuboids.joinpath(f'{path_meshes_category.name}.ply')
-            if not fpath.exists() or override:
-                paths_meshes_category = []
-                for path_mesh_category in path_meshes_category.iterdir():
-                    print(path_mesh_category)
-                    paths_meshes_category.append(path_mesh_category)
+                if fpath_mesh_out.exists() and not override:
+                    logger.warning(f'mesh already exists {fpath_mesh_out}')
+                    return
+                else:
+                    logger.info(f'preprocessing mesh for {category} with type {mesh_type}')
 
-                meshes = Meshes.load_from_files(paths_meshes_category)
+                import re
+                match = re.match(r"([a-z]+)([0-9]+)", mesh_type, re.I)
+                if match and len(match.groups()) == 2:
+                    mesh_type, mesh_vertices_count = match.groups()
+                    mesh_vertices_count = int(mesh_vertices_count)
+                else:
+                    msg = f'could not retrieve mesh type and vertices count from mesh name {mesh_type}'
+                    raise Exception(msg)
 
-                verts_count_axis_coverage = int(meshes.verts.shape[0] * perc_axis_coverage)
+                fpaths_meshes_category = [fpath for fpath in self.path_raw.joinpath(Pascal3DFrame.get_rpath_raw_categorical_meshes(category=category)).iterdir()]
+                meshes = Meshes.load_from_files(fpaths_meshes_category)
+                pts3d = meshes.verts * PASCAL3D_SCALE_NORMALIZE_TO_REAL[category]
 
-                verts_sorted = meshes.verts.sort(dim=0)[0]
-                verts_group = verts_sorted[verts_count_axis_coverage::] - verts_sorted[0:-verts_count_axis_coverage]
-                min_ids = verts_group.min(dim=0)[1]
-                cuboid_limits = verts_sorted[torch.stack([min_ids, min_ids + verts_count_axis_coverage], dim=0)].diagonal(dim1=-2, dim2=-1)
+                from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
 
-                category = path_meshes_category.name
-                cuboid_limits = cuboid_limits * PASCAL3D_SCALE_NORMALIZE_TO_REAL[category]
-                meshes = Cuboids.create_dense_from_limits(limits=cuboid_limits[None,], verts_count=verts_count)
+                cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
+                                                 optimize_rot=False,
+                                                 optimize_transl=False,
+                                                 vertices_max_count=mesh_vertices_count)
 
+                obj_mesh = cuboids.get_mesh_with_id(0)
+                obj_mesh.write_to_file(fpath=fpath_mesh_out)
 
-                fpath.parent.mkdir(parents=True, exist_ok=True)
-                save_ply(fpath, verts=meshes.verts, faces=meshes.faces)
-
-
-
-
-    # def preprocess_masks(self, override=False, remove_previous=False):
-    #     logger.info('preprocess masks...')
-    #     for frame_id in tqdm(range(len(self))):
-    #         frame = self.get_item(frame_id)
-    #         frame.preprocess_mask(override=override)
-
-    # def preprocess_depths(self, override=False, remove_previous=False):
-    #     logger.info('preprocess depths...')
-    #     for frame_id in tqdm(range(len(self))):
-    #         frame = self.get_item(frame_id)
-    #         frame.preprocess_depth(override=override)
     ##### DATASET PROPERTIES
-
-
     def get_frame_by_name_unique(self, name_unique):
         from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_MESH_TYPES, \
             OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES, \
