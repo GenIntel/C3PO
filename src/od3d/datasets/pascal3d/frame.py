@@ -204,6 +204,8 @@ class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObj
             return self.path_preprocess.joinpath(self.get_rfpath_pp_categorical_mesh(mesh_type=mesh_type, category=self.category))
 
     def read_mesh(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
         if mesh_type == OD3D_MESH_TYPES.META:
             mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type), scale=PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category])
         else:
