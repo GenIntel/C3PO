@@ -9,7 +9,7 @@ from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES, CO3D_
 
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_SequenceDataset
 from od3d.datasets.object import OD3D_FRAME_MASK_TYPES, OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_PCL_TYPES, \
-    OD3D_SEQUENCE_SFM_TYPES, OD3D_TFROM_OBJ_TYPES, OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES
+    OD3D_SEQUENCE_SFM_TYPES, OD3D_TFROM_OBJ_TYPES, OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES, OD3D_FRAME_DEPTH_TYPES
 from pathlib import Path
 from typing import List, Dict
 
@@ -67,7 +67,8 @@ class CO3D(OD3D_SequenceDataset):
                                pcl_type=self.pcl_type,
                                sfm_type=self.sfm_type,
                                modalities=self.modalities,
-                               tform_obj_type=self.tform_obj_type)
+                               tform_obj_type=self.tform_obj_type,
+                               depth_type=OD3D_FRAME_DEPTH_TYPES.META)
 
     def get_sequence_by_name_unique(self, name_unique):
         return self.sequence_type(name_unique=name_unique,
@@ -82,7 +83,8 @@ class CO3D(OD3D_SequenceDataset):
                                   pcl_type=self.pcl_type,
                                   sfm_type=self.sfm_type,
                                   modalities=self.modalities,
-                                  tform_obj_type=self.tform_obj_type)
+                                  tform_obj_type=self.tform_obj_type,
+                                  depth_type=OD3D_FRAME_DEPTH_TYPES.META)
 
     @staticmethod
     def setup(config: DictConfig):
