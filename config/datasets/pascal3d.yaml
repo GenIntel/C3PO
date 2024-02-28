@@ -3,7 +3,9 @@ class_name: Pascal3D
 
 modalities:
     - 'rgb'
+    - 'rgb_mask'
     - 'category'
+    - 'category_id'
     - 'mask'
     - 'kpts2d_annot'
     - 'kpts2d_annot_vsbl'
@@ -26,18 +28,18 @@ path_meshes: ${platform.path_datasets_raw}/${.rpath_meshes}
 
 path_cuboids: '${.path_preprocess}/mesh/cuboid250'
 fpaths_cuboids:
-    airplane: ${..path_cuboids}/aeroplane.ply
-    bicycle: ${..path_cuboids}/bicycle.ply
-    boat: ${..path_cuboids}/boat.ply
-    bottle: ${..path_cuboids}/bottle.ply
-    bus: ${..path_cuboids}/bus.ply
-    car: ${..path_cuboids}/car.ply
-    chair: ${..path_cuboids}/chair.ply
-    dining_table: ${..path_cuboids}/diningtable.ply
-    motorcycle: ${..path_cuboids}/motorbike.ply
-    couch: ${..path_cuboids}/sofa.ply
-    train: ${..path_cuboids}/train.ply
-    tv: ${..path_cuboids}/tvmonitor.ply
+    airplane: ${..path_cuboids}/aeroplane/mesh.ply
+    bicycle: ${..path_cuboids}/bicycle/mesh.ply
+    boat: ${..path_cuboids}/boat/mesh.ply
+    bottle: ${..path_cuboids}/bottle/mesh.ply
+    bus: ${..path_cuboids}/bus/mesh.ply
+    car: ${..path_cuboids}/car/mesh.ply
+    chair: ${..path_cuboids}/chair/mesh.ply
+    dining_table: ${..path_cuboids}/diningtable/mesh.ply
+    motorcycle: ${..path_cuboids}/motorbike/mesh.ply
+    couch: ${..path_cuboids}/sofa/mesh.ply
+    train: ${..path_cuboids}/train/mesh.ply
+    tv: ${..path_cuboids}/tvmonitor/mesh.ply
 
 setup:
   enabled: False
@@ -51,15 +53,15 @@ extract_meta:
 
 preprocess:
   cuboid:
-    enabled: True
+    enabled: False
     override: False
     remove_previous: False
   mask:
-    enabled: True
+    enabled: False
     override: False
     remove_previous: False
   depth:
-    enabled: True
+    enabled: False
     override: False
     remove_previous: False
 
