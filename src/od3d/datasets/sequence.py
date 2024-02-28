@@ -21,6 +21,18 @@ from od3d.cv.reconstruction.clean import get_pcl_clean_with_masks
 from od3d.cv.io import write_pts3d_with_colors_and_normals
 from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES
 from torch.utils.data import Dataset, DataLoader
+
+import re
+from od3d.cv.io import read_pts3d_with_colors_and_normals
+import open3d
+from od3d.cv.geometry.mesh import Mesh
+from od3d.cv.geometry.downsample import random_sampling, voxel_downsampling
+
+from od3d.cv.io import get_default_device
+from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast, inv_tform4x4, tform4x4, tform4x4_broadcast
+from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
+
+
 @dataclass
 class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
     frame_type = OD3D_Frame
@@ -99,6 +111,22 @@ class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
                                         if field.name != 'name_unique' and field.name in frame_fields_names}
         return self.frame_type(name_unique=frame_name_unique, **all_attrs_except_name_unique)
 
+    def visualize(self):
+        from od3d.cv.visual.show import show_scene
+        tform_obj_type = self.tform_obj_type
+        cams_tform4x4_world, cams_intr4x4, cams_imgs = self.read_cams(cams_count=20, show_imgs=True, tform_obj_type=tform_obj_type)
+        cams_viewpoints = inv_tform4x4(torch.stack(cams_tform4x4_world))[:, :3, 3]
+
+        pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=tform_obj_type)
+
+
+        mesh_feats_viewpoints = self.read_mesh_feats_viewpoint(tform_obj_type=tform_obj_type)
+        if isinstance(mesh_feats_viewpoints, list):
+            mesh_feats_viewpoints = torch.cat(mesh_feats_viewpoints, dim=0)
+
+        show_scene(cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs,
+                   pts3d_colors=[pts3d_colors], pts3d=[pts3d, mesh_feats_viewpoints, cams_viewpoints],
+                   meshes=[self.get_mesh()])
 
     def read_cams(self, cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES=None, tform_obj_type= None, cams_count=5,
                   show_imgs=True):
@@ -261,16 +289,6 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
     # @property
     # def path_droid_slam(self):
     #     return self.path_preprocess.joinpath(OD3D_SequenceDroidSlamMixin.get_rfpath_droid_slam(), self.name_unique)
-
-import re
-from od3d.cv.io import read_pts3d_with_colors_and_normals
-import open3d
-from od3d.cv.geometry.mesh import Mesh
-from od3d.cv.geometry.downsample import random_sampling, voxel_downsampling
-
-from od3d.cv.io import get_default_device
-from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast, inv_tform4x4
-from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
 
 
 
@@ -796,12 +814,19 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
     def read_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None, tform_obj_type=None, device='cpu'):
         fpath_mesh_feats_viewpoint = self.get_fpath_mesh_feats_viewpoint(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
-        mesh_feats_viewpoint = torch.load(fpath_mesh_feats_viewpoint).to(device=device)
+        mesh_feats_viewpoint = torch.load(fpath_mesh_feats_viewpoint)
+        if isinstance(mesh_feats_viewpoint, list):
+            mesh_feats_viewpoint = [f.to(device=device) for f in mesh_feats_viewpoint]
+        else:
+            mesh_feats_viewpoint = mesh_feats_viewpoint.to(device=device)
 
         tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
         if tform_obj is not None:
             tform_obj = tform_obj.to(device=device)
-            mesh_feats_viewpoint = transf3d_broadcast(pts3d=mesh_feats_viewpoint, transf4x4=tform_obj)
+            if isinstance(mesh_feats_viewpoint, list):
+                mesh_feats_viewpoint = [transf3d_broadcast(pts3d=f, transf4x4=tform_obj) for f in mesh_feats_viewpoint]
+            else:
+                mesh_feats_viewpoint = transf3d_broadcast(pts3d=mesh_feats_viewpoint, transf4x4=tform_obj)
 
 
         if (mesh_type is None or mesh_type == self.mesh_type) and \
@@ -911,9 +936,12 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                                                imgs_sizes=batch.size, mesh_ids=[0,] * B,
                                                down_sample_rate=down_sample_rate)
 
+            batch_cam_tform4x4_obj_raw = batch.cam_tform4x4_obj
+            tform_obj = self.get_tform_obj(device=device)
+            if tform_obj is not None:
+                batch_cam_tform4x4_obj_raw = tform4x4_broadcast(batch_cam_tform4x4_obj_raw, tform_obj[None,])
 
-            viewpoints3d = transf3d_broadcast(pts3d=-batch.cam_tform4x4_obj[:, None, :3, 3], transf4x4=inv_tform4x4(batch.cam_tform4x4_obj[:, None])).expand(*vts2d_mask.shape, 3)
-
+            viewpoints3d = (inv_tform4x4(batch_cam_tform4x4_obj_raw)[:, :3, 3])[:, None].expand(*vts2d_mask.shape, 3)
 
             # verts3d = meshes.get_verts_stacked_with_mesh_ids(mesh_ids=[0,] * B).clone()
             # show_scene(meshes=meshes, pts3d=verts3d, lines3d=[torch.stack([verts3d, verts3d + normals3d], dim=-2)])

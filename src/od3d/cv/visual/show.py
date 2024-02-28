@@ -345,7 +345,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             vis = o3d.visualization.Visualizer()
             vis.create_window(visible=False, height=H, width=W)
             opt = vis.get_render_option()
-            opt.mesh_show_back_face = True
+            opt.mesh_show_back_face = False
             #opt.background_color = np.asarray([0, 0, 0])
             #opt.mesh_show_wireframe = mesh_show_wireframe
 
@@ -423,7 +423,7 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
                cams_imgs: Union[torch.Tensor, List[torch.Tensor]]=None,
                cams_names: List[str]=None,
                cams_imgs_resize: bool = True,
-                cams_imgs_depth_scale: float = 0.2,
+               cams_imgs_depth_scale: float = 0.2,
                cams_show_wireframe: bool = True):
     """
     Args:

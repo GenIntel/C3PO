@@ -918,7 +918,8 @@ class Meshes(torch.nn.Module):
             faces_per_pixel=1,
             bin_size=None,
             max_faces_per_bin=None,
-            perspective_correct=self.pt3d_raster_perspective_correct
+            perspective_correct=self.pt3d_raster_perspective_correct,
+            cull_backfaces=True
         )
 
         rasterizer = MeshRasterizer(
