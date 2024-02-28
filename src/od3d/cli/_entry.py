@@ -21,14 +21,6 @@ app.add_typer(app_docker, name='docker')
 app.add_typer(app_write, name='write')
 
 def main():
-    seed_number = 0
-    import numpy as np
-    import random
-    import torch
-    np.random.seed(seed_number)
-    torch.manual_seed(seed_number)
-    random.seed(seed_number)
-
     app()
 
 if __name__ == "__main__":

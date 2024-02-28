@@ -2,13 +2,15 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo_align3d
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.src: co3d_no_zsp_50s_unlabeled # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
+  - datasets@train_datasets.src: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
   - datasets@train_datasets.labeled: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
   - datasets@val_datasets.main:
   - datasets@test_datasets.co3d: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
+
+seed_number: 3
 
 categories:
   - bicycle
@@ -63,7 +65,7 @@ method:
     dist_appear_weight: 0.2
     global_optimization_steps: 1
     categories: ${categories}
-    aligned_name: 'alpha500_dinov2b' # 'latest_50s_to_5s_sota' # _sota_ref_86_64
+    aligned_name: # 'alpha500_dinov2b' 'latest_50s_to_5s_sota' # _sota_ref_86_64
 
 mesh_feats_type: 'M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc' # M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm', 'R_min50'
 mesh_type: 'alpha500' # 'alpha500' 'convex500', 'voxel500' 'poisson500', 'alpha500'
