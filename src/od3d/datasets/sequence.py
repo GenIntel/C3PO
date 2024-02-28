@@ -269,7 +269,7 @@ from od3d.cv.geometry.mesh import Mesh
 from od3d.cv.geometry.downsample import random_sampling, voxel_downsampling
 
 from od3d.cv.io import get_default_device
-from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast
+from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast, inv_tform4x4
 from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
 
 
@@ -309,11 +309,11 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             self.pts3d, self.pts3d_colors, self.pts3d_normals = pts3d, pts3d_colors, pts3d_normals
         return pts3d, pts3d_colors, pts3d_normals
 
-    def get_pcl(self, pcl_type=None, clone=False, device='cpu'):
-        if self.pts3d is not None and (pcl_type is None or pcl_type == self.pcl_type):
+    def get_pcl(self, pcl_type=None, clone=False, device='cpu', tform_obj_type: OD3D_TFROM_OBJ_TYPES=None):
+        if self.pts3d is not None and (pcl_type is None or pcl_type == self.pcl_type) and (tform_obj_type is None or tform_obj_type == self.tform_obj_type):
             pts3d, pts3d_colors, pts3d_normals = self.pts3d, self.pts3d_colors, self.pts3d_normals
         else:
-            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(pcl_type=pcl_type, device=device)
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(pcl_type=pcl_type, device=device, tform_obj_type=tform_obj_type)
         if not clone:
             return pts3d, pts3d_colors, pts3d_normals
         else:
@@ -591,17 +591,23 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
     def fpath_mesh(self):
         return self.get_fpath_mesh()
 
-    def read_mesh(self, mesh_type=None):
-        mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type))
-        if mesh_type is None or mesh_type == self.mesh_type:
+    def read_mesh(self, mesh_type=None, device='cpu', tform_obj_type=None):
+        mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type), device=device)
+
+        tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+        if tform_obj is not None:
+            tform_obj = tform_obj.to(device=device)
+            mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=tform_obj)
+
+        if (mesh_type is None or mesh_type == self.mesh_type) and (tform_obj_type is None or tform_obj_type == self.tform_obj_type):
             self.mesh = mesh
         return mesh
 
-    def get_mesh(self, mesh_type=None, clone=False):
-        if (mesh_type is None or mesh_type == self.mesh_type) and self.mesh is not None:
+    def get_mesh(self, mesh_type=None, clone=False, device='cpu', tform_obj_type=None):
+        if self.mesh is not None and (mesh_type is None or mesh_type == self.mesh_type) and (tform_obj_type is None or tform_obj_type == self.tform_obj_type):
             mesh = self.mesh
         else:
-            mesh = self.read_mesh(mesh_type=mesh_type)
+            mesh = self.read_mesh(mesh_type=mesh_type, device=device, tform_obj_type=tform_obj_type)
 
         if not clone:
             return mesh
@@ -634,13 +640,12 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         #     logger.warning(f'could not preprocess mesh, due to fpath to pcl {fpath_pcl} does not exists.')
         #     return None
 
-        pts3d, pts3d_colors, pts3d_normals = self.get_pcl(clone=True)
+        device = get_default_device()
+        pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW, device=device)
         N = pts3d.shape[0]
         if N < 4:
             logger.warning(f'Could not estimate mesh for sequence {self.name_unique} due to too few points in raw pcl {N}')
             return
-
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         o3d_pcl = open3d.geometry.PointCloud()
         o3d_pcl.points = open3d.utility.Vector3dVector(pts3d.detach().cpu().numpy())
@@ -710,13 +715,26 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
         elif mesh_type == 'cuboid':
             from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
-            cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
+            if self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID) is not None:
+                tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID, device=device)
+
+            elif self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP_CUBOID) is not None:
+                tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP_CUBOID, device=device)
+
+            else:
+                msg = f'Could not find tform_obj for cuboid type'
+                raise NotImplementedError(msg)
+
+
+            cannical_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+
+            cuboids, _ = fit_cuboid_to_pts3d(pts3d=cannical_pts3d,
                                              optimize_rot=False,
                                              optimize_transl=False,
                                              vertices_max_count=mesh_vertices_count)
 
+            cuboids.verts.data = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=inv_tform4x4(tform_obj))
             obj_mesh = cuboids.get_mesh_with_id(0)
-
         else:
             msg = f'Unknown mesh type {mesh_type}'
             raise Exception(msg)
@@ -747,9 +765,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_feats_type is None:
             mesh_feats_type = self.mesh_feats_type
 
-        return self.path_preprocess.joinpath("feats", f'{mesh_feats_type}',  f'{mesh_type}',
-                                             f'{self.tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
-                                             self.name_unique, 'mesh_feats.pt')
+        return self.path_preprocess.joinpath("feats", f'{mesh_feats_type}',  f'{mesh_type}', f'{self.pcl_type}',
+                                             f'{self.sfm_type}', self.name_unique, 'mesh_feats.pt')
 
     def get_fpath_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None):
         if mesh_type is None:
@@ -757,9 +774,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_feats_type is None:
             mesh_feats_type = self.mesh_feats_type
 
-        return self.path_preprocess.joinpath("feats", f'{mesh_feats_type}',  f'{mesh_type}',
-                                             f'{self.tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
-                                             self.name_unique, 'mesh_feats_viewpoint.pt')
+        return self.path_preprocess.joinpath("feats", f'{mesh_feats_type}',  f'{mesh_type}', f'{self.pcl_type}',
+                                             f'{self.sfm_type}', self.name_unique, 'mesh_feats_viewpoint.pt')
 
 
     @property
@@ -778,11 +794,19 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             self.mesh_feats = mesh_feats
         return mesh_feats
 
-    def read_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None):
+    def read_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None, tform_obj_type=None, device='cpu'):
         fpath_mesh_feats_viewpoint = self.get_fpath_mesh_feats_viewpoint(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
-        mesh_feats_viewpoint = torch.load(fpath_mesh_feats_viewpoint)
+        mesh_feats_viewpoint = torch.load(fpath_mesh_feats_viewpoint).to(device=device)
+
+        tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+        if tform_obj is not None:
+            tform_obj = tform_obj.to(device=device)
+            mesh_feats_viewpoint = transf3d_broadcast(pts3d=mesh_feats_viewpoint, transf4x4=tform_obj)
+
+
         if (mesh_type is None or mesh_type == self.mesh_type) and \
-                (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type):
+                (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type) and \
+                (tform_obj_type is None or tform_obj_type == self.tform_obj_type):
             self.mesh_feats_viewpoint = mesh_feats_viewpoint
         return mesh_feats_viewpoint
 
@@ -798,13 +822,15 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         else:
             return mesh_feats.clone()
 
-    def get_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None, clone=False):
+    def get_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None, tform_obj_type=None, clone=False):
         if (mesh_type is None or mesh_type == self.mesh_type) and \
-                (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type) \
-                and self.mesh_feats_viewpoint is not None:
+                (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type) and \
+                (tform_obj_type is None or tform_obj_type == self.tform_obj_type) and \
+                self.mesh_feats_viewpoint is not None:
             mesh_feats_viewpoint = self.mesh_feats_viewpoint
         else:
-            mesh_feats_viewpoint = self.read_mesh_feats_viewpoint(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
+            mesh_feats_viewpoint = self.read_mesh_feats_viewpoint(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type,
+                                                                  tform_obj_type=tform_obj_type)
 
         if not clone:
             return mesh_feats_viewpoint
@@ -936,6 +962,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         #     viewpoints3d = transf3d_broadcast(viewpoints3d, normal3d_transf_obj)
         #     verts3d = transf3d_broadcast(verts3d, normal3d_transf_obj)
         #     show_scene(pts3d=[verts3d, viewpoints3d], lines3d=[torch.Tensor([[[0., 0., 0.], [0., -1., 0.]]])])
+
+        logger.info(f'save mesh feats at {self.fpath_mesh_feats}')
+        logger.info(f'save mesh feats viewpoint at {self.fpath_mesh_feats_viewpoint}')
 
         if reduce_type == 'acc':
             if not self.fpath_mesh_feats.parent.exists():

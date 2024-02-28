@@ -11,7 +11,7 @@ sequences_require_mesh: False
 sequences_require_pcl: True
 sequences_require_gt_pose: True
 
-tform_obj_type: 'label3d_cuboid' # 'label3d_cuboid' 'aligned_N_alpha500_dinov2b/r0' 'raw'
+tform_obj_type: 'raw' # 'label3d_cuboid' 'aligned_N_alpha500_dinov2b/r0' 'raw'
 
 #categories:
 #  - bicycle

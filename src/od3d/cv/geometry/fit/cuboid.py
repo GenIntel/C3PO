@@ -87,7 +87,7 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
     cuboid_tform4x4_obj = cuboid_tform4x4_obj.detach()
 
 
-    cuboid_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=cuboid_tform4x4_obj)
+    cuboid_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=cuboid_tform4x4_obj).detach()
 
     # using min max
     # _, cuboid_pts3d_ids_min = cuboid_pts3d.min(dim=0)
@@ -113,7 +113,7 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
 
     logger.info(cuboid_pts3d_limits)
 
-    cuboid = Cuboids.create_dense_from_limits(limits=cuboid_pts3d_limits, verts_count=vertices_max_count)
+    cuboid = Cuboids.create_dense_from_limits(limits=cuboid_pts3d_limits, verts_count=vertices_max_count, device=device)
     #from od3d.cv.visual.show import show_scene
     #show_scene(meshes=cuboid, pts3d=[cuboid_pts3d], meshes_add_translation=False, pts3d_add_translation=False)
 

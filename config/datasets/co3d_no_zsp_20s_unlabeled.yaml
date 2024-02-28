@@ -11,6 +11,8 @@ sequences_require_mesh: False
 sequences_require_pcl: True
 sequences_require_gt_pose: False
 
+tform_obj_type: 'raw'
+
 categories:
   - bicycle
   - truck

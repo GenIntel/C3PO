@@ -3,7 +3,6 @@ defaults:
 
 name: co3d_no_zsp_20s_aligned
 
-
 sequences_require_gt_pose: True
 
-aligned_name: 'latest_20s_to_5s' # 'all_to_one_17_10_23_convex500_dinov2_acc_min'
+tform_obj_type: 'aligned_N_alpha500_dinov2b/r0' # 'label3d_cuboid' 'aligned_N_alpha500_dinov2b/r0'

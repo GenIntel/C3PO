@@ -45,8 +45,6 @@ class Mesh:
         self.feats = feats
         self.device = verts.device
 
-
-
     @staticmethod
     def convert_to_textureVertex(textures_uv: PT3DTexturesUV, meshes: PT3DMeshes) -> PT3DTexturesVertex:
         # note: this is a workaround, since the model textures_uv contains multiple values per vertex, but textures_vertex only one

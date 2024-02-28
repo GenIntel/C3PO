@@ -87,7 +87,7 @@ class OD3D_SEQUENCE_SFM_TYPES(str, Enum):
 class OD3D_TformObjMixin():
     tform_obj_type: OD3D_TFROM_OBJ_TYPES
 
-    def get_tform_obj(self, tform_obj_type: OD3D_TFROM_OBJ_TYPES = None):
+    def get_tform_obj(self, tform_obj_type: OD3D_TFROM_OBJ_TYPES = None, device='cpu'):
         if tform_obj_type is None:
             tform_obj_type = self.tform_obj_type
 
@@ -96,7 +96,7 @@ class OD3D_TformObjMixin():
         else:
             fpath_tform_obj = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
             if fpath_tform_obj.exists():
-                return torch.load(self.get_fpath_tform_obj(tform_obj_type=tform_obj_type))
+                return torch.load(self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)).to(device=device)
             else:
                 logger.warning(f'tform_obj_type {tform_obj_type} does not exists at {fpath_tform_obj}')
                 return None
