@@ -804,10 +804,10 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
     def fpath_mesh_feats_viewpoint(self):
         return self.get_fpath_mesh_feats_viewpoint()
 
-    def read_mesh_feats(self, mesh_type=None, mesh_feats_type=None):
+    def read_mesh_feats(self, mesh_type=None, mesh_feats_type=None, cache=True):
         fpath_mesh_feats = self.get_fpath_mesh_feats(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
         mesh_feats = torch.load(fpath_mesh_feats)
-        if (mesh_type is None or mesh_type == self.mesh_type) and \
+        if cache is True and (mesh_type is None or mesh_type == self.mesh_type) and \
                 (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type):
             self.mesh_feats = mesh_feats
         return mesh_feats
@@ -1074,8 +1074,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             else:
                 device = 'cpu'
 
-            seq1_feats = self.read_mesh_feats()
-            seq2_feats = sequence.read_mesh_feats()
+            seq1_feats = self.read_mesh_feats(cache=False)
+            seq2_feats = sequence.read_mesh_feats(cache=False)
 
             from od3d.cv.cluster.embed import pca
             dist_verts_mesh_feats_reduce_type = self.mesh_feats_dist_reduce_type
@@ -1192,7 +1192,5 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                 fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
 
-            del self.mesh_feats
-            del sequence.mesh_feats
             del seq1_feats
             del seq2_feats
