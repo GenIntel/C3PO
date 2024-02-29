@@ -1209,3 +1209,4 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             del dist_verts_seq1_seq2
             del seq1_feats
             del seq2_feats
+            torch.cuda.empty_cache()
