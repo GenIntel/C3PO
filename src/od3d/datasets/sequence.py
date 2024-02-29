@@ -1137,24 +1137,30 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     seq2_feats_padded_mask = seq12_feats_padded_mask[seq1_verts_count:].clone()
 
                     # Vertices1 x Viewpoints x Vertices2 x Viewpoints
-                    dists_verts_feats_seq1_seq2 = torch.cdist(seq1_feats_padded.reshape(-1, F)[None,],
-                                                              seq2_feats_padded.reshape(-1, F)[None,]).reshape(
-                        seq1_verts_partial_count, V, seq2_verts_count, V)
+                    if reduce_type.startswith('negdot'):
+                        dists_verts_feats_seq1_seq2 = -torch.einsum('bnf,bkf->bnk', seq1_feats_padded.reshape(-1, F)[None,],
+                                                                  seq2_feats_padded.reshape(-1, F)[None,]).reshape(
+                            seq1_verts_partial_count, V, seq2_verts_count, V)
+                    else:
+                        dists_verts_feats_seq1_seq2 = torch.cdist(seq1_feats_padded.reshape(-1, F)[None,],
+                                                                  seq2_feats_padded.reshape(-1, F)[None,]).reshape(
+                            seq1_verts_partial_count, V, seq2_verts_count, V)
                     dists_verts_feats_seq1_seq2_mask = (
                                 seq1_feats_padded_mask[:, :, None, None] * seq2_feats_padded_mask[None, None, :, :])
                     dist_verts_seq1_seq2_inf_mask = dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(
                         2).sum(
                         dim=-1) == 0.
 
-                    if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN:
+                    if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN:
                         # replace nan values with inf
                         dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
                         dist_verts_seq1_seq2[seq1_verts_partial] = dists_verts_feats_seq1_seq2.permute(0, 2, 1,
                                                                                                        3).flatten(
                             2).min(dim=-1).values
-                    elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG:
+                    elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_AVG:
                         dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(0.)
                         dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
+
                         dist_verts_seq1_seq2_partial = (dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).flatten(
                             2) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2)).sum(dim=-1) / \
                                                        (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1,
@@ -1162,7 +1168,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                                                            dim=-1) + 1e-10)
                         dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
                         dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
-                    elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG:
+                    elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN_AVG:
                         dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
                         dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
                         dist_verts_seq1_seq2_partial = ((
@@ -1187,7 +1193,11 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     else:
                         logger.warning(f'Unknown reduce type {reduce_type}.')
             else:
-                dist_verts_seq1_seq2 = torch.cdist(seq1_feats.to(device=device), seq2_feats.to(device=device))
+                if reduce_type.startswith('negdot'):
+                    dist_verts_seq1_seq2 = -torch.einsum('nf,kf->nk', seq1_feats.to(device=device), seq2_feats.to(device=device))
+                else:
+                    dist_verts_seq1_seq2 = torch.cdist(seq1_feats.to(device=device), seq2_feats.to(device=device))
+
             if not fpath_dist_verts_mesh_feats.parent.exists():
                 fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
