@@ -140,14 +140,6 @@ class NeMo_Align3D(OD3D_Method):
         src_sequences = dataset_src.get_sequences()
         ref_sequences = dataset_ref.get_sequences()
         for src_sequence in src_sequences:
-            src_sequence.preprocess_tform_obj()
-            src_sequence.preprocess_mesh()
-            src_sequence.preprocess_mesh_feats()
-        for ref_sequence in ref_sequences:
-            ref_sequence.preprocess_tform_obj()
-            ref_sequence.preprocess_mesh()
-            ref_sequence.preprocess_mesh_feats()
-        for src_sequence in src_sequences:
             for ref_sequence in ref_sequences:
                 src_sequence.preprocess_mesh_feats_dist(sequence=ref_sequence)
                 ref_sequence.preprocess_mesh_feats_dist(sequence=src_sequence)
