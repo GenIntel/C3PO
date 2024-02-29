@@ -1115,6 +1115,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     logger.warning(f'unknown embed type {embed_type}')
 
                 P = 32  # ensures that 11 GB are enough
+                logger.info(f'seq1 verts {seq1_verts_count}, seq2 verts {seq2_verts_count}, seq1 partial {(seq1_verts_count // P)}, viewpoints max {V}')
+
                 for p in range(P):
                     if p < P - 1:
                         seq1_verts_partial = torch.arange(seq1_verts_count)[
