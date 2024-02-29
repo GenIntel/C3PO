@@ -1069,10 +1069,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if fpath_dist_verts_mesh_feats.exists():
             return torch.load(fpath_dist_verts_mesh_feats)
         else:
-            if torch.cuda.is_available():
-                device = 'cuda:0'
-            else:
-                device = 'cpu'
+            device = get_default_device()
 
             seq1_feats = self.read_mesh_feats(cache=False)
             seq2_feats = sequence.read_mesh_feats(cache=False)
@@ -1168,6 +1165,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                                                            dim=-1) + 1e-10)
                         dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
                         dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
+                        del dist_verts_seq1_seq2_partial
                     elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN_AVG:
                         dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
                         dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
@@ -1190,8 +1188,14 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                                                                       :, :, 0].sum(dim=-1) + 1e-10))
                         dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
                         dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
+                        del dist_verts_seq1_seq2_partial
                     else:
                         logger.warning(f'Unknown reduce type {reduce_type}.')
+
+                    del dists_verts_feats_seq1_seq2
+                    del dists_verts_feats_seq1_seq2_mask
+                    del dist_verts_seq1_seq2_inf_mask
+                    del seq1_verts_partial
                 del seq12_feats_padded
                 del seq12_feats_padded_mask
                 seq1_feats.clear()
