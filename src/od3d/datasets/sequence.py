@@ -1192,6 +1192,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                         dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
                     else:
                         logger.warning(f'Unknown reduce type {reduce_type}.')
+                del seq12_feats_padded
+                del seq12_feats_padded_mask
                 seq1_feats.clear()
                 seq2_feats.clear()
             else:
@@ -1204,5 +1206,6 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                 fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
             logger.info(f'save mesh feats dist at {fpath_dist_verts_mesh_feats}')
+            del dist_verts_seq1_seq2
             del seq1_feats
             del seq2_feats
