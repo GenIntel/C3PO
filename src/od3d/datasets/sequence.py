@@ -1191,5 +1191,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             if not fpath_dist_verts_mesh_feats.parent.exists():
                 fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
+
+            del self.mesh_feats
+            del sequence.mesh_feats
             del seq1_feats
             del seq2_feats
