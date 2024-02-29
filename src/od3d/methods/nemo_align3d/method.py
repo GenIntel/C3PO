@@ -140,8 +140,12 @@ class NeMo_Align3D(OD3D_Method):
         src_sequences = dataset_src.get_sequences()
         ref_sequences = dataset_ref.get_sequences()
         for src_sequence in src_sequences:
+            src_sequence.preprocess_tform_obj()
+            src_sequence.preprocess_mesh()
             src_sequence.preprocess_mesh_feats()
         for ref_sequence in ref_sequences:
+            ref_sequence.preprocess_tform_obj()
+            ref_sequence.preprocess_mesh()
             ref_sequence.preprocess_mesh_feats()
         for src_sequence in src_sequences:
             for ref_sequence in ref_sequences:
@@ -394,8 +398,9 @@ class NeMo_Align3D(OD3D_Method):
             src_category_instance_ids = src_instance_ids[src_map_seq_to_cat == cat_id]
 
             for ref_instance_id_in_category, ref_instance_id in enumerate(ref_category_instance_ids):
-                aligned_name = f'{self.config.aligned_name}/r{ref_instance_id_in_category}'
-                aligned_filtered_name = f'{self.config.aligned_name}_filtered/r{ref_instance_id_in_category}'
+                if self.config.aligned_name is not None:
+                    aligned_name = f'{self.config.aligned_name}/r{ref_instance_id_in_category}'
+                    aligned_filtered_name = f'{self.config.aligned_name}_filtered/r{ref_instance_id_in_category}'
 
                 # geometry/appearance: 0.81/0.18 | 0.59/0.29 | 0.89/0.29 | 0.9/0.65 (best qualit.) | 0.9/0.55 | 0.9 / 0.6 | 0.95 0.76 | 0.92 0.53 | 0.91 0.55
                 if self.config.gt_cam_tform_obj_source is not None:
@@ -428,10 +433,11 @@ class NeMo_Align3D(OD3D_Method):
                     ref_verts_ncds = (ref_verts_ncds - ref_verts_ncds.min(dim=0, keepdim=True).values) / (1e-10 + ref_verts_ncds.max(dim=0, keepdim=True).values - ref_verts_ncds.min(dim=0, keepdim=True).values)
                     ref_verts_ncds = (ref_verts_ncds + 1.) / 2.
 
-                    if accurate_sim[src_instance_id_in_category]:
-                        src_sequences[src_instance_id].write_aligned_mesh_and_tform_obj(mesh=ref_mesh_cloned, aligned_obj_tform_obj=aligned_cuboid_tform_src, aligned_name=aligned_filtered_name)
+                    if self.config.aligned_name is not None:
+                        if accurate_sim[src_instance_id_in_category]:
+                            src_sequences[src_instance_id].write_aligned_mesh_and_tform_obj(mesh=ref_mesh_cloned, aligned_obj_tform_obj=aligned_cuboid_tform_src, aligned_name=aligned_filtered_name)
 
-                    src_sequences[src_instance_id].write_aligned_mesh_and_tform_obj(mesh=ref_mesh_cloned, aligned_obj_tform_obj=aligned_cuboid_tform_src, aligned_name=aligned_name)
+                        src_sequences[src_instance_id].write_aligned_mesh_and_tform_obj(mesh=ref_mesh_cloned, aligned_obj_tform_obj=aligned_cuboid_tform_src, aligned_name=aligned_name)
 
                     dist_verts_ref = src_sequences[src_instance_id].read_mesh_feats_dist(ref_sequences[ref_instance_id]).to(device=self.device, dtype=dtype)
                     dist_verts_ref = dist_verts_ref / 2.

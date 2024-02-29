@@ -5,9 +5,12 @@ import wandb
 from pathlib import Path
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.methods.method import OD3D_Method
-
+import numpy as np
+import random
+import torch
 import json
 from datetime import datetime
+
 def get_timestamp_as_string():
     now = datetime.now()
     timestamp = now.strftime("%m-%d_%H-%M-%S")
@@ -31,6 +34,10 @@ class OD3D_Benchmark:
                        dir=Path(self.config.logger.local_dir), name=self.config.run_name, reinit=True)
 
     def run(self):
+        random.seed(self.config.get('seed_number', 0))
+        np.random.seed(self.config.get('seed_number', 0))
+        torch.manual_seed(self.config.get('seed_number', 0))
+
         # 1. setup datasets
         datasets_val = {}
         if "val_datasets" in self.config.keys():

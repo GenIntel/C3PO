@@ -42,7 +42,7 @@ class CenterZoom3D(OD3D_Transform):
             logger.warning(f"dist <= 0")
 
         if self.center_use_mask and (frame.get_mask() > 0.5).sum() > 0:
-            mask = frame.mask > 0.5
+            mask = frame.get_mask() > 0.5
             mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
             mask_pxl2d = mask_pxl2d[mask[0]]
             # this automatic scales to fit the cropped image
@@ -66,12 +66,12 @@ class CenterZoom3D(OD3D_Transform):
                 dist *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[frame.category]
             scale = frame.cam_tform4x4_obj[2, 3] / dist
 
-        elif self.scale_with_mask is not None and frame.mask is not None:
+        elif self.scale_with_mask is not None and frame.get_mask() is not None:
             # note: this usage should become deprecated in the future.
             if self.scale is not None:
                 logger.warning('For CenterZoom3D `scale` and `scale_with_mask` are not None. Only using `scale_with_mask`.')
 
-            mask = frame.mask > 0.5
+            mask = frame.get_mask() > 0.5
             if mask.sum() > 0.:
                 mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
                 mask_pxl2d = mask_pxl2d[mask[0]]
@@ -159,12 +159,12 @@ class CenterZoom3D(OD3D_Transform):
 
         if OD3D_FRAME_MODALITIES.BBOX in frame.modalities:
             # x_min, y_min, x_max, y_max
-            frame.bbox = (frame.bbox.reshape(2, 2) * scale[None,]).flatten()
+            frame.bbox = (frame.get_bbox().reshape(2, 2) * scale[None,]).flatten()
             frame.bbox[[0, 2]] = frame.bbox[[0, 2]] + cam_crop_tform_cam[0, 2]
             frame.bbox[[1, 3]] = frame.bbox[[1, 3]] + cam_crop_tform_cam[1, 2]
 
         if OD3D_FRAME_MODALITIES.KPTS2D_ANNOT in frame.modalities:
-            frame.kpts2d_annot = frame.kpts2d_annot * scale[None,]
+            frame.kpts2d_annot = frame.get_kpts2d_annot() * scale[None,]
             frame.kpts2d_annot = frame.kpts2d_annot + cam_crop_tform_cam[:2, 2]
 
         # assumption: depth of all image points is the same (which of course does only approximately holds)

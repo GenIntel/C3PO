@@ -7,7 +7,7 @@ from od3d.datasets.sequence import OD3D_SequenceMeshMixin, OD3D_MESH_TYPES, OD3D
     OD3D_SequenceCategoryMixin, OD3D_SequenceSfMMixin, OD3D_SEQUENCE_SFM_TYPES
 from od3d.datasets.sequence_meta import OD3D_SequenceMeta, OD3D_SequenceMetaCategoryMixin
 
-from od3d.datasets.object import OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin
+from od3d.datasets.object import OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin, OD3D_DepthTypeMixin
 from od3d.datasets.co3d.enum import MAP_CATEGORIES_CO3D_TO_OD3D
 from pathlib import Path
 from co3d.dataset.data_types import (
@@ -42,7 +42,7 @@ class CO3D_SequenceMeta(OD3D_SequenceMetaCategoryMixin, OD3D_SequenceMeta):
 
 @dataclass
 class CO3D_Sequence(OD3D_SequenceMeshMixin, OD3D_SequenceCategoryMixin,
-                       OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin, OD3D_Sequence):
+                       OD3D_DepthTypeMixin, OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin, OD3D_Sequence):
     frame_type = CO3D_Frame
     map_categories_to_od3d = MAP_CATEGORIES_CO3D_TO_OD3D
     meta_type = CO3D_SequenceMeta

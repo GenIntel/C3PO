@@ -3,7 +3,7 @@ logger = logging.getLogger(__name__)
 
 import torch
 from od3d.cv.geometry.transform import tform4x4, inv_tform4x4
-from od3d.cv.io import read_image
+from od3d.cv.io import read_image, write_mask_image
 import torchvision
 from dataclasses import dataclass
 from typing import List, Union
@@ -11,11 +11,13 @@ from enum import Enum
 from od3d.cv.geometry.mesh import Mesh
 from od3d.datasets.object import OD3D_Object, OD3D_CamTform4x4ObjTypeMixin, OD3D_MaskTypeMixin, OD3D_MeshTypeMixin, \
     OD3D_CAM_TFORM_OBJ_TYPES, OD3D_MESH_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_FrameModalitiesMixin, OD3D_TformObjMixin, \
-    OD3D_MeshFeatsTypeMixin
+    OD3D_MeshFeatsTypeMixin, OD3D_FRAME_DEPTH_TYPES, OD3D_DepthTypeMixin
 
 from od3d.datasets.frame_meta import OD3D_FrameMeta
 from pathlib import Path
 import numpy as np
+from od3d.cv.io import write_depth_image, read_depth_image
+
 
 class OD3D_FRAME_MODALITIES(str, Enum):
     NAME = 'name'
@@ -100,15 +102,15 @@ class OD3D_Frame(OD3D_FrameModalitiesMixin, OD3D_Object):
             elif modality == OD3D_FRAME_MODALITIES.MESH:
                 return self.get_mesh()
             elif modality == OD3D_FRAME_MODALITIES.BBOX:
-                return self.bbox
+                return self.get_bbox()
             elif modality == OD3D_FRAME_MODALITIES.BBOXS:
-                return self.bboxs
+                return self.get_bboxs()
             elif modality == OD3D_FRAME_MODALITIES.KPTS2D_ANNOT:
-                return self.kpts2d_annot
+                return self.get_kpts2d_annot()
             elif modality == OD3D_FRAME_MODALITIES.KPTS2D_ANNOT_VSBL:
-                return self.kpts2d_annot_vsbl
+                return self.get_kpts2d_annot_vsbl()
             elif modality == OD3D_FRAME_MODALITIES.KPTS3D:
-                return self.kpts3d
+                return self.get_kpts3d()
             elif modality == OD3D_FRAME_MODALITIES.KPTS_NAMES:
                 return self.kpts_names
             elif modality == OD3D_FRAME_MODALITIES.RAYS_CENTER3D:
@@ -156,6 +158,8 @@ class OD3D_FrameMaskMixin(OD3D_MaskTypeMixin):
     def fpath_mask(self):
         if self.mask_type == OD3D_FRAME_MASK_TYPES.META:
             return self.path_raw.joinpath(self.meta.rfpath_mask)
+        elif self.mask_type == OD3D_FRAME_MASK_TYPES.MESH:
+            return self.path_preprocess.joinpath("mask", f"{self.mask_type}", self.mesh_type_unique, f"{self.name_unique}.png")
         else:
             return self.path_preprocess.joinpath("mask", f"{self.mask_type}", f"{self.name_unique}.png")
 
@@ -242,6 +246,9 @@ class OD3D_FrameMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin):
     def fpath_mesh(self):
         return self.get_fpath_mesh()
 
+    def read_mesh(self, mesh_type=None):
+        return self.sequence.read_mesh()
+
     def get_fpath_mesh(self, mesh_type=None):
         return self.sequence.get_fpath_mesh(mesh_type=mesh_type)
 
@@ -294,37 +301,27 @@ class OD3D_FrameCategoriesMixin(OD3D_Object):
 
 @dataclass
 class OD3D_FrameBBoxMixin(OD3D_Object):
-    _bbox = None
-    @property
-    def bbox(self):
-        if self._bbox is None:
-            self._bbox = self.meta.bbox
-        return self._bbox
+    bbox = None
 
-    @bbox.setter
-    def bbox(self, value: torch.Tensor):
-            self._bbox = value
+    def read_bbox(self):
+        return self.meta.bbox.clone()
+
+    def get_bbox(self):
+        if self.bbox is None:
+            self.bbox = self.read_bbox()
+        return self.bbox
 
 
 @dataclass
 class OD3D_FrameKpts2d3dMixin(OD3D_Object):
     kpts2d_annot_type: OD3D_FRAME_KPTS2D_ANNOT_TYPES
-    _kpts3d = None
-    _kpts2d_annot = None
-    _kpts2d_annot_vsbl = None
+    kpts3d = None
+    kpts2d_annot = None
+    kpts2d_annot_vsbl = None
 
     @property
     def kpts_names(self):
         return self.meta.kpts_names
-
-    @property
-    def kpts2d_annot(self):
-        if self._kpts2d_annot is None:
-            if self.kpts2d_annot_type == OD3D_FRAME_KPTS2D_ANNOT_TYPES.META:
-                self._kpts2d_annot = self.meta.kpts2d_annot
-            else:
-                self._kpts2d_annot = torch.load(self.fpath_kpts2d_annot)
-        return self._kpts2d_annot
 
     @property
     def fpath_kpts2d_annot(self):
@@ -332,6 +329,18 @@ class OD3D_FrameKpts2d3dMixin(OD3D_Object):
             raise ValueError("Meta kpts2d_annot is not saved in a file")
         else:
             return self.path_preprocess.joinpath("kpts2d_annot", self.kpts2d_annot_type, f"{self.name_unique}.pt")
+
+    def read_kpts2d_annot(self):
+        if self.kpts2d_annot_type == OD3D_FRAME_KPTS2D_ANNOT_TYPES.META:
+            return self.meta.kpts2d_annot.clone()
+        else:
+            return torch.load(self.fpath_kpts2d_annot)
+
+    def get_kpts2d_annot(self):
+        if self.kpts2d_annot is None:
+            self.kpts2d_annot = self.read_kpts2d_annot()
+        return self.kpts2d_annot
+
     @property
     def kpts2d_annot_labeled(self):
         if self.kpts2d_annot_type == OD3D_FRAME_KPTS2D_ANNOT_TYPES.META:
@@ -339,29 +348,32 @@ class OD3D_FrameKpts2d3dMixin(OD3D_Object):
         else:
             return
 
-    @kpts2d_annot.setter
-    def kpts2d_annot(self, value: torch.Tensor):
-            self._kpts2d_annot = value
+    def read_kpts2d_annot_vsbl(self):
+        return self.meta.kpts2d_annot_vsbl.clone()
 
-    @property
-    def kpts2d_annot_vsbl(self):
-        if self._kpts2d_annot_vsbl is None:
-            self._kpts2d_annot_vsbl = self.meta.kpts2d_annot_vsbl
-        return self._kpts2d_annot_vsbl
+    def get_kpts2d_annot_vsbl(self):
+        if self.kpts2d_annot_vsbl is None:
+            self.kpts2d_annot_vsbl = self.read_kpts2d_annot_vsbl()
+        return self.kpts2d_annot_vsbl
 
-    @kpts2d_annot_vsbl.setter
-    def kpts2d_annot_vsbl(self, value: torch.Tensor):
-            self._kpts2d_annot_vsbl = value
+    def read_kpts3d(self):
+        return self.meta.kpts3d.clone()
 
-    @property
-    def kpts3d(self):
-        if self._kpts3d is None:
-            self._kpts3d = self.meta.kpts3d
-        return self._kpts3d
+    def get_kpts3d(self):
+        if self.kpts3d is None:
+            self.kpts3d = self.read_kpts3d()
+        return self.kpts3d
 
-    @kpts3d.setter
-    def kpts3d(self, value: torch.Tensor):
-            self._kpts3d = value
+
+    # @property
+    # def kpts3d(self):
+    #     if self._kpts3d is None:
+    #         self._kpts3d = self.meta.kpts3d
+    #     return self._kpts3d
+    #
+    # @kpts3d.setter
+    # def kpts3d(self, value: torch.Tensor):
+    #         self._kpts3d = value
 
     # @property
     # def fpath_kpts2d_orient(self):
@@ -390,27 +402,61 @@ class OD3D_FrameRGBMixin(OD3D_Object):
             self.rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB)
         return self.rgb
 
-
-class OD3D_FrameDepthMixin(OD3D_Object):
+class OD3D_FrameDepthMixin(OD3D_DepthTypeMixin):
     depth = None
 
     @property
     def fpath_depth(self):
-        return self.path_raw.joinpath(self.meta.rfpath_depth)
+        if self.depth_type == OD3D_FRAME_DEPTH_TYPES.META:
+            return self.path_raw.joinpath(self.meta.rfpath_depth)
+        elif self.depth_type == OD3D_FRAME_DEPTH_TYPES.MESH:
+            return self.path_preprocess.joinpath("depth", f"{self.depth_type}", self.mesh_type_unique, f"{self.name_unique}.png")
+        else:
+            return self.path_preprocess.joinpath("depth", f"{self.depth_type}", f"{self.name_unique}.png")
+
+    def write_depth(self, value: torch.Tensor):
+        write_depth_image(value, path=self.fpath_depth)
+        self.depth = value
+
+    def read_depth(self):
+        if self.depth_type == OD3D_FRAME_DEPTH_TYPES.META:
+            depth = torchvision.io.read_image(str(self.fpath_depth), mode=torchvision.io.ImageReadMode.UNCHANGED)
+        elif self.depth_type == OD3D_FRAME_DEPTH_TYPES.MESH:
+            depth = read_depth_image(self.fpath_depth)
+        else:
+            raise NotImplementedError
+        return depth
 
     def get_depth(self):
         if self.depth is None:
-            self.depth = torchvision.io.read_image(str(self.fpath_depth), mode=torchvision.io.ImageReadMode.UNCHANGED)
+            self.depth = self.read_depth()
         return self.depth
 
 
-class OD3D_FrameDepthMaskMixin(OD3D_Object):
+class OD3D_FrameDepthMaskMixin(OD3D_DepthTypeMixin):
     depth_mask = None
+
+    @property
+    def fpath_depth_mask(self):
+        if self.depth_type == OD3D_FRAME_DEPTH_TYPES.META:
+            return self.path_raw.joinpath(self.meta.rfpath_depth_mask)
+        elif self.depth_type == OD3D_FRAME_DEPTH_TYPES.MESH:
+            return self.path_preprocess.joinpath("depth_mask", f"{self.depth_type}", self.mesh_type_unique, f"{self.name_unique}.png")
+        else:
+            return self.path_preprocess.joinpath("depth_mask", f"{self.depth_type}", f"{self.name_unique}.png")
+
+    def read_depth_mask(self):
+        depth_mask = read_image(self.fpath_depth_mask)
+        return depth_mask
 
     def get_depth_mask(self):
         if self.depth_mask is None:
-            self.depth_mask = read_image(self.path_raw.joinpath(self.meta.rfpath_depth_mask))
+            self.depth_mask = self.read_depth_mask()
         return self.depth_mask
+
+    def write_depth_mask(self, value: torch.Tensor):
+        write_mask_image(value, path=self.fpath_depth_mask)
+        self.depth_mask = value
 
 @dataclass
 class OD3D_FrameSequenceMixin(OD3D_Object):

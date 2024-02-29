@@ -1,0 +1,6 @@
+defaults:
+  - co3d_no_zsp_5s_labeled_ref
+
+name: co3d_no_zsp_5s_labeled_ref_cuboid
+
+mesh_type: 'cuboid500' # 'cuboid500' 'convex500', 'voxel500' 'poisson500', 'alpha500', 'cuboid1000'

@@ -45,8 +45,6 @@ class Mesh:
         self.feats = feats
         self.device = verts.device
 
-
-
     @staticmethod
     def convert_to_textureVertex(textures_uv: PT3DTexturesUV, meshes: PT3DMeshes) -> PT3DTexturesVertex:
         # note: this is a workaround, since the model textures_uv contains multiple values per vertex, but textures_vertex only one
@@ -920,7 +918,8 @@ class Meshes(torch.nn.Module):
             faces_per_pixel=1,
             bin_size=None,
             max_faces_per_bin=None,
-            perspective_correct=self.pt3d_raster_perspective_correct
+            perspective_correct=self.pt3d_raster_perspective_correct,
+            cull_backfaces=True
         )
 
         rasterizer = MeshRasterizer(
