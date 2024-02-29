@@ -1192,6 +1192,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                         dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
                     else:
                         logger.warning(f'Unknown reduce type {reduce_type}.')
+                seq1_feats.clear()
+                seq2_feats.clear()
             else:
                 if reduce_type.startswith('negdot'):
                     dist_verts_seq1_seq2 = -torch.einsum('nf,kf->nk', seq1_feats.to(device=device), seq2_feats.to(device=device))
