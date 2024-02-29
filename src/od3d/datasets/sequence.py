@@ -1085,7 +1085,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                 embed_type, embed_dim, reduce_type = match.groups()
                 if len(embed_dim) > 0:
                     embed_dim = int(embed_dim)
-                print(embed_type, embed_dim, reduce_type)
+                # print(embed_type, embed_dim, reduce_type)
             else:
                 msg = f'could not retrieve embed_type, embed_dim, and reduce type from mesh feats type {dist_verts_mesh_feats_reduce_type}'
                 raise Exception(msg)
@@ -1201,6 +1201,6 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             if not fpath_dist_verts_mesh_feats.parent.exists():
                 fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
             torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
-
+            logger.info(f'save mesh feats dist at {fpath_dist_verts_mesh_feats}')
             del seq1_feats
             del seq2_feats
