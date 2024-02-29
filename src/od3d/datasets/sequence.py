@@ -1069,7 +1069,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         device = get_default_device()
 
         seq1_feats = self.read_mesh_feats(cache=False)
-        seq2_feats = sequence.read_mesh_feats(cache=False)
+        seq2_feats = sequence.read_mesh_feats(cache=False, mesh_type=self.mesh_type, mesh_feats_type=self.mesh_feats_type)
 
         from od3d.cv.cluster.embed import pca
         dist_verts_mesh_feats_reduce_type = self.mesh_feats_dist_reduce_type
