@@ -41,6 +41,8 @@ train:
         config: ${texture_dataset}
         W: 512
         H: 512
+        scale_with_mask: 1.
+        scale_selection: 'shorter' # 'shorter' 'larger' 'separate'
         scale_min: 0.8
         scale_max: 1.2
         center_rel_shift_xy_min:
