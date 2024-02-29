@@ -1048,9 +1048,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_feats_type is None:
             mesh_feats_type = self.mesh_feats_type
 
-        return self.path_preprocess.joinpath("feats_dist", f'{mesh_feats_type}',  f'{mesh_type}',
-                                             f'{self.tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
-                                             self.name_unique, sequence.name_unique, 'mesh_feats_dist.pt')
+        return self.path_preprocess.joinpath("feats_dist", f'{mesh_feats_type}',  f'{mesh_type}', f'{self.pcl_type}',
+                                             f'{self.sfm_type}', self.name_unique, sequence.name_unique, 'mesh_feats_dist.pt')
+
     def read_mesh_feats_dist(self, sequence: OD3D_Sequence, mesh_type=None, mesh_feats_type=None):
         fpath_mesh_feats_dist = self.get_fpath_mesh_feats_dist(sequence, mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
         mesh_feats_dist = torch.load(fpath_mesh_feats_dist)
