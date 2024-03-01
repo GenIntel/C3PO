@@ -4,7 +4,8 @@ import torch
 from od3d.cv.geometry.transform import rot3x3, transf4x4_from_rot3x3, tform4x4, se3_exp_map, transf3d_broadcast
 from od3d.cv.geometry.primitives import Cuboids
 
-def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=False, vertices_max_count=1000, q=0.98):
+def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=False, vertices_max_count=1000, q=0.98,
+                        optimize_steps=100, force_symmetric=True):
     """
     Args:
         pts3d (torch.Tensor): Nx3
@@ -37,10 +38,11 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
     cuboid_pts3d_limits = torch.cat(
         [pts3d.quantile(q=(1.0 - q) / 2., dim=0), pts3d.quantile(q=1.0 - (1.0 - q) / 2., dim=0)], dim=0)
 
-    pts3d_mean = (cuboid_pts3d_limits[3:6] + cuboid_pts3d_limits[0:3]) / 2.
+    if optimize_transl:
+        pts3d_mean = (cuboid_pts3d_limits[3:6] + cuboid_pts3d_limits[0:3]) / 2.
+        tmp_tform6_cuboid[:3] = - pts3d_mean
 
-    tmp_tform6_cuboid[:3] = - pts3d_mean
-    for i in range(100):
+    for i in range(optimize_steps):
         if not optimize_rot:
             tmp_tform6_cuboid.data[3:] = 0.
         if not optimize_transl:
@@ -110,6 +112,10 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
         cuboid_pts3d_limits *= scale
         cuboid_tform4x4_obj[:3] *= scale
         #cuboid_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=cuboid_tform4x4_obj)
+
+    if force_symmetric:
+        cuboid_pts3d_limits = cuboid_pts3d_limits.abs().max(dim=1, keepdim=True).values.expand(1, 2, 3).clone()
+        cuboid_pts3d_limits[:, 0, :] *= -1
 
     logger.info(cuboid_pts3d_limits)
 

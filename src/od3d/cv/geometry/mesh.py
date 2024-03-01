@@ -611,9 +611,9 @@ class Meshes(torch.nn.Module):
 
         return verts2d, mask_verts_vsbl
 
-    def show(self, fpath: Path = None, return_visualization=False, viewpoints_count=1):
+    def show(self, fpath: Path = None, return_visualization=False, viewpoints_count=1, meshes_add_translation=True):
         from od3d.cv.visual.show import show_scene
-        return show_scene(meshes=self, fpath=fpath, return_visualization=return_visualization, viewpoints_count=viewpoints_count, meshes_add_translation=True)
+        return show_scene(meshes=self, fpath=fpath, return_visualization=return_visualization, viewpoints_count=viewpoints_count, meshes_add_translation=meshes_add_translation)
 
     """
     def show(self, pts3d=[], meshes_ids=None):
