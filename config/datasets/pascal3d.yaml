@@ -47,21 +47,21 @@ setup:
   remove_previous: False
 
 extract_meta:
-  enabled: False
+  enabled: True
   override: False
   remove_previous: False
 
 preprocess:
   cuboid:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
   mask:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
   depth:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
 
