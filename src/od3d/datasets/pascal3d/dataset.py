@@ -188,14 +188,14 @@ class Pascal3D(OD3D_Dataset):
     #                          path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
     #                          categories=self.categories)
 
-    # @staticmethod
-    # def get_rpath_meshes():
-    #     return Path("CAD")
-    # @staticmethod
-    # def get_path_meshes(path_raw: Path):
-    #     return path_raw.joinpath(Pascal3D.get_rpath_meshes())
-    #
-    # @property
-    # def path_meshes(self):
-    #     return Pascal3D.get_path_meshes(path_raw=self.path_raw)
+    @staticmethod
+    def get_rpath_meshes():
+        return Path("CAD")
+    @staticmethod
+    def get_path_meshes(path_raw: Path):
+        return path_raw.joinpath(Pascal3D.get_rpath_meshes())
+    
+    @property
+    def path_meshes(self):
+        return Pascal3D.get_path_meshes(path_raw=self.path_raw)
 
