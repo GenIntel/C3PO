@@ -59,9 +59,13 @@ class OD3D_MESH_FEATS_TYPES(str, Enum):
 
 class OD3D_MESH_FEATS_DIST_REDUCE_TYPES(str, Enum):
     AVG = 'avg'
+    NEGDOT_AVG = 'negdot_avg'
     AVG50 = 'avg50'
+    NEGDOT_AVG50 = 'negdot_avg50'
     MIN = 'min'
+    NEGDOT_MIN = 'negdot_min'
     MIN_AVG = 'min_avg'
+    NEGDOT_MIN_AVG = 'negdot_min_avg'
 
 class OD3D_PCL_TYPES(str, Enum):
     META = 'meta'

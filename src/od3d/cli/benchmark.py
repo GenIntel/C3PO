@@ -40,7 +40,7 @@ def get_nested_value(data, key):
             return None  # Key not found
     return value
 
-def get_runs(name_regex='.*', age_in_hours=1000):
+def get_runs(name_regex='.*', timestamp_gt_age_in_hours=1000, timestamp_lt_age_in_hours=0):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config()
 
@@ -51,15 +51,17 @@ def get_runs(name_regex='.*', age_in_hours=1000):
     # Access the API
     api = wandb.Api()
 
-    timestamp_created_gt = (datetime.datetime.now(datetime.timezone.utc) -datetime.timedelta(hours=age_in_hours)).isoformat()
+    timestamp_created_lt = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=timestamp_lt_age_in_hours)).isoformat()
+    timestamp_created_gt = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=timestamp_gt_age_in_hours)).isoformat()
+
     # config.logger.wandb_project_name
     # Fetch all the runs in your project
     runs = api.runs(config.logger.wandb_project_name, filters={
                             "display_name": {"$regex": name_regex},
                             "$and": [{
                                 'created_at': {
-                                    # "$lt": '2022-03-09T10',
-                                    "$gt": timestamp_created_gt
+                                    "$lt": timestamp_created_lt,
+                                    "$gt": timestamp_created_gt,
                                 }
                             }]}
                     )
@@ -87,7 +89,7 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
     #                 )
 
 
-    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
 
     # if name_regex is not None:
     #     #runs_names_regex_matches = [re.match(name_regex, run.name) for run in runs]
@@ -613,7 +615,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 
 def get_failed_runs(name_regex='.*', age_in_hours=1000):
     logging.basicConfig(level=logging.INFO)
-    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
     runs = list(filter(lambda run: run.state =='failed' or run.state=='crashed', runs)) #  or run.state =='running'
     # runs_states = [run.state for run in runs]
     runs_names = [run.name for run in runs]
@@ -623,17 +625,18 @@ def get_failed_runs(name_regex='.*', age_in_hours=1000):
 @app.command()
 def recent(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
                   name_regex: str = typer.Option('.*', '-n', '--name')):
-    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
     # runs_states = [run.state for run in runs]
     for run in runs:
         logger.info(f'{run.name} {run.state}')
 
 @app.command()
-def delete_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
-                  name_regex: str = typer.Option('.*', '-n', '--name')):
+def delete_slurm(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
+                 timestamp_lt_age_in_hours: int = typer.Option(0, '-l', '--lower'),
+                 name_regex: str = typer.Option('.*', '-n', '--name')):
 
     logging.basicConfig(level=logging.INFO)
-    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=timestamp_gt_age_in_hours, timestamp_lt_age_in_hours=timestamp_lt_age_in_hours)
     logger.info(f'deleting following runs: ')
     for run in runs:
         logger.info(run.name)
