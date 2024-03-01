@@ -209,10 +209,10 @@ exit 0
     #subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
 
     if not cfg.platform.shared_home_with_local:
-        run_cmd(f'ssh torque "mkdir -p {remote_tmp_script_fpath_parent}"', logger=logger)
-        run_cmd(f'scp {local_tmp_script_fpath} torque:{remote_tmp_script_fpath}', logger=logger)
-        run_cmd(f'scp {local_tmp_config_fpath} torque:{remote_tmp_config_fpath}', logger=logger)
-    run_cmd(f'ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', logger=logger)
+        run_cmd(f'ssh torque "mkdir -p {remote_tmp_script_fpath_parent}"', logger=None)
+        run_cmd(f'scp {local_tmp_script_fpath} torque:{remote_tmp_script_fpath}', logger=None)
+        run_cmd(f'scp {local_tmp_config_fpath} torque:{remote_tmp_config_fpath}', logger=None)
+    run_cmd(f'ssh torque "cd torque_jobs && qsub {remote_tmp_script_fpath}"', logger=None)
 
 def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
     # 1. save config
@@ -369,10 +369,10 @@ exit 0
         '''
         rsh.write(script_as_string)
     if not cfg.platform.shared_home_with_local:
-        run_cmd(f'ssh slurm "mkdir -p {remote_tmp_script_fpath_parent}"', logger=logger)
-        run_cmd(f'scp {local_tmp_script_fpath} slurm:{remote_tmp_script_fpath}', logger=logger)
-        run_cmd(f'scp {local_tmp_config_fpath} slurm:{remote_tmp_config_fpath}', logger=logger)
-    run_cmd(f'ssh slurm "sbatch {remote_tmp_script_fpath}"', logger=logger)
+        run_cmd(f'ssh slurm "mkdir -p {remote_tmp_script_fpath_parent}"', logger=None)
+        run_cmd(f'scp {local_tmp_script_fpath} slurm:{remote_tmp_script_fpath}', logger=None)
+        run_cmd(f'scp {local_tmp_config_fpath} slurm:{remote_tmp_config_fpath}', logger=None)
+    run_cmd(f'ssh slurm "sbatch {remote_tmp_script_fpath}"', logger=None)
 
     # ws_allocate {cfg.platform.ws_name} 100 -m sommerl@informatik.uni-freiburg.de
     # ws_allocate od3d 100 -m sommerl@informatik.uni-freiburg.de # /work/dlclarge1/sommerl-od3d

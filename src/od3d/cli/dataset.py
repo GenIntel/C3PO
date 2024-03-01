@@ -122,8 +122,7 @@ def rsync_raw(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
 @app.command()
 def rsync_preprocess(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
           platform_source: str = typer.Option('local', '-s', '--source'),
-          platform_target: str = typer.Option('slurm', '-t', '--target'),
-          rsync_meta: bool = typer.Option(False, '-m', '--meta')):
+          platform_target: str = typer.Option('slurm', '-t', '--target')):
     logging.basicConfig(level=logging.INFO)
     config_source = od3d.io.load_hierarchical_config(platform=platform_source, overrides=["+datasets@dataset=" + dataset])
     config_target = od3d.io.load_hierarchical_config(platform=platform_target, overrides=["+datasets@dataset=" + dataset])
@@ -134,14 +133,7 @@ def rsync_preprocess(dataset: str = typer.Option('co3d_only_first', '-d', '--dat
     source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
     target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
 
-
-    subdirs = list([path.name for path in paths_source.iterdir() if path.name not in ['labelstudio', 'meta']])
-    if rsync_meta:
-        subdirs.append('meta')
-
-    logger.info(subdirs)
-    for subdir in subdirs:
-        od3d.io.run_cmd(cmd=f'rsync -avrzP --delete {source_link}{paths_source.joinpath(subdir)} {target_link}{paths_target.joinpath(subdir).parent}', live=True, logger=logger)
+    od3d.io.run_cmd(cmd=f'rsync -avrzP --delete {source_link}{paths_source} {target_link}{paths_target.parent}', live=True, logger=logger)
 
 @app.command()
 def visualize_categories(dataset: str = typer.Option('coco', '-d', '--dataset'),
@@ -237,7 +229,7 @@ def visualize_sequences(dataset: str = typer.Option('pascal3d', '-d', '--dataset
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
     for sequence in dataset.get_sequences():
         sequence.visualize()
-        
+
 @app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
