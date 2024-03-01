@@ -113,6 +113,7 @@ class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
 
     def visualize(self):
         from od3d.cv.visual.show import show_scene
+        logger.info(self.name_unique)
         tform_obj_type = self.tform_obj_type
         cams_tform4x4_world, cams_intr4x4, cams_imgs = self.read_cams(cams_count=20, show_imgs=True, tform_obj_type=tform_obj_type)
         cams_viewpoints = inv_tform4x4(torch.stack(cams_tform4x4_world))[:, :3, 3]
@@ -124,9 +125,12 @@ class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
         if isinstance(mesh_feats_viewpoints, list):
             mesh_feats_viewpoints = torch.cat(mesh_feats_viewpoints, dim=0)
 
+        mesh = self.get_mesh()
+        logger.info(f'mesh has {len(mesh.verts)} vertices and {len(mesh.faces)} faces.')
+
         show_scene(cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs,
                    pts3d_colors=[pts3d_colors], pts3d=[pts3d, mesh_feats_viewpoints, cams_viewpoints],
-                   meshes=[self.get_mesh()])
+                   meshes=[mesh])
 
     def read_cams(self, cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES=None, tform_obj_type= None, cams_count=5,
                   show_imgs=True):
@@ -710,12 +714,12 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             # #### OPTION 3: ALPHA_SHAPE
             pts3d = random_sampling(pts3d, pts3d_max_count=20000)
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=5. / len(pts3d)).mean()
-            alpha = 10 * particle_size
+            alpha = 10. * particle_size
             o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
             logger.info(o3d_obj_mesh)
             o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
             logger.info(o3d_obj_mesh)
-            o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(mesh_vertices_count)
+            o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=mesh_vertices_count)
             logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
 
