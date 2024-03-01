@@ -713,7 +713,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         elif mesh_type == 'alpha':
             # #### OPTION 3: ALPHA_SHAPE
             pts3d = random_sampling(pts3d, pts3d_max_count=20000)
-            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=5. / len(pts3d)).mean()
+            quantile = max(0.01, 3. / len(pts3d))
+            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
             alpha = 10. * particle_size
             o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
             logger.info(o3d_obj_mesh)

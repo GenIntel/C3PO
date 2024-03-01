@@ -10,7 +10,7 @@ defaults:
   - datasets@texture_dataset: dtd
   - platform: local
 
-seed_number: 3
+seed_number: 0
 
 categories:
   - bicycle
@@ -46,6 +46,11 @@ metrics:
   - metricA
   - metricB
 
+mesh_feats_type: 'M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc' # M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm', 'R_min50'
+mesh_type: 'alpha500' # 'alpha500' 'convex500', 'voxel500' 'poisson500', 'alpha500'
+mesh_feats_dist_reduce_type: 'negdot_min_avg' # 'pca32_', 'avg', 'min', 'min_avg'
+
+
 method:
   nemo:
     refine_optimization_steps: 20
@@ -67,19 +72,33 @@ method:
     categories: ${categories}
     aligned_name: # 'alpha500_dinov2b' 'latest_50s_to_5s_sota' # _sota_ref_86_64
 
-mesh_feats_type: 'M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc' # M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm', 'R_min50'
-mesh_type: 'alpha500' # 'alpha500' 'convex500', 'voxel500' 'poisson500', 'alpha500'
-mesh_feats_dist_reduce_type: 'min_avg' # 'pca32_', 'avg', 'min', 'min_avg'
+    preprocess:
+      pcl:
+        enabled: True
+        override: False
+      tform_obj:
+        enabled: True
+        override: False
+      mesh:
+        enabled: True
+        override: True
+      mesh_feats:
+        enabled: True
+        override: True
+      mesh_feats_dist:
+        enabled: True
+        override: True
+
 
 train_datasets:
   src:
-    preprocess: ${preprocess}
+    #preprocess: ${preprocess}
     mesh_type: ${mesh_type}
     mesh_feats_type: ${mesh_feats_type}
     mesh_feats_dist_reduce_type: ${mesh_feats_dist_reduce_type}
     categories: ${categories}
   labeled:
-    preprocess: ${preprocess}
+    #preprocess: ${preprocess}
     mesh_type: ${mesh_type}
     mesh_feats_type: ${mesh_feats_type}
     mesh_feats_dist_reduce_type: ${mesh_feats_dist_reduce_type}
@@ -87,7 +106,7 @@ train_datasets:
 
 val_datasets:
   main:
-    preprocess: ${preprocess}
+    #preprocess: ${preprocess}
     mesh_type: ${mesh_type}
     mesh_feats_type: ${mesh_feats_type}
     mesh_feats_dist_reduce_type: ${mesh_feats_dist_reduce_type}
@@ -95,7 +114,7 @@ val_datasets:
 
 test_datasets:
   co3d:
-    preprocess: ${preprocess}
+    #preprocess: ${preprocess}
     mesh_type: ${mesh_type}
     mesh_feats_type: ${mesh_feats_type}
     mesh_feats_dist_reduce_type: ${mesh_feats_dist_reduce_type}
@@ -104,25 +123,3 @@ test_datasets:
 train: True
 test: True
 
-preprocess:
-  sfm:
-    enabled: False
-    override: False
-  mask:
-    enabled: False
-    override: False
-  pcl:
-    enabled: False
-    override: False
-  tform_obj:
-    enabled: False
-    override: False
-  mesh:
-    enabled: False
-    override: False
-  mesh_feats:
-    enabled: False
-    override: False
-  mesh_feats_dist:
-    enabled: False
-    override: False
