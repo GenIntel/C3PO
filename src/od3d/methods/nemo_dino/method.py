@@ -246,7 +246,7 @@ class NeMo_DINO(NeMo):
         # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
         # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
         loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
-        if self.config.train.bank_feats_update is not 'average':
+        if self.config.train.bank_feats_update != 'average':
             loss.backward()
         logger.info(f'loss {loss.item()}')
         results_batch['noise2d'] = noise2d
