@@ -55,8 +55,8 @@ method:
       val: True
       epochs: 1 # artur: 200  wufei: 800
       dataloader:
-        num_workers: 1
-        batch_size: 1 # artur: 24/32 wufei: 108
+        num_workers: 4
+        batch_size: 16 # artur: 24/32 wufei: 108
         pin_memory: True
       transform:
         class_name: SequentialTransform

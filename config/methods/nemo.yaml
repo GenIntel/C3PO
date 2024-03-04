@@ -54,7 +54,7 @@ train:
       - class_name: RGB_Random
 
   epochs_to_next_test: 1
-  epochs: 5
+  epochs: 1
   val_fraction: 0.01
   batch_accumulate_to_next_step: 2
 
@@ -81,8 +81,8 @@ test:
           - -0.
 
     dataloader:
-        num_workers: 0
-        batch_size: 1
+        num_workers: 4
+        batch_size: 16
         pin_memory: True
 
     visualize:
