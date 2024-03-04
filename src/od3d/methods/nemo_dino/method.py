@@ -230,8 +230,9 @@ class NeMo_DINO(NeMo):
             self.normalize_feats()
         elif self.config.train.bank_feats_update == 'average':
             sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.detach()/self.mesh_update_count)  
+            self.meshes.feats[batch_vts_ids].data =  self.meshes.feats[batch_vts_ids].data * self.mesh_update_count[batch_vts_ids][:, None] + net_feats
             self.mesh_update_count[batch_vts_ids] += 1
-            self.meshes.feats[batch_vts_ids].data += net_feats
+            self.meshes.feats = self.meshes.feats / self.mesh_update_count[:, None]
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
             sim = None
