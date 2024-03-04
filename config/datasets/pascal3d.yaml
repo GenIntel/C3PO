@@ -36,10 +36,10 @@ fpaths_cuboids:
     car: ${..path_cuboids}/car/mesh.ply
     chair: ${..path_cuboids}/chair/mesh.ply
     diningtable: ${..path_cuboids}/diningtable/mesh.ply
-    motorcycle: ${..path_cuboids}/motorbike/mesh.ply
+    motorbike: ${..path_cuboids}/motorbike/mesh.ply
     couch: ${..path_cuboids}/sofa/mesh.ply
     train: ${..path_cuboids}/train/mesh.ply
-    tv: ${..path_cuboids}/tvmonitor/mesh.ply
+    tvmonitor: ${..path_cuboids}/tvmonitor/mesh.ply
 
 setup:
   enabled: False
