@@ -28,7 +28,7 @@ path_meshes: ${platform.path_datasets_raw}/${.rpath_meshes}
 
 path_cuboids: '${.path_preprocess}/mesh/cuboid250'
 fpaths_cuboids:
-    airplane: ${..path_cuboids}/aeroplane/mesh.ply
+    aeroplane: ${..path_cuboids}/aeroplane/mesh.ply
     bicycle: ${..path_cuboids}/bicycle/mesh.ply
     boat: ${..path_cuboids}/boat/mesh.ply
     bottle: ${..path_cuboids}/bottle/mesh.ply
@@ -87,15 +87,15 @@ image_sizes:
 #       n04037443_4668
 
 categories:
-#    - aeroplane
-#    - bicycle
-#    - boat
-#    - bottle
-#    - bus
-#     - car
-#    - chair
-#    - diningtable
-#    - motorbike
-#    - sofa
-#    - train
-#    - tvmonitor
+   - aeroplane
+   - bicycle
+   - boat
+   - bottle
+   - bus
+   - car
+   - chair
+   - diningtable
+   - motorbike
+   - sofa
+   - train
+   - tvmonitor
