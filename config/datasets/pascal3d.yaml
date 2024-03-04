@@ -35,7 +35,7 @@ fpaths_cuboids:
     bus: ${..path_cuboids}/bus/mesh.ply
     car: ${..path_cuboids}/car/mesh.ply
     chair: ${..path_cuboids}/chair/mesh.ply
-    dining_table: ${..path_cuboids}/diningtable/mesh.ply
+    diningtable: ${..path_cuboids}/diningtable/mesh.ply
     motorcycle: ${..path_cuboids}/motorbike/mesh.ply
     couch: ${..path_cuboids}/sofa/mesh.ply
     train: ${..path_cuboids}/train/mesh.ply
