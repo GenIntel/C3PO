@@ -61,7 +61,7 @@ preprocess:
     override: False
   mesh_feats:
     enabled: True
-    override: True
+    override: False
   mesh_feats_dist:
     enabled: False
     override: False
