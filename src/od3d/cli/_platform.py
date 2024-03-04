@@ -42,6 +42,7 @@ def rsync_configs(platform: str = typer.Option(None, '-p', '--platform')):
                              f'platform/{platform}.yaml']
     config_rfpaths_target = ['credentials/default.yaml',
                              f'platform/local.yaml']
+
     for config_rfpath_source, config_rfpath_target in zip(config_rfpaths_source, config_rfpaths_target):
         path_source = Path(config_source.platform.path_od3d).joinpath('config', config_rfpath_source)
         path_target = Path(config_target.platform.path_od3d).joinpath('config', config_rfpath_target)
@@ -52,7 +53,7 @@ def run(platform: str = typer.Option(None, '-p', '--platform'),
         cmd: str = typer.Option('od3d debug hello-world', '-c', '--command')):
     logging.basicConfig(level=logging.INFO)
 
-    run_cmd(f'od3d platform rsync-configs -p {platform}', logger=logger)
+    # run_cmd(f'od3d platform rsync-configs -p {platform}', logger=logger)
 
     config = od3d.io.load_hierarchical_config(platform=platform)
 

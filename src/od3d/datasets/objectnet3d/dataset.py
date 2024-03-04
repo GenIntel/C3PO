@@ -183,7 +183,11 @@ class ObjectNet3D(OD3D_Dataset):
                 cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
                                                  optimize_rot=False,
                                                  optimize_transl=False,
-                                                 vertices_max_count=mesh_vertices_count)
+                                                 vertices_max_count=mesh_vertices_count,
+                                                 optimize_steps=1)
+
+                # show:
+                #Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
 
                 obj_mesh = cuboids.get_mesh_with_id(0)
                 obj_mesh.write_to_file(fpath=fpath_mesh_out)
