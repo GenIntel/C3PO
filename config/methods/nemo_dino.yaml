@@ -1,8 +1,9 @@
 defaults:
   - nemo
-  - model@model: dinov2_frozen_no_head
+  - override methods/model@method.nemo.model: dinov2_frozen_no_head
 
 class_name: NeMo_DINO
 
 train:
   bank_feats_update: moving_average
+s
