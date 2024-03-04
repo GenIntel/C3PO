@@ -101,7 +101,10 @@ class DINOv2(OD3D_Backbone):
 
         x = x.reshape(-1, H_out_expected +offset_H , W_out_expected+offset_W, self.out_dims[-1]).permute(0, 3, 1, 2)
         x = x[:, :, :H_out, :W_out]
-        x_layers = [x]
+        if self.config.head :
+            x_layers = [x]
+        else:
+            x_layers = x
         return x_layers
     
     @staticmethod
