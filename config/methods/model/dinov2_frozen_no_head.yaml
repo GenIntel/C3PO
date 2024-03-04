@@ -7,5 +7,6 @@ backbone:
   weights: 'default' # 'default' 'none'
   freeze: True
   layers_returned: [ 0 ] # always start with deepest layer...
+  head: False
 
 head:
