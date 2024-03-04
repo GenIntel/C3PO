@@ -6,4 +6,3 @@ class_name: NeMo_DINO
 
 train:
   bank_feats_update: moving_average
-s
