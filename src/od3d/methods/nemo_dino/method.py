@@ -58,6 +58,7 @@ class NeMo_DINO(NeMo):
         logging_dir,
     ):
         super().__init__(config=config, logging_dir=logging_dir)
+        self.mesh_update_count = torch.ones(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],), device=self.device)
 
     @staticmethod
     def count_parameters(model):
@@ -227,6 +228,10 @@ class NeMo_DINO(NeMo):
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
             bank_feats[batch_vts_ids_unique].data = bank_feats_new
             self.normalize_feats()
+        elif self.config.train.bank_feats_update == 'average':
+            sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.detach()/self.mesh_update_count)  
+            self.mesh_update_count[batch_vts_ids] += 1
+            self.meshes.feats[batch_vts_ids].data += net_feats
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
             sim = None
@@ -240,8 +245,8 @@ class NeMo_DINO(NeMo):
         # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
         # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
         loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
-
-        loss.backward()
+        if self.config.train.bank_feats_update is not 'average':
+            loss.backward()
         logger.info(f'loss {loss.item()}')
         results_batch['noise2d'] = noise2d
         results_batch['loss'] = loss[None,]
