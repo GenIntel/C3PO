@@ -15,7 +15,7 @@ metrics:
   - metricB
 
 
-train: False
+train: True
 test: True
 
 train_datasets:
