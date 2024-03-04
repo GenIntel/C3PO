@@ -1,6 +1,6 @@
 defaults:
   - nemo
-  - override methods/model@method.nemo.model: dinov2_frozen_no_head
+ 
 
 class_name: NeMo_DINO
 
