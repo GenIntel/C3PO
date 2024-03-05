@@ -229,10 +229,17 @@ class NeMo_DINO(NeMo):
             bank_feats[batch_vts_ids_unique].data = bank_feats_new
             self.normalize_feats()
         elif self.config.train.bank_feats_update == 'average':
+            batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.detach())  
-            self.meshes.feats[batch_vts_ids].data =  self.meshes.feats[batch_vts_ids].data * self.mesh_update_count[batch_vts_ids][:, None] + net_feats
-            self.mesh_update_count[batch_vts_ids] += 1
-            self.meshes.feats = self.meshes.feats / self.mesh_update_count[:, None]
+            bank_feats_new =  bank_feats[batch_vts_ids].data * self.mesh_update_count[batch_vts_ids][:, None] + net_feats
+            bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
+            self.mesh_update_count[batch_vts_ids_unique] += 1
+            bank_feats[batch_vts_ids_unique].data = bank_feats_new
+            bank_feats = bank_feats/ self.mesh_update_count[:, None]
+            self.meshes.feats.data = bank_feats[:self.meshes.feats.shape[0]]
+            self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0]:]
+            self.normalize_feats()
+
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
             sim = None
