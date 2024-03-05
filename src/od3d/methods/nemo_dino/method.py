@@ -213,10 +213,6 @@ class NeMo_DINO(NeMo):
         # batch_vts_ids = self.meshes.get_feats_ids_stacked(batch.category_id.tolist())
 
         bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
-        
-        logger.info(f'bank_feats.shape {bank_feats.shape}')
-        logger.info(f'net_feats.shape {net_feats.shape}')
-        logger.info(f'batch_vts_ids.shape {batch_vts_ids.shape}')
         if self.config.train.bank_feats_update == 'loss_gradient':
             sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats)
         elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
