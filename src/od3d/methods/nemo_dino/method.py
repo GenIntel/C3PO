@@ -235,7 +235,7 @@ class NeMo_DINO(NeMo):
             bank_feats = bank_feats/ self.mesh_update_count[:, None]
             self.meshes.feats.data = bank_feats[:self.meshes.feats.shape[0]]
             self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0]:]
-            #self.normalize_feats()
+            self.normalize_feats()
 
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
