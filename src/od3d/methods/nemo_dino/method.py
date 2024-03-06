@@ -59,6 +59,8 @@ class NeMo_DINO(NeMo):
     ):
         super().__init__(config=config, logging_dir=logging_dir)
         self.mesh_update_count = torch.ones(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],), device=self.device)
+        # hard coded for now
+        self.mesh_feats_total = torch.zeros(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],384), device=self.device)
 
     @staticmethod
     def count_parameters(model):
@@ -106,6 +108,7 @@ class NeMo_DINO(NeMo):
         
 
     def train_epoch(self, dataset: OD3D_Dataset) -> OD3D_Results:
+        # change to train mode later
         self.net.eval()
         self.meshes.del_pre_rendered()
         self.meshes.feats.requires_grad = True
@@ -228,11 +231,11 @@ class NeMo_DINO(NeMo):
         elif self.config.train.bank_feats_update == 'average':
             batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.detach())  
-            bank_feats_new =  bank_feats[batch_vts_ids].data * self.mesh_update_count[batch_vts_ids][:, None] + net_feats
+            bank_feats_new =  self.mesh_feats_total[batch_vts_ids]  + net_feats
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
             self.mesh_update_count[batch_vts_ids_unique] += 1
-            bank_feats[batch_vts_ids_unique].data = bank_feats_new
-            bank_feats = bank_feats/ self.mesh_update_count[:, None]
+            self.mesh_feats_total[batch_vts_ids_unique] = bank_feats_new
+            bank_feats = self.mesh_feats_total/ self.mesh_update_count[:, None]
             self.meshes.feats.data = bank_feats[:self.meshes.feats.shape[0]]
             self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0]:]
             self.normalize_feats()
