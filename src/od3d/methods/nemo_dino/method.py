@@ -123,15 +123,16 @@ class NeMo_DINO(NeMo):
             results_batch: OD3D_Results = self.train_batch(batch=batch)
             results_batch.log_with_prefix('train')
             accumulate_steps += 1
-            if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
-                self.optim.step()
-                self.normalize_feats()
-                self.optim.zero_grad()
+            if (accumulate_steps % self.config.train.batch_accumulate_to_next_step) == 0:
+                if (self.config.train.bank_feats_update != 'average'):
+                    self.optim.step()
+                    self.normalize_feats()
+                    self.optim.zero_grad()
 
             results_epoch += results_batch
-
-        self.scheduler.step()
-        self.optim.zero_grad()
+        if (self.config.train.bank_feats_update != 'average'):
+            self.scheduler.step()
+            self.optim.zero_grad()
 
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
                                                  config_visualize=self.config.train.visualize)
@@ -234,7 +235,7 @@ class NeMo_DINO(NeMo):
             bank_feats = bank_feats/ self.mesh_update_count[:, None]
             self.meshes.feats.data = bank_feats[:self.meshes.feats.shape[0]]
             self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0]:]
-            self.normalize_feats()
+            #self.normalize_feats()
 
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
