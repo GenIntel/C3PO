@@ -111,25 +111,8 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
 pip install wheel
-pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu117
-FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 pip install -e {cfg.platform.path_od3d}
-# pip uninstall open3d -y
-# rm -rf Open3D
-# git clone --recursive --branch v0.17.0 https://github.com/isl-org/Open3D.git
-# cd Open3D/
-# mkdir build && cd build
-# cmake -DBUILD_FILAMENT_FROM_SOURCE=ON \
-#       -DBUILD_SHARED_LIBS=ON \
-#       -DENABLE_HEADLESS_RENDERING=ON \
-#       -DBUILD_GUI=OFF \
-#       -DBUILD_WEBRTC=OFF \
-#       -DUSE_SYSTEM_GLEW=OFF \
-#       -DUSE_SYSTEM_GLFW=OFF ..
-# make -j$(nproc)
-# make install
-# make install-pip-package
-# cd ../..
             '''
         else:
             install_od3d_cmds_str = ''
@@ -149,14 +132,14 @@ pip install -e {cfg.platform.path_od3d}
 echo $(curl google.com)
 
 CUDA_HOME={cfg.platform.path_cuda}
-PATH=${{CUDA_HOME}}/bin:${{PATH}}
-LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
-export PATH
-export LD_LIBRARY_PATH
+# PATH=${{CUDA_HOME}}/bin:${{PATH}}
+# LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
+# export PATH
+# export LD_LIBRARY_PATH
 export CUDA_HOME
 
-echo PATH=${{PATH}}
-echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
+# echo PATH=${{PATH}}
+# echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
 echo CUDA_HOME=${{CUDA_HOME}}
 
 # Setup Repository
@@ -272,25 +255,8 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
 pip install wheel
-pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu117
-FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 pip install -e {cfg.platform.path_od3d}
-# pip uninstall open3d -y
-# rm -rf Open3D
-# git clone --recursive --branch v0.17.0 https://github.com/isl-org/Open3D.git
-# cd Open3D/
-# mkdir build && cd build
-# cmake -DBUILD_FILAMENT_FROM_SOURCE=ON \
-#       -DBUILD_SHARED_LIBS=ON \
-#       -DENABLE_HEADLESS_RENDERING=ON \
-#       -DBUILD_GUI=OFF \
-#       -DBUILD_WEBRTC=OFF \
-#       -DUSE_SYSTEM_GLEW=OFF \
-#       -DUSE_SYSTEM_GLFW=OFF ..
-# make -j$(nproc)
-# make install
-# make install-pip-package
-# cd ../..
             '''
         else:
             install_od3d_cmds_str = ''
@@ -310,10 +276,10 @@ pip install -e {cfg.platform.path_od3d}
 {partition_cfg_str}
 
 CUDA_HOME={cfg.platform.path_cuda}
-PATH=${{CUDA_HOME}}/bin:${{PATH}}
-LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
-export PATH
-export LD_LIBRARY_PATH
+# PATH=${{CUDA_HOME}}/bin:${{PATH}}
+# LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
+# export PATH
+# export LD_LIBRARY_PATH
 export CUDA_HOME
 
 HTTP_PROXY=http://tfsquid.informatik.intra.uni-freiburg.de:8080
@@ -321,8 +287,8 @@ HTTPS_PROXY=http://tfsquid.informatik.intra.uni-freiburg.de:8080
 export HTTP_PROXY
 export HTTPS_PROXY
 
-echo PATH=${{PATH}}
-echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
+# echo PATH=${{PATH}}
+# echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
 echo CUDA_HOME=${{CUDA_HOME}}
 
 # Setup Repository
