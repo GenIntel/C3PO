@@ -152,8 +152,9 @@ class NeMo_Align3D(OD3D_Method):
         if self.config.preprocess.mesh_feats_dist.enabled:
             for src_sequence in src_sequences:
                 for ref_sequence in ref_sequences:
-                    src_sequence.preprocess_mesh_feats_dist(sequence=ref_sequence, override=self.config.preprocess.mesh_feats_dist.override)
-                    ref_sequence.preprocess_mesh_feats_dist(sequence=src_sequence, override=self.config.preprocess.mesh_feats_dist.override)
+                    if src_sequence.category == ref_sequence.category:
+                        src_sequence.preprocess_mesh_feats_dist(sequence=ref_sequence, override=self.config.preprocess.mesh_feats_dist.override)
+                        ref_sequence.preprocess_mesh_feats_dist(sequence=src_sequence, override=self.config.preprocess.mesh_feats_dist.override)
 
         # tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
         logger.info('loading mesh feats...')
