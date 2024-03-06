@@ -1,7 +1,7 @@
 defaults:
   - optimizer@train.optimizer: adam
   - scheduler@train.scheduler: multistep
-  - model@model: dinov2_frozen_no_head
+  - model@model: dinov2_frozen_base
 
 name: nemo
 class_name: NeMo
