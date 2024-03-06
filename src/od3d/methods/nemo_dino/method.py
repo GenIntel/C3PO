@@ -109,7 +109,7 @@ class NeMo_DINO(NeMo):
 
     def train_epoch(self, dataset: OD3D_Dataset) -> OD3D_Results:
         # change to train mode later
-        self.net.eval()
+        self.net.train()
         self.meshes.del_pre_rendered()
         self.meshes.feats.requires_grad = True
         dataset.transform = self.transform_train
