@@ -6,6 +6,7 @@ backbone:
   stride: 7
   weights: 'default' # 'default' 'none'
   freeze: True
+  head: True
   layers_returned: [ 0 ] # always start with deepest layer...
 head:
   class_name: ResNet
