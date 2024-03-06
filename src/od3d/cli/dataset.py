@@ -2,7 +2,7 @@ import logging
 import shutil
 
 logger = logging.getLogger(__name__)
-import torch.utils.data
+
 import typer
 import od3d.io
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES
@@ -233,6 +233,7 @@ def visualize_sequences(dataset: str = typer.Option('pascal3d', '-d', '--dataset
 @app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
+    import torch.utils.data
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset, "+datasets@dtd=dtd"])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)

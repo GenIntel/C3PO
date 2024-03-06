@@ -5,56 +5,58 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "OD3D"
 authors = [
-    {name = "Bla Bla", email = "blaa@bla.bla"},
+    {name = "Leonhard Sommer", email = "sommerl@cs.uni-freiburg.de"},
 ]
 description = "Neural Mesh, Render and Compare"
 readme = "README.rst"
 requires-python = ">=3.7"
 keywords = ["3D", "detection", "object"]
 license = {text = "BSD-3-Clause"}
+dynamic = ["version"]
+
 dependencies = [
     "wheel",
     "pytest",
-    "pandas",
     "wget",
-    "opencv-python",
-    "torch",
-    "torchvision",
-    "torchaudio",
     "fvcore",
     "iopath",
-    "pytorch3d@git+https://github.com/facebookresearch/pytorch3d@stable",
-    "nvdiffrast@git+https://github.com/NVlabs/nvdiffrast",
-    "diff-gaussian-rasterization@git+https://github.com/limpbot/diff-gaussian-rasterization.git",
-    "segment-anything@git+https://github.com/facebookresearch/segment-anything.git",
-    "visdom",
     "tqdm",
     "requests",
     "h5py",
-    "co3d@git+https://github.com/facebookresearch/co3d",
     "wandb",
     "cython",
-    "pycocotools",
-    "bboxtools",
-    "scipy",
-    "scikit-image",
     "gdown",
     "typer",
     "hydra-core",
-    "plotly",
-    "scikit-learn",
     "pygit2",
-    "seaborn",
-    "open3d==0.17.0",
     "numba",
-    "pycuda",
+    "pandas",
+    "seaborn",
+    "plotly",
+    "pycocotools",
+    "bboxtools",
+    "scipy",
+    "scikit-learn",
+    "scikit-image",
+    "seaborn",
+    "opencv-python",
     "timm",
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "visdom",
+    "open3d==0.17.0",
     "tvb-gdist",
+    "pycuda",
+    "co3d@git+https://github.com/facebookresearch/co3d",
+    "segment-anything@git+https://github.com/facebookresearch/segment-anything.git",
+    "pytorch3d@git+https://github.com/facebookresearch/pytorch3d@stable"
 ]
 
-dynamic = ["version"]
+[project.optional-dependencies]
+od3d-gauss-splat = ["diff-gaussian-rasterization@git+https://github.com/limpbot/diff-gaussian-rasterization.git",]
+od3d-nvdiffrast = ["nvdiffrast@git+https://github.com/NVlabs/nvdiffrast",]
 
-#[project.optional-dependencies]
 
 [project.scripts]
 od3d = "od3d.cli._entry:main"

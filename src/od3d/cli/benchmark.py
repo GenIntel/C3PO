@@ -7,7 +7,6 @@ from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
 from od3d.benchmark.run import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, torque_run_method_or_cmd, slurm_run_method_or_cmd
-from od3d.benchmark.benchmark import get_timestamp_as_string, get_timestamp_from_string
 import json
 app = typer.Typer()
 import subprocess
@@ -20,13 +19,23 @@ from pygit2 import Repository
 
 from tabulate import tabulate
 import re
-from od3d.datasets.meta import OD3D_Meta
 import od3d.io
 
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+
+def get_timestamp_as_string():
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%m-%d_%H-%M-%S")
+    return timestamp
+
+def get_timestamp_from_string(string):
+    now = datetime.datetime.now()
+    year = now.strftime("%Y")
+    timestamp = datetime.datetime.strptime('_'.join(f'{year}-{string}'.split('_')[:2]), "%Y-%m-%d_%H-%M-%S")
+    return timestamp
 
 def get_nested_value(data, key):
     keys = key.split('.')  # Split the string key into a list of keys
@@ -340,6 +349,7 @@ def table_multiple_categories_multiview_incremental():
     my_df.to_csv('output.csv', index=False, header=False)
 
 def save_category_sequence_images_as_one(df: pandas.DataFrame):
+    from od3d.datasets.meta import OD3D_Meta
     # df has to contain 'train_datasets.labeled.dict_nested_frames', 'category', 'sequence_nth'
     config = od3d.io.load_hierarchical_config()
 
@@ -645,7 +655,6 @@ def delete_slurm(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--gr
 def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
                   name_regex: str = typer.Option('.*', '-n', '--name')):
     from pathlib import Path
-    from od3d.benchmark.benchmark import get_timestamp_as_string
 
     logging.basicConfig(level=logging.INFO)
     runs_names = get_failed_runs(age_in_hours=age_in_hours, name_regex=name_regex)
@@ -761,3 +770,4 @@ def stop_slurm(job: str = typer.Option(None, '-j', '--job')):
             slurm_result = subprocess.run(f'ssh slurm "scancel {str(job_id)}"', capture_output=True, shell=True)
             for line in slurm_result.stdout.decode("utf-8").split("\n"):
                 logger.info(line)
+

@@ -2,11 +2,10 @@ import logging
 logger = logging.getLogger(__name__)
 import subprocess
 from omegaconf import DictConfig, OmegaConf
-from od3d.benchmark.benchmark import OD3D_Benchmark
 from od3d.io import run_cmd
-
-
 def bench_single_method_local(config: DictConfig):
+    # note: this is allows benchmarking on other platforms without complete installation locally
+    from od3d.benchmark.benchmark import OD3D_Benchmark
     benchmark = OD3D_Benchmark(config=config)
     benchmark.run()
 
