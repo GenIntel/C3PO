@@ -47,7 +47,7 @@ setup:
   remove_previous: False
 
 extract_meta:
-  enabled: True
+  enabled: False
   override: False
   remove_previous: False
 
