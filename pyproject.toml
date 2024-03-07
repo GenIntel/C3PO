@@ -50,7 +50,8 @@ dependencies = [
     "pycuda",
     "co3d@git+https://github.com/facebookresearch/co3d",
     "segment-anything@git+https://github.com/facebookresearch/segment-anything.git",
-    "pytorch3d@git+https://github.com/facebookresearch/pytorch3d@stable"
+    "pytorch3d@git+https://github.com/facebookresearch/pytorch3d@stable",
+    "CGAL",
 ]
 
 [project.optional-dependencies]
