@@ -914,12 +914,12 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         model.eval()
         transform = SequentialTransform([OD3D_Transform.create_by_name(transform_name), model.transform])
 
-        dataloader = self.get_dataloader(batch_size=10, shuffle=False, transform=transform)
+        dataloader = self.get_dataloader(batch_size=6, shuffle=False, transform=transform) # 11 GB
 
         down_sample_rate = model.downsample_rate
         feature_dim = model.out_dim
-
-        meshes = Meshes.load_from_meshes([self.get_mesh()], device=device)
+        mesh = self.get_mesh()
+        meshes = Meshes.load_from_meshes([mesh], device=device)
 
         ## DEBUG BLOCK START
         #cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(CAM_TFORM_OBJ_SOURCES.PCL)
