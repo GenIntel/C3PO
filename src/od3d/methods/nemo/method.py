@@ -173,7 +173,8 @@ class NeMo(OD3D_Method):
         logger.info(f'total params: {self.total_params}, trainable params: {self.trainable_params}')
         if self.config.train.bank_feats_update == "moving_average":
             if self.trainable_params == 0:
-                self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list())     
+                logger.info('no trainable params, no optimizer needed.')
+                self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()))    
                 self.back_propagate = False
             else:
                 self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()))
