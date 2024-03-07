@@ -20,6 +20,33 @@ def classes():
     print(list(OD3D_Dataset.subclasses.keys()))
 
 @app.command()
+def visualize_category_sequences(
+        dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+    dataset.visualize_category_sequences()
+
+@app.command()
+def visualize_category_meshes(
+        dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+    dataset.visualize_category_meshes()
+
+@app.command()
+def save_sequences_as_video(
+        dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+    dataset.save_sequences_as_video()
+
+@app.command()
 def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
               dataset_ban: str = typer.Option(None, '-b', '--dataset-ban'),
               platform: str = typer.Option('local', '-p', '--platform')):

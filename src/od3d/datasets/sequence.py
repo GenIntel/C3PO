@@ -724,6 +724,50 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
 
+        elif mesh_type == 'alphawrap':
+            # #### OPTION 3: ALPHA_SHAPE
+            pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
+            quantile = max(0.01, 3. / len(pts3d))
+            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
+            alpha = 1. * particle_size
+            offset = alpha
+            from CGAL.CGAL_Kernel import Point_3
+            from CGAL.CGAL_Alpha_wrap_3 import alpha_wrap_3
+            from CGAL.CGAL_Polyhedron_3 import Polyhedron_3
+            cgal_pts3d = [ Point_3(pt[0].item(), pt[1].item(), pt[2].item()) for pt in pts3d ]
+            cgal_poly = Polyhedron_3()
+            alpha_wrap_3(cgal_pts3d, alpha.item(), offset.item(), cgal_poly)
+            cgal_poly.points()
+
+            vertices = []
+            for v in cgal_poly.vertices():
+                vertices.append([v.point().x(), v.point().y(), v.point().z()])
+            vertices = torch.Tensor(vertices)
+
+            # Get faces
+            faces = []
+            for f in cgal_poly.facets():
+                edge = f.facet_begin()
+                edge = edge.next()
+                face_vertices = []
+                for i in range(f.facet_degree()):
+                    vertex = torch.Tensor([edge.vertex().point().x(), edge.vertex().point().y(), edge.vertex().point().z()])
+                    vertex_id = torch.where((vertices == vertex).all(dim=-1))[0]
+                    face_vertices.append(vertex_id)
+                    edge = edge.next()
+                # Assuming each facet is a triangle
+                assert len(face_vertices) == 3
+                faces.append(face_vertices)
+            faces = torch.Tensor(faces).long()
+            vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+            faces = open3d.utility.Vector3iVector(faces.detach().cpu().numpy())
+            o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
+            logger.info(o3d_obj_mesh)
+            o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(mesh_vertices_count)
+            logger.info(o3d_obj_mesh)
+            obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+
+
         elif mesh_type == 'voxel':
             #### OPTION 4: VOXEL GRID
             from pytorch3d.ops.marching_cubes import marching_cubes

@@ -5,6 +5,7 @@ from typing import List
 import torch
 import cv2
 import os
+from tqdm import tqdm
 
 from od3d.cv.visual.blend import rgb_to_range01
 def save_gif(imgs: List[torch.Tensor], fpath: Path):
@@ -15,11 +16,11 @@ def save_gif(imgs: List[torch.Tensor], fpath: Path):
     imgs[0].save(fpath, format="GIF", append_images=imgs,
                  save_all=True, duration=100, loop=0)
 
-def save_video(imgs: List[torch.Tensor], fpath: Path):
+def save_video(imgs: List[torch.Tensor], fpath: Path, fps=10):
     height, width = imgs[0].shape[1:]
     fpath.parent.mkdir(parents=True, exist_ok=True)
-    vwriter = create_vwriter(fpath=fpath, width=width, height=height)
-    for img in imgs:
+    vwriter = create_vwriter(fpath=fpath, width=width, height=height, fps=fps)
+    for img in tqdm(imgs):
         vwriter.write(tensor_to_cv_img(img))
 
 def create_vwriter(fpath, width, height, fps=10):

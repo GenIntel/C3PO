@@ -203,9 +203,11 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             if meshes.rgb is not None:
                 vertex_colors = open3d.utility.Vector3dVector(meshes.get_rgb_with_mesh_id(mesh_id=i).detach().cpu().numpy())
                 mesh_o3d.vertex_colors = vertex_colors
-
             else:
-                vertex_colors = None
+                vertex_colors = open3d.utility.Vector3dVector(meshes.get_verts_ncds_with_mesh_id(mesh_id=i).detach().cpu().numpy())
+                mesh_o3d.vertex_colors = vertex_colors
+
+                #vertex_colors = None
             #vertex_colors
             #vertex_normals
 
@@ -365,7 +367,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             vis.poll_events()
             vis.update_renderer()
             # view_control = vis.get_view_control()
-            if return_visualization:
+            if return_visualization or fpath is not None:
                 imgs = []
 
                 from od3d.cv.geometry.transform import get_cam_tform4x4_obj_for_viewpoints_count, transf3d, tform4x4_broadcast
@@ -403,11 +405,23 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 if viewpoints_count == 1:
                     imgs = imgs[0]
                 else:
-                    imgs = torch.stack(imgs, dim=0)
-                return imgs
-            else:
-                vis.capture_screen_image(str(fpath))
+                    if viewpoints_count > 4:
+                        viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
+                        imgs_placeholder = torch.zeros(size=(viewpoints_count_sqrt ** 2, 3, H, W), dtype=dtype, device=device)
+                        imgs_placeholder[:viewpoints_count] = torch.stack(imgs, dim=0)
+                        imgs = imgs_placeholder
+                        imgs = imgs.reshape(viewpoints_count_sqrt, viewpoints_count_sqrt, 3, H, W)
+                    else:
+                        imgs = torch.stack(imgs, dim=0)
 
+                if fpath is not None:
+                    show_imgs(rgbs=imgs, fpath=fpath)
+                vis.update_renderer()
+                vis.destroy_window()
+                if return_visualization:
+                    return imgs
+                else:
+                    return 0
             vis.update_renderer()
             vis.destroy_window()
         else:
@@ -594,16 +608,16 @@ def show_pcl(verts, cam_tform4x4_obj: torch.Tensor=None, cam_intr4x4: torch.Tens
     input('bla')
 
 
-def imgs_to_img(rgbs, pad=1, pad_value=0):
+def imgs_to_img(rgbs, pad=1, pad_value=0, H_out=None, W_out=None):
     # rgb: K x 3 x H x W / GH x GW x 3 x H x W
 
-    # , masks_mulitply=None, masks_overlay=None
-    #rgbs = (rgbs * 1.0).clamp(0, 1)
-    #if masks is not None:
-    #    rgb = (rgbs + masks) / 2.0
+    if isinstance(rgbs, List) and isinstance(rgbs[0], List):
+        H_in, W_in = rgbs[0][0].shape[-2:]
+        rgbs = torch.stack([torch.stack([resize(rgb, H_out=H_in, W_out=W_in) for rgb in rgbs_i], dim=0) for rgbs_i in rgbs], dim=0)
+    elif isinstance(rgbs, List):
+        H_in, W_in = rgbs[0].shape[-2:]
+        rgbs = torch.stack([resize(rgb, H_out=H_in, W_out=W_in) for rgb in rgbs], dim=0)
 
-    if isinstance(rgbs, List):
-        rgbs = torch.stack(rgbs, dim=0)
 
     rgbs = torch.nn.functional.pad(rgbs, (pad, pad, pad, pad), "constant", pad_value)
     #margin = 2
@@ -640,6 +654,8 @@ def imgs_to_img(rgbs, pad=1, pad_value=0):
 
     rgb = rgb.reshape(C, GH * H, GW * W)
 
+    if H_out is not None and W_out is not None:
+        rgb = resize(rgb, H_out=H_out, W_out=W_out)
     return rgb
 
 
