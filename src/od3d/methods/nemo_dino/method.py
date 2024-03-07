@@ -62,26 +62,13 @@ class NeMo_DINO(NeMo):
         # hard coded for now
         self.mesh_feats_total = torch.zeros(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],384), device=self.device)
 
-    @staticmethod
-    def count_parameters(model):
-        total_params = 0
-        for name, parameter in model.named_parameters():
-            if not parameter.requires_grad:
-                continue
-            params = parameter.numel()
-            logger.info(f"{name}: {params}")
-            total_params += params
-        logger.info(f"Total Trainable Params: {total_params}")
 
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
         self.save_checkpoint(path_checkpoint=self.path_checkpoint)
-        logger.info(f"net parameters")
-        self.count_parameters(self.net)
-        logger.info(f"mesh parameters")
-        self.count_parameters(self.meshes)
+
         if 'main' in datasets_val.keys():
             dataset_train_sub = datasets_train['labeled']
         else:
@@ -126,23 +113,22 @@ class NeMo_DINO(NeMo):
             results_batch: OD3D_Results = self.train_batch(batch=batch)
             results_batch.log_with_prefix('train')
             accumulate_steps += 1
-            if (accumulate_steps % self.config.train.batch_accumulate_to_next_step) == 0:
-                if (self.config.train.bank_feats_update != 'average'):
-                    self.optim.step()
-                    self.normalize_feats()
-                    self.optim.zero_grad()
+            if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
+                self.optim.step()
+                self.normalize_feats()
+                self.optim.zero_grad()
 
             results_epoch += results_batch
-        if (self.config.train.bank_feats_update != 'average'):
-            self.scheduler.step()
-            self.optim.zero_grad()
+
+        self.scheduler.step()
+        self.optim.zero_grad()
 
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
                                                  config_visualize=self.config.train.visualize)
         results_epoch = results_epoch.mean()
         results_epoch += results_visual
         return results_epoch
-    
+
 
     def train_batch(self, batch) -> OD3D_Results:
         results_batch = OD3D_Results()
@@ -235,9 +221,7 @@ class NeMo_DINO(NeMo):
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
             self.mesh_update_count[batch_vts_ids_unique] += 1
             self.mesh_feats_total[batch_vts_ids_unique] = bank_feats_new
-            bank_feats = self.mesh_feats_total/ self.mesh_update_count[:, None]
-            self.meshes.feats.data = bank_feats[:self.meshes.feats.shape[0]]
-            self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0]:]
+            bank_feats.data = self.mesh_feats_total/ self.mesh_update_count[:, None]
             self.normalize_feats()
 
         else:
@@ -253,7 +237,7 @@ class NeMo_DINO(NeMo):
         # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
         # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
         loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
-        if self.config.train.bank_feats_update != 'average':
+        if self.back_propagate:
             loss.backward()
         logger.info(f'loss {loss.item()}')
         results_batch['noise2d'] = noise2d
