@@ -106,7 +106,10 @@ class NeMo(OD3D_Method):
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
-        self.trainable_params = sum(p.numel() for p in self.net.parameters() if p.requires_grad)
+        self.trainable_params = sum(p.numel() for p in self.net.parameters() if p.requires_grad) 
+        if self.config.model.head is not None:
+            self.total_params += sum(p.numel() for p in self.net.head.parameters())
+            self.trainable_params += sum(p.numel() for p in self.net.head.parameters() if p.requires_grad)
         # self.path_shapenemo = Path(config.path_shapenemo)
         # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
         self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
