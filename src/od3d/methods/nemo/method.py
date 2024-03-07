@@ -106,6 +106,7 @@ class NeMo(OD3D_Method):
 
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
+        self.trainable_params = sum(p.numel() for p in self.net.parameters() if p.requires_grad)
         # self.path_shapenemo = Path(config.path_shapenemo)
         # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
         self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
@@ -168,8 +169,16 @@ class NeMo(OD3D_Method):
         self.net.cuda()
         self.meshes.cuda()
         self.net.eval()
-
-        self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats])
+        self.back_propagate = True
+        if self.config.train.bank_feats_update == "moving_average":
+            if self.trainable_params == 0:
+                self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list())     
+                self.back_propagate = False
+            else:
+                self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()))
+        else:
+            self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats])
+        
         self.scheduler = od3d.io.get_obj_from_config(self.optim, config=self.config.train.scheduler)
 
         # load checkpoint
@@ -185,6 +194,7 @@ class NeMo(OD3D_Method):
         # note: somehow vertices are stored in wrong order of classes (starting with last class tvmonitor until first class aeroplane
         # self.verts_feats = self.verts_feats.reshape(len(self.meshes), self.verts_count_max, -1).flip(dims=(0,)).reshape(len(self.meshes) * self.verts_count_max, -1)
         self.down_sample_rate = self.net.downsample_rate
+
 
     def normalize_feats(self):
         if self.config.bank_feats_normalize:
@@ -471,8 +481,8 @@ class NeMo(OD3D_Method):
         # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
         # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
         loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
-
-        loss.backward()
+        if self.back_propagate:
+            loss.backward()
         logger.info(f'loss {loss.item()}')
         results_batch['noise2d'] = noise2d
         results_batch['loss'] = loss[None,]
