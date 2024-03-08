@@ -52,14 +52,14 @@ class ZSP(OD3D_Method):
         self.transform_test = OD3D_Transform.subclasses[config.test.transform.class_name].create_from_config(config=config.test.transform)
         self.target_data = None
 
-    def get_cuda_visible_devices(self):
-        import os
-        cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES', '')
-        if len(cuda_visible_devices) == 0:
-            cuda_visible_devices = '0' # 'all'
+    def get_gpu_cfg_str(self):
+        if torch.cuda.is_available():
+            gpus_uuids = torch.cuda._raw_device_uuid_nvml()
+            gpu_uuid = gpus_uuids[torch.cuda.current_device()]
+            gpu_cfg_str = f'--gpus {gpu_uuid}' # 'all'
         else:
-            cuda_visible_devices = f'{cuda_visible_devices}'
-        return cuda_visible_devices
+            gpu_cfg_str = ''
+        return gpu_cfg_str
 
     def is_port_in_use(self, port):
         import socket
@@ -81,7 +81,7 @@ class ZSP(OD3D_Method):
         while self.is_port_in_use(self.docker_port):
             self.docker_port += 1
 
-        od3d.io.run_cmd(f'od3d docker zsp-run --port {self.docker_port} --gpus {self.get_cuda_visible_devices()} &', logger=logger, background=True)
+        od3d.io.run_cmd(f'od3d docker zsp-run --port {self.docker_port} {self.get_gpu_cfg_str()} &', logger=logger, background=True)
         from time import sleep
         sleep(10)
 
