@@ -480,10 +480,11 @@ class NeMo_Align3D(OD3D_Method):
                     ref_meshes_cloned.append(ref_mesh_cloned)
 
                 viewpoints_count = 2
-                # category_meshes = Meshes.load_from_meshes(src_meshes_cloned, device=self.device)
-                category_meshes = Meshes.load_from_meshes(ref_meshes_cloned, device=self.device)
+                category_meshes = Meshes.load_from_meshes(src_meshes_cloned, device=self.device)
+                #category_meshes = Meshes.load_from_meshes(ref_meshes_cloned, device=self.device)
 
                 imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
+
                 from od3d.cv.visual.draw import add_boolean_table
                 if self.config.gt_cam_tform_obj_source is not None:
                     accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim,  accurate_sim_geo, accurate_sim_appear], dim=0)
