@@ -60,27 +60,30 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
         walltime = cfg.platform.walltime
 
         if gpu_count > 0:
-            if gpu_mem_in_gb > 16:
-                if gpu_mem_in_gb > 24:
-                    logger.warning(f'GPU memory of {gpu_mem_in_gb} GB is too large. Using 24 GB instead.')
-                #gpu_mem_cfg_str = ':nvidiaMin24GB'
-                gpu_mem_cfg_str = ':nvidiaRTX3090'
-            elif gpu_mem_in_gb > 12:
-                # gpu_mem_cfg_str = ':nvidiaMin16GB'
-                gpu_mem_cfg_str = ':nvidiaP100'
-            elif gpu_mem_in_gb > 11:
-                # gpu_mem_cfg_str = ':nvidiaMin12GB'
-                gpu_mem_cfg_str = ':nvidiaP100'
-            elif gpu_mem_in_gb > 10:
-                # gpu_mem_cfg_str = ':nvidiaMin11GB'
-                gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
-            elif gpu_mem_in_gb > 6:
-                # gpu_mem_cfg_str = ':nvidiaMin8GB'
-                gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
-            elif gpu_mem_in_gb > 0:
-                gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+            if gpu_mem_in_gb is None:
+                gpu_mem_cfg_str = ''
             else:
-                gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+                if gpu_mem_in_gb > 16:
+                    if gpu_mem_in_gb > 24:
+                        logger.warning(f'GPU memory of {gpu_mem_in_gb} GB is too large. Using 24 GB instead.')
+                    #gpu_mem_cfg_str = ':nvidiaMin24GB'
+                    gpu_mem_cfg_str = ':nvidiaRTX3090'
+                elif gpu_mem_in_gb > 12:
+                    # gpu_mem_cfg_str = ':nvidiaMin16GB'
+                    gpu_mem_cfg_str = ':nvidiaP100'
+                elif gpu_mem_in_gb > 11:
+                    # gpu_mem_cfg_str = ':nvidiaMin12GB'
+                    gpu_mem_cfg_str = ':nvidiaP100'
+                elif gpu_mem_in_gb > 10:
+                    # gpu_mem_cfg_str = ':nvidiaMin11GB'
+                    gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+                elif gpu_mem_in_gb > 6:
+                    # gpu_mem_cfg_str = ':nvidiaMin8GB'
+                    gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+                elif gpu_mem_in_gb > 0:
+                    gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+                else:
+                    gpu_mem_cfg_str = 'nvidiaRTX2080Ti'
         else:
             gpu_mem_cfg_str = ""
 
@@ -105,6 +108,11 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
         else:
             pull_od3d_submodules_cmds_str = ''
 
+        if cfg.platform.hostlist is not None:
+            hostlist_cfg_str = f'hostlist={cfg.platform.hostlist},'
+        else:
+            hostlist_cfg_str = ''
+
         if cfg.platform.install_od3d:
             # headless open3d rendering infeasible due to requirements
             # https://github.com/isl-org/Open3D/blob/main/util/install_deps_ubuntu.sh (most likely clang version)
@@ -120,7 +128,7 @@ pip install -e {cfg.platform.path_od3d}
         script_as_string = f'''#!/bin/bash
 #PBS -N {job_name}
 #PBS -S /bin/bash
-#PBS -l nodes={node_count}:ppn={cpu_count}{gpu_cfg_str}{gpu_mem_cfg_str}{cuda_cfg_str},mem={ram},walltime={walltime}
+#PBS -l {hostlist_cfg_str}nodes={node_count}:ppn={cpu_count}{gpu_cfg_str}{gpu_mem_cfg_str}{cuda_cfg_str},mem={ram},walltime={walltime}
 #PBS -q {cfg.platform.queue}
 #PBS -m a
 #PBS -M {cfg.platform.username}@informatik.uni-freiburg.de
