@@ -56,7 +56,7 @@ class ZSP(OD3D_Method):
         import os
         cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES', '')
         if len(cuda_visible_devices) == 0:
-            cuda_visible_devices = 'all'
+            cuda_visible_devices = '0' # 'all'
         else:
             cuda_visible_devices = f'{cuda_visible_devices}'
         return cuda_visible_devices

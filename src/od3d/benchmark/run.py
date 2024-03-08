@@ -30,7 +30,7 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
     if cmd is None:
         job_name = cfg.run_name
     else:
-        job_name = cmd.replace(' ', '_').replace('/', '_').replace('-', '_')
+        job_name = cmd.replace(' ', '_').replace('/', '_').replace('-', '_').replace('$', '_').replace('(', '_').replace(')', '_')
 
     from pathlib import Path
     local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
@@ -212,7 +212,7 @@ def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
     if cmd is None:
         job_name = cfg.run_name
     else:
-        job_name = cmd.replace(' ', '_').replace('/', '_').replace('-', '_')
+        job_name = cmd.replace(' ', '_').replace('/', '_').replace('-', '_').replace('$', '_').replace('(', '_').replace(')', '_')
 
     from pathlib import Path
     local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
