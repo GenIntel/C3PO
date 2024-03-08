@@ -81,7 +81,7 @@ class OD3D_Dataset(Dataset):
 
         if categories is not None:
             if self.map_od3d_categories is not None:
-                self.categories = [self.map_od3d_categories[category] if category not in self.all_categories else category for category in categories]
+                self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
             else:
                 self.categories = categories
         else:
@@ -447,7 +447,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         self.frames_count_max_per_sequence = frames_count_max_per_sequence
         if categories is not None:
             if self.map_od3d_categories is not None:
-                self.categories = [self.map_od3d_categories[category] if category not in self.all_categories else category for category in categories]
+                self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
             else:
                 self.categories = categories
         else:
