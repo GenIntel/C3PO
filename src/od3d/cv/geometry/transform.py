@@ -216,7 +216,7 @@ def get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=1, dist: float=1.
         viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
         range_max = 1. - 1./ viewpoints_count_sqrt
         azim = torch.linspace(-math.pi * range_max, math.pi * range_max, viewpoints_count_sqrt)
-        elev = torch.linspace(-math.pi / 2. * range_max, math.pi / 2. * range_max, viewpoints_count_sqrt)
+        elev = torch.linspace(+math.pi / 2. * range_max, -math.pi / 2. * range_max, viewpoints_count_sqrt)
         azim = azim.repeat(viewpoints_count_sqrt)[:viewpoints_count]
         elev = elev.repeat_interleave(viewpoints_count_sqrt)[:viewpoints_count]
         theta = torch.zeros_like(elev)
