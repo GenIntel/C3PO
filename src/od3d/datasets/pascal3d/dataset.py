@@ -131,6 +131,8 @@ class Pascal3D(OD3D_Dataset):
         logger.info('preprocess cuboid...')
 
         for category in self.categories:
+            if category not in self.all_categories:
+                continue
             mesh_types = [OD3D_MESH_TYPES.CUBOID250, OD3D_MESH_TYPES.CUBOID500, OD3D_MESH_TYPES.CUBOID1000]
             for mesh_type in mesh_types:
                 fpath_mesh_out = self.path_preprocess.joinpath(Pascal3DFrame.get_rfpath_pp_categorical_mesh(mesh_type=mesh_type, category=category))
