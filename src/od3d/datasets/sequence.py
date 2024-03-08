@@ -715,14 +715,69 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
             quantile = max(0.01, 3. / len(pts3d))
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
-            alpha = 10. * particle_size
-            o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
-            logger.info(o3d_obj_mesh)
-            o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
-            logger.info(o3d_obj_mesh)
-            o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=mesh_vertices_count)
-            logger.info(o3d_obj_mesh)
+            vertices_count = mesh_vertices_count + 1
+            alpha = particle_size / 2.
+            while vertices_count > mesh_vertices_count:
+                alpha = alpha * 2
+                o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+                logger.info(o3d_obj_mesh)
+                o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
+                logger.info(o3d_obj_mesh)
+                #o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=mesh_vertices_count)
+                #logger.info(o3d_obj_mesh)
+                obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+                vertices_count = len(o3d_obj_mesh.vertices)
+
+        elif mesh_type == 'alphawrap':
+            # #### OPTION 3: ALPHA_SHAPE
+            pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
+            quantile = max(0.01, 3. / len(pts3d))
+            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
+            vertices_count = mesh_vertices_count + 1
+            alpha = particle_size / 2.
+            offset = particle_size / 10.
+            while vertices_count > mesh_vertices_count:
+                alpha = alpha * 2
+                from CGAL.CGAL_Kernel import Point_3
+                from CGAL.CGAL_Alpha_wrap_3 import alpha_wrap_3
+                from CGAL.CGAL_Polyhedron_3 import Polyhedron_3
+                cgal_pts3d = [ Point_3(pt[0].item(), pt[1].item(), pt[2].item()) for pt in pts3d ]
+                cgal_poly = Polyhedron_3()
+                alpha_wrap_3(cgal_pts3d, alpha.item(), offset.item(), cgal_poly)
+                cgal_poly.points()
+
+                vertices = []
+                for v in cgal_poly.vertices():
+                    vertices.append([v.point().x(), v.point().y(), v.point().z()])
+                vertices = torch.Tensor(vertices)
+
+                # Get faces
+                faces = []
+                for f in cgal_poly.facets():
+                    edge = f.facet_begin()
+                    edge = edge.next()
+                    face_vertices = []
+                    for i in range(f.facet_degree()):
+                        vertex = torch.Tensor([edge.vertex().point().x(), edge.vertex().point().y(), edge.vertex().point().z()])
+                        vertex_id = torch.where((vertices == vertex).all(dim=-1))[0]
+                        face_vertices.append(vertex_id)
+                        edge = edge.next()
+                    # Assuming each facet is a triangle
+                    assert len(face_vertices) == 3
+                    faces.append(face_vertices)
+                faces = torch.Tensor(faces).long()
+                vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+                faces = open3d.utility.Vector3iVector(faces.detach().cpu().numpy())
+
+
+                o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
+                logger.info(o3d_obj_mesh)
+                vertices_count = len(o3d_obj_mesh.vertices)
+
+            #o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(mesh_vertices_count)
+            #logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+
 
         elif mesh_type == 'voxel':
             #### OPTION 4: VOXEL GRID
@@ -914,12 +969,12 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         model.eval()
         transform = SequentialTransform([OD3D_Transform.create_by_name(transform_name), model.transform])
 
-        dataloader = self.get_dataloader(batch_size=10, shuffle=False, transform=transform)
+        dataloader = self.get_dataloader(batch_size=6, shuffle=False, transform=transform) # 11 GB
 
         down_sample_rate = model.downsample_rate
         feature_dim = model.out_dim
-
-        meshes = Meshes.load_from_meshes([self.get_mesh()], device=device)
+        mesh = self.get_mesh()
+        meshes = Meshes.load_from_meshes([mesh], device=device)
 
         ## DEBUG BLOCK START
         #cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(CAM_TFORM_OBJ_SOURCES.PCL)
@@ -965,6 +1020,13 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
             # B x F+N x C
             net_feats = sample_pxl2d_pts(feats2d_net, pxl2d=torch.cat([vts2d, noise2d], dim=1))
+
+            # visualize points sampled
+            # from od3d.cv.visual.show import show_img
+            # from od3d.cv.visual.draw import draw_pixels
+            # img = batch.rgb[0].clone()
+            # img = draw_pixels(img, vts2d[0] * down_sample_rate, colors=meshes.get_verts_ncds_with_mesh_id(mesh_id=0))
+            # show_img(img)
 
             C = net_feats.shape[2]
             # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
@@ -1053,8 +1115,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_feats_type is None:
             mesh_feats_type = self.mesh_feats_type
 
-        return self.path_preprocess.joinpath("feats_dist", f'{mesh_feats_type}',  f'{mesh_type}', f'{self.pcl_type}',
-                                             f'{self.sfm_type}', self.name_unique, sequence.name_unique, 'mesh_feats_dist.pt')
+        return self.path_preprocess.joinpath("feats_dist", f'{self.mesh_feats_dist_reduce_type}', f'{mesh_feats_type}',
+                                             f'{mesh_type}', f'{self.pcl_type}', f'{self.sfm_type}',
+                                             self.name_unique, sequence.name_unique, 'mesh_feats_dist.pt')
 
     def read_mesh_feats_dist(self, sequence: OD3D_Sequence, mesh_type=None, mesh_feats_type=None):
         fpath_mesh_feats_dist = self.get_fpath_mesh_feats_dist(sequence, mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)

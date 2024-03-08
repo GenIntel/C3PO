@@ -1,5 +1,5 @@
 defaults:
-  - co3d_no_zsp_50s
+  - co3d_no_zsp_50s_unlabeled
 
 name: co3d_no_zsp_50s_aligned
 

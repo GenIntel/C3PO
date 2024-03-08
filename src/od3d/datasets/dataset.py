@@ -81,7 +81,7 @@ class OD3D_Dataset(Dataset):
 
         if categories is not None:
             if self.map_od3d_categories is not None:
-                self.categories = [self.map_od3d_categories[category] if category not in self.all_categories else category for category in categories]
+                self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
             else:
                 self.categories = categories
         else:
@@ -447,7 +447,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         self.frames_count_max_per_sequence = frames_count_max_per_sequence
         if categories is not None:
             if self.map_od3d_categories is not None:
-                self.categories = [self.map_od3d_categories[category] if category not in self.all_categories else category for category in categories]
+                self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
             else:
                 self.categories = categories
         else:
@@ -698,3 +698,130 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
             sequences.append(self.get_sequence_by_name_unique(name_unique=sequence_name_unique))
         return sequences
+
+    def save_sequences_as_video(self, H=1080, W=1920, fps=2, fpath_video=None, imgs_count=30):
+
+        if fpath_video is None:
+            fpath_video = Path(f'{self.name}.mp4')
+
+        sequences = self.get_sequences()
+        category_sequences_count = {}
+        category_sequences_count_max = 0
+
+        for category in tqdm(self.categories):
+            category_sequences_count[category] = sum([1 for sequence in sequences if sequence.category == category])
+            if category_sequences_count_max < category_sequences_count[category]:
+                category_sequences_count_max = category_sequences_count[category]
+            category_sequences_count[category] = 0
+
+        H_cell = H // len(self.categories)
+        W_cell = W // category_sequences_count_max
+        tstamp_category_sequence_imgs = torch.zeros(size=(imgs_count, len(self.categories), category_sequences_count_max, 3, H_cell, W_cell))
+
+        from od3d.cv.visual.resize import resize
+        for sequence in tqdm(sequences):
+            cams_tform4x4_world, cams_intr4x4, cams_imgs = sequence.read_cams(cams_count=imgs_count)
+            cams_imgs = resize(torch.stack(cams_imgs, dim=0), H_out=H_cell, W_out=W_cell)
+            tstamp_category_sequence_imgs[:len(cams_imgs), sequence.category_id, category_sequences_count[sequence.category]] = cams_imgs
+            category_sequences_count[sequence.category] += 1
+
+        from od3d.cv.visual.show import imgs_to_img
+        tstamp_category_sequence_imgs = [imgs_to_img(imgs, H_out=H, W_out=W) for imgs in tstamp_category_sequence_imgs]
+
+        from od3d.cv.visual.video import save_video
+        save_video(fpath=fpath_video, imgs=tstamp_category_sequence_imgs, fps=fps)
+
+    def visualize_category_sequences(self, imgs_count=10):
+        sequences = self.get_sequences()
+        from od3d.cv.visual.resize import resize
+        from od3d.cv.visual.show import show_scene, show_imgs
+
+        for category in tqdm(self.categories):
+            category_mesh = None
+            category_cams_imgs = []
+            category_cams_tform4x4_world = []
+            category_cams_intr4x4 = []
+            category_pts3d = None
+            category_pts3d_colors = None
+            category_pts3d_normals = None
+            for sequence in tqdm(sequences):
+                if sequence.category == category:
+                    cams_tform4x4_world, cams_intr4x4, cams_imgs = sequence.read_cams(cams_count=imgs_count)
+
+                    category_cams_imgs += cams_imgs
+                    category_cams_tform4x4_world.append(torch.stack(cams_tform4x4_world, dim=0))
+                    category_cams_intr4x4.append(torch.stack(cams_intr4x4, dim=0))
+                    if category_mesh is None:
+                        category_pts3d, category_pts3d_colors, category_pts3d_normals = sequence.read_pcl()
+                        category_mesh = sequence.read_mesh()
+
+            category_cams_intr4x4 = torch.cat(category_cams_intr4x4, dim=0)
+            category_cams_tform4x4_world = torch.cat(category_cams_tform4x4_world, dim=0)
+            #category_cams_imgs = torch.cat(category_cams_imgs, dim=0)
+            logger.info(f'mesh has {len(category_mesh.verts)} vertices and {len(category_mesh.faces)} faces.')
+            show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
+                       cams_imgs=category_cams_imgs, meshes=[category_mesh], viewpoints_count=9,
+                       fpath=f'{category}.png')
+
+
+            #show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
+            #           cams_imgs=category_cams_imgs, pts3d_colors=[category_pts3d_colors], pts3d=[category_pts3d],
+            #           viewpoints_count=9, fpath=f'{category}.png')
+
+    def visualize_category_meshes(self, imgs_count=10):
+        sequences = self.get_sequences()
+        from od3d.cv.visual.resize import resize
+        from od3d.cv.visual.show import show_scene, show_imgs
+
+        for category in tqdm(self.categories):
+            category_sequence = None
+            category_mesh = None
+            category_sequences_mesh = []
+            category_pts3d = None
+            category_pts3d_colors = None
+            category_pts3d_normals = None
+            category_sequences_pts3d = []
+            category_sequences_pts3d_colors = []
+            category_sequences_pts3d_normals = []
+
+            for sequence in tqdm(sequences):
+                if sequence.category == category:
+                    sequence_mesh = sequence.read_mesh()
+                    sequence_pts3d, sequence_pts3d_colors, sequence_pts3d_normals = sequence.read_pcl()
+
+                    if category_mesh is None:
+                        category_sequence = sequence
+                        category_pts3d = sequence_pts3d
+                        #category_pts3d_colors = sequence_pts3d_colors
+                        #category_pts3d_normals = sequence_pts3d_normals
+                        category_mesh = sequence_mesh
+                        category_mesh.rgb = category_mesh.verts_ncds
+
+                    sequence.preprocess_mesh_feats(override=False)
+                    # logger.info(f'mesh is watertight: {sequence_mesh.to_o3d().is_watertight()}')
+                    category_sequence.preprocess_mesh_feats(override=False)
+                    sequence.preprocess_mesh_feats_dist(category_sequence, override=False)
+                    mesh_feats_dist = sequence.read_mesh_feats_dist(category_sequence)
+
+                    dist_ref_geo_max = torch.cdist(category_mesh.verts[None,], category_mesh.verts[None,]).max().detach()  #
+                    dist_src_geo_max = torch.cdist(sequence_mesh.verts[None,], sequence_mesh.verts[None,]).max().detach()  #
+
+                    argmin_ref_from_src = mesh_feats_dist.argmin(dim=-1)  # N,
+                    argmin_src_from_ref = mesh_feats_dist.argmin(dim=-2)  # R,
+                    src_cyclic_dist = (sequence_mesh.verts - sequence_mesh.verts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1,).detach() / dist_src_geo_max  # N,
+                    ref_cyclic_dist = (category_mesh.verts - category_mesh.verts[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1,).detach() / dist_ref_geo_max  # R,
+
+                    from od3d.cv.select import batched_index_select
+                    src_cyclic_dist[
+                        batched_index_select(input=mesh_feats_dist, index=argmin_ref_from_src[..., None], dim=1).isinf()[:,
+                        0]] = torch.inf
+                    ref_cyclic_dist[
+                        batched_index_select(input=mesh_feats_dist.T, index=argmin_src_from_ref[..., None], dim=1).isinf()[
+                        :, 0]] = torch.inf
+
+                    cyclic_weight_temp = 0.5
+                    cycle_weight = torch.exp(-((src_cyclic_dist / cyclic_weight_temp)**2))
+
+                    sequence_mesh.rgb = category_mesh.verts_ncds[argmin_ref_from_src] * (src_cyclic_dist != torch.inf).float()[:, None]
+                    sequence_mesh.rgb *= cycle_weight[:, None]
+                    show_scene(meshes=[sequence_mesh], viewpoints_count=9, fpath=f'{category}_{sequence.name}.png')

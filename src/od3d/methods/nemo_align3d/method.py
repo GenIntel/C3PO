@@ -152,8 +152,9 @@ class NeMo_Align3D(OD3D_Method):
         if self.config.preprocess.mesh_feats_dist.enabled:
             for src_sequence in src_sequences:
                 for ref_sequence in ref_sequences:
-                    src_sequence.preprocess_mesh_feats_dist(sequence=ref_sequence, override=self.config.preprocess.mesh_feats_dist.override)
-                    ref_sequence.preprocess_mesh_feats_dist(sequence=src_sequence, override=self.config.preprocess.mesh_feats_dist.override)
+                    if src_sequence.category == ref_sequence.category:
+                        src_sequence.preprocess_mesh_feats_dist(sequence=ref_sequence, override=self.config.preprocess.mesh_feats_dist.override)
+                        ref_sequence.preprocess_mesh_feats_dist(sequence=src_sequence, override=self.config.preprocess.mesh_feats_dist.override)
 
         # tform4x4(inv_tform4x4(src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.CO3D)), src_frame.get_cam_tform4x4_obj(cam_tform_obj_source=CAM_TFORM_OBJ_SOURCES.DROID_SLAM))
         logger.info('loading mesh feats...')
@@ -171,8 +172,8 @@ class NeMo_Align3D(OD3D_Method):
         ref_instances_count_per_category = [(ref_map_seq_to_cat == c).sum().item() for c in range(categories_count)]
 
         logger.info('loading meshes...')
-        src_meshes = Meshes.load_from_meshes([seq.get_mesh() for seq in src_sequences], device=self.device)
-        ref_meshes = Meshes.load_from_meshes([seq.get_mesh() for seq in ref_sequences], device=self.device)
+        src_meshes = Meshes.load_from_meshes([seq.read_mesh() for seq in src_sequences], device=self.device)
+        ref_meshes = Meshes.load_from_meshes([seq.read_mesh() for seq in ref_sequences], device=self.device)
 
         src_instances_count = len(src_meshes)
         ref_instances_count = len(ref_meshes)
@@ -466,7 +467,7 @@ class NeMo_Align3D(OD3D_Method):
                     #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                     #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
 
-                    src_pts3d, src_pts3d_colors, src_pts3d_normals = src_sequences[src_instance_id].get_pcl(clone=True)
+                    src_pts3d, src_pts3d_colors, src_pts3d_normals = src_sequences[src_instance_id].read_pcl()
                     src_pts3d = src_pts3d.to(device=self.device, dtype=dtype)
                     src_pts3d_colors = src_pts3d_colors.to(device=self.device, dtype=dtype)
                     src_pts3d_normals = src_pts3d_normals.to(device=self.device, dtype=dtype)
@@ -479,10 +480,11 @@ class NeMo_Align3D(OD3D_Method):
                     ref_meshes_cloned.append(ref_mesh_cloned)
 
                 viewpoints_count = 2
-                # category_meshes = Meshes.load_from_meshes(src_meshes_cloned, device=self.device)
-                category_meshes = Meshes.load_from_meshes(ref_meshes_cloned, device=self.device)
+                category_meshes = Meshes.load_from_meshes(src_meshes_cloned, device=self.device)
+                #category_meshes = Meshes.load_from_meshes(ref_meshes_cloned, device=self.device)
 
                 imgs = show_scene(pts3d=pts3d, pts3d_colors=pts3d_colors, return_visualization=True, viewpoints_count=viewpoints_count, meshes=category_meshes, device=self.device, meshes_add_translation=True, pts3d_add_translation=True)
+
                 from od3d.cv.visual.draw import add_boolean_table
                 if self.config.gt_cam_tform_obj_source is not None:
                     accurate_table = torch.stack([accurate_pi6, accurate_pi18, accurate_sim,  accurate_sim_geo, accurate_sim_appear], dim=0)

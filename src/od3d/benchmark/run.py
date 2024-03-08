@@ -2,11 +2,10 @@ import logging
 logger = logging.getLogger(__name__)
 import subprocess
 from omegaconf import DictConfig, OmegaConf
-from od3d.benchmark.benchmark import OD3D_Benchmark
 from od3d.io import run_cmd
-
-
 def bench_single_method_local(config: DictConfig):
+    # note: this is allows benchmarking on other platforms without complete installation locally
+    from od3d.benchmark.benchmark import OD3D_Benchmark
     benchmark = OD3D_Benchmark(config=config)
     benchmark.run()
 
@@ -31,7 +30,7 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
     if cmd is None:
         job_name = cfg.run_name
     else:
-        job_name = cmd.replace(' ', '_')
+        job_name = cmd.replace(' ', '_').replace('/', '_').replace('-', '_').replace('$', '_').replace('(', '_').replace(')', '_')
 
     from pathlib import Path
     local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
@@ -61,27 +60,30 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
         walltime = cfg.platform.walltime
 
         if gpu_count > 0:
-            if gpu_mem_in_gb > 16:
-                if gpu_mem_in_gb > 24:
-                    logger.warning(f'GPU memory of {gpu_mem_in_gb} GB is too large. Using 24 GB instead.')
-                #gpu_mem_cfg_str = ':nvidiaMin24GB'
-                gpu_mem_cfg_str = ':nvidiaRTX3090'
-            elif gpu_mem_in_gb > 12:
-                # gpu_mem_cfg_str = ':nvidiaMin16GB'
-                gpu_mem_cfg_str = ':nvidiaP100'
-            elif gpu_mem_in_gb > 11:
-                # gpu_mem_cfg_str = ':nvidiaMin12GB'
-                gpu_mem_cfg_str = ':nvidiaP100'
-            elif gpu_mem_in_gb > 10:
-                # gpu_mem_cfg_str = ':nvidiaMin11GB'
-                gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
-            elif gpu_mem_in_gb > 6:
-                # gpu_mem_cfg_str = ':nvidiaMin8GB'
-                gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
-            elif gpu_mem_in_gb > 0:
-                gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+            if gpu_mem_in_gb is None:
+                gpu_mem_cfg_str = ''
             else:
-                gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+                if gpu_mem_in_gb > 16:
+                    if gpu_mem_in_gb > 24:
+                        logger.warning(f'GPU memory of {gpu_mem_in_gb} GB is too large. Using 24 GB instead.')
+                    #gpu_mem_cfg_str = ':nvidiaMin24GB'
+                    gpu_mem_cfg_str = ':nvidiaRTX3090'
+                elif gpu_mem_in_gb > 12:
+                    # gpu_mem_cfg_str = ':nvidiaMin16GB'
+                    gpu_mem_cfg_str = ':nvidiaP100'
+                elif gpu_mem_in_gb > 11:
+                    # gpu_mem_cfg_str = ':nvidiaMin12GB'
+                    gpu_mem_cfg_str = ':nvidiaP100'
+                elif gpu_mem_in_gb > 10:
+                    # gpu_mem_cfg_str = ':nvidiaMin11GB'
+                    gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+                elif gpu_mem_in_gb > 6:
+                    # gpu_mem_cfg_str = ':nvidiaMin8GB'
+                    gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+                elif gpu_mem_in_gb > 0:
+                    gpu_mem_cfg_str = ':nvidiaRTX2080Ti'
+                else:
+                    gpu_mem_cfg_str = 'nvidiaRTX2080Ti'
         else:
             gpu_mem_cfg_str = ""
 
@@ -106,31 +108,19 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
         else:
             pull_od3d_submodules_cmds_str = ''
 
+        if cfg.platform.hostlist is not None:
+            hostlist_cfg_str = f'hostlist={cfg.platform.hostlist},'
+        else:
+            hostlist_cfg_str = ''
+
         if cfg.platform.install_od3d:
             # headless open3d rendering infeasible due to requirements
             # https://github.com/isl-org/Open3D/blob/main/util/install_deps_ubuntu.sh (most likely clang version)
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
 pip install wheel
-pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu117
-FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 pip install -e {cfg.platform.path_od3d}
-# pip uninstall open3d -y
-# rm -rf Open3D
-# git clone --recursive --branch v0.17.0 https://github.com/isl-org/Open3D.git
-# cd Open3D/
-# mkdir build && cd build
-# cmake -DBUILD_FILAMENT_FROM_SOURCE=ON \
-#       -DBUILD_SHARED_LIBS=ON \
-#       -DENABLE_HEADLESS_RENDERING=ON \
-#       -DBUILD_GUI=OFF \
-#       -DBUILD_WEBRTC=OFF \
-#       -DUSE_SYSTEM_GLEW=OFF \
-#       -DUSE_SYSTEM_GLFW=OFF ..
-# make -j$(nproc)
-# make install
-# make install-pip-package
-# cd ../..
             '''
         else:
             install_od3d_cmds_str = ''
@@ -138,7 +128,7 @@ pip install -e {cfg.platform.path_od3d}
         script_as_string = f'''#!/bin/bash
 #PBS -N {job_name}
 #PBS -S /bin/bash
-#PBS -l nodes={node_count}:ppn={cpu_count}{gpu_cfg_str}{gpu_mem_cfg_str}{cuda_cfg_str},mem={ram},walltime={walltime}
+#PBS -l {hostlist_cfg_str}nodes={node_count}:ppn={cpu_count}{gpu_cfg_str}{gpu_mem_cfg_str}{cuda_cfg_str},mem={ram},walltime={walltime}
 #PBS -q {cfg.platform.queue}
 #PBS -m a
 #PBS -M {cfg.platform.username}@informatik.uni-freiburg.de
@@ -150,14 +140,14 @@ pip install -e {cfg.platform.path_od3d}
 echo $(curl google.com)
 
 CUDA_HOME={cfg.platform.path_cuda}
-PATH=${{CUDA_HOME}}/bin:${{PATH}}
-LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
-export PATH
-export LD_LIBRARY_PATH
+# PATH=${{CUDA_HOME}}/bin:${{PATH}}
+# LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
+# export PATH
+# export LD_LIBRARY_PATH
 export CUDA_HOME
 
-echo PATH=${{PATH}}
-echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
+# echo PATH=${{PATH}}
+# echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
 echo CUDA_HOME=${{CUDA_HOME}}
 
 # Setup Repository
@@ -222,7 +212,7 @@ def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
     if cmd is None:
         job_name = cfg.run_name
     else:
-        job_name = cmd.replace(' ', '_')
+        job_name = cmd.replace(' ', '_').replace('/', '_').replace('-', '_').replace('$', '_').replace('(', '_').replace(')', '_')
 
     from pathlib import Path
     local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
@@ -273,25 +263,8 @@ git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-r
             install_od3d_cmds_str = f'''
 pip install pip --upgrade
 pip install wheel
-pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu117
-FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 pip install -e {cfg.platform.path_od3d}
-# pip uninstall open3d -y
-# rm -rf Open3D
-# git clone --recursive --branch v0.17.0 https://github.com/isl-org/Open3D.git
-# cd Open3D/
-# mkdir build && cd build
-# cmake -DBUILD_FILAMENT_FROM_SOURCE=ON \
-#       -DBUILD_SHARED_LIBS=ON \
-#       -DENABLE_HEADLESS_RENDERING=ON \
-#       -DBUILD_GUI=OFF \
-#       -DBUILD_WEBRTC=OFF \
-#       -DUSE_SYSTEM_GLEW=OFF \
-#       -DUSE_SYSTEM_GLFW=OFF ..
-# make -j$(nproc)
-# make install
-# make install-pip-package
-# cd ../..
             '''
         else:
             install_od3d_cmds_str = ''
@@ -311,10 +284,10 @@ pip install -e {cfg.platform.path_od3d}
 {partition_cfg_str}
 
 CUDA_HOME={cfg.platform.path_cuda}
-PATH=${{CUDA_HOME}}/bin:${{PATH}}
-LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
-export PATH
-export LD_LIBRARY_PATH
+# PATH=${{CUDA_HOME}}/bin:${{PATH}}
+# LD_LIBRARY_PATH=${{CUDA_HOME}}/lib64:${{LD_LIBRARY_PATH}}
+# export PATH
+# export LD_LIBRARY_PATH
 export CUDA_HOME
 
 HTTP_PROXY=http://tfsquid.informatik.intra.uni-freiburg.de:8080
@@ -322,8 +295,8 @@ HTTPS_PROXY=http://tfsquid.informatik.intra.uni-freiburg.de:8080
 export HTTP_PROXY
 export HTTPS_PROXY
 
-echo PATH=${{PATH}}
-echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
+# echo PATH=${{PATH}}
+# echo LD_LIBRARY_PATH=${{LD_LIBRARY_PATH}}
 echo CUDA_HOME=${{CUDA_HOME}}
 
 # Setup Repository

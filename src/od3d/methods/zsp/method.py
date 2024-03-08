@@ -44,7 +44,7 @@ class ZSP(OD3D_Method):
         super().__init__(config=config, logging_dir=logging_dir)
 
         self.device = 'cpu' #'cuda:0'
-
+        self.docker_port = None
         # init Network
         # self.net = OD3D_Model(config.docker)
 
@@ -52,17 +52,48 @@ class ZSP(OD3D_Method):
         self.transform_test = OD3D_Transform.subclasses[config.test.transform.class_name].create_from_config(config=config.test.transform)
         self.target_data = None
 
-    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
-        import os
-        cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES', '')
-        if len(cuda_visible_devices) == 0:
-            cuda_visible_devices = 'all'
+    def get_gpu_cfg_str(self):
+        if torch.cuda.is_available():
+            gpus_uuids = torch.cuda._raw_device_uuid_nvml()
+            gpu_uuid = gpus_uuids[torch.cuda.current_device()]
+            gpu_cfg_str = f'--gpus {gpu_uuid}' # 'all'
         else:
-            cuda_visible_devices = f'{cuda_visible_devices}'
+            gpu_cfg_str = ''
+        return gpu_cfg_str
 
+    def is_port_in_use(self, port):
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+            except socket.error:
+                return True
+            return False
+
+    def start_docker(self):
+        logger.info(f'current cuda device {torch.cuda.current_device()}')
+
+        if self.docker_port is not None:
+            logger.info('docker already running')
+            return
+
+        self.docker_port = 5000
+        while self.is_port_in_use(self.docker_port):
+            self.docker_port += 1
+
+        od3d.io.run_cmd(f'od3d docker zsp-run --port {self.docker_port} {self.get_gpu_cfg_str()} &', logger=logger, background=True)
+        from time import sleep
+        sleep(10)
+
+    def stop_docker(self):
+        od3d.io.run_cmd(f'od3d docker zsp-stop --port {self.docker_port}', logger=logger, background=True)
+        self.docker_port = None
+
+    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
         torch.cuda.empty_cache()
 
-        od3d.io.run_cmd(f'od3d docker zsp-run --gpus {cuda_visible_devices} &', logger=logger, background=True)
+        self.start_docker()
+
         dataset_src: CO3D = datasets_train['src']
         dataset_ref: CO3D = datasets_train['labeled']
 
@@ -93,6 +124,7 @@ class ZSP(OD3D_Method):
         all_pred_pose_dist_appear = {}
         if self.config.use_train_only_to_collect_target_data:
             self.target_data = {}
+
         for cat_id, category in enumerate(categories):
             if self.config.use_train_only_to_collect_target_data:
                 self.target_data[cat_id] = []
@@ -195,7 +227,7 @@ class ZSP(OD3D_Method):
                 #     logger.warning('ref scale = 1.')
                 #
 
-                ref_cam_source = CAM_TFORM_OBJ_SOURCES.PCL
+                ref_cam_source = None # CAM_TFORM_OBJ_SOURCES.PCL
                 ref_sequence_scale = torch.Tensor([1.])[None,]
 
                 # if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED or \
@@ -210,30 +242,30 @@ class ZSP(OD3D_Method):
                 #     logger.warning('src scale = 1.')
                 # #show_scene(pts3d=[ref_sequences[ref_mesh_id].get_pcl(PCL_SOURCES.CO3D) for ref_mesh_id in ref_mesh_ids], pts3d_add_translation=True)
 
-                src_cam_source = CAM_TFORM_OBJ_SOURCES.PCL
+                src_cam_source = None
                 src_sequences_scales = torch.Tensor([1. for s, src_mesh_id in enumerate(src_mesh_ids)])
 
                 # data = {'img': batch.rgb, 'cam_tform4x4_obj': batch.cam_tform4x4_obj}
                 # src_H, src_W =
-                ref_image = torch.stack([src_frame.rgb for src_frame in src_frames_low_res], dim=0)
+                ref_image = torch.stack([src_frame.get_rgb() for src_frame in src_frames_low_res], dim=0)
                 B = len(ref_image)
                 ref_scalings = src_frames_low_res[0].size.clone()  # torch.stack([src_frame.size], dim=0)
                 ref_scalings[:] = transform_rescale # * src_frame.depth_mask
-                ref_depth_map = torch.stack([ src_frame.depth for s, src_frame in enumerate(src_frames_high_res)], dim=0)
+                ref_depth_map = torch.stack([ src_frame.get_depth() for s, src_frame in enumerate(src_frames_high_res)], dim=0)
                 # ref_depth_map[ref_depth_map > ref_depth_map.flatten(2).mean(dim=-1)[..., None, None] * 2] = 0
 
-                ref_cam_intr = torch.stack([src_frame.cam_intr4x4 for src_frame in src_frames_high_res], dim=0)
+                ref_cam_intr = torch.stack([src_frame.get_cam_intr4x4() for src_frame in src_frames_high_res], dim=0)
                 ref_cam_extr = torch.stack([src_frame.get_cam_tform4x4_obj(src_cam_source) for src_frame in src_frames_high_res], dim=0)
                 ref_cam_extr[:, :3, 3] /= src_sequences_scales[:, None]
 
-                all_target_images = torch.stack([ref_frame.rgb for ref_frame in ref_frames_low_res], dim=0)[None,].repeat(B, 1, 1, 1, 1)
+                all_target_images = torch.stack([ref_frame.get_rgb() for ref_frame in ref_frames_low_res], dim=0)[None,].repeat(B, 1, 1, 1, 1)
                 N_TGT = len(ref_frames_low_res)
                 target_scalings = ref_frames_low_res[
                     0].size.clone()  # torch.stack([ref_frame.size for ref_frame in ref_frames], dim=0)[None,]
                 target_scalings[:] = transform_rescale # * ref_frame.depth_mask
-                target_depth_map = torch.stack([ref_frame.depth for r, ref_frame in enumerate(ref_frames_high_res)], dim=0)[None,].repeat(B, 1, 1, 1, 1)
+                target_depth_map = torch.stack([ref_frame.get_depth() for r, ref_frame in enumerate(ref_frames_high_res)], dim=0)[None,].repeat(B, 1, 1, 1, 1)
                 # target_depth_map[target_depth_map > target_depth_map.flatten(3).mean(dim=-1)[..., None, None] * 2 ] = 0
-                target_cam_intr = torch.stack([ref_frame.cam_intr4x4 for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
+                target_cam_intr = torch.stack([ref_frame.get_cam_intr4x4() for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
                 target_cam_extr = torch.stack([ref_frame.get_cam_tform4x4_obj(ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
                 target_cam_extr[:, :, :3, 3] /= ref_sequence_scale[:, :, None]
 
@@ -270,11 +302,11 @@ class ZSP(OD3D_Method):
                 #     ref_depth_map[:, :, 0, 0] = 0.
 
                 if self.config.use_train_only_to_collect_target_data:
-                    ref_cam_source = ref_frames_high_res[0].cam_tform_obj_source
+                    #ref_cam_source = ref_frames_high_res[0].cam_tform_obj_source
                     #ref_sequence_scale = ref_sequences[ref_mesh_id].get_a_src_scale_b_src(
                     #    ref_cam_source, CAM_TFORM_OBJ_SOURCES.CO3D)
                     target_cam_extr = \
-                    torch.stack([ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[
+                    torch.stack([ref_frame.get_cam_tform4x4_obj() for ref_frame in ref_frames_high_res], dim=0)[
                         None,].repeat(B, 1, 1, 1)
                     target_cam_extr[:, :, :3, 3] /= ref_sequence_scale[:, :, None]
 
@@ -323,44 +355,27 @@ class ZSP(OD3D_Method):
                 bytes_io.seek(0)
 
                 try:
-                    resp = requests.post("http://127.0.0.1:5000/predict", files={"file": bytes_io})
+                    resp = requests.post(f"http://127.0.0.1:{self.docker_port}/predict", files={"file": bytes_io})
                     # all_pred_ref_tform_src = resp.json()['obj2_tform_obj1']
                     pred_ref_tform_srcs = resp.json()['obj2_tform_obj1']
                     pred_ref_tform_srcs = torch.Tensor(pred_ref_tform_srcs).to(device=self.device)
                 except Exception as e:
                     logger.info(f'failed to retrieve predicted `ref_tform_source`')
                     logger.info(e)
-                    pred_ref_tform_srcs = torch.eye(4)[None,].repeat(B, 1, 1).to(device=self.device)
+                    pred_ref_tform_srcs = torch.eye(4)[None,].repeat(B, 1, 1).to(device=self.device) * 0.
 
                 for s, src_mesh_id in enumerate(src_mesh_ids):
                     pred_ref_tform_src = pred_ref_tform_srcs[s]
                     all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
-                    if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
-                        ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(
-                            device=self.device, dtype=pred_ref_tform_src.dtype)
-                    elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                        ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(
-                            device=self.device, dtype=pred_ref_tform_src.dtype)
-                    else:
-                        ref_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
-                        logger.warning('No gt available for reference.')
-
-                    if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
-                        src_labeled_obj_tform_obj = src_sequences[src_mesh_id].labeled_obj_tform_obj.to(
-                            device=self.device, dtype=pred_ref_tform_src.dtype)
-                    elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                        src_labeled_obj_tform_obj = src_sequences[src_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(
-                            device=self.device, dtype=pred_ref_tform_src.dtype)
-                    else:
-                        src_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
-                        logger.warning('No gt available for source.')
-
+                    ref_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
+                    src_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
                     gt_ref_tform_src = tform4x4(inv_tform4x4(ref_labeled_obj_tform_obj), src_labeled_obj_tform_obj)
 
-                    if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                        aligned_cuboid_tform_obj = tform4x4(ref_labeled_obj_tform_obj, pred_ref_tform_src) # droid_slam_labeled_cuboid_tform_droid_slam
-                        src_sequences[src_mesh_id].write_aligned_obj_tform_obj(aligned_name=f'zsp/r{r}', aligned_obj_tform_obj=aligned_cuboid_tform_obj)
+                    if self.config.aligned_name is not None:
+                        aligned_name = f'{self.config.aligned_name}/r{r}'
+                        aligned_cuboid_tform_obj = tform4x4(ref_labeled_obj_tform_obj, pred_ref_tform_src)
+                        src_sequences[src_mesh_id].write_aligned_mesh_and_tform_obj(mesh=ref_sequences[ref_mesh_id].read_mesh(), aligned_obj_tform_obj=aligned_cuboid_tform_obj, aligned_name=aligned_name)
 
                     diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
                     logger.info(diff_rot_angle_rad)
@@ -391,7 +406,11 @@ class ZSP(OD3D_Method):
             results_mean.log()
             logger.info(results_mean)
 
+        self.stop_docker()
+
     def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
+        self.start_docker()
+
         if self.target_data is not None:
             logger.info(f'test dataset {dataset.name}')
 
@@ -422,8 +441,10 @@ class ZSP(OD3D_Method):
             #                                         config_visualize=self.config.test.visualize)
             results_epoch = results_epoch.mean()
             #results_epoch += results_visual
+            self.stop_docker()
             return results_epoch
         else:
+            self.stop_docker()
             return OD3D_Results()
 
     def inference_batch(self, batch: OD3D_Frames):
@@ -489,7 +510,7 @@ class ZSP(OD3D_Method):
             target_cam_intr = []
             target_scalings = self.target_data[0][0]['target_scalings']
             for b in range(B):
-                categorical_target_data = self.target_data[batch.label[b].item()][r]
+                categorical_target_data = self.target_data[batch.category_id[b].item()][r]
                 all_target_images.append(categorical_target_data['all_target_images']) #[None,].repeat(B, 1, 1, 1, 1)
                 target_depth_map.append(categorical_target_data['target_depth_map']) #[None,].repeat(B, 1, 1, 1, 1)
                 target_cam_extr.append(categorical_target_data['target_cam_extr']) #[None,].repeat(B, 1, 1, 1)
@@ -525,7 +546,7 @@ class ZSP(OD3D_Method):
             bytes_io.seek(0)
 
             try:
-                resp = requests.post("http://127.0.0.1:5000/predict", files={"file": bytes_io})
+                resp = requests.post(f"http://127.0.0.1:{self.docker_port}/predict", files={"file": bytes_io})
                 # all_pred_ref_tform_src = resp.json()['obj2_tform_obj1']
                 resp_json = resp.json()
                 pred_ref_tform_srcs = resp_json['obj2_tform_obj1']
@@ -533,7 +554,6 @@ class ZSP(OD3D_Method):
                 all_imgs = torch.Tensor(all_imgs)
 
                 #show_imgs(all_imgs.permute(0, 3, 1, 2))
-
 
                 pred_ref_tform_srcs = torch.Tensor(pred_ref_tform_srcs).to(device=self.device)
             except Exception as e:
@@ -553,13 +573,13 @@ class ZSP(OD3D_Method):
         all_rot_diff_rad = torch.stack(all_rot_diff_rad, dim=0)
         results['rot_diff_rad'] = all_rot_diff_rad.permute(1, 0)
         for b in range(B):
-            prefix = f"{self.categories[batch.label[b].item()]}_"
+            prefix = f"{self.categories[batch.category_id[b].item()]}_"
             if f'{prefix}rot_diff_rad' not in results.keys():
                 results[f'{prefix}rot_diff_rad'] = all_rot_diff_rad.T[b][None,]  # [] torch.stack(all_rot_diff_rad, dim=0).permute(1, 0)
             else:
                 results[f'{prefix}rot_diff_rad'] = torch.cat([results[f'{prefix}rot_diff_rad'], all_rot_diff_rad.T[b][None,]], dim=0)
 
-        results['label_gt'] = batch.label
+        results['label_gt'] = batch.category_id
         #results['label_pred'] = pred_class_ids
         #results['label_names'] = self.config.classes
         #results['sim'] = sim

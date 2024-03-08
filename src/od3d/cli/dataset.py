@@ -2,7 +2,7 @@ import logging
 import shutil
 
 logger = logging.getLogger(__name__)
-import torch.utils.data
+
 import typer
 import od3d.io
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES
@@ -18,6 +18,33 @@ app = typer.Typer()
 @app.command()
 def classes():
     print(list(OD3D_Dataset.subclasses.keys()))
+
+@app.command()
+def visualize_category_sequences(
+        dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+    dataset.visualize_category_sequences()
+
+@app.command()
+def visualize_category_meshes(
+        dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+    dataset.visualize_category_meshes()
+
+@app.command()
+def save_sequences_as_video(
+        dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+    dataset.save_sequences_as_video()
 
 @app.command()
 def sequences(dataset: str = typer.Option('co3d', '-d', '--dataset'),
@@ -233,6 +260,7 @@ def visualize_sequences(dataset: str = typer.Option('pascal3d', '-d', '--dataset
 @app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
               platform: str = typer.Option('local', '-p', '--platform')):
+    import torch.utils.data
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset, "+datasets@dtd=dtd"])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
