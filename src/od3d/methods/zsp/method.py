@@ -335,7 +335,7 @@ class ZSP(OD3D_Method):
                 except Exception as e:
                     logger.info(f'failed to retrieve predicted `ref_tform_source`')
                     logger.info(e)
-                    pred_ref_tform_srcs = torch.zeros(4)[None,].repeat(B, 1, 1).to(device=self.device)
+                    pred_ref_tform_srcs = torch.eye(4)[None,].repeat(B, 1, 1).to(device=self.device) * 0.
 
                 for s, src_mesh_id in enumerate(src_mesh_ids):
                     pred_ref_tform_src = pred_ref_tform_srcs[s]
@@ -534,7 +534,7 @@ class ZSP(OD3D_Method):
             except Exception as e:
                 logger.info(f'failed to retrieve predicted `ref_tform_source`')
                 logger.info(e)
-                pred_ref_tform_srcs = torch.zeros(4)[None,].repeat(B, 1, 1).to(device=self.device) * 0.
+                pred_ref_tform_srcs = torch.eye(4)[None,].repeat(B, 1, 1).to(device=self.device) * 0.
 
             cam_tform4x4_obj = tform4x4(batch.cam_tform4x4_obj, inv_tform4x4(pred_ref_tform_srcs))
 
