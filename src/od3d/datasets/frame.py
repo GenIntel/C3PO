@@ -397,9 +397,12 @@ class OD3D_FrameRGBMixin(OD3D_Object):
     def fpath_rgb(self):
         return self.path_raw.joinpath(self.meta.rfpath_rgb)
 
+    def read_rgb(self):
+        rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB)
+        return rgb
     def get_rgb(self):
         if self.rgb is None:
-            self.rgb = torchvision.io.read_image(str(self.fpath_rgb), mode=torchvision.io.ImageReadMode.RGB)
+            self.rgb = self.read_rgb()
         return self.rgb
 
 class OD3D_FrameDepthMixin(OD3D_DepthTypeMixin):
