@@ -798,6 +798,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                         category_mesh.rgb = category_mesh.verts_ncds
 
                     sequence.preprocess_mesh_feats(override=False)
+                    # logger.info(f'mesh is watertight: {sequence_mesh.to_o3d().is_watertight()}')
                     category_sequence.preprocess_mesh_feats(override=False)
                     sequence.preprocess_mesh_feats_dist(category_sequence, override=False)
                     mesh_feats_dist = sequence.read_mesh_feats_dist(category_sequence)

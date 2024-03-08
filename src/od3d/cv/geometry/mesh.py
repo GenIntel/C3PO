@@ -84,6 +84,13 @@ class Mesh:
         faces = torch.from_numpy(np.asarray(mesh_o3d.triangles)).to(dtype=torch.long, device=device)
         return Mesh(verts=vertices, faces=faces)
     # .TriangleMesh(vertices=vertices, triangles=triangles)
+
+    def to_o3d(self):
+        import open3d
+        vertices = open3d.utility.Vector3dVector(self.verts.detach().cpu().numpy())
+        faces = open3d.utility.Vector3iVector(self.faces.detach().cpu().numpy())
+        o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
+        return o3d_obj_mesh
     @staticmethod
     def create_sphere(center3d: torch.Tensor([0., 0., 0.]), radius: float = 1., device='cpu'):
         return Mesh.from_o3d(o3d.geometry.TriangleMesh.create_sphere(radius=radius).translate(center3d.detach().cpu().numpy()), device=device)
