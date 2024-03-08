@@ -67,6 +67,9 @@ class ZSP(OD3D_Method):
         torch.cuda.empty_cache()
         od3d.io.run_cmd(f'od3d docker zsp-run --gpus {self.get_cuda_visible_devices()} &', logger=logger, background=True)
 
+        from time import sleep
+        sleep(10)
+
         dataset_src: CO3D = datasets_train['src']
         dataset_ref: CO3D = datasets_train['labeled']
 
@@ -384,6 +387,9 @@ class ZSP(OD3D_Method):
     def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
         od3d.io.run_cmd(f'od3d docker zsp-run --gpus {self.get_cuda_visible_devices()} &', logger=logger, background=True)
 
+        from time import sleep
+        sleep(10)
+
         if self.target_data is not None:
             logger.info(f'test dataset {dataset.name}')
 
@@ -528,7 +534,6 @@ class ZSP(OD3D_Method):
                 all_imgs = torch.Tensor(all_imgs)
 
                 #show_imgs(all_imgs.permute(0, 3, 1, 2))
-
 
                 pred_ref_tform_srcs = torch.Tensor(pred_ref_tform_srcs).to(device=self.device)
             except Exception as e:
