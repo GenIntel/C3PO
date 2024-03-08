@@ -200,7 +200,7 @@ class ZSP(OD3D_Method):
                 #     logger.warning('ref scale = 1.')
                 #
 
-                ref_cam_source = CAM_TFORM_OBJ_SOURCES.PCL
+                ref_cam_source = None # CAM_TFORM_OBJ_SOURCES.PCL
                 ref_sequence_scale = torch.Tensor([1.])[None,]
 
                 # if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM_ZSP_LABELED or \
@@ -215,31 +215,31 @@ class ZSP(OD3D_Method):
                 #     logger.warning('src scale = 1.')
                 # #show_scene(pts3d=[ref_sequences[ref_mesh_id].get_pcl(PCL_SOURCES.CO3D) for ref_mesh_id in ref_mesh_ids], pts3d_add_translation=True)
 
-                src_cam_source = CAM_TFORM_OBJ_SOURCES.PCL
+                src_cam_source = None
                 src_sequences_scales = torch.Tensor([1. for s, src_mesh_id in enumerate(src_mesh_ids)])
 
                 # data = {'img': batch.rgb, 'cam_tform4x4_obj': batch.cam_tform4x4_obj}
                 # src_H, src_W =
-                ref_image = torch.stack([src_frame.rgb for src_frame in src_frames_low_res], dim=0)
+                ref_image = torch.stack([src_frame.read_rgb() for src_frame in src_frames_low_res], dim=0)
                 B = len(ref_image)
                 ref_scalings = src_frames_low_res[0].size.clone()  # torch.stack([src_frame.size], dim=0)
                 ref_scalings[:] = transform_rescale # * src_frame.depth_mask
-                ref_depth_map = torch.stack([ src_frame.depth for s, src_frame in enumerate(src_frames_high_res)], dim=0)
+                ref_depth_map = torch.stack([ src_frame.read_depth() for s, src_frame in enumerate(src_frames_high_res)], dim=0)
                 # ref_depth_map[ref_depth_map > ref_depth_map.flatten(2).mean(dim=-1)[..., None, None] * 2] = 0
 
-                ref_cam_intr = torch.stack([src_frame.cam_intr4x4 for src_frame in src_frames_high_res], dim=0)
-                ref_cam_extr = torch.stack([src_frame.get_cam_tform4x4_obj(src_cam_source) for src_frame in src_frames_high_res], dim=0)
+                ref_cam_intr = torch.stack([src_frame.read_cam_intr4x4() for src_frame in src_frames_high_res], dim=0)
+                ref_cam_extr = torch.stack([src_frame.read_cam_tform4x4_obj(src_cam_source) for src_frame in src_frames_high_res], dim=0)
                 ref_cam_extr[:, :3, 3] /= src_sequences_scales[:, None]
 
-                all_target_images = torch.stack([ref_frame.rgb for ref_frame in ref_frames_low_res], dim=0)[None,].repeat(B, 1, 1, 1, 1)
+                all_target_images = torch.stack([ref_frame.read_rgb() for ref_frame in ref_frames_low_res], dim=0)[None,].repeat(B, 1, 1, 1, 1)
                 N_TGT = len(ref_frames_low_res)
                 target_scalings = ref_frames_low_res[
                     0].size.clone()  # torch.stack([ref_frame.size for ref_frame in ref_frames], dim=0)[None,]
                 target_scalings[:] = transform_rescale # * ref_frame.depth_mask
-                target_depth_map = torch.stack([ref_frame.depth for r, ref_frame in enumerate(ref_frames_high_res)], dim=0)[None,].repeat(B, 1, 1, 1, 1)
+                target_depth_map = torch.stack([ref_frame.read_depth() for r, ref_frame in enumerate(ref_frames_high_res)], dim=0)[None,].repeat(B, 1, 1, 1, 1)
                 # target_depth_map[target_depth_map > target_depth_map.flatten(3).mean(dim=-1)[..., None, None] * 2 ] = 0
-                target_cam_intr = torch.stack([ref_frame.cam_intr4x4 for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
-                target_cam_extr = torch.stack([ref_frame.get_cam_tform4x4_obj(ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
+                target_cam_intr = torch.stack([ref_frame.read_cam_intr4x4() for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
+                target_cam_extr = torch.stack([ref_frame.read_cam_tform4x4_obj(ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
                 target_cam_extr[:, :, :3, 3] /= ref_sequence_scale[:, :, None]
 
                 # if ref_cam_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM:
@@ -279,7 +279,7 @@ class ZSP(OD3D_Method):
                     #ref_sequence_scale = ref_sequences[ref_mesh_id].get_a_src_scale_b_src(
                     #    ref_cam_source, CAM_TFORM_OBJ_SOURCES.CO3D)
                     target_cam_extr = \
-                    torch.stack([ref_frame.get_cam_tform4x4_obj(cam_tform_obj_source=ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[
+                    torch.stack([ref_frame.read_cam_tform4x4_obj(cam_tform_obj_source=ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[
                         None,].repeat(B, 1, 1, 1)
                     target_cam_extr[:, :, :3, 3] /= ref_sequence_scale[:, :, None]
 
@@ -335,37 +335,20 @@ class ZSP(OD3D_Method):
                 except Exception as e:
                     logger.info(f'failed to retrieve predicted `ref_tform_source`')
                     logger.info(e)
-                    pred_ref_tform_srcs = torch.eye(4)[None,].repeat(B, 1, 1).to(device=self.device)
+                    pred_ref_tform_srcs = torch.zeros(4)[None,].repeat(B, 1, 1).to(device=self.device)
 
                 for s, src_mesh_id in enumerate(src_mesh_ids):
                     pred_ref_tform_src = pred_ref_tform_srcs[s]
                     all_pred_ref_tform_src[category][r, s] = pred_ref_tform_src
 
-                    if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
-                        ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].labeled_obj_tform_obj.to(
-                            device=self.device, dtype=pred_ref_tform_src.dtype)
-                    elif dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                        ref_labeled_obj_tform_obj = ref_sequences[ref_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(
-                            device=self.device, dtype=pred_ref_tform_src.dtype)
-                    else:
-                        ref_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
-                        logger.warning('No gt available for reference.')
-
-                    if dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED or dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.LABELED_CUBOID:
-                        src_labeled_obj_tform_obj = src_sequences[src_mesh_id].labeled_obj_tform_obj.to(
-                            device=self.device, dtype=pred_ref_tform_src.dtype)
-                    elif dataset_src.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                        src_labeled_obj_tform_obj = src_sequences[src_mesh_id].zsp_labeled_cuboid_ref_tform_obj.to(
-                            device=self.device, dtype=pred_ref_tform_src.dtype)
-                    else:
-                        src_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
-                        logger.warning('No gt available for source.')
-
+                    ref_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
+                    src_labeled_obj_tform_obj = torch.eye(4).to(device=self.device)
                     gt_ref_tform_src = tform4x4(inv_tform4x4(ref_labeled_obj_tform_obj), src_labeled_obj_tform_obj)
 
-                    if dataset_ref.cam_tform_obj_source == CAM_TFORM_OBJ_SOURCES.ZSP_LABELED_CUBOID_REF:
-                        aligned_cuboid_tform_obj = tform4x4(ref_labeled_obj_tform_obj, pred_ref_tform_src) # droid_slam_labeled_cuboid_tform_droid_slam
-                        src_sequences[src_mesh_id].write_aligned_obj_tform_obj(aligned_name=f'zsp/r{r}', aligned_obj_tform_obj=aligned_cuboid_tform_obj)
+                    if self.config.aligned_name is not None:
+                        aligned_name = f'{self.config.aligned_name}/r{r}'
+                        aligned_cuboid_tform_obj = tform4x4(ref_labeled_obj_tform_obj, pred_ref_tform_src)
+                        src_sequences[src_mesh_id].write_aligned_mesh_and_tform_obj(mesh=ref_sequences[ref_mesh_id].read_mesh(), aligned_obj_tform_obj=aligned_cuboid_tform_obj, aligned_name=aligned_name)
 
                     diff_rot_angle_rad = get_pose_diff_in_rad(pred_tform4x4=pred_ref_tform_src, gt_tform4x4=gt_ref_tform_src)
                     logger.info(diff_rot_angle_rad)
@@ -501,7 +484,7 @@ class ZSP(OD3D_Method):
             target_cam_intr = []
             target_scalings = self.target_data[0][0]['target_scalings']
             for b in range(B):
-                categorical_target_data = self.target_data[batch.label[b].item()][r]
+                categorical_target_data = self.target_data[batch.category_id[b].item()][r]
                 all_target_images.append(categorical_target_data['all_target_images']) #[None,].repeat(B, 1, 1, 1, 1)
                 target_depth_map.append(categorical_target_data['target_depth_map']) #[None,].repeat(B, 1, 1, 1, 1)
                 target_cam_extr.append(categorical_target_data['target_cam_extr']) #[None,].repeat(B, 1, 1, 1)
@@ -551,7 +534,7 @@ class ZSP(OD3D_Method):
             except Exception as e:
                 logger.info(f'failed to retrieve predicted `ref_tform_source`')
                 logger.info(e)
-                pred_ref_tform_srcs = torch.eye(4)[None,].repeat(B, 1, 1).to(device=self.device) * 0.
+                pred_ref_tform_srcs = torch.zeros(4)[None,].repeat(B, 1, 1).to(device=self.device) * 0.
 
             cam_tform4x4_obj = tform4x4(batch.cam_tform4x4_obj, inv_tform4x4(pred_ref_tform_srcs))
 
@@ -565,13 +548,13 @@ class ZSP(OD3D_Method):
         all_rot_diff_rad = torch.stack(all_rot_diff_rad, dim=0)
         results['rot_diff_rad'] = all_rot_diff_rad.permute(1, 0)
         for b in range(B):
-            prefix = f"{self.categories[batch.label[b].item()]}_"
+            prefix = f"{self.categories[batch.category_id[b].item()]}_"
             if f'{prefix}rot_diff_rad' not in results.keys():
                 results[f'{prefix}rot_diff_rad'] = all_rot_diff_rad.T[b][None,]  # [] torch.stack(all_rot_diff_rad, dim=0).permute(1, 0)
             else:
                 results[f'{prefix}rot_diff_rad'] = torch.cat([results[f'{prefix}rot_diff_rad'], all_rot_diff_rad.T[b][None,]], dim=0)
 
-        results['label_gt'] = batch.label
+        results['label_gt'] = batch.category_id
         #results['label_pred'] = pred_class_ids
         #results['label_names'] = self.config.classes
         #results['sim'] = sim
