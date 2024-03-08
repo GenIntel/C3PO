@@ -220,26 +220,26 @@ class ZSP(OD3D_Method):
 
                 # data = {'img': batch.rgb, 'cam_tform4x4_obj': batch.cam_tform4x4_obj}
                 # src_H, src_W =
-                ref_image = torch.stack([src_frame.read_rgb() for src_frame in src_frames_low_res], dim=0)
+                ref_image = torch.stack([src_frame.get_rgb() for src_frame in src_frames_low_res], dim=0)
                 B = len(ref_image)
                 ref_scalings = src_frames_low_res[0].size.clone()  # torch.stack([src_frame.size], dim=0)
                 ref_scalings[:] = transform_rescale # * src_frame.depth_mask
-                ref_depth_map = torch.stack([ src_frame.read_depth() for s, src_frame in enumerate(src_frames_high_res)], dim=0)
+                ref_depth_map = torch.stack([ src_frame.get_depth() for s, src_frame in enumerate(src_frames_high_res)], dim=0)
                 # ref_depth_map[ref_depth_map > ref_depth_map.flatten(2).mean(dim=-1)[..., None, None] * 2] = 0
 
-                ref_cam_intr = torch.stack([src_frame.read_cam_intr4x4() for src_frame in src_frames_high_res], dim=0)
-                ref_cam_extr = torch.stack([src_frame.read_cam_tform4x4_obj(src_cam_source) for src_frame in src_frames_high_res], dim=0)
+                ref_cam_intr = torch.stack([src_frame.get_cam_intr4x4() for src_frame in src_frames_high_res], dim=0)
+                ref_cam_extr = torch.stack([src_frame.get_cam_tform4x4_obj(src_cam_source) for src_frame in src_frames_high_res], dim=0)
                 ref_cam_extr[:, :3, 3] /= src_sequences_scales[:, None]
 
-                all_target_images = torch.stack([ref_frame.read_rgb() for ref_frame in ref_frames_low_res], dim=0)[None,].repeat(B, 1, 1, 1, 1)
+                all_target_images = torch.stack([ref_frame.get_rgb() for ref_frame in ref_frames_low_res], dim=0)[None,].repeat(B, 1, 1, 1, 1)
                 N_TGT = len(ref_frames_low_res)
                 target_scalings = ref_frames_low_res[
                     0].size.clone()  # torch.stack([ref_frame.size for ref_frame in ref_frames], dim=0)[None,]
                 target_scalings[:] = transform_rescale # * ref_frame.depth_mask
-                target_depth_map = torch.stack([ref_frame.read_depth() for r, ref_frame in enumerate(ref_frames_high_res)], dim=0)[None,].repeat(B, 1, 1, 1, 1)
+                target_depth_map = torch.stack([ref_frame.get_depth() for r, ref_frame in enumerate(ref_frames_high_res)], dim=0)[None,].repeat(B, 1, 1, 1, 1)
                 # target_depth_map[target_depth_map > target_depth_map.flatten(3).mean(dim=-1)[..., None, None] * 2 ] = 0
-                target_cam_intr = torch.stack([ref_frame.read_cam_intr4x4() for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
-                target_cam_extr = torch.stack([ref_frame.read_cam_tform4x4_obj(ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
+                target_cam_intr = torch.stack([ref_frame.get_cam_intr4x4() for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
+                target_cam_extr = torch.stack([ref_frame.get_cam_tform4x4_obj(ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[None,].repeat(B, 1, 1, 1)
                 target_cam_extr[:, :, :3, 3] /= ref_sequence_scale[:, :, None]
 
                 # if ref_cam_source == CAM_TFORM_OBJ_SOURCES.DROID_SLAM:
@@ -275,11 +275,11 @@ class ZSP(OD3D_Method):
                 #     ref_depth_map[:, :, 0, 0] = 0.
 
                 if self.config.use_train_only_to_collect_target_data:
-                    ref_cam_source = ref_frames_high_res[0].cam_tform_obj_source
+                    #ref_cam_source = ref_frames_high_res[0].cam_tform_obj_source
                     #ref_sequence_scale = ref_sequences[ref_mesh_id].get_a_src_scale_b_src(
                     #    ref_cam_source, CAM_TFORM_OBJ_SOURCES.CO3D)
                     target_cam_extr = \
-                    torch.stack([ref_frame.read_cam_tform4x4_obj(cam_tform_obj_source=ref_cam_source) for ref_frame in ref_frames_high_res], dim=0)[
+                    torch.stack([ref_frame.get_cam_tform4x4_obj() for ref_frame in ref_frames_high_res], dim=0)[
                         None,].repeat(B, 1, 1, 1)
                     target_cam_extr[:, :, :3, 3] /= ref_sequence_scale[:, :, None]
 
