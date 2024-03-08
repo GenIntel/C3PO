@@ -172,8 +172,8 @@ class NeMo_Align3D(OD3D_Method):
         ref_instances_count_per_category = [(ref_map_seq_to_cat == c).sum().item() for c in range(categories_count)]
 
         logger.info('loading meshes...')
-        src_meshes = Meshes.load_from_meshes([seq.get_mesh() for seq in src_sequences], device=self.device)
-        ref_meshes = Meshes.load_from_meshes([seq.get_mesh() for seq in ref_sequences], device=self.device)
+        src_meshes = Meshes.load_from_meshes([seq.read_mesh() for seq in src_sequences], device=self.device)
+        ref_meshes = Meshes.load_from_meshes([seq.read_mesh() for seq in ref_sequences], device=self.device)
 
         src_instances_count = len(src_meshes)
         ref_instances_count = len(ref_meshes)
@@ -467,7 +467,7 @@ class NeMo_Align3D(OD3D_Method):
                     #co3d_src_tform_src = self.sequences_co3d_tform_droid_slam[instance_id]
                     #pts3d.append(transf3d_broadcast(pts3d=self.sequences[instance_id].pcl.to(device=self.device, dtype=dtype), transf4x4=tform4x4(all_pred_ref_tform_src[category][ref_instance_id_in_category, instance_id_in_category], inv_tform4x4(co3d_src_tform_src))))
 
-                    src_pts3d, src_pts3d_colors, src_pts3d_normals = src_sequences[src_instance_id].get_pcl(clone=True)
+                    src_pts3d, src_pts3d_colors, src_pts3d_normals = src_sequences[src_instance_id].read_pcl()
                     src_pts3d = src_pts3d.to(device=self.device, dtype=dtype)
                     src_pts3d_colors = src_pts3d_colors.to(device=self.device, dtype=dtype)
                     src_pts3d_normals = src_pts3d_normals.to(device=self.device, dtype=dtype)
