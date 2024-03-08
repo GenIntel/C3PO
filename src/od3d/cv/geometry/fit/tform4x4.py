@@ -111,6 +111,10 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     src_cyclic_dist[batched_index_select(input=dist_app_ref, index=argmin_ref_from_src[..., None], dim=1).isinf()[:, 0]] = torch.inf
     ref_cyclic_dist[batched_index_select(input=dist_app_ref.T, index=argmin_src_from_ref[..., None], dim=1).isinf()[:, 0]] = torch.inf
 
+    # not used anymore due to uni-directional cycle dist
+    #cyclic_dist_avg = (src_cyclic_dist[:, None] + ref_cyclic_dist[None,]) / 2. # NxR,
+    #cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape).clone().detach() # PxNxR
+
     src_cyclic_dist_mask = ~src_cyclic_dist.isinf()
     ref_cyclic_dist_mask = ~ref_cyclic_dist.isinf()
 
@@ -120,10 +124,6 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
             app_cyclic_weight_temp = cyclic_weight_temp
         if geo_cyclic_weight_temp is None:
             geo_cyclic_weight_temp = cyclic_weight_temp
-
-    # not used anymore due to uni-directional cycle dist
-    #cyclic_dist_avg = (src_cyclic_dist[:, None] + ref_cyclic_dist[None,]) / 2. # NxR,
-    #cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape).clone().detach() # PxNxR
 
     # PxNxR
     argmin_ref_from_src = argmin_ref_from_src[None,].expand(P, N)
