@@ -193,16 +193,16 @@ class ObjectNet3D(OD3D_Dataset):
                 obj_mesh = cuboids.get_mesh_with_id(0)
                 obj_mesh.write_to_file(fpath=fpath_mesh_out)
 
-
-
-
     def preprocess_subset_category_names_unique(self, override=False, remove_previous=False):
         logger.info('preprocess subset_category_names_unique...')
         dict_subset_category_names_unique = {}
-        if self.filter_frames_categorical:
-            msg = f'Preprocessing requires to not filter categorically. Set `filter_frames_categorical` to `False`'
-            raise Exception(msg)
-        for frame_id in tqdm(range(len(self))):
+
+        # if self.filter_frames_categorical:
+        #     msg = f'Preprocessing requires to not filter categorically. Set `filter_frames_categorical` to `False`'
+        #     raise Exception(msg)
+
+        dataset = self.get_subset_with_dict_nested_frames(dict_nested_frames={})
+        for frame_id in tqdm(range(len(dataset))):
             frame_meta = self.get_item(frame_id).meta
             if frame_meta.subset not in dict_subset_category_names_unique.keys():
                 dict_subset_category_names_unique[frame_meta.subset] = {}
