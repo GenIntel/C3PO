@@ -52,17 +52,21 @@ class ZSP(OD3D_Method):
         self.transform_test = OD3D_Transform.subclasses[config.test.transform.class_name].create_from_config(config=config.test.transform)
         self.target_data = None
 
-    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+    def get_cuda_visible_devices(self):
         import os
         cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES', '')
         if len(cuda_visible_devices) == 0:
             cuda_visible_devices = 'all'
         else:
             cuda_visible_devices = f'{cuda_visible_devices}'
+        return cuda_visible_devices
+
+    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+
 
         torch.cuda.empty_cache()
+        od3d.io.run_cmd(f'od3d docker zsp-run --gpus {self.get_cuda_visible_devices()} &', logger=logger, background=True)
 
-        od3d.io.run_cmd(f'od3d docker zsp-run --gpus {cuda_visible_devices} &', logger=logger, background=True)
         dataset_src: CO3D = datasets_train['src']
         dataset_ref: CO3D = datasets_train['labeled']
 
@@ -93,6 +97,7 @@ class ZSP(OD3D_Method):
         all_pred_pose_dist_appear = {}
         if self.config.use_train_only_to_collect_target_data:
             self.target_data = {}
+
         for cat_id, category in enumerate(categories):
             if self.config.use_train_only_to_collect_target_data:
                 self.target_data[cat_id] = []
@@ -391,7 +396,11 @@ class ZSP(OD3D_Method):
             results_mean.log()
             logger.info(results_mean)
 
+        od3d.io.run_cmd(f'od3d docker zsp-stop', logger=logger, background=True)
+
     def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
+        od3d.io.run_cmd(f'od3d docker zsp-run --gpus {self.get_cuda_visible_devices()} &', logger=logger, background=True)
+
         if self.target_data is not None:
             logger.info(f'test dataset {dataset.name}')
 
@@ -422,8 +431,11 @@ class ZSP(OD3D_Method):
             #                                         config_visualize=self.config.test.visualize)
             results_epoch = results_epoch.mean()
             #results_epoch += results_visual
+
+            od3d.io.run_cmd(f'od3d docker zsp-stop', logger=logger, background=True)
             return results_epoch
         else:
+            od3d.io.run_cmd(f'od3d docker zsp-stop', logger=logger, background=True)
             return OD3D_Results()
 
     def inference_batch(self, batch: OD3D_Frames):
