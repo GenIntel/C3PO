@@ -71,6 +71,8 @@ class ZSP(OD3D_Method):
             return False
 
     def start_docker(self):
+        logger.info(f'current cuda device {torch.cuda.current_device()}')
+
         if self.docker_port is not None:
             logger.info('docker already running')
             return
