@@ -18,15 +18,16 @@ def zsp():
     run_cmd(cmd=cmd, logger=logger, live=True)
 
 @app.command()
-def zsp_run(gpus: str = typer.Option('all', '-g', '--gpus')):
+def zsp_run(gpus: str = typer.Option('all', '-g', '--gpus'),
+            port: str = typer.Option(5000, '-p', '--port')):
     logging.basicConfig(level=logging.INFO)
-    cmd = f'docker run --gpus device={gpus} -p 5000:5000 -t limpbot/zsp:v1'
+    cmd = f'docker run --gpus device={gpus} -p {port}:5000 -t limpbot/zsp:v1'
     run_cmd(cmd=cmd, logger=logger, live=True)
 
 @app.command()
-def zsp_stop():
+def zsp_stop(port: str = typer.Option(5000, '-p', '--port')):
     logging.basicConfig(level=logging.INFO)
-    cmd = f'docker container stop $(docker container ps --filter "ancestor=limpbot/zsp:v1" -q)'
+    cmd = f'docker container stop $(docker container ps --filter "ancestor=limpbot/zsp:v1" --filter "publish={port}" -q)'
     run_cmd(cmd=cmd, logger=logger, live=True)
 
 @app.command()

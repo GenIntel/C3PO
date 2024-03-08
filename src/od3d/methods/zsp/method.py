@@ -44,7 +44,7 @@ class ZSP(OD3D_Method):
         super().__init__(config=config, logging_dir=logging_dir)
 
         self.device = 'cpu' #'cuda:0'
-
+        self.docker_port = None
         # init Network
         # self.net = OD3D_Model(config.docker)
 
@@ -61,14 +61,36 @@ class ZSP(OD3D_Method):
             cuda_visible_devices = f'{cuda_visible_devices}'
         return cuda_visible_devices
 
-    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+    def is_port_in_use(self, port):
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+            except socket.error:
+                return True
+            return False
 
+    def start_docker(self):
+        if self.docker_port is not None:
+            logger.info('docker already running')
+            return
 
-        torch.cuda.empty_cache()
-        od3d.io.run_cmd(f'od3d docker zsp-run --gpus {self.get_cuda_visible_devices()} &', logger=logger, background=True)
+        self.docker_port = 5000
+        while self.is_port_in_use(self.docker_port):
+            self.docker_port += 1
 
+        od3d.io.run_cmd(f'od3d docker zsp-run --port {self.docker_port} --gpus {self.get_cuda_visible_devices()} &', logger=logger, background=True)
         from time import sleep
         sleep(10)
+
+    def stop_docker(self):
+        od3d.io.run_cmd(f'od3d docker zsp-stop --port {self.docker_port}', logger=logger, background=True)
+        self.docker_port = None
+
+    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+        torch.cuda.empty_cache()
+
+        self.start_docker()
 
         dataset_src: CO3D = datasets_train['src']
         dataset_ref: CO3D = datasets_train['labeled']
@@ -331,7 +353,7 @@ class ZSP(OD3D_Method):
                 bytes_io.seek(0)
 
                 try:
-                    resp = requests.post("http://127.0.0.1:5000/predict", files={"file": bytes_io})
+                    resp = requests.post(f"http://127.0.0.1:{self.docker_port}/predict", files={"file": bytes_io})
                     # all_pred_ref_tform_src = resp.json()['obj2_tform_obj1']
                     pred_ref_tform_srcs = resp.json()['obj2_tform_obj1']
                     pred_ref_tform_srcs = torch.Tensor(pred_ref_tform_srcs).to(device=self.device)
@@ -382,13 +404,10 @@ class ZSP(OD3D_Method):
             results_mean.log()
             logger.info(results_mean)
 
-        od3d.io.run_cmd(f'od3d docker zsp-stop', logger=logger, background=True)
+        self.stop_docker()
 
     def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
-        od3d.io.run_cmd(f'od3d docker zsp-run --gpus {self.get_cuda_visible_devices()} &', logger=logger, background=True)
-
-        from time import sleep
-        sleep(10)
+        self.start_docker()
 
         if self.target_data is not None:
             logger.info(f'test dataset {dataset.name}')
@@ -420,11 +439,10 @@ class ZSP(OD3D_Method):
             #                                         config_visualize=self.config.test.visualize)
             results_epoch = results_epoch.mean()
             #results_epoch += results_visual
-
-            od3d.io.run_cmd(f'od3d docker zsp-stop', logger=logger, background=True)
+            self.stop_docker()
             return results_epoch
         else:
-            od3d.io.run_cmd(f'od3d docker zsp-stop', logger=logger, background=True)
+            self.stop_docker()
             return OD3D_Results()
 
     def inference_batch(self, batch: OD3D_Frames):
@@ -526,7 +544,7 @@ class ZSP(OD3D_Method):
             bytes_io.seek(0)
 
             try:
-                resp = requests.post("http://127.0.0.1:5000/predict", files={"file": bytes_io})
+                resp = requests.post(f"http://127.0.0.1:{self.docker_port}/predict", files={"file": bytes_io})
                 # all_pred_ref_tform_src = resp.json()['obj2_tform_obj1']
                 resp_json = resp.json()
                 pred_ref_tform_srcs = resp_json['obj2_tform_obj1']
