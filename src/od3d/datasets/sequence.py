@@ -718,7 +718,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             vertices_count = mesh_vertices_count + 1
             alpha = particle_size / 2.
             while vertices_count > mesh_vertices_count:
-                alpha = alpha * 2
+                alpha = alpha * 1.3
                 o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
                 logger.info(o3d_obj_mesh)
                 o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
@@ -735,9 +735,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
             vertices_count = mesh_vertices_count + 1
             alpha = particle_size / 2.
-            offset = particle_size / 10.
+            offset = particle_size / 20.
             while vertices_count > mesh_vertices_count:
-                alpha = alpha * 2
+                alpha = alpha * 1.3
                 from CGAL.CGAL_Kernel import Point_3
                 from CGAL.CGAL_Alpha_wrap_3 import alpha_wrap_3
                 from CGAL.CGAL_Polyhedron_3 import Polyhedron_3
@@ -766,16 +766,19 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     assert len(face_vertices) == 3
                     faces.append(face_vertices)
                 faces = torch.Tensor(faces).long()
+
                 vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
                 faces = open3d.utility.Vector3iVector(faces.detach().cpu().numpy())
 
-
                 o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
+
+                assert o3d_obj_mesh.is_watertight()
                 logger.info(o3d_obj_mesh)
                 vertices_count = len(o3d_obj_mesh.vertices)
 
+
             #o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(mesh_vertices_count)
-            #logger.info(o3d_obj_mesh)
+            logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
 
 
