@@ -115,7 +115,7 @@ class NeMo_DINO(NeMo):
             accumulate_steps += 1
             if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
                 self.optim.step()
-                self.normalize_feats()
+                #self.normalize_feats()
                 self.optim.zero_grad()
 
             results_epoch += results_batch
@@ -222,7 +222,7 @@ class NeMo_DINO(NeMo):
             self.mesh_update_count[batch_vts_ids_unique] += 1
             self.mesh_feats_total[batch_vts_ids_unique] = bank_feats_new
             bank_feats.data = self.mesh_feats_total/ self.mesh_update_count[:, None]
-            self.normalize_feats()
+            #self.normalize_feats()
 
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
