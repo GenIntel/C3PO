@@ -28,18 +28,18 @@ path_meshes: ${platform.path_datasets_raw}/${.rpath_meshes}
 
 path_cuboids: '${.path_preprocess}/mesh/cuboid250'
 fpaths_cuboids:
-    aeroplane: ${..path_cuboids}/aeroplane/mesh.ply
+    airplane: ${..path_cuboids}/aeroplane/mesh.ply
     bicycle: ${..path_cuboids}/bicycle/mesh.ply
     boat: ${..path_cuboids}/boat/mesh.ply
     bottle: ${..path_cuboids}/bottle/mesh.ply
     bus: ${..path_cuboids}/bus/mesh.ply
     car: ${..path_cuboids}/car/mesh.ply
     chair: ${..path_cuboids}/chair/mesh.ply
-    diningtable: ${..path_cuboids}/diningtable/mesh.ply
-    motorbike: ${..path_cuboids}/motorbike/mesh.ply
-    sofa: ${..path_cuboids}/sofa/mesh.ply
+    dining_table: ${..path_cuboids}/diningtable/mesh.ply
+    motorcycle: ${..path_cuboids}/motorbike/mesh.ply
+    couch: ${..path_cuboids}/sofa/mesh.ply
     train: ${..path_cuboids}/train/mesh.ply
-    tvmonitor: ${..path_cuboids}/tvmonitor/mesh.ply
+    tv: ${..path_cuboids}/tvmonitor/mesh.ply
 
 setup:
   enabled: False
