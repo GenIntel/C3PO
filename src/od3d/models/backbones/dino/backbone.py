@@ -97,6 +97,7 @@ class DINOv2(OD3D_Backbone):
             if self.config.get('class_token', False):
                 x_ = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
                 cls = self.extractor.forward_features(x)["x_norm_clstoken"]
+                cls = cls.unsqueeze(1)
                 cls_repeat = cls.expand(B,x_.shape[1], -1)
                 x = torch.cat([cls_repeat, x_], dim=2)
             else:
