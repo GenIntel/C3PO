@@ -42,8 +42,12 @@ class DINOv2(OD3D_Backbone):
         if self.dinov2:
             self.extractor = torch.hub.load(self.config.hub_repo, self.config.hub_model,
                                         pretrained=self.config.weights == 'default')
+            if  self.config.get('class_token', False):
+                self.out_dims = [self.extractor.embed_dim * 2]
+            else:
+                self.out_dims = [self.extractor.embed_dim]
             self.extractor = self.patch_vit_resolution(self.extractor, self.stride)
-            self.out_dims = [self.extractor.embed_dim]
+            
         else: # using keys did not show any improvement
             self.extractor = ViTExtractor(model_type=self.config.hub_model)
             self.out_dims = [self.extractor.model.embed_dim]
@@ -90,8 +94,13 @@ class DINOv2(OD3D_Backbone):
         x = resize(x, H_out= H_in, W_out=W_in)
         
         if self.dinov2:
-            x = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
-        
+            if self.config.get('class_token', False):
+                x_ = self.extractor.forward_features(x)["x_norm_patchtokens"]  # # 'x_norm_patchtokens', 'x_prenorm'
+                cls = self.extractor.forward_features(x)["x_norm_clstoken"]
+                cls_repeat = cls.expand(B,x_.shape[1], -1)
+                x = torch.cat([cls_repeat, x_], dim=2)
+            else:
+                x = self.extractor.forward_features(x)["x_norm_patchtokens"]
         else:
             #x = self.extractor.get_intermediate_layers(x, n=12)[9]  # maximum 12 layers, zsp uses 9
             #x = x[:, 1:] # remove cls token
