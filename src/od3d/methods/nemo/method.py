@@ -144,7 +144,7 @@ class NeMo(OD3D_Method):
         self.seq_obj_tform4x4_est_obj = {}
         self.seq_obj_tform4x4_est_obj_sim = {}
 
-        #self.normalize_feats()
+        self.normalize_feats()
 
         if self.config.train.loss == 'cross_entropy':
             self.criterion = torch.nn.CrossEntropyLoss().cuda()
@@ -369,7 +369,7 @@ class NeMo(OD3D_Method):
             accumulate_steps += 1
             if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
                 self.optim.step()
-                #self.normalize_feats()
+                self.normalize_feats()
                 self.optim.zero_grad()
 
             results_epoch += results_batch
@@ -469,7 +469,7 @@ class NeMo(OD3D_Method):
             batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
             bank_feats[batch_vts_ids_unique].data = bank_feats_new
-            #self.normalize_feats()
+            self.normalize_feats()
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
             sim = None
