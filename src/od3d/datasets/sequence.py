@@ -733,9 +733,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
             quantile = max(0.01, 3. / len(pts3d))
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
-            vertices_count = mesh_vertices_count + 1
             alpha = particle_size / 2.
             offset = particle_size / 20.
+            vertices_count = mesh_vertices_count + 1
             while vertices_count > mesh_vertices_count:
                 alpha = alpha * 1.3
                 from CGAL.CGAL_Kernel import Point_3
@@ -773,14 +773,39 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                 o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
 
                 assert o3d_obj_mesh.is_watertight()
+
                 logger.info(o3d_obj_mesh)
                 vertices_count = len(o3d_obj_mesh.vertices)
 
+            # tol = particle_size / 2.
+            # import pymesh2
+            # pymesh_mesh = pymesh2.form_mesh(vertices, faces)
+            # while vertices_count > mesh_vertices_count:
+            #     pymesh_mesh, info = pymesh_mesh2.collapse_short_edges(pymesh_mesh, tol)
+            #     vertices_count = len(pymesh_mesh.vertices)
 
-            #o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(mesh_vertices_count)
+            #o3d_obj_mesh = o3d_obj_mesh.filter_smooth_laplacian(number_of_iterations=10)
+
+            # faces_count = mesh_vertices_count * 2
+            # voxel_size = particle_size / 2.
+            # while vertices_count > mesh_vertices_count:
+            #     #faces_count = faces_count * 0.9
+            #     #o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(int(faces_count))
+            #
+            #     voxel_size = voxel_size * 1.3
+            #     o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_vertex_clustering(
+            #         voxel_size=voxel_size,
+            #         contraction=open3d.geometry.SimplificationContraction.Quadric) # Average, Quadric
+            #
+            #     logger.info(o3d_obj_mesh_downsampled)
+            #     vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+            #
+            # o3d_obj_mesh = o3d_obj_mesh_downsampled
+
             logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
 
+            assert o3d_obj_mesh.is_watertight()
 
         elif mesh_type == 'voxel':
             #### OPTION 4: VOXEL GRID
@@ -998,6 +1023,10 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                                                cams_tform4x4_obj=batch.cam_tform4x4_obj,
                                                imgs_sizes=batch.size, mesh_ids=[0,] * B,
                                                down_sample_rate=down_sample_rate)
+
+            from od3d.cv.visual.resize import resize
+            rgb_mask_low_res = resize(batch.rgb_mask, scale_factor=1./down_sample_rate)
+            vts2d_mask *= sample_pxl2d_pts(rgb_mask_low_res, pxl2d=vts2d)[:, :, 0]
 
             batch_cam_tform4x4_obj_raw = batch.cam_tform4x4_obj
             tform_obj = self.get_tform_obj(device=device)
