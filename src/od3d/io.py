@@ -84,7 +84,10 @@ def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", m
             cfg = compose(config_name=benchmark, overrides=overrides)
             #cfg.ablation_name = '_'.join(
             #    [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
-            cfg.ablation_name = '_'.join([ablation.stem for ablation in ablations])
+
+            from omegaconf import open_dict
+            with open_dict(cfg):
+                cfg.ablation_name = '_'.join([ablation.stem for ablation in ablations])
             logger.info(cfg.ablation_name)
 
             cfgs.append(cfg)
