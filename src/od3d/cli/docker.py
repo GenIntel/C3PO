@@ -22,7 +22,7 @@ def zsp_run(gpus: str = typer.Option('all', '-g', '--gpus'),
             port: str = typer.Option(5000, '-p', '--port')):
     logging.basicConfig(level=logging.INFO)
     cmd = f'docker run --gpus device={gpus} -p {port}:5000 -t limpbot/zsp:v1'
-    run_cmd(cmd=cmd, logger=logger, live=True)
+    run_cmd(cmd=cmd, logger=logger, live=False, background=True)
 
 @app.command()
 def zsp_stop(port: str = typer.Option(5000, '-p', '--port')):

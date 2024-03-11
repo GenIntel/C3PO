@@ -172,7 +172,41 @@ def run_cmd(cmd, logger, live=False, background=False):
                 logger.info(res.stderr.decode("utf-8"))
             return res.stdout.decode("utf-8")
         else:
-            subprocess.run(cmd, capture_output=False, shell=True)
+            child = RunCmdBackgroundProcess(cmd, os.getpid())
+            child_proc = Process(target=child.run_child)
+            child_proc.start()
+
+            #subprocess.run(cmd,  capture_output=False, shell=True, stderr=None, stdout=None, start_new_session=False)
+
+import psutil
+from multiprocessing import Process
+from time import sleep
+
+
+class RunCmdBackgroundProcess(object):
+    def __init__(self, command, parent_pid):
+        """
+        @type parent_pid: int
+        @type command: str
+        """
+        self._child = None
+        self._cmd = command
+        self._parent = psutil.Process(pid=parent_pid)
+
+    def run_child(self):
+        """
+        Start a child process by running self._cmd.
+        Wait until the parent process (self._parent) has died, then kill the
+        child.
+        """
+        self._child = subprocess.Popen([self._cmd], shell=True)
+        try:
+            while self._parent.status() == psutil.STATUS_RUNNING or self._parent.status() == psutil.STATUS_SLEEPING:
+                sleep(1)
+        except psutil.NoSuchProcess:
+            pass
+        finally:
+            self._child.terminate()
 
 
 def read_str_from_file(fpath: Path):
