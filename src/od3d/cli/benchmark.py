@@ -13,6 +13,8 @@ import subprocess
 from omegaconf import open_dict
 import time
 
+from od3d.cli._platform import get_slurm_jobs_ids
+
 import datetime
 import pandas as pd
 from pygit2 import Repository
@@ -697,17 +699,7 @@ def info_slurm():
     'srun -p lmb_gpu-rtx2080 -w dagobert --pty bash'
     pass
 
-def get_slurm_jobs_ids(job_id_treshold=None):
-    slurm_result = subprocess.run(f'ssh slurm "squeue --me"', capture_output=True, shell=True)
-    slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
-    slurm_jobs_ids = []
-    for slurm_job in slurm_jobs[1:]:
-        slurm_job_split = slurm_job.split()
-        if len(slurm_job_split) > 0:
-            slurm_jobs_ids.append(int(slurm_job_split[0]))
-    if job_id_treshold is not None:
-        slurm_jobs_ids = list(filter(lambda job_id: job_id < job_id_treshold, slurm_jobs_ids))
-    return slurm_jobs_ids
+
 
 @app.command()
 def rsync(platform_source: str = typer.Option('slurm', '-s', '--source'),
