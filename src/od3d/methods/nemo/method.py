@@ -109,7 +109,9 @@ class NeMo(OD3D_Method):
         # self.path_shapenemo = Path(config.path_shapenemo)
         # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
         self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
-        self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes)
+        self.fpaths_meshes_tform_obj = [self.config.fpaths_meshes_tform_obj[cls] for cls in config.categories]
+
+        self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes, fpaths_meshes_tforms=self.fpaths_meshes_tform_obj)
         self.meshes.gaussian_splat_enabled = self.config.meshes_gaussian_splat_enabled
         self.meshes.gaussian_splat_opacity = self.config.meshes_gaussian_splat_opacity
         self.meshes.geodesic_prob_sigma = self.config.train.geodesic_prob_sigma

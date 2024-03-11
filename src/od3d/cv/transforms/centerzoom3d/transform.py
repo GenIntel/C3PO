@@ -64,7 +64,7 @@ class CenterZoom3D(OD3D_Transform):
             dist = self.scale_with_dist
             if frame.category is not None and frame.category in PASCAL3D_SCALE_NORMALIZE_TO_REAL.keys():
                 dist *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[frame.category]
-            scale = frame.cam_tform4x4_obj[2, 3] / dist
+            scale = frame.get_cam_tform4x4_obj()[2, 3] / dist
 
         elif self.scale_with_mask is not None and frame.get_mask() is not None:
             # note: this usage should become deprecated in the future.
@@ -110,7 +110,7 @@ class CenterZoom3D(OD3D_Transform):
                 raise Exception(msg)
 
         if self.scale is not None:
-                # scale = frame.cam_tform4x4_obj[2, 3] / self.dist
+                # scale = frame.get_cam_tform4x4_obj[2, 3] / self.dist
                 scale *= self.scale
 
         # logger.info(f'scale = {scale}')
@@ -150,7 +150,8 @@ class CenterZoom3D(OD3D_Transform):
         frame.size[0:1] = self.H
         frame.size[1:2] = self.W
 
-        frame.cam_intr4x4 = torch.bmm(cam_crop_tform_cam[None,], frame.cam_intr4x4[None,])[0]
+        frame.cam_intr4x4 = torch.bmm(cam_crop_tform_cam[None,], frame.get_cam_intr4x4()[None,])[0]
+        frame.get_cam_tform4x4_obj()
 
         if self.scale_with_dist is not None:
             # note: this usage should become deprecated in the future.

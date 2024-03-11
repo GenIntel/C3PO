@@ -137,7 +137,9 @@ class OD3D_Dataset(Dataset):
     def get_subset_with_dict_nested_frames(self, dict_nested_frames: Dict):
         import copy
         dataset = copy.deepcopy(self)
-        dataset.set_list_frames_unique(list_frames_unique=OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames))
+        dict_nested_frames_compl = OD3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_frames)
+        list_frames_unique = OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames_compl)
+        dataset.set_list_frames_unique(list_frames_unique=list_frames_unique)
         return dataset
 
     def set_list_frames_unique(self, list_frames_unique):
@@ -497,8 +499,9 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                         # category / sequence not in dict_nested_frames
                         dict_nested_frames_seqs_filtered[category][sequence_name] = []
         dict_nested_frames = dict_nested_frames_seqs_filtered
-        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities, path_raw=path_raw,
-                         path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
+        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames,
+                         dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities,
+                         path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
 
     def filter_dict_nested_frames(self, dict_nested_frames: Dict[str, Dict[str, List[str]]]):
@@ -570,10 +573,12 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
     def get_subset_by_sequences(self, dict_category_sequences: Dict[str, List[str]], frames_count_max_per_sequence=None):
         dict_nested_frames = {}
-        for cat, seqs in dict_category_sequences.items():
+        for cat, seqs_names in dict_category_sequences.items():
             dict_nested_frames[cat] = {}
-            for seq in seqs:
-                 dict_nested_frames[cat][seq] = None
+            for seq_name in seqs_names:
+                seq = self.get_sequence_by_name_unique(name_unique=f'{cat}/{seq_name}')
+                dict_nested_frames[cat][seq_name] = OD3D_Sequence.get_subset_frames_names_uniform(
+                    frames_names=seq.frames_names, count_max_per_sequence=frames_count_max_per_sequence)
 
         return self.get_subset_with_dict_nested_frames(dict_nested_frames)
         #return OD3D_SequenceDataset(

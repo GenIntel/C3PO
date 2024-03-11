@@ -197,10 +197,14 @@ class Meshes(torch.nn.Module):
         rendering: torch.Tensor
 
     @staticmethod
-    def load_from_files(fpaths_meshes: List[Path], device='cpu'):
+    def load_from_files(fpaths_meshes: List[Path], fpaths_meshes_tforms: List[Path] = None, device='cpu'):
         meshes = []
-        for fpath_mesh in fpaths_meshes:
-            meshes.append(Mesh.load_from_file(fpath=fpath_mesh, device=device))
+        for i, fpath_mesh in enumerate(fpaths_meshes):
+            mesh = Mesh.load_from_file(fpath=fpath_mesh, device=device)
+            if fpaths_meshes_tforms is not None:
+                mesh_tform = torch.load(fpaths_meshes_tforms[i]).to(device)
+                mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=mesh_tform)
+            meshes.append(mesh)
         return Meshes.load_from_meshes(meshes=meshes)
 
     @staticmethod

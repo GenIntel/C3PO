@@ -606,6 +606,11 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
         tform_obj_type = mesh_type
         fpath_tform_obj_aligned = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
+
+        tform_obj = self.get_tform_obj()
+        if tform_obj is not None:
+            tform_obj = tform_obj.to(device=aligned_obj_tform_obj.device)
+            aligned_obj_tform_obj = tform4x4(aligned_obj_tform_obj.detach().clone(), tform_obj)
         fpath_tform_obj_aligned.parent.mkdir(parents=True, exist_ok=True)
         torch.save(aligned_obj_tform_obj.detach().cpu(), f=fpath_tform_obj_aligned)
 
@@ -717,16 +722,21 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
             vertices_count = mesh_vertices_count + 1
             alpha = particle_size / 2.
+            # while vertices_count > mesh_vertices_count:
+            #     alpha = alpha * 1.3
+            o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+            logger.info(o3d_obj_mesh)
+            o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
+            logger.info(o3d_obj_mesh)
+            faces_count = mesh_vertices_count * 2
+
             while vertices_count > mesh_vertices_count:
-                alpha = alpha * 1.3
-                o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
-                logger.info(o3d_obj_mesh)
-                o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
-                logger.info(o3d_obj_mesh)
-                #o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=mesh_vertices_count)
-                #logger.info(o3d_obj_mesh)
-                obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
-                vertices_count = len(o3d_obj_mesh.vertices)
+                faces_count = int(faces_count * 0.9)
+                o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=faces_count)
+                logger.info(o3d_obj_mesh_downsampled)
+                vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+
+            obj_mesh = Mesh.from_o3d(o3d_obj_mesh_downsampled, device=device)
 
         elif mesh_type == 'alphawrap':
             # #### OPTION 3: ALPHA_SHAPE
@@ -801,6 +811,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             #     vertices_count = len(o3d_obj_mesh_downsampled.vertices)
             #
             # o3d_obj_mesh = o3d_obj_mesh_downsampled
+
+            logger.info(o3d_obj_mesh)
+            o3d_obj_mesh = o3d_obj_mesh.filter_smooth_simple(number_of_iterations=10)
 
             logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
