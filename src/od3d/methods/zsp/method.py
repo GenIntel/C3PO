@@ -83,11 +83,13 @@ class ZSP(OD3D_Method):
 
         od3d.io.run_cmd(f'od3d docker zsp-run --port {self.docker_port} {self.get_gpu_cfg_str()}', logger=logger, live=False, background=True)
         from time import sleep
-        sleep(10)
+        sleep(15)
 
     def stop_docker(self):
         od3d.io.run_cmd(f'od3d docker zsp-stop --port {self.docker_port}', logger=logger, live=False, background=True)
         self.docker_port = None
+        from time import sleep
+        sleep(15)
 
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
         torch.cuda.empty_cache()
