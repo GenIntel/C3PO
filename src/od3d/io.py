@@ -82,8 +82,9 @@ def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", m
             overrides = [f"+ablations/{Path(ablation).parent}={Path(ablation).stem}" for ablation in ablations] + [
                 "platform=" + platform] + overrides
             cfg = compose(config_name=benchmark, overrides=overrides)
-            cfg.ablation_name = '_'.join(
-                [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
+            #cfg.ablation_name = '_'.join(
+            #    [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
+            cfg.ablation_name = '_'.join([ablation.stem for ablation in ablations])
             logger.info(cfg.ablation_name)
 
             cfgs.append(cfg)
