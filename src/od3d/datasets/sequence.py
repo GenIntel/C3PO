@@ -368,9 +368,9 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             H, W = self.get_min_HW()
             # note: this is only required if the frames have different sizes
             if H is not None and W is not None:
-                masks = torch.stack([frame.get_mask()[:, :H, :W] for frame in frames], dim=0).to(device=device)
+                masks = torch.stack([frame.read_mask()[:, :H, :W] for frame in frames], dim=0).to(device=device)
             else:
-                masks = torch.stack([frame.get_mask() for frame in frames], dim=0).to(device=device)
+                masks = torch.stack([frame.read_mask() for frame in frames], dim=0).to(device=device)
 
             cams_intr4x4 = torch.stack([frame.read_cam_intr4x4() for frame in frames], dim=0).to(device=device)
             cams_tform4x4_obj = torch.stack([frame.read_cam_tform4x4_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW) for frame in frames], dim=0).to(device=device)
