@@ -812,8 +812,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             #
             # o3d_obj_mesh = o3d_obj_mesh_downsampled
 
-            logger.info(o3d_obj_mesh)
-            o3d_obj_mesh = o3d_obj_mesh.filter_smooth_simple(number_of_iterations=10)
+            #logger.info(o3d_obj_mesh)
+            #o3d_obj_mesh = o3d_obj_mesh.filter_smooth_simple(number_of_iterations=10) # breaks watertightness
 
             logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
