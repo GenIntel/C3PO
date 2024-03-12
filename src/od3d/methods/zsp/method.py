@@ -86,7 +86,7 @@ class ZSP(OD3D_Method):
         sleep(15)
 
     def stop_docker(self):
-        od3d.io.run_cmd(f'od3d docker zsp-stop --port {self.docker_port}', logger=logger, live=False, background=True)
+        od3d.io.run_cmd(f'od3d docker zsp-stop --port {self.docker_port}', logger=logger)
         self.docker_port = None
         from time import sleep
         sleep(15)

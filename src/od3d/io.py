@@ -178,6 +178,7 @@ def run_cmd(cmd, logger, live=False, background=False):
         else:
             child = RunCmdBackgroundProcess(cmd, os.getpid())
             child_proc = Process(target=child.run_child)
+            child_proc.daemon = True
             child_proc.start()
 
             #subprocess.run(cmd,  capture_output=False, shell=True, stderr=None, stdout=None, start_new_session=False)
