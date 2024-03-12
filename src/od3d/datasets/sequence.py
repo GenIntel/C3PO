@@ -1270,13 +1270,13 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     2).sum(
                     dim=-1) == 0.
 
-                if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN:
+                if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN:
                     # replace nan values with inf
                     dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
                     dist_verts_seq1_seq2[seq1_verts_partial] = dists_verts_feats_seq1_seq2.permute(0, 2, 1,
                                                                                                    3).flatten(
                         2).min(dim=-1).values
-                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_AVG:
+                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_AVG:
                     dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(0.)
                     dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
 
@@ -1288,7 +1288,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
                     dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
                     del dist_verts_seq1_seq2_partial
-                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN_AVG:
+                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN_AVG:
                     dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
                     dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
                     dist_verts_seq1_seq2_partial = ((
