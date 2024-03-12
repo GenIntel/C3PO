@@ -30,13 +30,39 @@ def show_shapenet():
     Meshes()
 
 @app.command()
-def show_pts():
+def show_mesh():
+    from pathlib import Path
+    fpath = Path('/home/sommerl/Downloads/not_watertight_mesh.ply')
+    verts, faces = load_ply(fpath)
+    print(verts.shape, faces.shape)
+@app.command()
+def show_pts(fpath: str = typer.Option(None, '-f', '--fpath'), device: str = typer.Option('cpu', '-d', '--device')):
     from pathlib import Path
     from od3d.cv.io import read_pts3d, read_pts3d_colors, read_pts3d_with_colors_and_normals
-    fpath = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB_Preprocess/droid_slam/elephant/24_01_29__18_10/pcl_clean.ply')
+    # fpath = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB_Preprocess/droid_slam/elephant/24_01_29__18_10/pcl_clean.ply')
 
     pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(fpath)
+
+    import open3d
+    from od3d.cv.geometry.downsample import random_sampling
+    import torch
+
+    o3d_pcl = open3d.geometry.PointCloud()
+    o3d_pcl.points = open3d.utility.Vector3dVector(pts3d.detach().cpu().numpy())
+    o3d_pcl.normals = open3d.utility.Vector3dVector(pts3d_normals.detach().cpu().numpy())  # invalidate existing normals
+    o3d_pcl.colors = open3d.utility.Vector3dVector(pts3d_colors.detach().cpu().numpy())
+    print(pts3d.shape)
+    pts3d = random_sampling(pts3d, pts3d_max_count=10000)  # 11 GB
+    print(pts3d.shape)
+
+    quantile = max(0.01, 3. / len(pts3d))
+    particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
+    alpha = particle_size / 2. * 2
+    print(quantile, particle_size, alpha)
+
+    o3d_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
     show.show_scene(pts3d=[pts3d], pts3d_colors=[pts3d_colors], pts3d_normals=[pts3d_normals])
+
 
 @app.command()
 def show_scene():

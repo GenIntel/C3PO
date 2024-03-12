@@ -7,7 +7,7 @@ ablation_name: $ablation_name_zsp
 
 test_datasets:
   pascal3d:
-    subset_fraction: 0.1
+    subset_fraction: 0.3
     skip: False
     categories: ${categories}
     modalities: ${modalities_pascal3d_objectnet3d}
