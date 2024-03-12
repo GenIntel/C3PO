@@ -724,7 +724,15 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             alpha = particle_size / 2.
             # while vertices_count > mesh_vertices_count:
             #     alpha = alpha * 1.3
-            o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+            
+            o3d_obj_mesh = None
+            while o3d_obj_mesh is None:
+                try:
+                    o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+                except Exception as e:
+                    logger.warning(f'alpha {alpha} failed with {e}')
+                    alpha = alpha * 1.3
+
             logger.info(o3d_obj_mesh)
             o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
             logger.info(o3d_obj_mesh)
