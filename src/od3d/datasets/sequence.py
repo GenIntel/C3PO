@@ -1163,6 +1163,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
         del dataloader
         del model
+        torch.cuda.empty_cache()
 
     def get_fpath_mesh_feats_dist(self, sequence: OD3D_Sequence, mesh_type=None, mesh_feats_type=None):
         if mesh_type is None:
