@@ -1235,7 +1235,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             else:
                 logger.warning(f'unknown embed type {embed_type}')
 
-            P = 150  # ensures that 11 GB are enough
+            P = seq1_verts_count  # ensures that 11 GB are enough
             logger.info(f'seq1 verts {seq1_verts_count}, seq2 verts {seq2_verts_count}, seq1 partial {(seq1_verts_count // P)}, viewpoints max {V}')
 
             for p in range(P):
@@ -1267,8 +1267,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                         seq1_verts_partial_count, V, seq2_verts_count, V)
                 dists_verts_feats_seq1_seq2_mask = (
                             seq1_feats_padded_mask[:, :, None, None] * seq2_feats_padded_mask[None, None, :, :])
-
-                dist_verts_seq1_seq2_inf_mask = (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2) == 0.).all(dim=-1)
+                dist_verts_seq1_seq2_inf_mask = dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(
+                    2).sum(
+                    dim=-1) == 0.
 
                 if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN:
                     # replace nan values with inf
