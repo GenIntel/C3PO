@@ -201,7 +201,7 @@ class Meshes(torch.nn.Module):
         meshes = []
         for i, fpath_mesh in enumerate(fpaths_meshes):
             mesh = Mesh.load_from_file(fpath=fpath_mesh, device=device)
-            if fpaths_meshes_tforms is not None:
+            if fpaths_meshes_tforms is not None and fpaths_meshes_tforms[i] is not None:
                 mesh_tform = torch.load(fpaths_meshes_tforms[i]).to(device)
                 mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=mesh_tform)
             meshes.append(mesh)
