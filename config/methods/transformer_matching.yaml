@@ -1,0 +1,10 @@
+defaults:
+  - optimizer@train.optimizer: adam
+  - scheduler@train.scheduler: multistep
+  - model@model: dinov2_frozen
+
+name: transformer_matching
+class_name: TransformerMatching
+
+
+categories: ${train_datasets.labeled.categories}

@@ -1,7 +1,7 @@
 defaults:
   - logger: wandb
-  - methods@method.nemo: nemo_align3d
-  - methods/dataset@method.nemo: co3d
+  - methods@method.tranformer_matching: tranformer_matching
+  - methods/dataset@method.tranformer_matching: co3d
   - datasets@train_datasets.src: co3d_no_zsp_5s_labeled_ref #  co3d_no_zsp_5s_labeled_ref, co3dv1_10s_zsp_labeled_cuboid_ref #  co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
   - datasets@train_datasets.labeled: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_10s_zsp_labeled_cuboid_ref # co3dv1_10s_zsp_labeled # co3d_5s_no_zsp_labeled co3d_50s_no_zsp co3dv1_50s_no_zsp co3dv1_10s_zsp_unlabeled co3d_3s_no_zsp
   - datasets@val_datasets.main:
@@ -13,32 +13,4 @@ metrics:
   - metricA
   - metricB
 
-categories:
-  - bicycle
-  - truck
-  - train
-  - teddybear
-  - car
-  - bus
-  - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - airplane
-  - toilet
-  - hairdryer
-  - mouse
-  - toaster
-  - hydrant
-  - chair
-  - laptop
-  - book
-  - backpack
-  - cellphone # from cellphone on, no zsp categories
-  - microwave
-  - bench
-  - bottle
-  - couch
-  - cup
-  - suitcase
-  - tv
+categories: datasets.co3d@categories
