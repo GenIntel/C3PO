@@ -65,14 +65,14 @@ def render_gaussians(
 
         means2d = proj3d2d_broadcast(pts3d=means3d_cam, proj4x4=cam_intr4x4_b)
 
-        print(means2d[:10])
+        # print(means2d[:10])
 
         # 2 x H x W
         grid_pxl2d = torch.stack(torch.meshgrid(torch.arange(image_height), torch.arange(image_width), indexing='xy'), dim=0)
 
         # N x 2 x 3
         cov3d_var = pts3d_size_b
-        cov3d = (torch.eye(3).to(device, dtype))[None,].repeat(N, 1, 1) * cov3d_var[:, None, None]
+        cov3d = (torch.eye(3).to(device, dtype))[None,].repeat(N, 1, 1) * cov3d_var[:, :, None]
         jacobian3d2d = torch.zeros((N, 2, 3)).to(device, dtype)
         jacobian3d2d[:, 0, 0] = cam_intr4x4_b[0, 0] / means3d_cam_z
         jacobian3d2d[:, 0, 2] = -cam_intr4x4_b[0, 2] * means3d_cam[:, 0] / (means3d_cam_z**2)
@@ -103,7 +103,7 @@ def render_gaussians(
         gaussians_z_occlusion *= gaussians_z_fov[None,] * 1.
 
         # modified: note: does not work with additive model
-        #gaussians_z_occlusion = torch.sigmoid(0.5 * (means3d_cam_z[:, None] - means3d_cam_z[None,]) / cov3d_var)
+        #gaussians_z_occlusion = torch.sigmoid(0.5 * (means3d_cam_z[:, None] - means3d_cam_z[None,]) / cov3d_var_z)
         #gaussians_z_occlusion.fill_diagonal_(0)
         #gaussians_z_occlusion *= gaussians_z_fov[None,] * 1.
 
