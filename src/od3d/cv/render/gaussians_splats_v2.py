@@ -48,22 +48,23 @@ def render_gaussians(
         cam_tform4x4_obj_b = cams_tform4x4_obj[b]
         cam_intr4x4_b = cams_intr4x4[b]
         pts3d_b = pts3d[b, pts3d_mask[b]].clone()
-        pts3d_dists = torch.cdist(pts3d_b.clone().detach(), pts3d_b.clone().detach())
+        pts3d_cam = transf3d_broadcast(pts3d=pts3d_b, transf4x4=cam_tform4x4_obj_b)
+
+        pts3d_dists = torch.cdist(pts3d_cam.clone().detach(), pts3d_cam.clone().detach())
         pts3d_dists.fill_diagonal_(torch.inf)
         pts3d_size_b = pts3d_dists.min(dim=-1).values[:, None].mean(dim=0, keepdim=True).expand(N, 3) * pts3d_size_rel_to_neighbor_dist
         pts3d_size_b = pts3d_size_b.clamp(1e-5, 1e+5) # otherwise illegal access memory
         feats_b = feats[b, pts3d_mask[b]]
 
 
-        means3d_cam = transf3d_broadcast(pts3d=pts3d_b, transf4x4=cam_tform4x4_obj_b)
-        means3d_cam_z = means3d_cam[:, 2]
+        means3d_cam_z = pts3d_cam[:, 2]
 
         # gaussians_sorted_id = means3d_cam_z.argsort()
         # means3d_cam = means3d_cam[gaussians_sorted_id]
         # means3d_cam_z = means3d_cam[:, 2]
         # rgb = rgb[gaussians_sorted_id]
 
-        means2d = proj3d2d_broadcast(pts3d=means3d_cam, proj4x4=cam_intr4x4_b)
+        means2d = proj3d2d_broadcast(pts3d=pts3d_cam, proj4x4=cam_intr4x4_b)
 
         # print(means2d[:10])
 
@@ -75,9 +76,9 @@ def render_gaussians(
         cov3d = (torch.eye(3).to(device, dtype))[None,].repeat(N, 1, 1) * cov3d_var[:, :, None]
         jacobian3d2d = torch.zeros((N, 2, 3)).to(device, dtype)
         jacobian3d2d[:, 0, 0] = cam_intr4x4_b[0, 0] / means3d_cam_z
-        jacobian3d2d[:, 0, 2] = -cam_intr4x4_b[0, 2] * means3d_cam[:, 0] / (means3d_cam_z**2)
+        jacobian3d2d[:, 0, 2] = -cam_intr4x4_b[0, 2] * pts3d_cam[:, 0] / (means3d_cam_z**2)
         jacobian3d2d[:, 1, 1] = cam_intr4x4_b[1, 1] / means3d_cam_z
-        jacobian3d2d[:, 1, 2] = -cam_intr4x4_b[1, 2] * means3d_cam[:, 1] / (means3d_cam_z**2)
+        jacobian3d2d[:, 1, 2] = -cam_intr4x4_b[1, 2] * pts3d_cam[:, 1] / (means3d_cam_z**2)
         cov2d = jacobian3d2d @ cov3d @ jacobian3d2d.permute(0, 2, 1)
         # note: constant 2d covariance for debug
         # cov2d = (torch.eye(2).to(device, dtype))[None,].repeat(N, 1, 1) * 5
