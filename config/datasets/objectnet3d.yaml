@@ -2,21 +2,20 @@ name: objectnet3d
 class_name: ObjectNet3D
 
 modalities:
-  - 'rgb'
-  - 'category'
-  - 'mask'
-  - 'cam_intr4x4'
-  - 'cam_tform4x4_obj'
-  - 'categories'
-  - 'size'
+    - 'rgb'
+    - 'rgb_mask'
+    - 'category'
+    - 'category_id'
+    - 'mask'
+    - 'cam_intr4x4'
+    - 'cam_tform4x4_obj'
+    - 'size'
+    - 'bbox'
+    - 'depth'
   # - 'mesh'
-  # - 'bbox'
-  # - 'cam_tform4x4_objs'
-  # - 'bboxs'
-  # - 'meshs'
 
-path_raw: ${platform.path_datasets}/ObjectNet3D
-path_preprocess: ${platform.path_datasets}/ObjectNet3D_Preprocess
+path_raw: ${platform.path_datasets_raw}/ObjectNet3D
+path_preprocess: ${platform.path_datasets_preprocess}/ObjectNet3D_Preprocess
 
 setup:
   enabled: False
@@ -34,19 +33,19 @@ categories:
 
 preprocess:
   subset_category_names_unique:
-    enabled: False
-    override: False
-    remove_previous: False
-  mask:
-    enabled: False
-    override: False
-    remove_previous: False
-  depth:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
   cuboid:
-    enabled: False
+    enabled: True
+    override: False
+    remove_previous: False
+  mask:
+    enabled: True
+    override: False
+    remove_previous: False
+  depth:
+    enabled: True
     override: False
     remove_previous: False
 

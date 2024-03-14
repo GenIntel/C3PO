@@ -17,5 +17,5 @@ class RGB_Random(OD3D_Transform):
         ])
 
     def __call__(self, frame):
-        frame._rgb = self.transform(frame.rgb)
+        frame.rgb = self.transform(frame.get_rgb())
         return frame

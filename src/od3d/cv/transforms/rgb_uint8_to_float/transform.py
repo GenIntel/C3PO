@@ -9,6 +9,6 @@ class RGB_UInt8ToFloat(OD3D_Transform):
         super().__init__()
 
     def __call__(self, frame):
-        frame._rgb = frame.rgb / 255.
+        frame.rgb = frame.get_rgb() / 255.
         return frame
 

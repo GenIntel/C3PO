@@ -57,10 +57,30 @@ class CO3Dv1_Sequence(CO3D_Sequence):
                 W = frame_W
         return H, W
 
+from typing import Dict
+from od3d.datasets.object import OD3D_MESH_TYPES, OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES
 class CO3Dv1(CO3D):
     sequence_type = CO3Dv1_Sequence
     frame_type = CO3Dv1_Frame
     tform_obj_type = OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP_CUBOID
+
+    def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
+                 categories: List[CO3D_CATEGORIES]=None,
+                 dict_nested_frames: Dict[str, Dict[str, List[str]]]=None,
+                 dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None,
+                 frames_count_max_per_sequence=None, transform=None, index_shift=0, subset_fraction=1.,
+                 mesh_type=OD3D_MESH_TYPES.CUBOID500,
+                 mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+                 mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
+                 tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP_CUBOID):
+
+        super().__init__(categories=categories, name=name, modalities=modalities, path_raw=path_raw,
+                         path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction,
+                         index_shift=index_shift, dict_nested_frames=dict_nested_frames,
+                         dict_nested_frames_ban=dict_nested_frames_ban,
+                         frames_count_max_per_sequence=frames_count_max_per_sequence,
+                         mesh_type=mesh_type, mesh_feats_type=mesh_feats_type,
+                         mesh_feats_dist_reduce_type=mesh_feats_dist_reduce_type, tform_obj_type=tform_obj_type)
 
     @staticmethod
     def setup(config: DictConfig):

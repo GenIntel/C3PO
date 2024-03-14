@@ -68,9 +68,15 @@ class MonoLMB(OD3D_SequenceDataset):
         # /misc/lmbraid19/sommerl/datasets/MonoLMB/videos/elephant/24_01_29__18_10.mp4
         #
         from od3d.cv.io import extract_frames_from_video
-        fpath_video = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB/videos/elephant/24_01_29__18_10.mp4')
-        path_frames = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB/frames/elephant/24_01_29__18_10')
-        extract_frames_from_video(fpath_video, path_frames, fps=5)
+
+        #for fpath_video in fpath_videos
+        path_videos = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB/videos')
+        path_frames = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB/frames')
+        fpaths_videos = [file for file in path_videos.rglob('*') if file.is_file()]
+
+        for fpath_video in fpaths_videos:
+            path_video_frames = path_frames.joinpath(fpath_video.relative_to(path_videos).with_suffix(""))
+            extract_frames_from_video(fpath_video, path_video_frames, fps=5)
 
     @staticmethod
     def extract_meta(config: DictConfig):
@@ -79,7 +85,7 @@ class MonoLMB(OD3D_SequenceDataset):
         path_sequences = MonoLMB.get_path_frames_rgb(path_raw=path_raw)
         config.setup.remove_previous = True
         if path_meta.exists() and config.setup.remove_previous:
-            logger.info(f"Removing previous Objectron")
+            logger.info(f"Removing previous MonoLMB meta")
             shutil.rmtree(path_meta)
 
         path_meta.mkdir(parents=True, exist_ok=True)
@@ -87,7 +93,6 @@ class MonoLMB(OD3D_SequenceDataset):
         dict_nested_frames = config.get('dict_nested_frames', None)
         dict_nested_frames_banned = config.get('dict_nested_frames_ban', None)
         preprocess_meta_override = config.get('extract_meta', False).get('override', False)
-
 
         from od3d.datasets.monolmb.enum import MONOLMB_CATEGORIES
         categories = list(dict_nested_frames.keys()) if dict_nested_frames is not None else MONOLMB_CATEGORIES.list()

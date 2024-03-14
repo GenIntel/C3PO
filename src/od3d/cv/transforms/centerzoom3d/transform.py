@@ -42,7 +42,7 @@ class CenterZoom3D(OD3D_Transform):
             logger.warning(f"dist <= 0")
 
         if self.center_use_mask and (frame.get_mask() > 0.5).sum() > 0:
-            mask = frame.mask > 0.5
+            mask = frame.get_mask() > 0.5
             mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
             mask_pxl2d = mask_pxl2d[mask[0]]
             # this automatic scales to fit the cropped image
@@ -64,14 +64,14 @@ class CenterZoom3D(OD3D_Transform):
             dist = self.scale_with_dist
             if frame.category is not None and frame.category in PASCAL3D_SCALE_NORMALIZE_TO_REAL.keys():
                 dist *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[frame.category]
-            scale = frame.cam_tform4x4_obj[2, 3] / dist
+            scale = frame.get_cam_tform4x4_obj()[2, 3] / dist
 
-        elif self.scale_with_mask is not None and frame.mask is not None:
+        elif self.scale_with_mask is not None and frame.get_mask() is not None:
             # note: this usage should become deprecated in the future.
             if self.scale is not None:
                 logger.warning('For CenterZoom3D `scale` and `scale_with_mask` are not None. Only using `scale_with_mask`.')
 
-            mask = frame.mask > 0.5
+            mask = frame.get_mask() > 0.5
             if mask.sum() > 0.:
                 mask_pxl2d = get_pxl2d(H=mask.shape[1], W=mask.shape[2], dtype=float, device=mask.device)
                 mask_pxl2d = mask_pxl2d[mask[0]]
@@ -110,7 +110,7 @@ class CenterZoom3D(OD3D_Transform):
                 raise Exception(msg)
 
         if self.scale is not None:
-                # scale = frame.cam_tform4x4_obj[2, 3] / self.dist
+                # scale = frame.get_cam_tform4x4_obj[2, 3] / self.dist
                 scale *= self.scale
 
         # logger.info(f'scale = {scale}')
@@ -128,7 +128,7 @@ class CenterZoom3D(OD3D_Transform):
             center2d_shifted[1] += frame.H * self.center_rel_shift_xy[1]
 
 
-        frame.mask_rgb, _ = crop(frame.get_mask_rgb(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
+        frame.rgb_mask, _ = crop(frame.get_rgb_mask(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
 
         if OD3D_FRAME_MODALITIES.MASK in frame.modalities:
             frame.mask, _ = crop(img=frame.get_mask(), center=center2d_shifted, H_out=self.H, W_out=self.W, scale=scale, ctx=None, mode=self.mode_mask)
@@ -150,7 +150,8 @@ class CenterZoom3D(OD3D_Transform):
         frame.size[0:1] = self.H
         frame.size[1:2] = self.W
 
-        frame.cam_intr4x4 = torch.bmm(cam_crop_tform_cam[None,], frame.cam_intr4x4[None,])[0]
+        frame.cam_intr4x4 = torch.bmm(cam_crop_tform_cam[None,], frame.get_cam_intr4x4()[None,])[0]
+        frame.get_cam_tform4x4_obj()
 
         if self.scale_with_dist is not None:
             # note: this usage should become deprecated in the future.
@@ -159,12 +160,12 @@ class CenterZoom3D(OD3D_Transform):
 
         if OD3D_FRAME_MODALITIES.BBOX in frame.modalities:
             # x_min, y_min, x_max, y_max
-            frame.bbox = (frame.bbox.reshape(2, 2) * scale[None,]).flatten()
+            frame.bbox = (frame.get_bbox().reshape(2, 2) * scale[None,]).flatten()
             frame.bbox[[0, 2]] = frame.bbox[[0, 2]] + cam_crop_tform_cam[0, 2]
             frame.bbox[[1, 3]] = frame.bbox[[1, 3]] + cam_crop_tform_cam[1, 2]
 
         if OD3D_FRAME_MODALITIES.KPTS2D_ANNOT in frame.modalities:
-            frame.kpts2d_annot = frame.kpts2d_annot * scale[None,]
+            frame.kpts2d_annot = frame.get_kpts2d_annot() * scale[None,]
             frame.kpts2d_annot = frame.kpts2d_annot + cam_crop_tform_cam[:2, 2]
 
         # assumption: depth of all image points is the same (which of course does only approximately holds)

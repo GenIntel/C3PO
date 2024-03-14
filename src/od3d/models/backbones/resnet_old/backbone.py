@@ -8,6 +8,7 @@ from od3d.cv.transforms.sequential import SequentialTransform
 import torchvision
 from od3d.models.backbones.backbone import OD3D_Backbone
 from od3d.models.backbones.resnet_old.backbone_old import NetE2E
+from od3d.cv.visual.resize import resize
 
 class ResNetOld(OD3D_Backbone):
     def __init__(
@@ -39,7 +40,30 @@ class ResNetOld(OD3D_Backbone):
             pretrain=True,
         )
 
+        self.downsample_rate = self.config.downsample_rate
+        self.downsample_rate_resnet = 8
+
+        if self.freeze:
+            for param in self.parameters():
+                param.requires_grad = False
+
     def forward(self, rgb):
+
+        if rgb.dim() == 3:
+            C, H, W = rgb.shape
+        elif rgb.dim() == 4:
+            B, C, H, W = rgb.shape
+        else:
+            raise NotImplementedError
+
+        H_out = (H // self.downsample_rate)
+        W_out = (W // self.downsample_rate)
+        H_in = H_out * self.downsample_rate_resnet
+        W_in = W_out * self.downsample_rate_resnet
+
+        rgb = resize(rgb, H_out= H_in, W_out=W_in)
+
+
         #return self.net.forward_test(resize(rgb, H_out=512, W_out=512))
         #return torch.nn.functional.normalize(self.net.net(rgb), p=2, dim=1)
         return [self.net.forward_test(rgb)]

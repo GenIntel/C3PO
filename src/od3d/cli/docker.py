@@ -17,10 +17,23 @@ def zsp():
     cmd = 'docker build -f third_party/envs/Zero-Shot-Pose/Dockerfile -t limpbot/zsp:v1 third_party/zero-shot-pose'
     run_cmd(cmd=cmd, logger=logger, live=True)
 
+def get_cmd_zsp_run(gpus: str = 'all', port: str = 5000):
+    return f'docker run --gpus device={gpus} -p {port}:5000 -t limpbot/zsp:v1'
+
+def get_cmd_zsp_stop(port: str = 5000):
+    return f'docker container stop $(docker container ps --filter "ancestor=limpbot/zsp:v1" --filter "publish={port}" -q)'
+
 @app.command()
-def zsp_run(gpus: str = typer.Option('all', '-g', '--gpus')):
+def zsp_run(gpus: str = typer.Option('all', '-g', '--gpus'),
+            port: str = typer.Option(5000, '-p', '--port')):
     logging.basicConfig(level=logging.INFO)
-    cmd = f'docker run --gpus device={gpus} -p 5000:5000 -t limpbot/zsp:v1'
+    cmd = get_cmd_zsp_run(gpus=gpus, port=port)
+    run_cmd(cmd=cmd, logger=logger, live=False, background=True)
+
+@app.command()
+def zsp_stop(port: str = typer.Option(5000, '-p', '--port')):
+    logging.basicConfig(level=logging.INFO)
+    cmd = get_cmd_zsp_stop(port=port)
     run_cmd(cmd=cmd, logger=logger, live=True)
 
 @app.command()
@@ -28,4 +41,3 @@ def droid_slam():
     logging.basicConfig(level=logging.INFO)
     cmd = 'docker build -f third_party/envs/DROID-SLAM/Dockerfile -t limpbot/droid-slam:v1 --build-arg UID=$(id -u) --build-arg GID=$(id -g) third_party/DROID-SLAM'
     run_cmd(cmd=cmd, logger=logger, live=True)
-

@@ -22,14 +22,14 @@ class OD3D_Frames():
     cam_intr4x4: torch.Tensor = None
     cam_tform4x4_obj: torch.Tensor = None
     category: List[str] = None
-    cateogry_id: torch.LongTensor = None
+    category_id: torch.LongTensor = None
     categories: List[List[str]] = None
     dtype: torch.dtype = None
     device: torch.device = None
     sequence_name_unique: str = None
     sequence: OD3D_Sequence = None
     rgb: torch.Tensor = None
-    mask_rgb: torch.Tensor = None
+    rgb_mask: torch.Tensor = None
     depth: torch.Tensor = None
     mask: torch.Tensor = None
     depth_mask: torch.Tensor = None
@@ -58,7 +58,12 @@ class OD3D_Frames():
         for modality in modalities:
             modality_data = [frame.get_modality(modality) for frame in frames]
             if modality in list(OD3D_FRAME_MODALITIES_STACKABLE):
-                modality_data = torch.stack(modality_data, dim=0)
+                if type(modality_data[0]) == int:
+                    modality_data = torch.LongTensor(modality_data)
+                elif type(modality_data[0]) == float:
+                    modality_data = torch.FloatTensor(modality_data)
+                else:
+                    modality_data = torch.stack(modality_data, dim=0)
             modality_kwargs[modality] = modality_data
 
         if OD3D_FRAME_MODALITIES.SIZE in modality_kwargs.keys():

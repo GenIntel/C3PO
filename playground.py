@@ -1,3 +1,10 @@
+# from CGAL.CGAL_Kernel import Point_3
+# from CGAL.CGAL_Alpha_wrap_3 import alpha_wrap_3
+#
+# points = [ for ]
+# a = alpha_wrap_3(points)
+
+
 import torch
 from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
 from pathlib import Path

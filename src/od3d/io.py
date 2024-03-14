@@ -82,8 +82,12 @@ def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", m
             overrides = [f"+ablations/{Path(ablation).parent}={Path(ablation).stem}" for ablation in ablations] + [
                 "platform=" + platform] + overrides
             cfg = compose(config_name=benchmark, overrides=overrides)
-            cfg.ablation_name = '_'.join(
-                [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
+            #cfg.ablation_name = '_'.join(
+            #    [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
+
+            from omegaconf import open_dict
+            with open_dict(cfg):
+                cfg.ablation_name = '_'.join([ablation.stem for ablation in ablations])
             logger.info(cfg.ablation_name)
 
             cfgs.append(cfg)
@@ -172,8 +176,32 @@ def run_cmd(cmd, logger, live=False, background=False):
                 logger.info(res.stderr.decode("utf-8"))
             return res.stdout.decode("utf-8")
         else:
-            subprocess.run(cmd, capture_output=False, shell=True)
+            #child = RunCmdBackgroundProcess(cmd, os.getpid())
+            from multiprocessing import Process
+            pid = os.getpid()
+            child_proc = Process(target=run_child, args=(cmd, pid,))
+            child_proc.daemon = True
+            child_proc.start()
 
+def run_child(cmd, parent_pid):
+    """
+    Start a child process by running self._cmd.
+    Wait until the parent process (self._parent) has died, then kill the
+    child.
+    """
+    import psutil
+    from time import sleep
+    _parent = psutil.Process(pid=parent_pid)
+    _child = subprocess.Popen(cmd, shell=True)
+    try:
+        #with open("log.txt", "a") as myfile:
+        #    myfile.write(_parent.status())
+        while _parent.status() == psutil.STATUS_RUNNING or _parent.status() == psutil.STATUS_SLEEPING:
+            sleep(1)
+    except psutil.NoSuchProcess:
+        pass
+    finally:
+        _child.terminate()
 
 def read_str_from_file(fpath: Path):
     with open(fpath, 'r') as file:

@@ -6,13 +6,14 @@ from omegaconf import OmegaConf
 from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
-from od3d.benchmark.run import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, bench_single_method_torque, bench_single_method_slurm
-from od3d.benchmark.benchmark import get_timestamp_as_string, get_timestamp_from_string
+from od3d.benchmark.run import bench_single_method_local, bench_single_method_local_separate_venv, bench_single_method_local_docker, torque_run_method_or_cmd, slurm_run_method_or_cmd
 import json
 app = typer.Typer()
 import subprocess
 from omegaconf import open_dict
 import time
+
+from od3d.cli._platform import get_slurm_jobs_ids
 
 import datetime
 import pandas as pd
@@ -20,13 +21,23 @@ from pygit2 import Repository
 
 from tabulate import tabulate
 import re
-from od3d.datasets.meta import OD3D_Meta
 import od3d.io
 
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+
+def get_timestamp_as_string():
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%m-%d_%H-%M-%S")
+    return timestamp
+
+def get_timestamp_from_string(string):
+    now = datetime.datetime.now()
+    year = now.strftime("%Y")
+    timestamp = datetime.datetime.strptime('_'.join(f'{year}-{string}'.split('_')[:2]), "%Y-%m-%d_%H-%M-%S")
+    return timestamp
 
 def get_nested_value(data, key):
     keys = key.split('.')  # Split the string key into a list of keys
@@ -40,7 +51,7 @@ def get_nested_value(data, key):
             return None  # Key not found
     return value
 
-def get_runs(name_regex='.*', age_in_hours=1000):
+def get_runs(name_regex='.*', timestamp_gt_age_in_hours=1000, timestamp_lt_age_in_hours=0):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config()
 
@@ -51,15 +62,17 @@ def get_runs(name_regex='.*', age_in_hours=1000):
     # Access the API
     api = wandb.Api()
 
-    timestamp_created_gt = (datetime.datetime.now(datetime.timezone.utc) -datetime.timedelta(hours=age_in_hours)).isoformat()
+    timestamp_created_lt = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=timestamp_lt_age_in_hours)).isoformat()
+    timestamp_created_gt = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=timestamp_gt_age_in_hours)).isoformat()
+
     # config.logger.wandb_project_name
     # Fetch all the runs in your project
     runs = api.runs(config.logger.wandb_project_name, filters={
                             "display_name": {"$regex": name_regex},
                             "$and": [{
                                 'created_at': {
-                                    # "$lt": '2022-03-09T10',
-                                    "$gt": timestamp_created_gt
+                                    "$lt": timestamp_created_lt,
+                                    "$gt": timestamp_created_gt,
                                 }
                             }]}
                     )
@@ -87,7 +100,7 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
     #                 )
 
 
-    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
 
     # if name_regex is not None:
     #     #runs_names_regex_matches = [re.match(name_regex, run.name) for run in runs]
@@ -338,6 +351,7 @@ def table_multiple_categories_multiview_incremental():
     my_df.to_csv('output.csv', index=False, header=False)
 
 def save_category_sequence_images_as_one(df: pandas.DataFrame):
+    from od3d.datasets.meta import OD3D_Meta
     # df has to contain 'train_datasets.labeled.dict_nested_frames', 'category', 'sequence_nth'
     config = od3d.io.load_hierarchical_config()
 
@@ -601,9 +615,9 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         elif method_cfg.platform.link == 'local-docker':
             bench_single_method_local_docker(method_cfg)
         elif method_cfg.platform.link == 'torque':
-            bench_single_method_torque(method_cfg)
+            torque_run_method_or_cmd(method_cfg)
         elif method_cfg.platform.link == 'slurm':
-            bench_single_method_slurm(method_cfg)
+            slurm_run_method_or_cmd(method_cfg)
 
             if (i+1) % 40 == 0:
                 time.sleep(sleep_in_mins * 60)
@@ -613,7 +627,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 
 def get_failed_runs(name_regex='.*', age_in_hours=1000):
     logging.basicConfig(level=logging.INFO)
-    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
     runs = list(filter(lambda run: run.state =='failed' or run.state=='crashed', runs)) #  or run.state =='running'
     # runs_states = [run.state for run in runs]
     runs_names = [run.name for run in runs]
@@ -623,17 +637,18 @@ def get_failed_runs(name_regex='.*', age_in_hours=1000):
 @app.command()
 def recent(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
                   name_regex: str = typer.Option('.*', '-n', '--name')):
-    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
     # runs_states = [run.state for run in runs]
     for run in runs:
         logger.info(f'{run.name} {run.state}')
 
 @app.command()
-def delete_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
-                  name_regex: str = typer.Option('.*', '-n', '--name')):
+def delete_slurm(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
+                 timestamp_lt_age_in_hours: int = typer.Option(0, '-l', '--lower'),
+                 name_regex: str = typer.Option('.*', '-n', '--name')):
 
     logging.basicConfig(level=logging.INFO)
-    runs = get_runs(name_regex=name_regex, age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=timestamp_gt_age_in_hours, timestamp_lt_age_in_hours=timestamp_lt_age_in_hours)
     logger.info(f'deleting following runs: ')
     for run in runs:
         logger.info(run.name)
@@ -642,7 +657,6 @@ def delete_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
 def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
                   name_regex: str = typer.Option('.*', '-n', '--name')):
     from pathlib import Path
-    from od3d.benchmark.benchmark import get_timestamp_as_string
 
     logging.basicConfig(level=logging.INFO)
     runs_names = get_failed_runs(age_in_hours=age_in_hours, name_regex=name_regex)
@@ -657,7 +671,7 @@ def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
             cfg_old.run_name = timestamp_str + run_name[len(timestamp_str):]
 
             logger.info(f'restarting {run_name}...')
-            bench_single_method_slurm(cfg_old)
+            slurm_run_method_or_cmd(cfg_old)
         except Exception as e:
             logger.info(e)
     logger.info(runs_names)
@@ -685,17 +699,7 @@ def info_slurm():
     'srun -p lmb_gpu-rtx2080 -w dagobert --pty bash'
     pass
 
-def get_slurm_jobs_ids(job_id_treshold=None):
-    slurm_result = subprocess.run(f'ssh slurm "squeue --me"', capture_output=True, shell=True)
-    slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
-    slurm_jobs_ids = []
-    for slurm_job in slurm_jobs[1:]:
-        slurm_job_split = slurm_job.split()
-        if len(slurm_job_split) > 0:
-            slurm_jobs_ids.append(int(slurm_job_split[0]))
-    if job_id_treshold is not None:
-        slurm_jobs_ids = list(filter(lambda job_id: job_id < job_id_treshold, slurm_jobs_ids))
-    return slurm_jobs_ids
+
 
 @app.command()
 def rsync(platform_source: str = typer.Option('slurm', '-s', '--source'),
@@ -758,3 +762,4 @@ def stop_slurm(job: str = typer.Option(None, '-j', '--job')):
             slurm_result = subprocess.run(f'ssh slurm "scancel {str(job_id)}"', capture_output=True, shell=True)
             for line in slurm_result.stdout.decode("utf-8").split("\n"):
                 logger.info(line)
+

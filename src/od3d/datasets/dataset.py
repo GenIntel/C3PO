@@ -14,7 +14,7 @@ import inspect
 from tqdm import tqdm
 import numpy as np
 import od3d.io
-from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES
+from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES, OD3D_FRAME_DEPTH_TYPES
 from od3d.cv.geometry.transform import proj3d2d_broadcast
 from od3d.datasets.sequence import OD3D_Sequence
 from od3d.datasets.sequence_meta import OD3D_SequenceMeta
@@ -38,6 +38,7 @@ class OD3D_DATASET_SPLITS(str, ExtEnum):
 
 class OD3D_Dataset(Dataset):
     from od3d.datasets.enum import OD3D_CATEGORIES
+    map_od3d_categories = None
     all_categories = list(OD3D_CATEGORIES)
     subclasses = {}
     frame_type = OD3D_Frame
@@ -73,7 +74,18 @@ class OD3D_Dataset(Dataset):
                  categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1.,
                  dict_nested_frames: Dict=None, dict_nested_frames_ban: Dict=None):
 
+
+
         logger.info(f'init dataset {name}...')
+
+
+        if categories is not None:
+            if self.map_od3d_categories is not None:
+                self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
+            else:
+                self.categories = categories
+        else:
+            self.categories = self.all_categories
 
         self.name = name
         self.path_raw: Path = Path(path_raw)
@@ -82,13 +94,12 @@ class OD3D_Dataset(Dataset):
 
         if transform is None:
             from od3d.cv.transforms.rgb_uint8_to_float import RGB_UInt8ToFloat
-            transform = RGB_UInt8ToFloat
+            transform = RGB_UInt8ToFloat()
 
         self.transform = transform
         self.index_shift = index_shift
         self.modalities = modalities
         self.splits_featured = [OD3D_DATASET_SPLITS.RANDOM]
-        self.categories = categories if categories is not None else self.all_categories
 
         logger.info('completing nested frames..., can take up to 500 seconds...')
         dict_nested_frames = self.frame_type.meta_type.complete_nested_metas(path_meta=self.path_meta,
@@ -126,7 +137,9 @@ class OD3D_Dataset(Dataset):
     def get_subset_with_dict_nested_frames(self, dict_nested_frames: Dict):
         import copy
         dataset = copy.deepcopy(self)
-        dataset.set_list_frames_unique(list_frames_unique=OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames))
+        dict_nested_frames_compl = OD3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_frames)
+        list_frames_unique = OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames_compl)
+        dataset.set_list_frames_unique(list_frames_unique=list_frames_unique)
         return dataset
 
     def set_list_frames_unique(self, list_frames_unique):
@@ -244,43 +257,68 @@ class OD3D_Dataset(Dataset):
                 override = config_preprocess.mask.get('override', False)
                 self.preprocess_mask(override=override)
 
+
+
     def preprocess_mask(self, override=False, remove_previous=False):
         logger.info("preprocess masks...")
         from functools import partial
 
+        first_frame = self.get_frame_by_name_unique(self.list_frames_unique[0])
+        first_frame_fpath_mask = first_frame.fpath_mask
+        mask_type = first_frame.mask_type
+        if first_frame_fpath_mask.exists() and not override:
+            logger.info(f"masks exists, at least at {first_frame_fpath_mask}, skip preprocess mask")
+            return
+
+        modalities = [OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.CAM_INTR4X4,
+                      OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ, OD3D_FRAME_MODALITIES.SIZE]
+        if mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D:
+            modalities.append(OD3D_FRAME_MODALITIES.RAYS_CENTER3D)
+        elif mask_type == OD3D_FRAME_MASK_TYPES.MESH:
+            modalities.append(OD3D_FRAME_MODALITIES.MESH)
+        elif mask_type == OD3D_FRAME_MASK_TYPES.SAM:
+            pass
+        else:
+            raise NotImplementedError
+
+        modalities_orig = self.modalities
+        self.modalities = modalities
         dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False,
-                                                 collate_fn=partial(self.collate_fn,
-                                                                    modalities=[OD3D_FRAME_MODALITIES.RGB,
-                                                                                OD3D_FRAME_MODALITIES.MASK,
-                                                                                OD3D_FRAME_MODALITIES.RAYS_CENTER3D,
-                                                                                OD3D_FRAME_MODALITIES.CAM_INTR4X4,
-                                                                                OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ])
-                                                 )
+                                                 collate_fn=partial(self.collate_fn, modalities=modalities))
         logging.info(f"Dataset contains {len(self)} frames.")
 
-        from od3d.models.model import OD3D_Model
-        model = OD3D_Model.create_by_name('sam')
-        model.cuda()
-        model.eval()
-        self.transform = model.transform
+        if mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D or mask_type == OD3D_FRAME_MASK_TYPES.SAM:
+            from od3d.models.model import OD3D_Model
+            model = OD3D_Model.create_by_name('sam')
+            model.cuda()
+            model.eval()
+            self.transform = model.transform
+        else:
+            pass
 
+        from od3d.cv.io import get_default_device
+        device = get_default_device()
         for batch in iter(dataloader):
             logger.info(f'{batch.name_unique[0]}')  # sequence_name[0]}')
-            if torch.cuda.is_available():
-                batch.to(device='cuda:0')
-                # batch.cam_proj4x4_obj batch.rays_center3d
-                frames = [self.get_frame_by_name_unique(name_unique=name_unique) for name_unique in batch.name_unique]
+            frames = [self.get_frame_by_name_unique(name_unique=name_unique) for name_unique in batch.name_unique]
+            batch.to(device=device)
 
-                if frames[0].fpath_mask.exists() and not override:
-                    logger.info(f"masks exists, at least at {frames[0].fpath_mask}, skip preprocess mask")
-                    return
+            if mask_type == OD3D_FRAME_MASK_TYPES.MESH:
+                masks = batch.mesh.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj.to(device=device),
+                                                cams_intr4x4=batch.cam_intr4x4.to(device=device),
+                                                imgs_sizes=batch.size.to(device=device), modality='mask')
 
-                if frames[0].mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D:
+                for b in range(len(batch.name_unique)):
+                    frame = frames[b]
+                    mask = masks[b]
+                    frame.write_mask(mask)
+            else:
+                if mask_type == OD3D_FRAME_MASK_TYPES.SAM_SFM_RAYS_CENTER3D:
                     center_pxl2d = proj3d2d_broadcast(proj4x4=batch.cam_proj4x4_obj, pts3d=batch.rays_center3d)
-                elif frames[0].mask_type == OD3D_FRAME_MASK_TYPES.SAM:
+                elif mask_type == OD3D_FRAME_MASK_TYPES.SAM:
                     center_pxl2d = batch.size[None, [1,0]] / 2
                 else:
-                    raise ValueError(f"mask_type {frames[0].mask_type} not supported")
+                    raise ValueError(f"mask_type {mask_type} not supported")
                 masks, scores, logits = model(batch.rgb, center_pxl2d)
 
                 for b in range(len(batch.name_unique)):
@@ -291,6 +329,55 @@ class OD3D_Dataset(Dataset):
                     # from od3d.cv.visual.draw import draw_pixels
                     # mask = draw_pixels(mask, pxls=center_pxl2d[b:b+1])
                     frame.write_mask(mask)
+        self.modalities = modalities_orig
+
+
+    def preprocess_depth(self, override=False, remove_previous=False):
+        logger.info("preprocess depth...")
+        from functools import partial
+
+        first_frame = self.get_frame_by_name_unique(self.list_frames_unique[0])
+        first_frame_fpath_depth = first_frame.fpath_depth
+        depth_type = first_frame.depth_type
+        if first_frame_fpath_depth.exists() and not override:
+            logger.info(f"masks exists, at least at {first_frame_fpath_depth}, skip preprocess mask")
+            return
+
+        modalities = [OD3D_FRAME_MODALITIES.RGB, OD3D_FRAME_MODALITIES.CAM_INTR4X4,
+                      OD3D_FRAME_MODALITIES.CAM_TFORM4X4_OBJ, OD3D_FRAME_MODALITIES.SIZE]
+        if depth_type == OD3D_FRAME_DEPTH_TYPES.MESH:
+            modalities.append(OD3D_FRAME_MODALITIES.MESH)
+        else:
+            raise NotImplementedError
+
+        modalities_orig = self.modalities
+        self.modalities = modalities
+        dataloader = torch.utils.data.DataLoader(dataset=self, batch_size=1, shuffle=False,
+                                                 collate_fn=partial(self.collate_fn, modalities=modalities))
+        logging.info(f"Dataset contains {len(self)} frames.")
+
+        from od3d.cv.io import get_default_device
+        device = get_default_device()
+        for batch in iter(dataloader):
+            logger.info(f'{batch.name_unique[0]}')  # sequence_name[0]}')
+            frames = [self.get_frame_by_name_unique(name_unique=name_unique) for name_unique in batch.name_unique]
+            batch.to(device=device)
+
+            if depth_type == OD3D_FRAME_MASK_TYPES.MESH:
+                depths = batch.mesh.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj.to(device=device),
+                                                 cams_intr4x4=batch.cam_intr4x4.to(device=device),
+                                                 imgs_sizes=batch.size.to(device=device), modality='depth')
+
+                depths_masks = batch.mesh.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj.to(device=device),
+                                                 cams_intr4x4=batch.cam_intr4x4.to(device=device),
+                                                 imgs_sizes=batch.size.to(device=device), modality='mask')
+
+                for b in range(len(batch.name_unique)):
+                    frame = frames[b]
+                    depth = depths[b]
+                    depth_mask = depths_masks[b]
+                    frame.write_depth(depth)
+                    frame.write_depth_mask(depth_mask)
 
     def visualize(self, item: int):
         raise NotImplementedError
@@ -360,7 +447,13 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                  transform=None, index_shift=0, subset_fraction=1., frames_count_max_per_sequence=None):
 
         self.frames_count_max_per_sequence = frames_count_max_per_sequence
-        self.categories = categories if categories is not None else self.all_categories
+        if categories is not None:
+            if self.map_od3d_categories is not None:
+                self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
+            else:
+                self.categories = categories
+        else:
+            self.categories = self.all_categories
         self.path_raw = Path(path_raw)
         self.path_preprocess = Path(path_preprocess)
         self.modalities = modalities
@@ -406,8 +499,9 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                         # category / sequence not in dict_nested_frames
                         dict_nested_frames_seqs_filtered[category][sequence_name] = []
         dict_nested_frames = dict_nested_frames_seqs_filtered
-        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities, path_raw=path_raw,
-                         path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
+        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames,
+                         dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities,
+                         path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
 
     def filter_dict_nested_frames(self, dict_nested_frames: Dict[str, Dict[str, List[str]]]):
@@ -479,14 +573,18 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
     def get_subset_by_sequences(self, dict_category_sequences: Dict[str, List[str]], frames_count_max_per_sequence=None):
         dict_nested_frames = {}
-        for cat, seqs in dict_category_sequences.items():
+        for cat, seqs_names in dict_category_sequences.items():
             dict_nested_frames[cat] = {}
-            for seq in seqs:
-                 dict_nested_frames[cat][seq] = None
-        return OD3D_SequenceDataset(
-            name=self.name, modalities=self.modalities, path_raw=self.path_raw, path_preprocess=self.path_preprocess,
-            categories=self.categories, dict_nested_frames=dict_nested_frames, transform=self.transform,
-            index_shift=self.index_shift)
+            for seq_name in seqs_names:
+                seq = self.get_sequence_by_name_unique(name_unique=f'{cat}/{seq_name}')
+                dict_nested_frames[cat][seq_name] = OD3D_Sequence.get_subset_frames_names_uniform(
+                    frames_names=seq.frames_names, count_max_per_sequence=frames_count_max_per_sequence)
+
+        return self.get_subset_with_dict_nested_frames(dict_nested_frames)
+        #return OD3D_SequenceDataset(
+        #    name=self.name, modalities=self.modalities, path_raw=self.path_raw, path_preprocess=self.path_preprocess,
+        #    categories=self.categories, dict_nested_frames=dict_nested_frames, transform=self.transform,
+        #    index_shift=self.index_shift)
 
     def get_split_sequences_shared(self, fraction1: float):
         dict_category_sequence_name_frames_names_subsetA = {}
@@ -518,21 +616,14 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
         return self.get_split_from_dicts(dict_category_sequence_name_frames_names_subsetA, dict_category_sequence_name_frames_names_subsetB)
 
-    def get_subset_with_dict_nested_frames(self, dict_nested_frames):
-        return OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
-                    path_preprocess=self.path_preprocess, categories=self.categories,
-                    dict_nested_frames=dict_nested_frames, transform=self.transform, index_shift=self.index_shift)
+    #def get_subset_with_dict_nested_frames(self, dict_nested_frames):
+    #    return OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
+    #                path_preprocess=self.path_preprocess, categories=self.categories,
+    #                dict_nested_frames=dict_nested_frames, transform=self.transform, index_shift=self.index_shift)
 
     def get_split_from_dicts(self, dict_nested_frames_subsetA, dict_nested_frames_subsetB):
-        co3d_subsetA = OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
-                                            path_preprocess=self.path_preprocess, categories=self.categories,
-                                            dict_nested_frames=dict_nested_frames_subsetA, transform=self.transform,
-                                            index_shift=self.index_shift)
-
-        co3d_subsetB = OD3D_SequenceDataset(name=self.name, modalities=self.modalities, path_raw=self.path_raw,
-                                            path_preprocess=self.path_preprocess, categories=self.categories,
-                                            dict_nested_frames=dict_nested_frames_subsetB,
-                                            transform=self.transform, index_shift=self.index_shift)
+        co3d_subsetA = self.get_subset_with_dict_nested_frames(dict_nested_frames_subsetA)
+        co3d_subsetB = self.get_subset_with_dict_nested_frames(dict_nested_frames_subsetB)
 
         return co3d_subsetA, co3d_subsetB
 
@@ -612,3 +703,130 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(self.dict_category_sequences_names):
             sequences.append(self.get_sequence_by_name_unique(name_unique=sequence_name_unique))
         return sequences
+
+    def save_sequences_as_video(self, H=1080, W=1920, fps=2, fpath_video=None, imgs_count=30):
+
+        if fpath_video is None:
+            fpath_video = Path(f'{self.name}.mp4')
+
+        sequences = self.get_sequences()
+        category_sequences_count = {}
+        category_sequences_count_max = 0
+
+        for category in tqdm(self.categories):
+            category_sequences_count[category] = sum([1 for sequence in sequences if sequence.category == category])
+            if category_sequences_count_max < category_sequences_count[category]:
+                category_sequences_count_max = category_sequences_count[category]
+            category_sequences_count[category] = 0
+
+        H_cell = H // len(self.categories)
+        W_cell = W // category_sequences_count_max
+        tstamp_category_sequence_imgs = torch.zeros(size=(imgs_count, len(self.categories), category_sequences_count_max, 3, H_cell, W_cell))
+
+        from od3d.cv.visual.resize import resize
+        for sequence in tqdm(sequences):
+            cams_tform4x4_world, cams_intr4x4, cams_imgs = sequence.read_cams(cams_count=imgs_count)
+            cams_imgs = resize(torch.stack(cams_imgs, dim=0), H_out=H_cell, W_out=W_cell)
+            tstamp_category_sequence_imgs[:len(cams_imgs), sequence.category_id, category_sequences_count[sequence.category]] = cams_imgs
+            category_sequences_count[sequence.category] += 1
+
+        from od3d.cv.visual.show import imgs_to_img
+        tstamp_category_sequence_imgs = [imgs_to_img(imgs, H_out=H, W_out=W) for imgs in tstamp_category_sequence_imgs]
+
+        from od3d.cv.visual.video import save_video
+        save_video(fpath=fpath_video, imgs=tstamp_category_sequence_imgs, fps=fps)
+
+    def visualize_category_sequences(self, imgs_count=10):
+        sequences = self.get_sequences()
+        from od3d.cv.visual.resize import resize
+        from od3d.cv.visual.show import show_scene, show_imgs
+
+        for category in tqdm(self.categories):
+            category_mesh = None
+            category_cams_imgs = []
+            category_cams_tform4x4_world = []
+            category_cams_intr4x4 = []
+            category_pts3d = None
+            category_pts3d_colors = None
+            category_pts3d_normals = None
+            for sequence in tqdm(sequences):
+                if sequence.category == category:
+                    cams_tform4x4_world, cams_intr4x4, cams_imgs = sequence.read_cams(cams_count=imgs_count)
+
+                    category_cams_imgs += cams_imgs
+                    category_cams_tform4x4_world.append(torch.stack(cams_tform4x4_world, dim=0))
+                    category_cams_intr4x4.append(torch.stack(cams_intr4x4, dim=0))
+                    if category_mesh is None:
+                        category_pts3d, category_pts3d_colors, category_pts3d_normals = sequence.read_pcl()
+                        category_mesh = sequence.read_mesh()
+
+            category_cams_intr4x4 = torch.cat(category_cams_intr4x4, dim=0)
+            category_cams_tform4x4_world = torch.cat(category_cams_tform4x4_world, dim=0)
+            #category_cams_imgs = torch.cat(category_cams_imgs, dim=0)
+            logger.info(f'mesh has {len(category_mesh.verts)} vertices and {len(category_mesh.faces)} faces.')
+            show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
+                       cams_imgs=category_cams_imgs, meshes=[category_mesh], viewpoints_count=9,
+                       fpath=f'{category}.png')
+
+
+            #show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
+            #           cams_imgs=category_cams_imgs, pts3d_colors=[category_pts3d_colors], pts3d=[category_pts3d],
+            #           viewpoints_count=9, fpath=f'{category}.png')
+
+    def visualize_category_meshes(self, imgs_count=10):
+        sequences = self.get_sequences()
+        from od3d.cv.visual.resize import resize
+        from od3d.cv.visual.show import show_scene, show_imgs
+
+        for category in tqdm(self.categories):
+            category_sequence = None
+            category_mesh = None
+            category_sequences_mesh = []
+            category_pts3d = None
+            category_pts3d_colors = None
+            category_pts3d_normals = None
+            category_sequences_pts3d = []
+            category_sequences_pts3d_colors = []
+            category_sequences_pts3d_normals = []
+
+            for sequence in tqdm(sequences):
+                if sequence.category == category:
+                    sequence_mesh = sequence.read_mesh()
+                    sequence_pts3d, sequence_pts3d_colors, sequence_pts3d_normals = sequence.read_pcl()
+
+                    if category_mesh is None:
+                        category_sequence = sequence
+                        category_pts3d = sequence_pts3d
+                        #category_pts3d_colors = sequence_pts3d_colors
+                        #category_pts3d_normals = sequence_pts3d_normals
+                        category_mesh = sequence_mesh
+                        category_mesh.rgb = category_mesh.verts_ncds
+
+                    sequence.preprocess_mesh_feats(override=False)
+                    # logger.info(f'mesh is watertight: {sequence_mesh.to_o3d().is_watertight()}')
+                    category_sequence.preprocess_mesh_feats(override=False)
+                    sequence.preprocess_mesh_feats_dist(category_sequence, override=False)
+                    mesh_feats_dist = sequence.read_mesh_feats_dist(category_sequence)
+
+                    dist_ref_geo_max = torch.cdist(category_mesh.verts[None,], category_mesh.verts[None,]).max().detach()  #
+                    dist_src_geo_max = torch.cdist(sequence_mesh.verts[None,], sequence_mesh.verts[None,]).max().detach()  #
+
+                    argmin_ref_from_src = mesh_feats_dist.argmin(dim=-1)  # N,
+                    argmin_src_from_ref = mesh_feats_dist.argmin(dim=-2)  # R,
+                    src_cyclic_dist = (sequence_mesh.verts - sequence_mesh.verts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1,).detach() / dist_src_geo_max  # N,
+                    ref_cyclic_dist = (category_mesh.verts - category_mesh.verts[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1,).detach() / dist_ref_geo_max  # R,
+
+                    from od3d.cv.select import batched_index_select
+                    src_cyclic_dist[
+                        batched_index_select(input=mesh_feats_dist, index=argmin_ref_from_src[..., None], dim=1).isinf()[:,
+                        0]] = torch.inf
+                    ref_cyclic_dist[
+                        batched_index_select(input=mesh_feats_dist.T, index=argmin_src_from_ref[..., None], dim=1).isinf()[
+                        :, 0]] = torch.inf
+
+                    cyclic_weight_temp = 0.5
+                    cycle_weight = torch.exp(-((src_cyclic_dist / cyclic_weight_temp)**2))
+
+                    sequence_mesh.rgb = category_mesh.verts_ncds[argmin_ref_from_src] * (src_cyclic_dist != torch.inf).float()[:, None]
+                    sequence_mesh.rgb *= cycle_weight[:, None]
+                    show_scene(meshes=[sequence_mesh], viewpoints_count=9, fpath=f'{category}_{sequence.name}.png')

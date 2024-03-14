@@ -7,8 +7,8 @@ modalities:
   - 'size'
   - 'mask'
 
-path_raw: ${platform.path_datasets}/OmniObject3D
-path_preprocess: ${platform.path_datasets}/OmniObject3D_Preprocess
+path_raw: ${platform.path_datasets_raw}/OmniObject3D
+path_preprocess: ${platform.path_datasets_preprocess}/OmniObject3D_Preprocess
 
 setup:
   enabled: False
