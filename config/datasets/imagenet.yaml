@@ -7,8 +7,8 @@ modalities:
   - 'size'
   - 'bbox'
 
-path_raw: ${platform.path_datasets}/ImageNet
-path_preprocess: ${platform.path_datasets}/ImageNet_Preprocess
+path_raw: ${platform.path_datasets_raw}/ImageNet
+path_preprocess: ${platform.path_datasets_preprocess}/ImageNet_Preprocess
 
 
 setup:

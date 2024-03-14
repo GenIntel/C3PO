@@ -2,8 +2,8 @@ defaults:
   - co3d
 
 class_name: CO3Dv1
-path_raw: ${platform.path_datasets}/CO3Dv1
-path_preprocess: ${platform.path_datasets}/CO3Dv1_Preprocess
+path_raw: ${platform.path_datasets_raw}/CO3Dv1
+path_preprocess: ${platform.path_datasets_preprocess}/CO3Dv1_Preprocess
 
 name: co3dv1_zsp_10s
 
@@ -28,7 +28,7 @@ categories:
   - hydrant
   - chair
   - laptop
-  - bookca
+  - book
   - backpack
 
 dict_nested_frames_ban:

@@ -83,6 +83,7 @@ def resize(
         x = x * 1.0
 
     x_dim_in = x.dim()
+    x_shape_in = x.shape
     if x_dim_in == 3:
         x = x[
             None,
@@ -163,4 +164,5 @@ def resize(
 
     if dtype_in == torch.uint8:
         x_out = x_out.to(dtype=torch.uint8)
+
     return x_out

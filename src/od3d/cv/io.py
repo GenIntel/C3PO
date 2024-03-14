@@ -87,11 +87,11 @@ def write_depth_image(img: torch.Tensor, path: Path):
     cv2.imwrite(str(path), depth.detach().cpu().numpy().astype(np.uint16))
 
 
-def save_image_mask(img: torch.Tensor, path: Path):
+def write_mask_image(img: torch.Tensor, path: Path):
     transform = transforms.Compose([
         transforms.ToPILImage()
     ])
-    img = transform(img.to(torch.uint8) * 255)
+    img = transform((img * 255).to(torch.uint8))
 
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path)
@@ -117,17 +117,16 @@ def image_as_wandb_image(img, caption="Caption Blub"):
 
 
 def extract_frames_from_video(fpath_video: Path, path_frames: Path, fps=5):
-    import cv2
-    import time
-
-    vidcap = cv2.VideoCapture(str(fpath_video))
-    vid_fps = vidcap.get(cv2.CAP_PROP_FPS)
 
     #vidcap.set(cv2.CAP_PROP_FPS, fps)
     # delete all files in directory path_frmaes
     from od3d.io import rm_dir
     rm_dir(path_frames)
     path_frames.mkdir(parents=True, exist_ok=True)
+
+
+    vidcap = cv2.VideoCapture(str(fpath_video))
+    vid_fps = vidcap.get(cv2.CAP_PROP_FPS)
 
     #if not path_frames.exists():
 

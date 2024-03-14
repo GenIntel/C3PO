@@ -20,6 +20,6 @@ class Crop(OD3D_Transform):
         frame.size[0:1] = self.H
         frame.size[1:2] = self.W
 
-        frame.rgb, cam_crop_tform_cam = crop(img=frame.rgb, H_out=self.H, W_out=self.W, scale=scale)
+        frame.rgb, cam_crop_tform_cam = crop(img=frame.get_rgb(), H_out=self.H, W_out=self.W, scale=scale)
 
         return frame

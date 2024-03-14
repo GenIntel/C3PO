@@ -131,18 +131,18 @@ class Cuboids(Meshes):
             triangles_back_lower = torch.stack([verts_xyz_ids[:-1, 0, 1:], verts_xyz_ids[1:, 0, :-1], verts_xyz_ids[1:, 0, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
 
             # right face
-            triangles_right_upper = torch.stack([verts_xyz_ids[-1, :-1, :-1], verts_xyz_ids[-1, 1:, :-1], verts_xyz_ids[-1, :-1, 1:]], dim=-1).reshape(-1, 3)
-            triangles_right_lower = torch.stack([verts_xyz_ids[-1, :-1, 1:], verts_xyz_ids[-1, 1:, :-1], verts_xyz_ids[-1, 1:, 1:]], dim=-1).reshape(-1, 3)
+            triangles_right_upper = torch.stack([verts_xyz_ids[-1, :-1, :-1], verts_xyz_ids[-1, 1:, :-1], verts_xyz_ids[-1, :-1, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
+            triangles_right_lower = torch.stack([verts_xyz_ids[-1, :-1, 1:], verts_xyz_ids[-1, 1:, :-1], verts_xyz_ids[-1, 1:, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
             # left face
-            triangles_left_upper = torch.stack([verts_xyz_ids[0, :-1, :-1], verts_xyz_ids[0, 1:, :-1], verts_xyz_ids[0, :-1, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
-            triangles_left_lower = torch.stack([verts_xyz_ids[0, :-1, 1:], verts_xyz_ids[0, 1:, :-1], verts_xyz_ids[0, 1:, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
+            triangles_left_upper = torch.stack([verts_xyz_ids[0, :-1, :-1], verts_xyz_ids[0, 1:, :-1], verts_xyz_ids[0, :-1, 1:]], dim=-1).reshape(-1, 3)
+            triangles_left_lower = torch.stack([verts_xyz_ids[0, :-1, 1:], verts_xyz_ids[0, 1:, :-1], verts_xyz_ids[0, 1:, 1:]], dim=-1).reshape(-1, 3)
 
             # top face
-            triangles_top_upper = torch.stack([verts_xyz_ids[:-1, :-1, -1], verts_xyz_ids[1:, :-1, -1], verts_xyz_ids[:-1, 1:, -1]], dim=-1).reshape(-1, 3)
-            triangles_top_lower = torch.stack([verts_xyz_ids[:-1, 1:, -1], verts_xyz_ids[1:, :-1, -1], verts_xyz_ids[1:, 1:, -1]], dim=-1).reshape(-1, 3)
+            triangles_top_upper = torch.stack([verts_xyz_ids[:-1, :-1, -1], verts_xyz_ids[1:, :-1, -1], verts_xyz_ids[:-1, 1:, -1]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
+            triangles_top_lower = torch.stack([verts_xyz_ids[:-1, 1:, -1], verts_xyz_ids[1:, :-1, -1], verts_xyz_ids[1:, 1:, -1]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
             # bottom face
-            triangles_bottom_upper = torch.stack([verts_xyz_ids[:-1, :-1, 0], verts_xyz_ids[1:, :-1, 0], verts_xyz_ids[:-1, 1:, 0]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
-            triangles_bottom_lower = torch.stack([verts_xyz_ids[:-1, 1:, 0], verts_xyz_ids[1:, :-1, 0], verts_xyz_ids[1:, 1:, 0]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
+            triangles_bottom_upper = torch.stack([verts_xyz_ids[:-1, :-1, 0], verts_xyz_ids[1:, :-1, 0], verts_xyz_ids[:-1, 1:, 0]], dim=-1).reshape(-1, 3)
+            triangles_bottom_lower = torch.stack([verts_xyz_ids[:-1, 1:, 0], verts_xyz_ids[1:, :-1, 0], verts_xyz_ids[1:, 1:, 0]], dim=-1).reshape(-1, 3)
 
 
             faces.append(triangles_front_upper)

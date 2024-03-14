@@ -45,8 +45,6 @@ class Mesh:
         self.feats = feats
         self.device = verts.device
 
-
-
     @staticmethod
     def convert_to_textureVertex(textures_uv: PT3DTexturesUV, meshes: PT3DMeshes) -> PT3DTexturesVertex:
         # note: this is a workaround, since the model textures_uv contains multiple values per vertex, but textures_vertex only one
@@ -86,6 +84,13 @@ class Mesh:
         faces = torch.from_numpy(np.asarray(mesh_o3d.triangles)).to(dtype=torch.long, device=device)
         return Mesh(verts=vertices, faces=faces)
     # .TriangleMesh(vertices=vertices, triangles=triangles)
+
+    def to_o3d(self):
+        import open3d
+        vertices = open3d.utility.Vector3dVector(self.verts.detach().cpu().numpy())
+        faces = open3d.utility.Vector3iVector(self.faces.detach().cpu().numpy())
+        o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
+        return o3d_obj_mesh
     @staticmethod
     def create_sphere(center3d: torch.Tensor([0., 0., 0.]), radius: float = 1., device='cpu'):
         return Mesh.from_o3d(o3d.geometry.TriangleMesh.create_sphere(radius=radius).translate(center3d.detach().cpu().numpy()), device=device)
@@ -192,10 +197,14 @@ class Meshes(torch.nn.Module):
         rendering: torch.Tensor
 
     @staticmethod
-    def load_from_files(fpaths_meshes: List[Path], device='cpu'):
+    def load_from_files(fpaths_meshes: List[Path], fpaths_meshes_tforms: List[Path] = None, device='cpu'):
         meshes = []
-        for fpath_mesh in fpaths_meshes:
-            meshes.append(Mesh.load_from_file(fpath=fpath_mesh, device=device))
+        for i, fpath_mesh in enumerate(fpaths_meshes):
+            mesh = Mesh.load_from_file(fpath=fpath_mesh, device=device)
+            if fpaths_meshes_tforms is not None:
+                mesh_tform = torch.load(fpaths_meshes_tforms[i]).to(device)
+                mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=mesh_tform)
+            meshes.append(mesh)
         return Meshes.load_from_meshes(meshes=meshes)
 
     @staticmethod
@@ -613,9 +622,9 @@ class Meshes(torch.nn.Module):
 
         return verts2d, mask_verts_vsbl
 
-    def show(self, fpath: Path = None, return_visualization=False, viewpoints_count=1):
+    def show(self, fpath: Path = None, return_visualization=False, viewpoints_count=1, meshes_add_translation=True):
         from od3d.cv.visual.show import show_scene
-        return show_scene(meshes=self, fpath=fpath, return_visualization=return_visualization, viewpoints_count=viewpoints_count, meshes_add_translation=True)
+        return show_scene(meshes=self, fpath=fpath, return_visualization=return_visualization, viewpoints_count=viewpoints_count, meshes_add_translation=meshes_add_translation)
 
     """
     def show(self, pts3d=[], meshes_ids=None):
@@ -920,7 +929,8 @@ class Meshes(torch.nn.Module):
             faces_per_pixel=1,
             bin_size=None,
             max_faces_per_bin=None,
-            perspective_correct=self.pt3d_raster_perspective_correct
+            perspective_correct=self.pt3d_raster_perspective_correct,
+            cull_backfaces=False # cull_backfaces=True
         )
 
         rasterizer = MeshRasterizer(

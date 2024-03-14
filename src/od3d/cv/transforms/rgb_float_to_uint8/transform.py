@@ -6,5 +6,5 @@ class RGB_FloatToUInt8(OD3D_Transform):
         super().__init__()
 
     def __call__(self, frame):
-        frame._rgb = (frame.rgb * 255.).to(dtype=torch.uint8)
+        frame.rgb = (frame.get_rgb() * 255.).to(dtype=torch.uint8)
         return frame

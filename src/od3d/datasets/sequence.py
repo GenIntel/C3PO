@@ -21,6 +21,18 @@ from od3d.cv.reconstruction.clean import get_pcl_clean_with_masks
 from od3d.cv.io import write_pts3d_with_colors_and_normals
 from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES
 from torch.utils.data import Dataset, DataLoader
+
+import re
+from od3d.cv.io import read_pts3d_with_colors_and_normals
+import open3d
+from od3d.cv.geometry.mesh import Mesh
+from od3d.cv.geometry.downsample import random_sampling, voxel_downsampling
+
+from od3d.cv.io import get_default_device
+from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast, inv_tform4x4, tform4x4, tform4x4_broadcast
+from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
+
+
 @dataclass
 class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
     frame_type = OD3D_Frame
@@ -99,6 +111,26 @@ class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
                                         if field.name != 'name_unique' and field.name in frame_fields_names}
         return self.frame_type(name_unique=frame_name_unique, **all_attrs_except_name_unique)
 
+    def visualize(self):
+        from od3d.cv.visual.show import show_scene
+        logger.info(self.name_unique)
+        tform_obj_type = self.tform_obj_type
+        cams_tform4x4_world, cams_intr4x4, cams_imgs = self.read_cams(cams_count=20, show_imgs=True, tform_obj_type=tform_obj_type)
+        cams_viewpoints = inv_tform4x4(torch.stack(cams_tform4x4_world))[:, :3, 3]
+
+        pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=tform_obj_type)
+
+
+        mesh_feats_viewpoints = self.read_mesh_feats_viewpoint(tform_obj_type=tform_obj_type)
+        if isinstance(mesh_feats_viewpoints, list):
+            mesh_feats_viewpoints = torch.cat(mesh_feats_viewpoints, dim=0)
+
+        mesh = self.get_mesh()
+        logger.info(f'mesh has {len(mesh.verts)} vertices and {len(mesh.faces)} faces.')
+
+        show_scene(cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs,
+                   pts3d_colors=[pts3d_colors], pts3d=[pts3d, mesh_feats_viewpoints, cams_viewpoints],
+                   meshes=[mesh])
 
     def read_cams(self, cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES=None, tform_obj_type= None, cams_count=5,
                   show_imgs=True):
@@ -262,16 +294,6 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
     # def path_droid_slam(self):
     #     return self.path_preprocess.joinpath(OD3D_SequenceDroidSlamMixin.get_rfpath_droid_slam(), self.name_unique)
 
-import re
-from od3d.cv.io import read_pts3d_with_colors_and_normals
-import open3d
-from od3d.cv.geometry.mesh import Mesh
-from od3d.cv.geometry.downsample import random_sampling, voxel_downsampling
-
-from od3d.cv.io import get_default_device
-from od3d.cv.geometry.transform import transf3d_broadcast, transf3d_normal_broadcast
-from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
-
 
 
 @dataclass
@@ -309,11 +331,11 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             self.pts3d, self.pts3d_colors, self.pts3d_normals = pts3d, pts3d_colors, pts3d_normals
         return pts3d, pts3d_colors, pts3d_normals
 
-    def get_pcl(self, pcl_type=None, clone=False, device='cpu'):
-        if self.pts3d is not None and (pcl_type is None or pcl_type == self.pcl_type):
+    def get_pcl(self, pcl_type=None, clone=False, device='cpu', tform_obj_type: OD3D_TFROM_OBJ_TYPES=None):
+        if self.pts3d is not None and (pcl_type is None or pcl_type == self.pcl_type) and (tform_obj_type is None or tform_obj_type == self.tform_obj_type):
             pts3d, pts3d_colors, pts3d_normals = self.pts3d, self.pts3d_colors, self.pts3d_normals
         else:
-            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(pcl_type=pcl_type, device=device)
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(pcl_type=pcl_type, device=device, tform_obj_type=tform_obj_type)
         if not clone:
             return pts3d, pts3d_colors, pts3d_normals
         else:
@@ -346,9 +368,9 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             H, W = self.get_min_HW()
             # note: this is only required if the frames have different sizes
             if H is not None and W is not None:
-                masks = torch.stack([frame.get_mask()[:, :H, :W] for frame in frames], dim=0).to(device=device)
+                masks = torch.stack([frame.read_mask()[:, :H, :W] for frame in frames], dim=0).to(device=device)
             else:
-                masks = torch.stack([frame.get_mask() for frame in frames], dim=0).to(device=device)
+                masks = torch.stack([frame.read_mask() for frame in frames], dim=0).to(device=device)
 
             cams_intr4x4 = torch.stack([frame.read_cam_intr4x4() for frame in frames], dim=0).to(device=device)
             cams_tform4x4_obj = torch.stack([frame.read_cam_tform4x4_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW) for frame in frames], dim=0).to(device=device)
@@ -386,35 +408,11 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
 #     #         self.mesh = mesh
 #     #     return mesh
 
-    def get_tform_obj(self, tform_obj_type: OD3D_TFROM_OBJ_TYPES=None):
-        if tform_obj_type is None:
-            tform_obj_type = self.tform_obj_type
-
-        if tform_obj_type == OD3D_TFROM_OBJ_TYPES.RAW:
-            return None
-        else:
-            fpath_tform_obj = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
-            if fpath_tform_obj.exists():
-                return torch.load(self.get_fpath_tform_obj(tform_obj_type=tform_obj_type))
-            else:
-                logger.warning(f'tform_obj_type {tform_obj_type} does not exists at {fpath_tform_obj}')
-                return None
-
     def get_fpath_tform_obj(self, tform_obj_type=None):
         if tform_obj_type is None:
             tform_obj_type = self.tform_obj_type
         return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
                                              self.name_unique, 'tform_obj.pt')
-
-    def write_tform_obj(self, tform_obj: torch.Tensor, fpath_tform_obj=None):
-        if fpath_tform_obj is None:
-            fpath_tform_obj = self.get_fpath_tform_obj()
-
-
-        if fpath_tform_obj.parent.exists() is False:
-            fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(tform_obj.detach().cpu(), f=fpath_tform_obj)
-
 
     def get_sequence_by_name_unique(self, sequence_name_unique: str):
         from dataclasses import fields
@@ -578,11 +576,20 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
         #     logger.info(f'not storing labeled axis.')
 
 
+from od3d.cv.geometry.mesh import Meshes
 @dataclass
 class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_SequencePCLMixin):
     mesh = None
     mesh_feats = None
     mesh_feats_viewpoint = None
+
+    def get_mesh_type_unique(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_type == OD3D_MESH_TYPES.META:
+            return Path('').joinpath(f'{mesh_type}')
+        else:
+            return Path('').joinpath(f'{mesh_type}', f'{self.pcl_type}', f'{self.sfm_type}')
 
     def get_fpath_mesh(self, mesh_type=None):
         if mesh_type is None:
@@ -590,23 +597,44 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_type == OD3D_MESH_TYPES.META:
             return self.path_raw.joinpath(self.meta.rfpath_mesh)
         else:
-            return self.path_preprocess.joinpath("mesh", f'{mesh_type}', f'{self.pcl_type}', f'{self.sfm_type}', self.name_unique, 'mesh.ply')
+            return self.path_preprocess.joinpath("mesh", self.get_mesh_type_unique(mesh_type), self.name_unique, 'mesh.ply')
+
+    def write_aligned_mesh_and_tform_obj(self, mesh: Meshes, aligned_obj_tform_obj: torch.Tensor, aligned_name: str):
+        mesh_type = f'aligned_N_{aligned_name}'
+        fpath_mesh_aligned = self.get_fpath_mesh(mesh_type=mesh_type)
+        mesh.write_to_file(fpath=fpath_mesh_aligned)
+
+        tform_obj_type = mesh_type
+        fpath_tform_obj_aligned = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
+
+        tform_obj = self.get_tform_obj()
+        if tform_obj is not None:
+            tform_obj = tform_obj.to(device=aligned_obj_tform_obj.device)
+            aligned_obj_tform_obj = tform4x4(aligned_obj_tform_obj.detach().clone(), tform_obj)
+        fpath_tform_obj_aligned.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(aligned_obj_tform_obj.detach().cpu(), f=fpath_tform_obj_aligned)
 
     @property
     def fpath_mesh(self):
         return self.get_fpath_mesh()
 
-    def read_mesh(self, mesh_type=None):
-        mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type))
-        if mesh_type is None or mesh_type == self.mesh_type:
+    def read_mesh(self, mesh_type=None, device='cpu', tform_obj_type=None):
+        mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type), device=device)
+
+        tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+        if tform_obj is not None:
+            tform_obj = tform_obj.to(device=device)
+            mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=tform_obj)
+
+        if (mesh_type is None or mesh_type == self.mesh_type) and (tform_obj_type is None or tform_obj_type == self.tform_obj_type):
             self.mesh = mesh
         return mesh
 
-    def get_mesh(self, mesh_type=None, clone=False):
-        if (mesh_type is None or mesh_type == self.mesh_type) and self.mesh is not None:
+    def get_mesh(self, mesh_type=None, clone=False, device='cpu', tform_obj_type=None):
+        if self.mesh is not None and (mesh_type is None or mesh_type == self.mesh_type) and (tform_obj_type is None or tform_obj_type == self.tform_obj_type):
             mesh = self.mesh
         else:
-            mesh = self.read_mesh(mesh_type=mesh_type)
+            mesh = self.read_mesh(mesh_type=mesh_type, device=device, tform_obj_type=tform_obj_type)
 
         if not clone:
             return mesh
@@ -639,13 +667,12 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         #     logger.warning(f'could not preprocess mesh, due to fpath to pcl {fpath_pcl} does not exists.')
         #     return None
 
-        pts3d, pts3d_colors, pts3d_normals = self.get_pcl(clone=True)
+        device = get_default_device()
+        pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW, device=device)
         N = pts3d.shape[0]
         if N < 4:
             logger.warning(f'Could not estimate mesh for sequence {self.name_unique} due to too few points in raw pcl {N}')
             return
-
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         o3d_pcl = open3d.geometry.PointCloud()
         o3d_pcl.points = open3d.utility.Vector3dVector(pts3d.detach().cpu().numpy())
@@ -690,16 +717,118 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
         elif mesh_type == 'alpha':
             # #### OPTION 3: ALPHA_SHAPE
-            pts3d = random_sampling(pts3d, pts3d_max_count=20000)
-            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=5. / len(pts3d)).mean()
-            alpha = 10 * particle_size
-            o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+            pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
+            quantile = max(0.01, 3. / len(pts3d))
+            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
+            vertices_count = mesh_vertices_count + 1
+            alpha = particle_size / 2.
+            # while vertices_count > mesh_vertices_count:
+            #     alpha = alpha * 1.3
+
+            o3d_obj_mesh = None
+            while o3d_obj_mesh is None:
+                try:
+                    o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+                except Exception as e:
+                    logger.warning(f'alpha {alpha} failed with {e}')
+                    alpha = alpha * 1.3
+
             logger.info(o3d_obj_mesh)
             o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
             logger.info(o3d_obj_mesh)
-            o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(mesh_vertices_count)
+            faces_count = mesh_vertices_count * 2
+
+            while vertices_count > mesh_vertices_count:
+                faces_count = int(faces_count * 0.9)
+                o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=faces_count)
+                logger.info(o3d_obj_mesh_downsampled)
+                vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+
+            obj_mesh = Mesh.from_o3d(o3d_obj_mesh_downsampled, device=device)
+
+        elif mesh_type == 'alphawrap':
+            # #### OPTION 3: ALPHAWRAP_SHAPE
+            pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
+            quantile = max(0.01, 3. / len(pts3d))
+            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
+            alpha = particle_size / 2.
+            offset = particle_size / 20.
+            vertices_count = mesh_vertices_count + 1
+            while vertices_count > mesh_vertices_count:
+
+                from CGAL.CGAL_Kernel import Point_3
+                from CGAL.CGAL_Alpha_wrap_3 import alpha_wrap_3
+                from CGAL.CGAL_Polyhedron_3 import Polyhedron_3
+                cgal_pts3d = [ Point_3(pt[0].item(), pt[1].item(), pt[2].item()) for pt in pts3d ]
+                cgal_poly = Polyhedron_3()
+                alpha_wrap_3(cgal_pts3d, alpha.item(), offset.item(), cgal_poly)
+                cgal_poly.points()
+
+                vertices = []
+                for v in cgal_poly.vertices():
+                    vertices.append([v.point().x(), v.point().y(), v.point().z()])
+                vertices = torch.Tensor(vertices)
+
+                # Get faces
+                faces = []
+                for f in cgal_poly.facets():
+                    edge = f.facet_begin()
+                    edge = edge.next()
+                    face_vertices = []
+                    for i in range(f.facet_degree()):
+                        vertex = torch.Tensor([edge.vertex().point().x(), edge.vertex().point().y(), edge.vertex().point().z()])
+                        vertex_id = torch.where((vertices == vertex).all(dim=-1))[0]
+                        face_vertices.append(vertex_id)
+                        edge = edge.next()
+                    # Assuming each facet is a triangle
+                    assert len(face_vertices) == 3
+                    faces.append(face_vertices)
+                faces = torch.Tensor(faces).long()
+
+                vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+                faces = open3d.utility.Vector3iVector(faces.detach().cpu().numpy())
+
+                o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
+
+                assert o3d_obj_mesh.is_watertight()
+
+                logger.info(o3d_obj_mesh)
+                vertices_count = len(o3d_obj_mesh.vertices)
+
+                alpha = alpha * 1.3
+
+            # tol = particle_size / 2.
+            # import pymesh2
+            # pymesh_mesh = pymesh2.form_mesh(vertices, faces)
+            # while vertices_count > mesh_vertices_count:
+            #     pymesh_mesh, info = pymesh_mesh2.collapse_short_edges(pymesh_mesh, tol)
+            #     vertices_count = len(pymesh_mesh.vertices)
+
+            #o3d_obj_mesh = o3d_obj_mesh.filter_smooth_laplacian(number_of_iterations=10)
+
+            # faces_count = mesh_vertices_count * 2
+            # voxel_size = particle_size / 2.
+            # while vertices_count > mesh_vertices_count:
+            #     #faces_count = faces_count * 0.9
+            #     #o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(int(faces_count))
+            #
+            #     voxel_size = voxel_size * 1.3
+            #     o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_vertex_clustering(
+            #         voxel_size=voxel_size,
+            #         contraction=open3d.geometry.SimplificationContraction.Quadric) # Average, Quadric
+            #
+            #     logger.info(o3d_obj_mesh_downsampled)
+            #     vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+            #
+            # o3d_obj_mesh = o3d_obj_mesh_downsampled
+
+            #logger.info(o3d_obj_mesh)
+            #o3d_obj_mesh = o3d_obj_mesh.filter_smooth_simple(number_of_iterations=10) # breaks watertightness
+
             logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
+
+            assert o3d_obj_mesh.is_watertight()
 
         elif mesh_type == 'voxel':
             #### OPTION 4: VOXEL GRID
@@ -715,13 +844,26 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
         elif mesh_type == 'cuboid':
             from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
-            cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
+            if self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID) is not None:
+                tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID, device=device)
+
+            elif self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP_CUBOID) is not None:
+                tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP_CUBOID, device=device)
+
+            else:
+                msg = f'Could not find tform_obj for cuboid type'
+                raise NotImplementedError(msg)
+
+
+            cannical_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+
+            cuboids, _ = fit_cuboid_to_pts3d(pts3d=cannical_pts3d,
                                              optimize_rot=False,
                                              optimize_transl=False,
                                              vertices_max_count=mesh_vertices_count)
 
+            cuboids.verts.data = transf3d_broadcast(pts3d=cuboids.verts, transf4x4=inv_tform4x4(tform_obj))
             obj_mesh = cuboids.get_mesh_with_id(0)
-
         else:
             msg = f'Unknown mesh type {mesh_type}'
             raise Exception(msg)
@@ -752,9 +894,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_feats_type is None:
             mesh_feats_type = self.mesh_feats_type
 
-        return self.path_preprocess.joinpath("feats", f'{mesh_feats_type}',  f'{mesh_type}',
-                                             f'{self.tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
-                                             self.name_unique, 'mesh_feats.pt')
+        return self.path_preprocess.joinpath("feats", f'{mesh_feats_type}',  f'{mesh_type}', f'{self.pcl_type}',
+                                             f'{self.sfm_type}', self.name_unique, 'mesh_feats.pt')
 
     def get_fpath_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None):
         if mesh_type is None:
@@ -762,9 +903,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_feats_type is None:
             mesh_feats_type = self.mesh_feats_type
 
-        return self.path_preprocess.joinpath("feats", f'{mesh_feats_type}',  f'{mesh_type}',
-                                             f'{self.tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
-                                             self.name_unique, 'mesh_feats_viewpoint.pt')
+        return self.path_preprocess.joinpath("feats", f'{mesh_feats_type}',  f'{mesh_type}', f'{self.pcl_type}',
+                                             f'{self.sfm_type}', self.name_unique, 'mesh_feats_viewpoint.pt')
 
 
     @property
@@ -775,19 +915,34 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
     def fpath_mesh_feats_viewpoint(self):
         return self.get_fpath_mesh_feats_viewpoint()
 
-    def read_mesh_feats(self, mesh_type=None, mesh_feats_type=None):
+    def read_mesh_feats(self, mesh_type=None, mesh_feats_type=None, cache=True):
         fpath_mesh_feats = self.get_fpath_mesh_feats(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
         mesh_feats = torch.load(fpath_mesh_feats)
-        if (mesh_type is None or mesh_type == self.mesh_type) and \
+        if cache is True and (mesh_type is None or mesh_type == self.mesh_type) and \
                 (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type):
             self.mesh_feats = mesh_feats
         return mesh_feats
 
-    def read_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None):
+    def read_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None, tform_obj_type=None, device='cpu'):
         fpath_mesh_feats_viewpoint = self.get_fpath_mesh_feats_viewpoint(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
         mesh_feats_viewpoint = torch.load(fpath_mesh_feats_viewpoint)
+        if isinstance(mesh_feats_viewpoint, list):
+            mesh_feats_viewpoint = [f.to(device=device) for f in mesh_feats_viewpoint]
+        else:
+            mesh_feats_viewpoint = mesh_feats_viewpoint.to(device=device)
+
+        tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+        if tform_obj is not None:
+            tform_obj = tform_obj.to(device=device)
+            if isinstance(mesh_feats_viewpoint, list):
+                mesh_feats_viewpoint = [transf3d_broadcast(pts3d=f, transf4x4=tform_obj) for f in mesh_feats_viewpoint]
+            else:
+                mesh_feats_viewpoint = transf3d_broadcast(pts3d=mesh_feats_viewpoint, transf4x4=tform_obj)
+
+
         if (mesh_type is None or mesh_type == self.mesh_type) and \
-                (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type):
+                (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type) and \
+                (tform_obj_type is None or tform_obj_type == self.tform_obj_type):
             self.mesh_feats_viewpoint = mesh_feats_viewpoint
         return mesh_feats_viewpoint
 
@@ -803,13 +958,15 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         else:
             return mesh_feats.clone()
 
-    def get_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None, clone=False):
+    def get_mesh_feats_viewpoint(self, mesh_type=None, mesh_feats_type=None, tform_obj_type=None, clone=False):
         if (mesh_type is None or mesh_type == self.mesh_type) and \
-                (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type) \
-                and self.mesh_feats_viewpoint is not None:
+                (mesh_feats_type is None or mesh_feats_type == self.mesh_feats_type) and \
+                (tform_obj_type is None or tform_obj_type == self.tform_obj_type) and \
+                self.mesh_feats_viewpoint is not None:
             mesh_feats_viewpoint = self.mesh_feats_viewpoint
         else:
-            mesh_feats_viewpoint = self.read_mesh_feats_viewpoint(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
+            mesh_feats_viewpoint = self.read_mesh_feats_viewpoint(mesh_type=mesh_type, mesh_feats_type=mesh_feats_type,
+                                                                  tform_obj_type=tform_obj_type)
 
         if not clone:
             return mesh_feats_viewpoint
@@ -863,12 +1020,12 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         model.eval()
         transform = SequentialTransform([OD3D_Transform.create_by_name(transform_name), model.transform])
 
-        dataloader = self.get_dataloader(batch_size=10, shuffle=False, transform=transform)
+        dataloader = self.get_dataloader(batch_size=6, shuffle=False, transform=transform) # 11 GB
 
         down_sample_rate = model.downsample_rate
         feature_dim = model.out_dim
-
-        meshes = Meshes.load_from_meshes([self.get_mesh()], device=device)
+        mesh = self.get_mesh()
+        meshes = Meshes.load_from_meshes([mesh], device=device)
 
         ## DEBUG BLOCK START
         #cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(CAM_TFORM_OBJ_SOURCES.PCL)
@@ -890,9 +1047,16 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                                                imgs_sizes=batch.size, mesh_ids=[0,] * B,
                                                down_sample_rate=down_sample_rate)
 
+            from od3d.cv.visual.resize import resize
+            rgb_mask_low_res = resize(batch.rgb_mask, scale_factor=1./down_sample_rate)
+            vts2d_mask *= sample_pxl2d_pts(rgb_mask_low_res, pxl2d=vts2d)[:, :, 0]
 
-            viewpoints3d = transf3d_broadcast(pts3d=-batch.cam_tform4x4_obj[:, None, :3, 3], transf4x4=inv_tform4x4(batch.cam_tform4x4_obj[:, None])).expand(*vts2d_mask.shape, 3)
+            batch_cam_tform4x4_obj_raw = batch.cam_tform4x4_obj
+            tform_obj = self.get_tform_obj(device=device)
+            if tform_obj is not None:
+                batch_cam_tform4x4_obj_raw = tform4x4_broadcast(batch_cam_tform4x4_obj_raw, tform_obj[None,])
 
+            viewpoints3d = (inv_tform4x4(batch_cam_tform4x4_obj_raw)[:, :3, 3])[:, None].expand(*vts2d_mask.shape, 3)
 
             # verts3d = meshes.get_verts_stacked_with_mesh_ids(mesh_ids=[0,] * B).clone()
             # show_scene(meshes=meshes, pts3d=verts3d, lines3d=[torch.stack([verts3d, verts3d + normals3d], dim=-2)])
@@ -911,6 +1075,13 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
             # B x F+N x C
             net_feats = sample_pxl2d_pts(feats2d_net, pxl2d=torch.cat([vts2d, noise2d], dim=1))
+
+            # visualize points sampled
+            # from od3d.cv.visual.show import show_img
+            # from od3d.cv.visual.draw import draw_pixels
+            # img = batch.rgb[0].clone()
+            # img = draw_pixels(img, vts2d[0] * down_sample_rate, colors=meshes.get_verts_ncds_with_mesh_id(mesh_id=0))
+            # show_img(img)
 
             C = net_feats.shape[2]
             # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
@@ -941,6 +1112,9 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         #     viewpoints3d = transf3d_broadcast(viewpoints3d, normal3d_transf_obj)
         #     verts3d = transf3d_broadcast(verts3d, normal3d_transf_obj)
         #     show_scene(pts3d=[verts3d, viewpoints3d], lines3d=[torch.Tensor([[[0., 0., 0.], [0., -1., 0.]]])])
+
+        logger.info(f'save mesh feats at {self.fpath_mesh_feats}')
+        logger.info(f'save mesh feats viewpoint at {self.fpath_mesh_feats_viewpoint}')
 
         if reduce_type == 'acc':
             if not self.fpath_mesh_feats.parent.exists():
@@ -989,6 +1163,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
         del dataloader
         del model
+        torch.cuda.empty_cache()
 
     def get_fpath_mesh_feats_dist(self, sequence: OD3D_Sequence, mesh_type=None, mesh_feats_type=None):
         if mesh_type is None:
@@ -996,9 +1171,10 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if mesh_feats_type is None:
             mesh_feats_type = self.mesh_feats_type
 
-        return self.path_preprocess.joinpath("feats_dist", f'{mesh_feats_type}',  f'{mesh_type}',
-                                             f'{self.tform_obj_type}', f'{self.pcl_type}', f'{self.sfm_type}',
+        return self.path_preprocess.joinpath("feats_dist", f'{self.mesh_feats_dist_reduce_type}', f'{mesh_feats_type}',
+                                             f'{mesh_type}', f'{self.pcl_type}', f'{self.sfm_type}',
                                              self.name_unique, sequence.name_unique, 'mesh_feats_dist.pt')
+
     def read_mesh_feats_dist(self, sequence: OD3D_Sequence, mesh_type=None, mesh_feats_type=None):
         fpath_mesh_feats_dist = self.get_fpath_mesh_feats_dist(sequence, mesh_type=mesh_type, mesh_feats_type=mesh_feats_type)
         mesh_feats_dist = torch.load(fpath_mesh_feats_dist)
@@ -1014,130 +1190,150 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
         if override and fpath_dist_verts_mesh_feats.exists():
             logger.info(f'overriding mesh feats dist at {fpath_dist_verts_mesh_feats}')
 
-        if fpath_dist_verts_mesh_feats.exists():
-            return torch.load(fpath_dist_verts_mesh_feats)
+        device = get_default_device()
+
+        seq1_feats = self.read_mesh_feats(cache=False)
+        seq2_feats = sequence.read_mesh_feats(cache=False, mesh_type=self.mesh_type, mesh_feats_type=self.mesh_feats_type)
+
+        from od3d.cv.cluster.embed import pca
+        dist_verts_mesh_feats_reduce_type = self.mesh_feats_dist_reduce_type
+        match = re.match(r"(pca)?([0-9]*)_?([a-z_]*)", dist_verts_mesh_feats_reduce_type, re.I)
+
+        if match:
+            embed_type, embed_dim, reduce_type = match.groups()
+            if len(embed_dim) > 0:
+                embed_dim = int(embed_dim)
+            # print(embed_type, embed_dim, reduce_type)
         else:
-            if torch.cuda.is_available():
-                device = 'cuda:0'
+            msg = f'could not retrieve embed_type, embed_dim, and reduce type from mesh feats type {dist_verts_mesh_feats_reduce_type}'
+            raise Exception(msg)
+
+        # perform pca on seq1_feats and seq2_feats and visualize
+        if isinstance(seq1_feats, list):
+            seq1_verts_count = len(seq1_feats)
+            seq2_verts_count = len(seq2_feats)
+            dist_verts_seq1_seq2 = torch.ones(size=(seq1_verts_count, seq2_verts_count)).to(
+                device=device) * torch.inf
+
+            # Vertices1+2 x Viewpoints x F
+            seq12_feats_padded = torch.nn.utils.rnn.pad_sequence(seq1_feats + seq2_feats, batch_first=True,
+                                                                 padding_value=torch.nan).to(device=device)
+            F = seq12_feats_padded.shape[-1]
+            V = seq12_feats_padded.shape[-2]
+            seq12_feats_padded_mask = (~seq12_feats_padded.isnan().all(dim=-1))
+
+            if embed_type is None:
+                pass
+            elif embed_type == 'pca':
+                seq12_feats_padded_embed = torch.zeros(size=(seq12_feats_padded.shape[:-1] + (embed_dim,))).to(
+                    device=device, dtype=seq12_feats_padded.dtype)
+                seq12_feats_padded_embed[:] = torch.nan
+                seq12_feats_padded_embed[seq12_feats_padded_mask] = pca(
+                    seq12_feats_padded[seq12_feats_padded_mask], C=embed_dim)
+                seq12_feats_padded = seq12_feats_padded_embed
+                F = embed_dim
             else:
-                device = 'cpu'
+                logger.warning(f'unknown embed type {embed_type}')
 
-            seq1_feats = self.read_mesh_feats()
-            seq2_feats = sequence.read_mesh_feats()
+            P = seq1_verts_count  # ensures that 11 GB are enough
+            logger.info(f'seq1 verts {seq1_verts_count}, seq2 verts {seq2_verts_count}, seq1 partial {(seq1_verts_count // P)}, viewpoints max {V}')
 
-            from od3d.cv.cluster.embed import pca
-            dist_verts_mesh_feats_reduce_type = self.mesh_feats_dist_reduce_type
-            match = re.match(r"(pca)?([0-9]*)_?([a-z_]*)", dist_verts_mesh_feats_reduce_type, re.I)
-
-            if match:
-                embed_type, embed_dim, reduce_type = match.groups()
-                if len(embed_dim) > 0:
-                    embed_dim = int(embed_dim)
-                print(embed_type, embed_dim, reduce_type)
-            else:
-                msg = f'could not retrieve embed_type, embed_dim, and reduce type from mesh feats type {dist_verts_mesh_feats_reduce_type}'
-                raise Exception(msg)
-
-            # perform pca on seq1_feats and seq2_feats and visualize
-            if isinstance(seq1_feats, list):
-                seq1_verts_count = len(seq1_feats)
-                seq2_verts_count = len(seq2_feats)
-                dist_verts_seq1_seq2 = torch.ones(size=(seq1_verts_count, seq2_verts_count)).to(
-                    device=device) * torch.inf
-
-                # Vertices1+2 x Viewpoints x F
-                seq12_feats_padded = torch.nn.utils.rnn.pad_sequence(seq1_feats + seq2_feats, batch_first=True,
-                                                                     padding_value=torch.nan).to(device=device)
-                F = seq12_feats_padded.shape[-1]
-                V = seq12_feats_padded.shape[-2]
-                seq12_feats_padded_mask = (~seq12_feats_padded.isnan().all(dim=-1))
-
-                if embed_type is None:
-                    pass
-                elif embed_type == 'pca':
-                    seq12_feats_padded_embed = torch.zeros(size=(seq12_feats_padded.shape[:-1] + (embed_dim,))).to(
-                        device=device, dtype=seq12_feats_padded.dtype)
-                    seq12_feats_padded_embed[:] = torch.nan
-                    seq12_feats_padded_embed[seq12_feats_padded_mask] = pca(
-                        seq12_feats_padded[seq12_feats_padded_mask], C=embed_dim)
-                    seq12_feats_padded = seq12_feats_padded_embed
-                    F = embed_dim
+            for p in range(P):
+                if p < P - 1:
+                    seq1_verts_partial = torch.arange(seq1_verts_count)[
+                                         (seq1_verts_count // P) * p:
+                                         (seq1_verts_count // P) * (p + 1)].to(device=device)
                 else:
-                    logger.warning(f'unknown embed type {embed_type}')
+                    seq1_verts_partial = torch.arange(seq1_verts_count)[
+                                         (seq1_verts_count // P) * p:].to(
+                        device=device)
+                seq1_verts_partial_count = len(seq1_verts_partial)
+                # logger.info(seq1_verts_partial)
+                # Vertices1 x Viewpoints x F
+                seq1_feats_padded = seq12_feats_padded[seq1_verts_partial].clone()
+                seq2_feats_padded = seq12_feats_padded[seq1_verts_count:].clone()
 
-                P = 8  # ensures that 11 GB are enough
-                for p in range(P):
-                    if p < P - 1:
-                        seq1_verts_partial = torch.arange(seq1_verts_count)[
-                                             (seq1_verts_count // P) * p:
-                                             (seq1_verts_count // P) * (p + 1)].to(device=device)
-                    else:
-                        seq1_verts_partial = torch.arange(seq1_verts_count)[
-                                             (seq1_verts_count // P) * p:].to(
-                            device=device)
-                    seq1_verts_partial_count = len(seq1_verts_partial)
-                    # logger.info(seq1_verts_partial)
-                    # Vertices1 x Viewpoints x F
-                    seq1_feats_padded = seq12_feats_padded[seq1_verts_partial].clone()
-                    seq2_feats_padded = seq12_feats_padded[seq1_verts_count:].clone()
+                seq1_feats_padded_mask = seq12_feats_padded_mask[seq1_verts_partial].clone()
+                seq2_feats_padded_mask = seq12_feats_padded_mask[seq1_verts_count:].clone()
 
-                    seq1_feats_padded_mask = seq12_feats_padded_mask[seq1_verts_partial].clone()
-                    seq2_feats_padded_mask = seq12_feats_padded_mask[seq1_verts_count:].clone()
-
-                    # Vertices1 x Viewpoints x Vertices2 x Viewpoints
+                # Vertices1 x Viewpoints x Vertices2 x Viewpoints
+                if reduce_type.startswith('negdot'):
+                    dists_verts_feats_seq1_seq2 = -torch.einsum('bnf,bkf->bnk', seq1_feats_padded.reshape(-1, F)[None,],
+                                                              seq2_feats_padded.reshape(-1, F)[None,]).reshape(
+                        seq1_verts_partial_count, V, seq2_verts_count, V)
+                else:
                     dists_verts_feats_seq1_seq2 = torch.cdist(seq1_feats_padded.reshape(-1, F)[None,],
                                                               seq2_feats_padded.reshape(-1, F)[None,]).reshape(
                         seq1_verts_partial_count, V, seq2_verts_count, V)
-                    dists_verts_feats_seq1_seq2_mask = (
-                                seq1_feats_padded_mask[:, :, None, None] * seq2_feats_padded_mask[None, None, :, :])
-                    dist_verts_seq1_seq2_inf_mask = dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(
-                        2).sum(
-                        dim=-1) == 0.
+                dists_verts_feats_seq1_seq2_mask = (
+                            seq1_feats_padded_mask[:, :, None, None] * seq2_feats_padded_mask[None, None, :, :])
+                dist_verts_seq1_seq2_inf_mask = dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(
+                    2).sum(
+                    dim=-1) == 0.
 
-                    if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN:
-                        # replace nan values with inf
-                        dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
-                        dist_verts_seq1_seq2[seq1_verts_partial] = dists_verts_feats_seq1_seq2.permute(0, 2, 1,
-                                                                                                       3).flatten(
-                            2).min(dim=-1).values
-                    elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG:
-                        dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(0.)
-                        dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
-                        dist_verts_seq1_seq2_partial = (dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).flatten(
-                            2) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2)).sum(dim=-1) / \
-                                                       (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1,
-                                                                                                 3).flatten(2).sum(
-                                                           dim=-1) + 1e-10)
-                        dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
-                        dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
-                    elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG:
-                        dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
-                        dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
-                        dist_verts_seq1_seq2_partial = ((
-                                                                (dists_verts_feats_seq1_seq2.permute(0, 2, 1,
-                                                                                                     3).min(
-                                                                    dim=-1).values.nan_to_num(
-                                                                    posinf=0.) * dists_verts_feats_seq1_seq2_mask.permute(
-                                                                    0, 2, 1, 3)[:, :, :, 0]).sum(dim=-1) +
-                                                                (dists_verts_feats_seq1_seq2.permute(0, 2, 1,
-                                                                                                     3).min(
-                                                                    dim=-2).values.nan_to_num(
-                                                                    posinf=0.) * dists_verts_feats_seq1_seq2_mask.permute(
-                                                                    0, 2, 1, 3)[:, :, 0, :]).sum(dim=-1)) /
-                                                        (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :,
-                                                         0, :].sum(
-                                                            dim=-1) + dists_verts_feats_seq1_seq2_mask.permute(0, 2,
-                                                                                                               1,
-                                                                                                               3)[:,
-                                                                      :, :, 0].sum(dim=-1) + 1e-10))
-                        dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
-                        dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
-                    else:
-                        logger.warning(f'Unknown reduce type {reduce_type}.')
+                if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN:
+                    # replace nan values with inf
+                    dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
+                    dist_verts_seq1_seq2[seq1_verts_partial] = dists_verts_feats_seq1_seq2.permute(0, 2, 1,
+                                                                                                   3).flatten(
+                        2).min(dim=-1).values
+                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_AVG:
+                    dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(0.)
+                    dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
+
+                    dist_verts_seq1_seq2_partial = (dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).flatten(
+                        2) * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(2)).sum(dim=-1) / \
+                                                   (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1,
+                                                                                             3).flatten(2).sum(
+                                                       dim=-1) + 1e-10)
+                    dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
+                    dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
+                    del dist_verts_seq1_seq2_partial
+                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN_AVG:
+                    dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
+                    dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
+                    dist_verts_seq1_seq2_partial = ((
+                                                            (dists_verts_feats_seq1_seq2.permute(0, 2, 1,
+                                                                                                 3).min(
+                                                                dim=-1).values.nan_to_num(
+                                                                posinf=0.) * dists_verts_feats_seq1_seq2_mask.permute(
+                                                                0, 2, 1, 3)[:, :, :, 0]).sum(dim=-1) +
+                                                            (dists_verts_feats_seq1_seq2.permute(0, 2, 1,
+                                                                                                 3).min(
+                                                                dim=-2).values.nan_to_num(
+                                                                posinf=0.) * dists_verts_feats_seq1_seq2_mask.permute(
+                                                                0, 2, 1, 3)[:, :, 0, :]).sum(dim=-1)) /
+                                                    (dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[:, :,
+                                                     0, :].sum(
+                                                        dim=-1) + dists_verts_feats_seq1_seq2_mask.permute(0, 2,
+                                                                                                           1,
+                                                                                                           3)[:,
+                                                                  :, :, 0].sum(dim=-1) + 1e-10))
+                    dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
+                    dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
+                    del dist_verts_seq1_seq2_partial
+                else:
+                    logger.warning(f'Unknown reduce type {reduce_type}.')
+
+                del dists_verts_feats_seq1_seq2
+                del dists_verts_feats_seq1_seq2_mask
+                del dist_verts_seq1_seq2_inf_mask
+                del seq1_verts_partial
+            del seq12_feats_padded
+            del seq12_feats_padded_mask
+            seq1_feats.clear()
+            seq2_feats.clear()
+        else:
+            if reduce_type.startswith('negdot'):
+                dist_verts_seq1_seq2 = -torch.einsum('nf,kf->nk', seq1_feats.to(device=device), seq2_feats.to(device=device))
             else:
                 dist_verts_seq1_seq2 = torch.cdist(seq1_feats.to(device=device), seq2_feats.to(device=device))
-            if not fpath_dist_verts_mesh_feats.parent.exists():
-                fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
-            del seq1_feats
-            del seq2_feats
+
+        if not fpath_dist_verts_mesh_feats.parent.exists():
+            fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
+        logger.info(f'save mesh feats dist at {fpath_dist_verts_mesh_feats}')
+        del dist_verts_seq1_seq2
+        del seq1_feats
+        del seq2_feats
+        torch.cuda.empty_cache()

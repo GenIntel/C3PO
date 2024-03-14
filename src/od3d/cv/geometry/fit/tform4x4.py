@@ -115,6 +115,16 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     #cyclic_dist_avg = (src_cyclic_dist[:, None] + ref_cyclic_dist[None,]) / 2. # NxR,
     #cyclic_dist_avg = cyclic_dist_avg[None,].expand(*dist_ref_geometry.shape).clone().detach() # PxNxR
 
+    src_cyclic_dist_mask = ~src_cyclic_dist.isinf()
+    ref_cyclic_dist_mask = ~ref_cyclic_dist.isinf()
+
+    if app_cyclic_weight_temp is None or geo_cyclic_weight_temp is None:
+        cyclic_weight_temp = (src_cyclic_dist[src_cyclic_dist_mask].sum(dim=-1) + ref_cyclic_dist[ref_cyclic_dist_mask].sum(dim=-1)) / (src_cyclic_dist_mask.sum(dim=-1) + ref_cyclic_dist_mask.sum(dim=-1) + 1e-6)
+        if app_cyclic_weight_temp is None:
+            app_cyclic_weight_temp = cyclic_weight_temp
+        if geo_cyclic_weight_temp is None:
+            geo_cyclic_weight_temp = cyclic_weight_temp
+
     # PxNxR
     argmin_ref_from_src = argmin_ref_from_src[None,].expand(P, N)
     argmin_src_from_ref = argmin_src_from_ref[None,].expand(P, R)
