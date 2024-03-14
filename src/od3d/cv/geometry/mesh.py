@@ -865,7 +865,9 @@ class Meshes(torch.nn.Module):
 
         if self.gaussian_splat_enabled and modality in \
                 [MESH_RENDER_MODALITIES.VERTS_NCDS, MESH_RENDER_MODALITIES.RGB, MESH_RENDER_MODALITIES.FEATS, MESH_RENDER_MODALITIES.MASK]: # MESH_RENDER_MODALITIES.FEATS:
-            from od3d.cv.render.gaussian_splats import render_gaussians
+            #from od3d.cv.render.gaussian_splats import render_gaussians
+            from od3d.cv.render.gaussians_splats_v2 import render_gaussians
+
             pts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device).clone().detach()
             if modality == MESH_RENDER_MODALITIES.VERTS_NCDS:
                 feats = self.get_verts_ncds_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
