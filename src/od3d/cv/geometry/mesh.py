@@ -828,7 +828,15 @@ class Meshes(torch.nn.Module):
         self.to(device)
 
         if down_sample_rate != 1.:
-            cams_intr4x4 = cams_intr4x4.clone() / down_sample_rate
+            cams_intr4x4 = cams_intr4x4.clone()
+            if cams_intr4x4.dim() == 2:
+                cams_intr4x4[:2] /= down_sample_rate
+            elif cams_intr4x4.dim() == 3:
+                cams_intr4x4[:, :2] /= down_sample_rate
+            elif cams_intr4x4.dim() == 4:
+                cams_intr4x4[:, :, :2] /= down_sample_rate
+            else:
+                raise NotImplementedError
             imgs_sizes = imgs_sizes.clone() // down_sample_rate
         else:
             cams_intr4x4 = cams_intr4x4.clone()
