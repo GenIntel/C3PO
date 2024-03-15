@@ -90,7 +90,7 @@ def get_torque_jobs_ids(job_id_treshold=None):
 
     return torque_jobs_ids
 @app.command()
-def rm_install_txt(platform: str = typer.Option(None, '-p', '--platform')):
+def rm_installing_txt(platform: str = typer.Option(None, '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform)
     run_cmd(f"ssh {platform} 'rm {config.platform.path_od3d}/installing.txt'", logger=logger)
