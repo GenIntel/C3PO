@@ -483,14 +483,14 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
 
             tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP)
 
-            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP)
-            pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
-            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d_label3d, size=size,
-                                                          optimize_rot=False,
-                                                          optimize_transl=True)
-            tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
 
-            self.write_tform_obj(tform_obj=tform_obj, fpath_tform_obj=fpath_tform_obj)
+            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d, size=size,
+                                                          optimize_rot=False,
+                                                          optimize_transl=True,
+                                                          tform_obj_label=tform_obj, optimize_steps=100)
+
+            self.write_tform_obj(tform_obj=obj_cuboid_tform_obj, fpath_tform_obj=fpath_tform_obj)
 
         elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D:
             fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
@@ -538,15 +538,24 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             self.preprocess_tform_obj(override=override, tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
 
             tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
 
-            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
-            pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
-            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d_label3d, size=size,
+            #from od3d.cv.visual.show import show_scene
+            #show_scene(pts3d=[pts3d], pts3d_colors=[pts3d_colors], pts3d_normals=[pts3d_normals])
+
+            #pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=)
+            #from od3d.cv.geometry.downsample import voxel_downsampling
+            #pts3d_label3d = voxel_downsampling(pts3d_label3d, K=100)
+            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d, size=size,
                                                           optimize_rot=False,
-                                                          optimize_transl=True)
-            tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
+                                                          optimize_transl=True, optimize_steps=100,
+                                                          tform_obj_label=tform_obj)
+            logger.info(obj_cuboid_tform_obj)
 
-            self.write_tform_obj(tform_obj=tform_obj, fpath_tform_obj=fpath_tform_obj)
+            #tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
+
+            logger.info(f'write at {fpath_tform_obj}')
+            self.write_tform_obj(tform_obj=obj_cuboid_tform_obj, fpath_tform_obj=fpath_tform_obj)
         else:
             raise NotImplementedError(f'tform_obj_type {tform_obj_type} not implemented')
 

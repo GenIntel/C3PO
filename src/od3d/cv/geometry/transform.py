@@ -7,6 +7,15 @@ import math
 from pytorch3d.transforms import axis_angle_to_matrix, rotation_6d_to_matrix, matrix_to_rotation_6d
 import pytorch3d.transforms
 
+def transf4x4_to_rot4x4_without_scale(transf4x4):
+    # note: note alignment of droid slam may include scale, therefore remove this scale.
+    # note: projection does not change as we scale the depth z to the object as well
+    rot4x4 = transf4x4.clone()
+    scale = rot4x4[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+    rot4x4[:3] = rot4x4[:3] / scale
+    rot4x4[:3, 3] = 0.
+    return rot4x4
+
 def so3_exp_map(so3_log:torch.Tensor):
 
     so3_log_shape = so3_log.shape
