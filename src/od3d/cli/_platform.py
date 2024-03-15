@@ -89,6 +89,11 @@ def get_torque_jobs_ids(job_id_treshold=None):
         torque_jobs_ids = list(filter(lambda job_id: job_id < job_id_treshold, torque_jobs_ids))
 
     return torque_jobs_ids
+@app.command()
+def rm_install_txt(platform: str = typer.Option(None, '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform)
+    run_cmd(f"ssh {platform} 'rm {config.platform.path_od3d}/installing.txt'", logger=logger)
 
 @app.command()
 def stop(platform: str = typer.Option(None, '-p', '--platform'),
