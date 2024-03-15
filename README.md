@@ -54,7 +54,11 @@ pip install git@github.com:Generative-Vision-Robust-Learning/od3d.git
     - `od3d dataset visualize -d [co3d|pascal3d|objectnet3d]`
 
   - Synchronize the target with the source platform
-    - `od3d dataset rsync -s local -t slurm -d co3d`
+    - `od3d dataset rsync -s local -t slurm -d co3d`  
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d"`  
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s torque -t local -d objectnet3d"`
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s torque -t local -d pascal3d"`  
+
 
 ### Benchmark
 
