@@ -4,22 +4,22 @@
 # points = [ for ]
 # a = alpha_wrap_3(points)
 
-
-import torch
-from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
-from pathlib import Path
-path = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta/sfm_mask')
-path = Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/tform_obj/label3d/meta_mask/meta')
-for category in path.iterdir():
-    for sequence in category.iterdir():
-        #fpath_in = '/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta/sfm_mask/bottle/38_1661_5028/axis.pt'
-        fpath_in = sequence.joinpath('axis.pt')
-        if fpath_in.exists():
-            fpath_out = Path(fpath_in).parent.joinpath('tform_obj.pt')
-            axis_pts3d = torch.load(fpath_in)
-            tform_obj = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_pts3d)
-            #tform_obj[:3, 3] = -pts3d.mean(dim=0)
-            torch.save(obj=tform_obj, f=fpath_out)
+#
+# import torch
+# from od3d.cv.geometry.fit.axis_tform_from_pts3d import axis_tform4x4_obj_from_pts3d
+# from pathlib import Path
+# path = Path('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta/sfm_mask')
+# path = Path('/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/tform_obj/label3d/meta_mask/meta')
+# for category in path.iterdir():
+#     for sequence in category.iterdir():
+#         #fpath_in = '/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta/sfm_mask/bottle/38_1661_5028/axis.pt'
+#         fpath_in = sequence.joinpath('axis.pt')
+#         if fpath_in.exists():
+#             fpath_out = Path(fpath_in).parent.joinpath('tform_obj.pt')
+#             axis_pts3d = torch.load(fpath_in)
+#             tform_obj = axis_tform4x4_obj_from_pts3d(axis_pts3d=axis_pts3d)
+#             #tform_obj[:3, 3] = -pts3d.mean(dim=0)
+#             torch.save(obj=tform_obj, f=fpath_out)
 
 # from huggingface_hub import login
 #
@@ -95,78 +95,155 @@ for category in path.iterdir():
 #     dist = dist.reshape(batch_shapes + featsA_specific_shapes + featsB_specific_shapes)
 #     return dist
 #
-# from od3d.cv.render.gaussian_splats import render_gaussians
+from od3d.cv.render.gaussian_splats import render_gaussians
+
+import torch
+
+import open3d as o3d
+import numpy as np
+
+fpath = '/misc/lmbraid19/sommerl/datasets/CO3D/car/469_66192_130586/pointcloud.ply'
+z_dist = 8.
+fpath = '/misc/lmbraid19/sommerl/datasets/CO3D/car/185_19982_37678/pointcloud.ply'
+z_dist = 3.
+
+#from od3d.cv.visual.show import show_scene
+#from od3d.cv.io import read_pts3d
+#pts3d = read_pts3d(fpath)
+#show_scene(pts3d=[pts3d])
 #
-# import torch
-#
-# import open3d as o3d
-# import numpy as np
-#
-# fpath = '/misc/lmbraid19/sommerl/datasets/CO3D/car/469_66192_130586/pointcloud.ply'
-# fpath = '/misc/lmbraid19/sommerl/datasets/CO3D/car/185_19982_37678/pointcloud.ply'
-#
-# #from od3d.cv.visual.show import show_scene
-# #from od3d.cv.io import read_pts3d
-# #pts3d = read_pts3d(fpath)
-# #show_scene(pts3d=[pts3d])
-# #
-# pcd = o3d.io.read_point_cloud(fpath)
-# size_pts = 0.03
-# opacity = 10.1
-# pcd = pcd.voxel_down_sample(voxel_size=size_pts)
-# N = len(pcd.points)
-#
-# device = 'cuda'
-# dtype = torch.float
-# image_width = 256
-# image_height = 256
-# zfar = 100.0
-# znear = 0.01
-# fx = 500. # x/z = fx * x'
-# fy = 500.
-# z_dist = 10.
-#
-# cam_tform_obj = torch.eye(4).to(device)
-# cam_tform_obj[0, 3] = 1.5
-# cam_tform_obj[1, 3] = 0.
-# cam_tform_obj[2, 3] = z_dist
-# cam_intr = torch.eye(4).to(device)
-# cam_intr[0, 0] = fx
-# cam_intr[1, 1] = fy
-# cam_intr[0, 2] = -image_width / 2.
-# cam_intr[1, 2] = -image_height / 2.
-#
-# # campos = torch.Tensor([0.0, 0.0, -z_dist]).to(device)
-# # viewmatrix = torch.eye(4).to(device)
-# # viewmatrix[2, 3] = z_dist
-# # viewmatrix = viewmatrix.T
-# # bg = torch.zeros((num_channels,)).to(device)
-# # bg[:3] = 0.
-#
-#
-# rgb = torch.zeros((N, 3)).to(device)
-# rgb[:, :3] = torch.from_numpy(np.asarray(pcd.colors)).to(device, dtype) # N x 3
-# means3d = torch.from_numpy(np.asarray(pcd.points)).to(device, dtype)  # N x 3
-# means3d = means3d - means3d.mean(dim=0, keepdim=True)
-# pts3d_mask = torch.ones((N,)).to(device, bool)
-#
-# img = render_gaussians(
-#         cams_tform4x4_obj=cam_tform_obj[None,],
-#         cams_intr4x4=cam_intr[None,],
-#         imgs_size=torch.Tensor([image_height, image_width]).to(device),
-#         pts3d=means3d[None,],
-#         pts3d_mask=pts3d_mask[None,],
-#         feats=rgb[None,],
-#         opacity=opacity,
-#         pts3d_size=size_pts,
-#         z_far=zfar,
-#         z_near=znear,
-#         feats_dim_base=32,
-# )[0]
-#
-# from od3d.cv.visual.show import show_img
-# show_img(img)
-#
+pcd = o3d.io.read_point_cloud(fpath)
+size_pts = 0.13 * 2
+opacity = 10.1
+pcd = pcd.voxel_down_sample(voxel_size=size_pts)
+N = len(pcd.points)
+
+device = 'cuda'
+dtype = torch.float
+image_width = 256
+image_height = 256
+zfar = 100.0
+znear = 0.01
+fx = 100. # x/z = fx * x'
+fy = 100.
+
+cam_tform_obj = torch.eye(4).to(device)
+cam_tform_obj[0, 3] = 0.
+cam_tform_obj[1, 3] = 0.
+cam_tform_obj[2, 3] = z_dist
+cam_intr = torch.eye(4).to(device)
+cam_intr[0, 0] = fx
+cam_intr[1, 1] = fy
+cam_intr[0, 2] = image_width / 2.
+cam_intr[1, 2] = image_height / 2.
+
+# campos = torch.Tensor([0.0, 0.0, -z_dist]).to(device)
+# viewmatrix = torch.eye(4).to(device)
+# viewmatrix[2, 3] = z_dist
+# viewmatrix = viewmatrix.T
+# bg = torch.zeros((num_channels,)).to(device)
+# bg[:3] = 0.
+
+
+rgb = torch.zeros((N, 3)).to(device)
+rgb[:, :3] = torch.from_numpy(np.asarray(pcd.colors)).to(device, dtype) # N x 3
+means3d = torch.from_numpy(np.asarray(pcd.points)).to(device, dtype)  # N x 3
+means3d = means3d - means3d.mean(dim=0, keepdim=True)
+pts3d_mask = torch.ones((N,)).to(device, bool)
+
+from od3d.cv.geometry.transform import proj3d2d_broadcast, tform4x4, transf3d_broadcast
+
+means3d_cam = transf3d_broadcast(pts3d=means3d, transf4x4=cam_tform_obj)
+means3d_cam_z = means3d_cam[:, 2]
+
+# gaussians_sorted_id = means3d_cam_z.argsort()
+# means3d_cam = means3d_cam[gaussians_sorted_id]
+# means3d_cam_z = means3d_cam[:, 2]
+# rgb = rgb[gaussians_sorted_id]
+
+means2d = proj3d2d_broadcast(pts3d=means3d_cam, proj4x4=cam_intr)
+
+print(means2d[:10])
+
+# 2 x H x W
+grid_pxl2d = torch.stack(torch.meshgrid(torch.arange(image_height), torch.arange(image_width), indexing='xy'), dim=0)
+
+# N x 2 x 3
+cov3d_var = size_pts / 50.
+cov3d = (torch.eye(3).to(device, dtype))[None,].repeat(N, 1, 1) * cov3d_var
+jacobian3d2d = torch.zeros((N, 2, 3)).to(device, dtype)
+jacobian3d2d[:, 0, 0] = cam_intr[0, 0] / means3d_cam_z
+jacobian3d2d[:, 0, 2] = -cam_intr[0, 2] * means3d_cam[:, 0] / (means3d_cam_z**2)
+jacobian3d2d[:, 1, 1] = cam_intr[1, 1] / means3d_cam_z
+jacobian3d2d[:, 1, 2] = -cam_intr[1, 2] * means3d_cam[:, 1] / (means3d_cam_z**2)
+cov2d = jacobian3d2d @ cov3d @ jacobian3d2d.permute(0, 2, 1)
+# cov2d = (torch.eye(2).to(device, dtype))[None,].repeat(N, 1, 1) * 5
+
+inv_cov2d = torch.inverse(cov2d)
+
+
+from od3d.cv.visual.show import show_scene2d, show_img, show_imgs
+
+# show_scene2d(pts2d =[means2d[gaussians_z_fov][:100], grid_pxl2d.flatten(1).permute(1,0)[:]])
+
+grid_pxl2d = grid_pxl2d.to(dtype=dtype, device=device)
+grid_pxl2d_dist2d = (grid_pxl2d[:, :, :, None] - means2d.permute(1, 0)[:, None, None]).abs()
+
+grid_pxl2d_cov_dist = grid_pxl2d_dist2d[0] ** 2 * inv_cov2d[None, None, :, 0, 0] + grid_pxl2d_dist2d[1] ** 2 * inv_cov2d[None, None, :, 1, 1] + \
+                  2 * grid_pxl2d_dist2d[0] * grid_pxl2d_dist2d[1] * inv_cov2d[None, None, :, 0, 1]
+grid_pxl2d_cov_opacity = torch.exp(-0.5 * grid_pxl2d_cov_dist)
+
+gaussians_z_fov = (means3d_cam_z > znear) * (means3d_cam_z < zfar)
+
+gaussians_z_occlusions = []
+
+# original
+gaussians_z_occlusion = (means3d_cam_z[:, None] > means3d_cam_z[None,]) * 1.
+gaussians_z_occlusion *= gaussians_z_fov[None,] * 1.
+
+gaussians_z_occlusions.append(gaussians_z_occlusion)
+
+# modified
+gaussians_z_occlusion = torch.sigmoid(0.5 * (means3d_cam_z[:, None] - means3d_cam_z[None,]) / cov3d_var)
+gaussians_z_occlusion.fill_diagonal_(0)
+gaussians_z_occlusion *= gaussians_z_fov[None,] * 1.
+
+gaussians_z_occlusions.append(gaussians_z_occlusion)
+imgs = []
+for gaussians_z_occlusion in gaussians_z_occlusions:
+        # hwo, no -> hwno: note: does take too much gpu memory
+        #grid_pxl2d_z_opacity = 1. - torch.einsum('hwo,no->hwno', grid_pxl2d_cov_opacity, gaussians_z_occlusion).clamp(0, 1)
+
+        # hwo, no -> hwn
+        grid_pxl2d_z_opacity = 1. - torch.einsum('hwo,no->hwn', grid_pxl2d_cov_opacity, gaussians_z_occlusion).clamp(0, 1)
+
+        grid_pxl2d_opacity = gaussians_z_fov[None, None] * grid_pxl2d_cov_opacity * grid_pxl2d_z_opacity
+
+        img = torch.einsum('hwn,nc->chw', grid_pxl2d_opacity, rgb)
+
+        imgs.append(img)
+show_imgs(imgs)
+#grid_dist = torch.stack(torch.meshgrid(torch.arange(image_height), torch.arange(image_width), indexing='ij'), dim=-1)
+# cov2d_conic
+#ov2d = torch.eye(2).to(device, dtype)
+
+
+
+img = render_gaussians(
+        cams_tform4x4_obj=cam_tform_obj[None,],
+        cams_intr4x4=cam_intr[None,],
+        imgs_size=torch.Tensor([image_height, image_width]).to(device),
+        pts3d=means3d[None,],
+        pts3d_mask=pts3d_mask[None,],
+        feats=rgb[None,],
+        opacity=opacity,
+        z_far=zfar,
+        z_near=znear,
+        feats_dim_base=128,
+)[0]
+
+
+
 # a = torch.Tensor([[ 8.6603e-01, -2.5000e-01,  4.3301e-01, -1.4901e-08],
 #          [ 5.0000e-01,  4.3301e-01, -7.5000e-01,  2.9802e-08],
 #          [ 0.0000e+00,  8.6603e-01,  5.0000e-01,  8.7890e-01],
