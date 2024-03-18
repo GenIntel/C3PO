@@ -444,9 +444,11 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                  categories: List=None,
                  dict_nested_frames: Dict=None,
                  dict_nested_frames_ban: Dict=None,
-                 transform=None, index_shift=0, subset_fraction=1., frames_count_max_per_sequence=None):
+                 transform=None, index_shift=0, subset_fraction=1., frames_count_max_per_sequence=None,
+                 sequences_count_max_per_category=None):
 
         self.frames_count_max_per_sequence = frames_count_max_per_sequence
+        self.sequences_count_max_per_category = sequences_count_max_per_category
         if categories is not None:
             if self.map_od3d_categories is not None:
                 self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
@@ -460,7 +462,8 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
         logger.info("filtering sequences...")
         self.dict_category_sequences_names = self.filter_dict_nested_sequences(dict_nested_frames=dict_nested_frames,
-                                                                               dict_nested_frames_ban=dict_nested_frames_ban)
+                                                                               dict_nested_frames_ban=dict_nested_frames_ban,
+                                                                               count_max_per_category=self.sequences_count_max_per_category)
 
         logger.info(f'sequences filtered')
         sequences_filtered_str = '\n'
@@ -532,7 +535,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         return dict_nested_frames
 
 
-    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
+    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None, count_max_per_category=None):
         logger.info("filtering frames...")
         if dict_nested_frames is not None:
             dict_nested_sequences = {}
@@ -568,6 +571,47 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         # get sequences
         dict_nested_sequences = OD3D_SequenceMetaCategoryMixin.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_sequences, dict_nested_metas_ban=dict_nested_sequences_ban)
 
+        # filter dict_nested_sequences
+        for i, category in tqdm(enumerate(dict_nested_sequences.keys())):
+            if category not in self.categories:
+                dict_nested_sequences[category] = []
+                continue
+            if count_max_per_category is not None:
+                dict_nested_sequences[category] = dict_nested_sequences[category][:count_max_per_category]
+
+            #
+            # if require_pcl or require_gt_pose or count_max_per_category is not None or sequences_require_mesh or require_good_cam_movement:
+            #
+            #     sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
+            #                  in dict_nested_sequences[category]]
+            #
+            #     if require_no_missing_frames:
+            #         sequences = list(filter(lambda sequence: sequence.no_missing_frames, sequences))
+            #
+            #     if require_good_cam_movement:
+            #         sequences = list(filter(lambda sequence: sequence.good_cam_movement, sequences))
+            #
+            #     #if dict_nested_sequences_ban is not None and category in dict_nested_sequences_ban.keys():
+            #     #    sequences = [seq for seq in sequences if seq not in dict_nested_sequences_ban[category]]
+            #     if require_gt_pose:
+            #         sequences = list(filter(lambda sequence: sequence.gt_pose_available, sequences))
+            #
+            #     if require_pcl:
+            #         sequences = list(filter(lambda sequence: sequence.meta.rfpath_pcl != Path('None'), sequences))
+            #         if require_pcl_score is not None:
+            #             sequences = list(
+            #                 filter(lambda sequence: sequence.meta.pcl_quality_score > require_pcl_score, sequences))
+            #         if sort_pcl_score:
+            #             sequences = sorted(sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
+            #     if sequences_require_mesh:
+            #         sequences_no_fpath_mesh = list(filter(lambda sequence: not sequence.fpath_mesh.exists(), sequences))
+            #         sequences = list(filter(lambda sequence: sequence.fpath_mesh.exists(), sequences))
+            #         if len(sequences_no_fpath_mesh) > 0:
+            #             sequences_no_fpath_mesh_names = [s.name for s in sequences_no_fpath_mesh]
+            #             logger.info(f'Filtering out sequences due to no mesh available for category {category}: \n{sequences_no_fpath_mesh_names}')
+            #             if count_max_per_category is not None:
+            #                 sequences = sequences[:count_max_per_category]
+            #             dict_nested_sequences[category] = [sequence.name for sequence in sequences]
         return dict_nested_sequences
 
 
