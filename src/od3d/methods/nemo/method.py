@@ -562,6 +562,17 @@ class NeMo(OD3D_Method):
                                                                                        feats2d_net=feats2d_net,
                                                                                        categories_ids=batch.category_id,
                                                                                        feats2d_net_mask=feats2d_net_mask)
+
+            # if self.config.inference.live:
+            #     from od3d.cv.visual.show import show_imgs
+            #     show_imgs(
+            #         blend_rgb(batch.rgb[:1], (self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj[0],
+            #                                                           cams_intr4x4=b_cams_multiview_intr4x4[0],
+            #                                                           imgs_sizes=batch.size,
+            #                                                           meshes_ids=batch.category_id[:1],
+            #                                                           modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
+            #                                                           broadcast_batch_and_cams=True)[0]).to(dtype=batch.rgb.dtype)), duration=-1)
+
             #  OPTION A: Use 2d gradient of rendered features
             sim = self.get_sim_feats2d_net_with_cams(
                 feats2d_net=feats2d_net,

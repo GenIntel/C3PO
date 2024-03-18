@@ -1,4 +1,5 @@
-
+import logging
+logger = logging.getLogger(__name__)
 import torch
 from od3d.cv.geometry.transform import proj3d2d_broadcast, tform4x4, transf3d_broadcast
 
@@ -56,6 +57,7 @@ def render_gaussians(
         pts3d_b_dists = pts3d_b_dists.clamp(1e-5, 1e+5)
 
         pts3d_size_b = pts3d_b_dists.min(dim=-1).values[:, None].mean(dim=0, keepdim=True).expand(N, 3) * pts3d_size_rel_to_neighbor_dist
+
         # pts3d_size_b = pts3d_b_dists.min(dim=-1).values[:, None].expand(N, 3) pts3d_size_rel_to_neighbor_dist
 
         pts3d_size_b = pts3d_size_b.clamp(1e-5, 1e+5) # otherwise illegal access memory
@@ -70,13 +72,17 @@ def render_gaussians(
         grid_pxl2d = torch.stack(torch.meshgrid(torch.arange(image_height), torch.arange(image_width), indexing='xy'), dim=0)
 
         # N x 2 x 3
-        cov3d_var = pts3d_size_b
+        cov3d_var = pts3d_size_b ** 2
         cov3d = (torch.eye(3).to(device, dtype))[None,].repeat(N, 1, 1) * cov3d_var[:, :, None]
         jacobian3d2d = torch.zeros((N, 2, 3)).to(device, dtype)
+        # J_K = [
+        #   fx/z, 0, -fx*x/z^2;
+        #   0, fy/z, -fy*y/z^2
+        #   ]
         jacobian3d2d[:, 0, 0] = cam_intr4x4_b[0, 0] / pts3d_b_cam[:, 2]
-        jacobian3d2d[:, 0, 2] = -cam_intr4x4_b[0, 2] * pts3d_b_cam[:, 0] / (pts3d_b_cam[:, 2]**2)
+        jacobian3d2d[:, 0, 2] = -cam_intr4x4_b[0, 0] * pts3d_b_cam[:, 0] / (pts3d_b_cam[:, 2]**2)
         jacobian3d2d[:, 1, 1] = cam_intr4x4_b[1, 1] / pts3d_b_cam[:, 2]
-        jacobian3d2d[:, 1, 2] = -cam_intr4x4_b[1, 2] * pts3d_b_cam[:, 1] / (pts3d_b_cam[:, 2]**2)
+        jacobian3d2d[:, 1, 2] = -cam_intr4x4_b[1, 1] * pts3d_b_cam[:, 1] / (pts3d_b_cam[:, 2]**2)
         cov2d = jacobian3d2d @ cov3d @ jacobian3d2d.permute(0, 2, 1)
         # note: constant 2d covariance for debug
         #cov2d = (torch.eye(2).to(device, dtype))[None,].repeat(N, 1, 1) * 5
