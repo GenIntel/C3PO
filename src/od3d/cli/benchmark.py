@@ -42,16 +42,33 @@ def get_timestamp_from_string(string):
 def get_nested_value(data, key):
     keys = key.split('.')  # Split the string key into a list of keys
     value = data
+    last_key_is_method = False
     for k in keys:
+        if isinstance(value, dict) and 'value' in value and k not in value:
+            value = value['value']
         if k in value:
             value = value[k]
-        elif 'value' in value and k in value['value']:
-            value = value['value'][k]
         else:
+            if last_key_is_method:
+                continue
             return None  # Key not found
+
+        if k == 'method':
+            last_key_is_method = True
+        else:
+            last_key_is_method = False
+
+    if isinstance(value, dict) and 'value' in value:
+        value = value['value']
     return value
 
-def get_runs(name_regex='.*', timestamp_gt_age_in_hours=1000, timestamp_lt_age_in_hours=0):
+def get_runs_multiple(benchmark: str=None, platform: str = None, ablation:str = None,
+                      age_in_hours_gt: int = 0, age_in_hours_lt: int = 1000):
+    run_name_regex = get_run_name_regex(ablation=ablation, platform=platform, benchmark=benchmark)
+    return get_runs(name_regex=run_name_regex, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt)
+
+
+def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config()
 
@@ -62,8 +79,8 @@ def get_runs(name_regex='.*', timestamp_gt_age_in_hours=1000, timestamp_lt_age_i
     # Access the API
     api = wandb.Api()
 
-    timestamp_created_lt = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=timestamp_lt_age_in_hours)).isoformat()
-    timestamp_created_gt = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=timestamp_gt_age_in_hours)).isoformat()
+    timestamp_created_lt = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=age_in_hours_gt)).isoformat()
+    timestamp_created_gt = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=age_in_hours_lt)).isoformat()
 
     # config.logger.wandb_project_name
     # Fetch all the runs in your project
@@ -78,7 +95,17 @@ def get_runs(name_regex='.*', timestamp_gt_age_in_hours=1000, timestamp_lt_age_i
                     )
     return runs
 
-def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[], age_in_hours=1000, name_partial_ban=None, filter_runs_with_metrics=True):
+def get_dataframe_multiple(ablation: str=None, platform: str=None, benchmark: str = None, age_in_hours_gt=0, age_in_hours_lt=1000, configs=None, metrics=[]):
+
+    run_name_regex = get_run_name_regex(ablation=ablation, platform=platform, benchmark=benchmark)
+    if configs is None:
+        configs = get_ablations_configs(ablation=ablation)
+        configs = ['platform.link', 'train_datasets.labeled.class_name', 'method.class_name'] + configs
+
+    return get_dataframe(configs=configs, metrics=metrics, name_regex=run_name_regex, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt)
+
+
+def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[], age_in_hours_lt=1000, age_in_hours_gt=0, name_partial_ban=None, filter_runs_with_metrics=True):
 
     # Initialize wandb
      # wandb.init(project=config.logger.wandb_project_name)
@@ -100,7 +127,7 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
     #                 )
 
 
-    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt)
 
     # if name_regex is not None:
     #     #runs_names_regex_matches = [re.match(name_regex, run.name) for run in runs]
@@ -225,7 +252,7 @@ def table():
     age_in_hours = 250
     configs = []
 
-    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours, name_partial=name_partial)
 
 
     # logger.info(tabulate(my_df, headers='keys', tablefmt='tsv',  floatfmt=".3f")) # 'github', 'tsv'
@@ -250,7 +277,7 @@ def table_multiple_sequences():
     configs = ['method.class_name', 'train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'train_datasets.labeled.dict_nested_frames']
     age_in_hours = 24 * 10
 
-    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
 
     my_df['sequence_nth'] = my_df["Run"].str.split('_1s_').str[1:2].str.join('_').str[:3]
     my_df['type'] = my_df["Run"].str[14:].str.split('_1s_').str[0] + my_df["Run"].str.split('_1s_').str[1:2].str.join('_').str[3:]
@@ -306,7 +333,7 @@ def table_multiple_categories_multiview_incremental():
     configs = ['method.class_name', 'train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size', 'train_datasets.labeled.dict_nested_frames']
     age_in_hours = 24 * 10
 
-    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
 
     my_df['sequence_nth'] = my_df["Run"].str.split('_1s_').str[1:2].str.join('_').str[:3]
     my_df['train_datasets.labeled.categories'] = my_df['train_datasets.labeled.categories'].str[0]
@@ -398,7 +425,7 @@ def table_multiple_categories():
     configs = ['train_datasets.labeled.categories', 'method.value.multiview.type', 'method.value.multiview.batch_size']
     age_in_hours = 24 * 4
 
-    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours, name_partial=name_partial, name_partial_ban=name_partial_ban)
 
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -457,7 +484,7 @@ def table_multiview_sequences():
     configs = ['method.value.multiview.type', 'method.value.multiview.batch_size', 'method.value.inference.refine.dims_detached']
     age_in_hours = 6
 
-    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours, name_partial=name_partial)
 
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -507,7 +534,7 @@ def table_multiview():
     configs = ['method.value.multiview.type', 'method.value.multiview.batch_size']
     age_in_hours = 2
 
-    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_partial=name_partial)
+    my_df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours, name_partial=name_partial)
 
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -533,24 +560,59 @@ def table_multiview():
 
     my_df.to_csv('output.csv', index=False, header=False)
 
+def get_run_name(bench_name: str, method_name: str, platform_name: str, ablation_name: str= None, without_timestamp: bool = False):
+    if ablation_name is not None:
+        run_name = f'{bench_name}_{method_name}_{ablation_name}_{platform_name}'
+    else:
+        run_name = f'{bench_name}_{method_name}_{platform_name}'
+    if without_timestamp is False:
+        run_name = f'{get_timestamp_as_string()}_{run_name}'
+    return run_name
 
+def get_run_name_regex(benchmark: str=None, platform: str = None, ablation:str = None):
 
-@app.command()
-def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
-        ablation: str = typer.Option(None, '-a', '--ablation'),
-        platform: str = typer.Option('local', '-p', '--platform'),
-        sleep_in_mins: int = typer.Option(60, '-s', '--sleep')):
-    logging.basicConfig(level=logging.INFO)
+    ablations_regex = get_ablations_regex(ablation=ablation)
 
+    if benchmark is not None:
+        cfg_platform = platform if platform is not None else 'local'
+        cfg = od3d.io.load_hierarchical_config(benchmark=benchmark, platform=cfg_platform)
+        bench_regex = cfg.train_datasets.labeled.class_name
+        method_regex = "|".join([method_cfg.class_name for method_cfg in cfg.method.values()])
+    else:
+        bench_regex = '.*'
+        method_regex = '.*'
+
+    platform_regex = platform if platform is not None else '.*'
+    run_name_regex = get_run_name(bench_name=bench_regex,
+                                  method_name=method_regex,
+                                  platform_name=platform_regex,
+                                  ablation_name=ablations_regex, without_timestamp=True)
+    run_name_regex = f'.*{run_name_regex}'
+
+    logger.info(run_name_regex)
+    return run_name_regex
+
+def get_ablations_root_dir():
     file_fpath = Path(__file__).parent.resolve()
     config_dir_rel = "../../../config"
     config_dir_abs = file_fpath.joinpath(config_dir_rel)
     ablations_root_dir = config_dir_abs.joinpath("ablations")
+    return ablations_root_dir
 
-    if ablation is None:
-        cfgs = [od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform)]
-    else:
-        cfgs = []
+def get_ablations_fpaths(ablation: str= None):
+    ablations_fpaths_rel = get_ablations_fpaths_rel(ablation=ablation)
+    ablations_root_dir = get_ablations_root_dir()
+    ablations_fpaths = []
+    for ablation_fpaths_rel in ablations_fpaths_rel:
+        ablations_fpaths.append([])
+        for ablation_fpath_rel in ablation_fpaths_rel:
+            ablations_fpaths[-1].append(ablations_root_dir.joinpath(f'{ablation_fpath_rel}.yaml'))
+    return ablations_fpaths
+
+def get_ablations_fpaths_rel(ablation:str=None):
+    if ablation is not None:
+        ablations_root_dir = get_ablations_root_dir()
+
         # create one config per ablation
         ablation_dirs = [ablations_root_dir.joinpath(a) for a in ablation.split(',')]
         #ablation_dir = ablations_root_dir.joinpath(ablation)
@@ -565,16 +627,66 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                 ablation_fpath_rel = ablation_file_fpath.relative_to(ablations_root_dir).with_suffix('')
                 if not ablation_fpath_rel.name.startswith("_"):
                     ablation_fpaths_rel[-1].append(ablation_fpath_rel)
-        import itertools
-        combinations_ablation_fpaths_rel = list(itertools.product(*ablation_fpaths_rel))
-        logger.info(f'loading {len(combinations_ablation_fpaths_rel)} hierarchical ablations...')
-        cfgs = od3d.io.load_multiple_hierarchical_configs(benchmark=benchmark, platform=platform, multiple_ablations=combinations_ablation_fpaths_rel)
+    else:
+        ablation_fpaths_rel = []
 
-        #for i, combination_ablation_fpaths_rel in enumerate(tqdm(combinations_ablation_fpaths_rel)):
-        #    #logger.info(f'{i} of {len(combinations_ablation_fpaths_rel)}')
-        #    cfg = od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform, ablations=combination_ablation_fpaths_rel)
-        #    cfg.ablation_name = '_'.join([cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
-        #    cfgs.append(cfg)
+    return ablation_fpaths_rel
+
+def get_ablations_configs(ablation:str=None):
+    from od3d.io import read_yaml
+    from od3d.data.ext_dicts import unroll_nested_dict
+
+    ablations_configs_fpaths = get_ablations_fpaths(ablation=ablation)
+    ablations_configs = []
+    for ablation_configs_fpaths in ablations_configs_fpaths:
+        for fpath in ablation_configs_fpaths:
+            config = dict(read_yaml(fpath))
+            #logger.info(type(config))
+            config = unroll_nested_dict(config, separator='.')
+            #logger.info(config.keys())
+            ablations_configs +=config.keys()
+
+    ablations_configs = list(set(ablations_configs))
+    if 'defaults' in ablations_configs:
+        ablations_configs.remove('defaults')
+
+    return ablations_configs
+
+def get_ablations_regex(ablation:str=None):
+    ablations_fpaths_rel = get_ablations_fpaths_rel(ablation=ablation)
+
+    ablation_regex = ")_(".join(["|".join([ablation_fpath_rel.stem for ablation_fpath_rel in ablation_fpaths_rel]) for ablation_fpaths_rel in ablations_fpaths_rel])
+    if len(ablation_regex) > 0:
+        ablation_regex = f'({ablation_regex})'
+
+    return ablation_regex
+
+def get_ablations_fpaths_rel_comb(ablation:str=None):
+    import itertools
+    ablation_fpaths_rel = get_ablations_fpaths_rel(ablation=ablation)
+    combinations_ablation_fpaths_rel = list(itertools.product(*ablation_fpaths_rel))
+
+    logger.info(f'loading {len(combinations_ablation_fpaths_rel)} hierarchical ablations...')
+    return combinations_ablation_fpaths_rel
+
+def get_run_name_without_timestamp(run_name: str):
+    return run_name[15:]
+
+@app.command()
+def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
+        ablation: str = typer.Option(None, '-a', '--ablation'),
+        platform: str = typer.Option('local', '-p', '--platform'),
+        age_in_hours_lt: int = typer.Option(24, '-h', '--hours'),
+        sleep_in_mins: int = typer.Option(60, '-s', '--sleep')):
+    logging.basicConfig(level=logging.INFO)
+
+    if ablation is None:
+        cfgs = [od3d.io.load_hierarchical_config(benchmark=benchmark, platform=platform)]
+    else:
+        combinations_ablations_fpaths_rel = get_ablations_fpaths_rel_comb(ablation=ablation)
+        logger.info(f'loading {len(combinations_ablations_fpaths_rel)} hierarchical ablations...')
+        cfgs = od3d.io.load_multiple_hierarchical_configs(benchmark=benchmark, platform=platform,
+                                                          multiple_ablations=combinations_ablations_fpaths_rel)
 
     # create one config per method
     logger.info(f'creating one config per method for {len(cfgs)} configs')
@@ -585,17 +697,28 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         for key in methods_keys:
             method_cfg = cfg.copy()
             method_cfg.method = cfg.method[key]
-            method_cfg_exists = False
-            for prev_method_cfg in methods_cfgs:
-                if method_cfg == prev_method_cfg:
-                    method_cfg_exists = True
-            if not method_cfg_exists:
-                methods_cfgs.append(method_cfg)
+            # note: not sure why I checked this, this slows down everything tremendously, and
+            #       paralellization not straightforward
+            # method_cfg_exists = False
+            # for prev_method_cfg in methods_cfgs:
+            #     if method_cfg == prev_method_cfg:
+            #         method_cfg_exists = True
+            # if not method_cfg_exists:
+            #     methods_cfgs.append(method_cfg)
+            methods_cfgs.append(method_cfg)
 
     print(f"{len(methods_cfgs)} configs with single method.")
 
     current_branch = Repository('.').head.shorthand  # 'master'
 
+    if ablation is not None:
+        prev_runs = get_runs_multiple(benchmark=benchmark, ablation=ablation, age_in_hours_lt=age_in_hours_lt)
+        prev_runs = [run for run in prev_runs if run.state == 'finished']
+        prev_runs_names = [get_run_name_without_timestamp(run.name) for run in prev_runs]
+    else:
+        prev_runs_names = []
+
+    started_runs = 0
     for i, method_cfg in tqdm(enumerate(methods_cfgs)):
         #logger.info(f'{i} of {len(methods_cfgs)}')
         with open_dict(method_cfg):
@@ -603,10 +726,15 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                 method_cfg.branch = current_branch
 
             ablation_name = method_cfg.get("ablation_name", None)
-            if ablation_name is not None:
-                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{ablation_name}_{method_cfg.platform.link}'
-            else:
-                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{method_cfg.platform.link}'
+            run_name = get_run_name(bench_name=method_cfg.train_datasets.labeled.class_name,
+                                               method_name=method_cfg.method.class_name,
+                                               platform_name=method_cfg.platform.link,
+                                               ablation_name=ablation_name)
+            if get_run_name_without_timestamp(run_name) in prev_runs_names:
+                logger.info(f'{run_name} already exists. Skipping...')
+                continue
+
+            method_cfg.run_name = run_name
 
         if method_cfg.platform.link == 'local':
             bench_single_method_local(method_cfg)
@@ -618,16 +746,16 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
             torque_run_method_or_cmd(method_cfg)
         elif method_cfg.platform.link == 'slurm':
             slurm_run_method_or_cmd(method_cfg)
-
-            if (i+1) % 40 == 0:
+            if (started_runs+1) % 40 == 0:
                 time.sleep(sleep_in_mins * 60)
+        started_runs += 1
 
         time.sleep(10)
 
 
 def get_failed_runs(name_regex='.*', age_in_hours=1000):
     logging.basicConfig(level=logging.INFO)
-    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours)
     runs = list(filter(lambda run: run.state =='failed' or run.state=='crashed', runs)) #  or run.state =='running'
     # runs_states = [run.state for run in runs]
     runs_names = [run.name for run in runs]
@@ -637,7 +765,7 @@ def get_failed_runs(name_regex='.*', age_in_hours=1000):
 @app.command()
 def recent(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
                   name_regex: str = typer.Option('.*', '-n', '--name')):
-    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=age_in_hours)
+    runs = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours)
     # runs_states = [run.state for run in runs]
     for run in runs:
         logger.info(f'{run.name} {run.state}')
@@ -648,7 +776,7 @@ def delete_slurm(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--gr
                  name_regex: str = typer.Option('.*', '-n', '--name')):
 
     logging.basicConfig(level=logging.INFO)
-    runs = get_runs(name_regex=name_regex, timestamp_gt_age_in_hours=timestamp_gt_age_in_hours, timestamp_lt_age_in_hours=timestamp_lt_age_in_hours)
+    runs = get_runs(name_regex=name_regex, age_in_hours_lt=timestamp_gt_age_in_hours, age_in_hours_gt=timestamp_lt_age_in_hours)
     logger.info(f'deleting following runs: ')
     for run in runs:
         logger.info(run.name)

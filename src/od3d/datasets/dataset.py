@@ -780,7 +780,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         from od3d.cv.visual.video import save_video
         save_video(fpath=fpath_video, imgs=tstamp_category_sequence_imgs, fps=fps)
 
-    def visualize_category_sequences(self, imgs_count=10):
+    def visualize_category_sequences(self, imgs_count=5, viewpoints_count=16, H=1080, W=1980):
         sequences = self.get_sequences()
         from od3d.cv.visual.resize import resize
         from od3d.cv.visual.show import show_scene, show_imgs
@@ -809,15 +809,15 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             #category_cams_imgs = torch.cat(category_cams_imgs, dim=0)
             logger.info(f'mesh has {len(category_mesh.verts)} vertices and {len(category_mesh.faces)} faces.')
             show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
-                       cams_imgs=category_cams_imgs, meshes=[category_mesh], viewpoints_count=9,
-                       fpath=f'{category}.png')
+                       cams_imgs=category_cams_imgs, meshes=[category_mesh], viewpoints_count=viewpoints_count,
+                       fpath=f'{category}.png', H=H, W=W)
 
 
             #show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
             #           cams_imgs=category_cams_imgs, pts3d_colors=[category_pts3d_colors], pts3d=[category_pts3d],
             #           viewpoints_count=9, fpath=f'{category}.png')
 
-    def visualize_category_meshes(self, imgs_count=10):
+    def visualize_category_meshes(self, viewpoints_count=16, H=1080, W=1980):
         sequences = self.get_sequences()
         from od3d.cv.visual.resize import resize
         from od3d.cv.visual.show import show_scene, show_imgs
@@ -873,4 +873,4 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
                     sequence_mesh.rgb = category_mesh.verts_ncds[argmin_ref_from_src] * (src_cyclic_dist != torch.inf).float()[:, None]
                     sequence_mesh.rgb *= cycle_weight[:, None]
-                    show_scene(meshes=[sequence_mesh], viewpoints_count=9, fpath=f'{category}_{sequence.name}.png')
+                    show_scene(meshes=[sequence_mesh], viewpoints_count=viewpoints_count, fpath=f'{category}_{sequence.name}.png', H=H, W=W)

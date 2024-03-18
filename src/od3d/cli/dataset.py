@@ -22,20 +22,27 @@ def classes():
 @app.command()
 def visualize_category_sequences(
         dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        imgs_count: int = typer.Option(5, '-i', '--imgs-count'),
+        viewpoints_count: int = typer.Option(16, '-v', '--viewpoints-count'),
+        height: int = typer.Option(1080, '-h', '--height'),
+        width: int = typer.Option(1080, '-h', '--height'),
         platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
-    dataset.visualize_category_sequences()
+    dataset.visualize_category_sequences(imgs_count=imgs_count, viewpoints_count=viewpoints_count, H=height, W=width)
 
 @app.command()
 def visualize_category_meshes(
         dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        viewpoints_count: int = typer.Option(16, '-v', '--viewpoints-count'),
+        height: int = typer.Option(1080, '-h', '--height'),
+        width: int = typer.Option(1080, '-h', '--height'),
         platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
-    dataset.visualize_category_meshes()
+    dataset.visualize_category_meshes(viewpoints_count=viewpoints_count, H=height, W=width)
 
 @app.command()
 def save_sequences_as_video(
