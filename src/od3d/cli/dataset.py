@@ -321,7 +321,7 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
         imgs.append(img)
 
     from od3d.cv.visual.video import save_gif, save_video
-    save_video(imgs=imgs, fpath=Path(config.platform.path_exps).joinpath('videos', dataset.name + '.mp4'))
+    save_video(imgs=imgs, fpath=Path(config.platform.path_exps).joinpath('videos', dataset.name + '.mkv'))
 import http.server
 import socketserver
 import torchvision

@@ -24,7 +24,13 @@ def save_video(imgs: List[torch.Tensor], fpath: Path, fps=10):
         vwriter.write(tensor_to_cv_img(img))
 
 def create_vwriter(fpath, width, height, fps=10):
-    fourcc = cv2.VideoWriter_fourcc("m", "p", "4", "v")
+    # cv2.VideoWriter_fourcc(*'VP80') -> avilable, browser compatible, .webm, ignore error msg
+    # cv2.VideoWriter_fourcc(*'VP90') -> avilable, browser compatible, .webm, ignore error msg
+    # cv2.VideoWriter_fourcc(*'X264') -> not available, browser compatible, .mkv
+    # cv2.VideoWriter_fourcc(*'MP4V') -> available, not browser compatible, .mp4
+    fpath = Path(fpath)
+    fpath = fpath.with_suffix(".webm")
+    fourcc = cv2.VideoWriter_fourcc(*'VP90')
     vwriter = cv2.VideoWriter(
         str(fpath),
         fourcc,

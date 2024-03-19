@@ -748,10 +748,10 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             sequences.append(self.get_sequence_by_name_unique(name_unique=sequence_name_unique))
         return sequences
 
-    def save_sequences_as_video(self, H=1080, W=1920, fps=2, fpath_video=None, imgs_count=30):
+    def save_sequences_as_video(self, H=1080, W=1920, fps=10, fpath_video=None, imgs_count=30):
 
         if fpath_video is None:
-            fpath_video = Path(f'{self.name}.mp4')
+            fpath_video = Path(f'{self.name}.avi')
 
         sequences = self.get_sequences()
         category_sequences_count = {}
