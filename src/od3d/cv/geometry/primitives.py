@@ -113,9 +113,9 @@ class Cuboids(Meshes):
             # ~ v = (x/step * y/step + z/step * y/step + x/step * z/step) * 2
             # ~ v = (x * y + z * y + x * x * z) * 2 / step^2
             # ~ step = sqrt((x * y + z * y + x * z) * 2 / v)
-            vx = int(w / (((w * h + w * d + h * d) * 2 / verts_count) ** 0.5))
-            vy = int(h / (((w * h + w * d + h * d) * 2 / verts_count) ** 0.5))
-            vz = int(d / (((w * h + w * d + h * d) * 2 / verts_count) ** 0.5))
+            vx = max(1, int(w / (((w * h + w * d + h * d) * 2 / verts_count) ** 0.5)))
+            vy = max(1, int(h / (((w * h + w * d + h * d) * 2 / verts_count) ** 0.5)))
+            vz = max(1, int(d / (((w * h + w * d + h * d) * 2 / verts_count) ** 0.5)))
             xs = torch.linspace(x_range[0], x_range[1], steps=vx)
             ys = torch.linspace(y_range[0], y_range[1], steps=vy)
             zs = torch.linspace(z_range[0], z_range[1], steps=vz)
