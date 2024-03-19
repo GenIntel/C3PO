@@ -676,7 +676,7 @@ def get_run_name_without_timestamp(run_name: str):
 def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
         ablation: str = typer.Option(None, '-a', '--ablation'),
         platform: str = typer.Option('local', '-p', '--platform'),
-        age_in_hours_lt: int = typer.Option(24, '-h', '--hours'),
+        age_in_hours_lt: int = typer.Option(24, '-l', '--age-in-hours-lt'),
         sleep_in_mins: int = typer.Option(60, '-s', '--sleep')):
     logging.basicConfig(level=logging.INFO)
 

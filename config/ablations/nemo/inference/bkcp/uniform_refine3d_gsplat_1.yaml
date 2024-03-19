@@ -7,4 +7,4 @@ method:
   nemo:
     meshes_gaussian_splat_enabled: True
     meshes_gaussian_splat_opacity: 1.
-    meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist: 0.05 # 0.1
+    meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist: 1. # 0.1

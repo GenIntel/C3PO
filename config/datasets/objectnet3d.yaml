@@ -42,11 +42,11 @@ preprocess:
     remove_previous: False
   mask:
     enabled: True
-    override: False
+    override: True
     remove_previous: False
   depth:
     enabled: True
-    override: False
+    override: True
     remove_previous: False
 
 
