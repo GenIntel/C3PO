@@ -400,7 +400,9 @@ class NeMo(OD3D_Method):
         feats2d_net = self.net(batch.rgb)
 
         logger.info(f'batch.size {batch.size}')
-        feats2d_net_mask = torch.ones(size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3])).to(device=self.device)
+        #feats2d_net_mask = torch.ones(size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3])).to(device=self.device)
+        feats2d_net_mask = 1. * resize(batch.rgb_mask, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+
         if self.config.train.use_mask_object:
             feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
                                                               W_out=feats2d_net.shape[3])
