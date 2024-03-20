@@ -94,7 +94,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
         import matplotlib
         # matplotlib.use("TkAgg")
 
-        fig, ax = plt.subplots(1, 1, figsize=(8, 6))  # (subplot_kw={"projection": "3d"})
+        fig, ax = plt.subplots(1, 1, figsize=(len(xi_unique), len(yi_unique)))  # (subplot_kw={"projection": "3d"})
 
         aspect_ratio = 0.5
 
