@@ -34,32 +34,37 @@ def show_mesh():
     logging.basicConfig(level=logging.INFO)
 
     from od3d.cv.geometry.mesh import Meshes
+
+    sequence_name = '373_41715_83384'  #
+    # co3dv2:  354_37645_70054 372_41153_81941 270_28771_56661 136_15656_31168 373_41715_83384
     fpaths_meshes = [
         '/misc/lmbraid19/sommerl/datasets/PASCAL3D_Preprocess/mesh/cuboid250/bicycle/mesh.ply',
-        #'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/mesh/alpha500/meta_mask/meta/bicycle/354_37645_70054/mesh.ply',
-        '/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/mesh/alpha500/meta_mask/meta/bicycle/397_49943_98337/mesh.ply'
+        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/mesh/alpha500/meta_mask/meta/bicycle/{sequence_name}/mesh.ply',
+        #'/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/mesh/alpha500/meta_mask/meta/bicycle/397_49943_98337/mesh.ply'
 
     ]
     fpaths_meshes_tform_obj = [
         None,
-        #'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/354_37645_70054/tform_obj.pt'
-        '/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/tform_obj/label3d_zsp_cuboid/meta_mask/meta/bicycle/397_49943_98337/tform_obj.pt'
-
+        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt'
+        #'/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/tform_obj/label3d_zsp_cuboid/meta_mask/meta/bicycle/397_49943_98337/tform_obj.pt'
+        #
     ]
 
     logger.info(fpaths_meshes_tform_obj)
     meshes = Meshes.load_from_files(fpaths_meshes=fpaths_meshes, fpaths_meshes_tforms=fpaths_meshes_tform_obj)
 
     import torch
-    tform_obj = torch.load('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/354_37645_70054/tform_obj.pt')
-    tform_obj = torch.load('/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta_mask/meta/bicycle/354_37645_70054/tform_obj.pt')
+    tform_obj = torch.load(f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt')
+    tform_obj = torch.load(f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt')
 
-    fpath_pcl = '/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/pcl/meta_mask/meta/bicycle/354_37645_70054/pcl.ply'
-    from od3d.cv.io import read_pts3d_with_colors_and_normals
-    pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(fpath_pcl)
-    from od3d.cv.geometry.transform import transf3d_broadcast
-    pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
-    show.show_scene(meshes=meshes, meshes_colors=meshes.get_verts_ncds_cat_with_mesh_ids(), pts3d=[pts3d], pts3d_colors=[pts3d_colors])
+    # fpath_pcl = f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/pcl/meta_mask/meta/bicycle/{sequence_name}/pcl.ply'
+    # from od3d.cv.io import read_pts3d_with_colors_and_normals
+    # pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(fpath_pcl)
+    # from od3d.cv.geometry.transform import transf3d_broadcast
+    # pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+    # , pts3d = [pts3d], pts3d_colors = [pts3d_colors]
+
+    show.show_scene(meshes=meshes, meshes_colors=meshes.get_verts_ncds_cat_with_mesh_ids())
     # from pathlib import Path
     # fpath = Path('/home/sommerl/Downloads/not_watertight_mesh.ply')
     # verts, faces = load_ply(fpath)
