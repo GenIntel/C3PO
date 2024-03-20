@@ -33,7 +33,6 @@ class OD3D_Model(nn.Module):
         elif config.get("nemo_checkpoint_old", None) is not None:
             self.load_nemo_checkpoint_old(config.nemo_checkpoint_old)
 
-
     def load_nemo_checkpoint_old(self, path_nemo_checkpoint):
         checkpoint = torch.load(path_nemo_checkpoint, map_location="cuda:0")
         self.backbone.net = torch.nn.DataParallel(self.backbone.net).cuda()
@@ -50,9 +49,9 @@ class OD3D_Model(nn.Module):
         return OD3D_Model(config)
 
     def forward(self, x: torch.Tensor, *args, **kwargs):
-        feats_maps = self.backbone(x, *args, **kwargs)
+        output = self.backbone(x, *args, **kwargs)
 
         if self.config.head is not None:
-            return self.head(feats_maps)
+            return self.head(output)
         else:
-            return feats_maps
+            return output

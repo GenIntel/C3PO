@@ -1,0 +1,14 @@
+defaults:
+  - extractor_base
+
+backbone:
+  name: superpoint
+  class_name: od3d.models.feature_extractors.SuperPoint
+  weights: superpoint_lightglue
+  freeze: True
+  output_dim: 256
+  descriptor_dim: 256
+  nms_radius: 4
+  max_num_keypoints: 2048
+  detection_threshold: 0.0005
+  remove_borders: 4
