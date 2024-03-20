@@ -418,7 +418,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                         imgs = torch.stack(imgs, dim=0)
 
                 if fpath is not None:
-                    show_imgs(rgbs=imgs, fpath=fpath)
+                    show_imgs(rgbs=imgs, fpath=fpath, pad=0)
                 vis.update_renderer()
                 vis.destroy_window()
                 if return_visualization:
