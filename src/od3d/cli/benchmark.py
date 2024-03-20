@@ -713,7 +713,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 
     if ablation is not None:
         prev_runs = get_runs_multiple(benchmark=benchmark, ablation=ablation, age_in_hours_lt=age_in_hours_lt)
-        prev_runs = [run for run in prev_runs if run.state == 'finished']
+        prev_runs = [run for run in prev_runs if (run.state == 'finished' or run.state =='running')]
         prev_runs_names = [get_run_name_without_timestamp(run.name) for run in prev_runs]
     else:
         prev_runs_names = []
