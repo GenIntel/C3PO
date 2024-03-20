@@ -4,5 +4,8 @@ defaults:
 
 method:
   nemo:
-    geo_cyclic_weight_temp: 0.05
-    app_cyclic_weight_temp: 0.05
+    geo_cyclic_weight_temp: 2.0
+    app_cyclic_weight_temp: 2.0
+
+
+
