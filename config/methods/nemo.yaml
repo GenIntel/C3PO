@@ -23,6 +23,7 @@ multiview:
 
 train:
   early_stopping: True
+  use_mask_rgb: True
   use_mask_object: False
   use_mask_rendered_object: True
   loss: cross_entropy # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
