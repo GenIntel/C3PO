@@ -423,8 +423,13 @@ class NeMo(OD3D_Method):
         prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
         noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise, replacement=True)].permute(1, 2, 0)
 
-        #from od3d.cv.visual.show import show_imgs
-        #show_imgs(prob_noise.reshape(-1, 1, H, W))
+        # note: visual for debug
+        # from od3d.cv.visual.show import show_imgs
+        # from od3d.cv.visual.draw import draw_pixels
+        # prob_noise_pxls = prob_noise.reshape(-1, 1, H, W).clone().repeat(1, 3, 1, 1)
+        # for b in range(len(prob_noise_pxls)):
+        #     prob_noise_pxls[b] = draw_pixels(prob_noise_pxls[b], noise2d[b])
+        # show_imgs(prob_noise_pxls)
 
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
         vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
