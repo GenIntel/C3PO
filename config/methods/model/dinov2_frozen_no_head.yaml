@@ -6,15 +6,8 @@ backbone:
   stride: 7
   weights: 'default' # 'default' 'none'
   freeze: True
-  head: True
   layers_returned: [ 0 ] # always start with deepest layer...
+  head: False
+  class_token: True
+
 head:
-  class_name: ResNet
-  block_type: 'bottleneck' # 'bottleneck', 'basic'
-  conv_blocks:
-    out_dims: [] #  [ 512, 512, 128 ]
-    strides: [] #  [ 1, 1, 1 ]
-    pre_upsampling: [] # [1., 1., 2.]
-  fully_connected:
-    out_dim: # None means that there is no linear layer
-  normalize: True

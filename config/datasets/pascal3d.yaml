@@ -53,15 +53,15 @@ extract_meta:
 
 preprocess:
   cuboid:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
   mask:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
   depth:
-    enabled: False
+    enabled: True
     override: False
     remove_previous: False
 
@@ -87,15 +87,15 @@ image_sizes:
 #       n04037443_4668
 
 categories:
-#    - aeroplane
-#    - bicycle
-#    - boat
-#    - bottle
-#    - bus
-#     - car
-#    - chair
-#    - diningtable
-#    - motorbike
-#    - sofa
-#    - train
-#    - tvmonitor
+   - aeroplane
+   - bicycle
+   - boat
+   - bottle
+   - bus
+   - car
+   - chair
+   - diningtable
+   - motorbike
+   - sofa
+   - train
+   - tvmonitor

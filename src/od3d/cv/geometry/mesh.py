@@ -152,7 +152,7 @@ class Meshes(torch.nn.Module):
             self.rgb = None
 
         if feats is not None:
-            self.feats = torch.nn.Parameter(torch.cat([_feats for _feats in feats], dim=0), requires_grad=True)
+            self.feats = torch.nn.Parameter(torch.cat([_feats for _feats in feats], dim=0), requires_grad=False) # handle for loss gradient
             self.feats_from_faces = torch.nn.Parameter(torch.cat([self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)] for mesh_id in range(len(self))], dim=0))
         else:
             self.feats = None

@@ -726,6 +726,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                 method_cfg.branch = current_branch
 
             ablation_name = method_cfg.get("ablation_name", None)
+
             run_name = get_run_name(bench_name=method_cfg.train_datasets.labeled.class_name,
                                                method_name=method_cfg.method.class_name,
                                                platform_name=method_cfg.platform.link,
@@ -735,6 +736,10 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                 continue
 
             method_cfg.run_name = run_name
+            if ablation_name is not None:
+                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{ablation_name}_{method_cfg.platform.link}'
+            else:
+                method_cfg.run_name = f'{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{method_cfg.platform.link}'
 
         if method_cfg.platform.link == 'local':
             bench_single_method_local(method_cfg)
