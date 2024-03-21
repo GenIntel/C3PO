@@ -161,18 +161,25 @@ class Pascal3D(OD3D_Dataset):
                 from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
                 from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
 
-                cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
-                                                 optimize_rot=False,
-                                                 optimize_transl=False,
-                                                 vertices_max_count=mesh_vertices_count,
-                                                 optimize_steps=1,
-                                                 size=OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]])
+                cuboids, tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d,
+                                                         optimize_rot=False,
+                                                         optimize_transl=False,
+                                                         vertices_max_count=mesh_vertices_count,
+                                                         optimize_steps=1,
+                                                         size=OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]])
+
+                scale_pascal3d_to_od3d[category] = tform_obj[:3, :3].norm(dim=-1).mean()
 
                 # show:
                 #Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
 
                 obj_mesh = cuboids.get_mesh_with_id(0)
                 obj_mesh.write_to_file(fpath=fpath_mesh_out)
+
+        log_str = '\n'
+        for key, val in scale_pascal3d_to_od3d.items():
+            log_str += f'{key}: {val} \n'
+        logger.info(log_str)
 
     ##### DATASET PROPERTIES
     def get_frame_by_name_unique(self, name_unique):

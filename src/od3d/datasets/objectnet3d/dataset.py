@@ -6,7 +6,7 @@ import shutil
 from od3d.datasets.pascal3d.frame import Pascal3DFrameMeta
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_Frame
-from od3d.datasets.objectnet3d.enum import OBJECTNET3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_OBJECTNET3D, OBJECTNET3D_SCALE_NORMALIZE_TO_REAL
+from od3d.datasets.objectnet3d.enum import OBJECTNET3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_OBJECTNET3D, MAP_CATEGORIES_OBJECTNET3D_TO_OD3D, OBJECTNET3D_SCALE_NORMALIZE_TO_REAL
 from pathlib import Path
 from typing import List, Dict
 from omegaconf import DictConfig
@@ -151,6 +151,7 @@ class ObjectNet3D(OD3D_Dataset):
     def preprocess_cuboid(self, override=False, remove_previous=False):
         logger.info('preprocess cuboid...')
 
+        scale_objectnet3d_to_od3d = {}
         for category in self.categories:
             if category not in self.all_categories:
                 continue
@@ -177,21 +178,30 @@ class ObjectNet3D(OD3D_Dataset):
                 fpaths_meshes_category = [fpath for fpath in fpaths_meshes_category if re.match(r"[0-9][0-9]\.off", fpath.name)]
 
                 meshes = Meshes.load_from_files(fpaths_meshes_category)
-                pts3d = meshes.verts * OBJECTNET3D_SCALE_NORMALIZE_TO_REAL[category]
+                pts3d = meshes.verts
 
                 from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
-
-                cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
+                from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
+                cuboids, tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d,
                                                  optimize_rot=False,
                                                  optimize_transl=False,
                                                  vertices_max_count=mesh_vertices_count,
-                                                 optimize_steps=1)
+                                                 optimize_steps=1,
+                                                 size=OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_OBJECTNET3D_TO_OD3D[category]])
+
+                scale_objectnet3d_to_od3d[category] = tform_obj[:3, :3].norm(dim=-1).mean()
 
                 # show:
                 #Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
 
                 obj_mesh = cuboids.get_mesh_with_id(0)
                 obj_mesh.write_to_file(fpath=fpath_mesh_out)
+
+        log_str = '\n'
+        for key, val in scale_objectnet3d_to_od3d.items():
+            log_str += f'{key}: {val} \n'
+        logger.info(log_str)
+
 
     def preprocess_subset_category_names_unique(self, override=False, remove_previous=False):
         logger.info('preprocess subset_category_names_unique...')
