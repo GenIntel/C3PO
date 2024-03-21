@@ -185,13 +185,15 @@ class ObjectNet3D(OD3D_Dataset):
                 cuboids, tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d,
                                                  optimize_rot=False,
                                                  optimize_transl=False,
+                                                 q=0.95,
                                                  vertices_max_count=mesh_vertices_count,
-                                                 optimize_steps=1,
+                                                 optimize_steps=0,
                                                  size=OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_OBJECTNET3D_TO_OD3D[category]])
 
                 scale_objectnet3d_to_od3d[category] = tform_obj[:3, :3].norm(dim=-1).mean()
 
                 # show:
+                #meshes.verts *= scale_objectnet3d_to_od3d[category]
                 #Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
 
                 obj_mesh = cuboids.get_mesh_with_id(0)
@@ -199,7 +201,7 @@ class ObjectNet3D(OD3D_Dataset):
 
         log_str = '\n'
         for key, val in scale_objectnet3d_to_od3d.items():
-            log_str += f'{key}: {val} \n'
+            log_str += str(key) + f': {val}, \n'
         logger.info(log_str)
 
 
