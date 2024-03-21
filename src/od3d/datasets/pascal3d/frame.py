@@ -229,7 +229,7 @@ class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObj
 
     def read_cam_tform4x4_obj_raw(self):
         cam_tform4x4_obj = torch.Tensor(self.meta.cam_tform4x4_obj)
-        cam_tform4x4_obj[2, 3] *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
+        cam_tform4x4_obj[:3, 3] *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
         return cam_tform4x4_obj
 
     def get_fpath_tform_obj(self, tform_obj_type=None):
