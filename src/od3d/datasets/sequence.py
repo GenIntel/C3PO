@@ -368,9 +368,9 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             H, W = self.get_min_HW()
             # note: this is only required if the frames have different sizes
             if H is not None and W is not None:
-                masks = torch.stack([frame.get_mask()[:, :H, :W] for frame in frames], dim=0).to(device=device)
+                masks = torch.stack([frame.read_mask()[:, :H, :W] for frame in frames], dim=0).to(device=device)
             else:
-                masks = torch.stack([frame.get_mask() for frame in frames], dim=0).to(device=device)
+                masks = torch.stack([frame.read_mask() for frame in frames], dim=0).to(device=device)
 
             cams_intr4x4 = torch.stack([frame.read_cam_intr4x4() for frame in frames], dim=0).to(device=device)
             cams_tform4x4_obj = torch.stack([frame.read_cam_tform4x4_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW) for frame in frames], dim=0).to(device=device)
@@ -483,14 +483,14 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
 
             tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP)
 
-            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_ZSP)
-            pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
-            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d_label3d, size=size,
-                                                          optimize_rot=False,
-                                                          optimize_transl=True)
-            tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
 
-            self.write_tform_obj(tform_obj=tform_obj, fpath_tform_obj=fpath_tform_obj)
+            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d, size=size,
+                                                          optimize_rot=False,
+                                                          optimize_transl=True,
+                                                          tform_obj_label=tform_obj, optimize_steps=100)
+
+            self.write_tform_obj(tform_obj=obj_cuboid_tform_obj, fpath_tform_obj=fpath_tform_obj)
 
         elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D:
             fpath_tform_obj.parent.mkdir(parents=True, exist_ok=True)
@@ -538,15 +538,24 @@ class OD3D_SequencePCLMixin(OD3D_TformObjMixin, OD3D_PCLTypeMixin, OD3D_Sequence
             self.preprocess_tform_obj(override=override, tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
 
             tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
+            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW)
 
-            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
-            pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
-            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d_label3d, size=size,
+            #from od3d.cv.visual.show import show_scene
+            #show_scene(pts3d=[pts3d], pts3d_colors=[pts3d_colors], pts3d_normals=[pts3d_normals])
+
+            #pts3d_label3d = transf3d_broadcast(pts3d=pts3d, transf4x4=)
+            #from od3d.cv.geometry.downsample import voxel_downsampling
+            #pts3d_label3d = voxel_downsampling(pts3d_label3d, K=100)
+            _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d, size=size,
                                                           optimize_rot=False,
-                                                          optimize_transl=True)
-            tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
+                                                          optimize_transl=True, optimize_steps=100,
+                                                          tform_obj_label=tform_obj)
+            logger.info(obj_cuboid_tform_obj)
 
-            self.write_tform_obj(tform_obj=tform_obj, fpath_tform_obj=fpath_tform_obj)
+            #tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
+
+            logger.info(f'write at {fpath_tform_obj}')
+            self.write_tform_obj(tform_obj=obj_cuboid_tform_obj, fpath_tform_obj=fpath_tform_obj)
         else:
             raise NotImplementedError(f'tform_obj_type {tform_obj_type} not implemented')
 
@@ -606,6 +615,11 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
         tform_obj_type = mesh_type
         fpath_tform_obj_aligned = self.get_fpath_tform_obj(tform_obj_type=tform_obj_type)
+
+        tform_obj = self.get_tform_obj()
+        if tform_obj is not None:
+            tform_obj = tform_obj.to(device=aligned_obj_tform_obj.device)
+            aligned_obj_tform_obj = tform4x4(aligned_obj_tform_obj.detach().clone(), tform_obj)
         fpath_tform_obj_aligned.parent.mkdir(parents=True, exist_ok=True)
         torch.save(aligned_obj_tform_obj.detach().cpu(), f=fpath_tform_obj_aligned)
 
@@ -717,27 +731,40 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
             vertices_count = mesh_vertices_count + 1
             alpha = particle_size / 2.
+            # while vertices_count > mesh_vertices_count:
+            #     alpha = alpha * 1.3
+
+            o3d_obj_mesh = None
+            while o3d_obj_mesh is None:
+                try:
+                    o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+                except Exception as e:
+                    logger.warning(f'alpha {alpha} failed with {e}')
+                    alpha = alpha * 1.3
+
+            logger.info(o3d_obj_mesh)
+            o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
+            logger.info(o3d_obj_mesh)
+            faces_count = mesh_vertices_count * 2
+
             while vertices_count > mesh_vertices_count:
-                alpha = alpha * 2
-                o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
-                logger.info(o3d_obj_mesh)
-                o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
-                logger.info(o3d_obj_mesh)
-                #o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=mesh_vertices_count)
-                #logger.info(o3d_obj_mesh)
-                obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
-                vertices_count = len(o3d_obj_mesh.vertices)
+                faces_count = int(faces_count * 0.9)
+                o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=faces_count)
+                logger.info(o3d_obj_mesh_downsampled)
+                vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+
+            obj_mesh = Mesh.from_o3d(o3d_obj_mesh_downsampled, device=device)
 
         elif mesh_type == 'alphawrap':
-            # #### OPTION 3: ALPHA_SHAPE
+            # #### OPTION 3: ALPHAWRAP_SHAPE
             pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
             quantile = max(0.01, 3. / len(pts3d))
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
-            vertices_count = mesh_vertices_count + 1
             alpha = particle_size / 2.
-            offset = particle_size / 10.
+            offset = particle_size / 20.
+            vertices_count = mesh_vertices_count + 1
             while vertices_count > mesh_vertices_count:
-                alpha = alpha * 2
+
                 from CGAL.CGAL_Kernel import Point_3
                 from CGAL.CGAL_Alpha_wrap_3 import alpha_wrap_3
                 from CGAL.CGAL_Polyhedron_3 import Polyhedron_3
@@ -766,18 +793,51 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     assert len(face_vertices) == 3
                     faces.append(face_vertices)
                 faces = torch.Tensor(faces).long()
+
                 vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
                 faces = open3d.utility.Vector3iVector(faces.detach().cpu().numpy())
 
-
                 o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
+
+                assert o3d_obj_mesh.is_watertight()
+
                 logger.info(o3d_obj_mesh)
                 vertices_count = len(o3d_obj_mesh.vertices)
 
-            #o3d_obj_mesh = o3d_obj_mesh.simplify_quadric_decimation(mesh_vertices_count)
+                alpha = alpha * 1.3
+
+            # tol = particle_size / 2.
+            # import pymesh2
+            # pymesh_mesh = pymesh2.form_mesh(vertices, faces)
+            # while vertices_count > mesh_vertices_count:
+            #     pymesh_mesh, info = pymesh_mesh2.collapse_short_edges(pymesh_mesh, tol)
+            #     vertices_count = len(pymesh_mesh.vertices)
+
+            #o3d_obj_mesh = o3d_obj_mesh.filter_smooth_laplacian(number_of_iterations=10)
+
+            # faces_count = mesh_vertices_count * 2
+            # voxel_size = particle_size / 2.
+            # while vertices_count > mesh_vertices_count:
+            #     #faces_count = faces_count * 0.9
+            #     #o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(int(faces_count))
+            #
+            #     voxel_size = voxel_size * 1.3
+            #     o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_vertex_clustering(
+            #         voxel_size=voxel_size,
+            #         contraction=open3d.geometry.SimplificationContraction.Quadric) # Average, Quadric
+            #
+            #     logger.info(o3d_obj_mesh_downsampled)
+            #     vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+            #
+            # o3d_obj_mesh = o3d_obj_mesh_downsampled
+
             #logger.info(o3d_obj_mesh)
+            #o3d_obj_mesh = o3d_obj_mesh.filter_smooth_simple(number_of_iterations=10) # breaks watertightness
+
+            logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)
 
+            assert o3d_obj_mesh.is_watertight()
 
         elif mesh_type == 'voxel':
             #### OPTION 4: VOXEL GRID
@@ -996,6 +1056,10 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                                                imgs_sizes=batch.size, mesh_ids=[0,] * B,
                                                down_sample_rate=down_sample_rate)
 
+            from od3d.cv.visual.resize import resize
+            rgb_mask_low_res = resize(batch.rgb_mask, scale_factor=1./down_sample_rate)
+            vts2d_mask *= sample_pxl2d_pts(rgb_mask_low_res, pxl2d=vts2d)[:, :, 0]
+
             batch_cam_tform4x4_obj_raw = batch.cam_tform4x4_obj
             tform_obj = self.get_tform_obj(device=device)
             if tform_obj is not None:
@@ -1108,6 +1172,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
         del dataloader
         del model
+        torch.cuda.empty_cache()
 
     def get_fpath_mesh_feats_dist(self, sequence: OD3D_Sequence, mesh_type=None, mesh_feats_type=None):
         if mesh_type is None:
@@ -1179,7 +1244,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             else:
                 logger.warning(f'unknown embed type {embed_type}')
 
-            P = 64  # ensures that 11 GB are enough
+            P = seq1_verts_count  # ensures that 11 GB are enough
             logger.info(f'seq1 verts {seq1_verts_count}, seq2 verts {seq2_verts_count}, seq1 partial {(seq1_verts_count // P)}, viewpoints max {V}')
 
             for p in range(P):
@@ -1215,13 +1280,13 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     2).sum(
                     dim=-1) == 0.
 
-                if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN:
+                if reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN:
                     # replace nan values with inf
                     dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
                     dist_verts_seq1_seq2[seq1_verts_partial] = dists_verts_feats_seq1_seq2.permute(0, 2, 1,
                                                                                                    3).flatten(
                         2).min(dim=-1).values
-                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_AVG:
+                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_AVG:
                     dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(0.)
                     dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
 
@@ -1233,7 +1298,7 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                     dist_verts_seq1_seq2_partial[dist_verts_seq1_seq2_inf_mask] = torch.inf
                     dist_verts_seq1_seq2[seq1_verts_partial] = dist_verts_seq1_seq2_partial
                     del dist_verts_seq1_seq2_partial
-                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG or OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN_AVG:
+                elif reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN_AVG:
                     dists_verts_feats_seq1_seq2 = dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
                     dists_verts_feats_seq1_seq2_mask = dists_verts_feats_seq1_seq2_mask.nan_to_num(0.)
                     dist_verts_seq1_seq2_partial = ((

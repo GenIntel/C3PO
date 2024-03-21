@@ -36,6 +36,113 @@ import open3d
 WINDOW_WIDTH = 1980
 WINDOW_HEIGHT = 1080
 
+
+@app.command()
+def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchmark'),
+             ablation: str = typer.Option(None, '-a', '--ablation'),
+             platform: str = typer.Option(None, '-p', '--platform'),
+             age_in_hours_gt: int = typer.Option(0, '-g', '--age-in-hours-gt'),
+             age_in_hours_lt: int = typer.Option(1000, '-l', '--age-in-hours-lt'),
+             metrics: str = typer.Option(None, '-m', '--metrics'),
+             x_label: str = typer.Option(None, '-x', '--x-label'),
+             y_label: str = typer.Option(None, '-y', '--y-label'),
+             configs: str = typer.Option(None, '-c', '--configs'),):
+
+    logging.basicConfig(level=logging.INFO)
+
+    from od3d.cli.benchmark import get_dataframe_multiple
+
+    if metrics is not None:
+        metrics = metrics.split(',')
+    else:
+        metrics = []
+
+    if configs is not None:
+        configs = configs.split(',')
+    else:
+        configs = []
+
+    df = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt, metrics=metrics, configs=configs)
+
+    for metric in metrics:
+        x = df[configs[0]].to_numpy()
+        y = df[configs[1]].to_numpy()
+        import numpy as np
+
+        x_log = torch.from_numpy(x)  # torch.log(torch.from_numpy(x)) / torch.log(torch.Tensor([10])).numpy()
+        y_log = torch.from_numpy(y)  # torch.log(torch.from_numpy(y)) / torch.log(torch.Tensor([10])).numpy()
+        xi = np.sort(np.unique(x))
+        yi = np.sort(np.unique(y))
+        grid_xiyi = np.stack(np.meshgrid(xi, yi))
+        logger.info(grid_xiyi)
+        mask_grid_xiyi = (x[:, None] == grid_xiyi[0].flatten()[None, :]) * (
+                    y[:, None] == grid_xiyi[1].flatten()[None, :])
+        xi_log = np.sort(np.unique(x_log))  # np.arange(x.min(), x.max(), 0.01)
+        yi_log = np.sort(np.unique(y_log))
+
+        z = df[metric].to_numpy()  # 'pose/acc_pi6' 'pose/acc_pi18'
+        z_max = (z[:, None] * mask_grid_xiyi).max(axis=0).reshape(grid_xiyi.shape[1:])
+        x_max = x[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
+        y_max = y[(z[:, None] * mask_grid_xiyi).argmax(axis=0)].reshape(grid_xiyi.shape[1:])
+        xi_unique = xi.copy()
+        yi_unique = yi.copy()
+        xi, yi = np.meshgrid(xi, yi)
+        xi_log, yi_log = np.meshgrid(xi_log, yi_log)
+
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import matplotlib
+        # matplotlib.use("TkAgg")
+
+        fig, ax = plt.subplots(1, 1, figsize=(len(xi_unique), len(yi_unique)))  # (subplot_kw={"projection": "3d"})
+
+        aspect_ratio = 0.5
+
+        font_size = 16
+        # Create a heatmap using imshow
+        im = ax.imshow(z_max, cmap='viridis', interpolation='nearest', aspect='auto')  # 'auto'
+        ax.tick_params(axis='y', labelsize=font_size)
+        ax.tick_params(axis='x', labelsize=font_size)
+
+        if x_label is None:
+            x_label = configs[0]
+        if y_label is None:
+            y_label = configs[1]
+        ax.set_xlabel(x_label, fontsize=font_size)
+        ax.set_ylabel(y_label, fontsize=font_size)
+
+        ax.set(xticks=np.arange(z_max.shape[1]),
+                  xticklabels=xi_unique)  # np.round(np.linspace(xi_log.min(), xi_log.max(), z_max.shape[1]), decimals=1))
+        ax.set(yticks=np.arange(z_max.shape[0]),
+                  yticklabels=yi_unique)  # np.round(np.linspace(yi_log.min(), yi_log.max(), z_max.shape[0]), decimals=0))
+
+        # Add colorbar to the right of the plot
+        cbar = fig.colorbar(im, ax=ax)  # , shrink='auto')
+        cbar.ax.tick_params(labelsize=font_size)
+
+        # Add colorbar to the right of the plot
+        cbar.ax.tick_params(labelsize=font_size)
+
+        max_coordinates = np.unravel_index(z_max.argmax(), z_max.shape)
+        max_x = xi_log[max_coordinates]
+        max_y = yi_log[max_coordinates]
+        max_z = z_max[max_coordinates]
+
+        max_coordinates = (max_coordinates[1], max_coordinates[0])
+
+        # Plot the point using scatter
+        ax.scatter(*max_coordinates, color='red', marker='o', label='max')
+
+        # Annotate the point with a description
+        desc = f'{max_z * 100:.1f}'
+        ax.annotate(desc, max_coordinates, textcoords="offset points", xytext=(0, 10), ha='center',
+                       fontsize=font_size,
+                       color='red')
+
+        plt.tight_layout()
+        plt.savefig(f'ablation_{metric.replace(",", "_").replace("/", "_")}_{ablation.replace(",", "_").replace("/", "_")}.svg')
+    logger.info(df)
+
 @app.command()
 def mesh():
     logging.basicConfig(level=logging.INFO)

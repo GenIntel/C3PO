@@ -54,7 +54,11 @@ pip install git@github.com:Generative-Vision-Robust-Learning/od3d.git
     - `od3d dataset visualize -d [co3d|pascal3d|objectnet3d]`
 
   - Synchronize the target with the source platform
-    - `od3d dataset rsync -s local -t slurm -d co3d`
+    - `od3d dataset rsync -s local -t slurm -d co3d`  
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d"`  
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s torque -t local -d objectnet3d"`
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s torque -t local -d pascal3d"`  
+
 
 ### Benchmark
 
@@ -74,6 +78,14 @@ To stop a job running on slurm use
 
   - `od3d bench stop-slurm -j <job-name>`.
 
+### Media
+`od3d dataset save-sequences-as-video -d co3d_no_zsp_aligned_visual`  
+`od3d dataset visualize-category-sequences -d co3d_no_zsp_aligned_visual`  
+`od3d dataset visualize-category-meshes -d co3d_no_zsp_aligned_visual`  
+
+
+### Figures
+`od3d figure multiple -a nemo3d_align/dataset,nemo3d_align/mesh_type,nemo3d_align/dist_app_weight,nemo3d_align/dist_cyclic_temp -c method.nemo.geo_cyclic_weight_temp,method.nemo.dist_appear_weight -m pose/acc_pi6,pose/acc_pi18`    
 
 ### Documentation
 - [Coordinate Frames](docs/coordinate_frames/README.md)

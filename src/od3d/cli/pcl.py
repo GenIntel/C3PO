@@ -30,13 +30,74 @@ def show_shapenet():
     Meshes()
 
 @app.command()
-def show_pts():
+def show_mesh():
+    logging.basicConfig(level=logging.INFO)
+
+    from od3d.cv.geometry.mesh import Meshes
+
+    sequence_name = '373_41715_83384'  #
+    # co3dv2:  354_37645_70054 372_41153_81941 270_28771_56661 136_15656_31168 373_41715_83384
+    fpaths_meshes = [
+        '/misc/lmbraid19/sommerl/datasets/PASCAL3D_Preprocess/mesh/cuboid250/bicycle/mesh.ply',
+        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/mesh/alpha500/meta_mask/meta/bicycle/{sequence_name}/mesh.ply',
+        #'/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/mesh/alpha500/meta_mask/meta/bicycle/397_49943_98337/mesh.ply'
+
+    ]
+    fpaths_meshes_tform_obj = [
+        None,
+        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt'
+        #'/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/tform_obj/label3d_zsp_cuboid/meta_mask/meta/bicycle/397_49943_98337/tform_obj.pt'
+        #
+    ]
+
+    logger.info(fpaths_meshes_tform_obj)
+    meshes = Meshes.load_from_files(fpaths_meshes=fpaths_meshes, fpaths_meshes_tforms=fpaths_meshes_tform_obj)
+
+    import torch
+    tform_obj = torch.load(f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt')
+    tform_obj = torch.load(f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt')
+
+    # fpath_pcl = f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/pcl/meta_mask/meta/bicycle/{sequence_name}/pcl.ply'
+    # from od3d.cv.io import read_pts3d_with_colors_and_normals
+    # pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(fpath_pcl)
+    # from od3d.cv.geometry.transform import transf3d_broadcast
+    # pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+    # , pts3d = [pts3d], pts3d_colors = [pts3d_colors]
+
+    show.show_scene(meshes=meshes, meshes_colors=meshes.get_verts_ncds_cat_with_mesh_ids())
+    # from pathlib import Path
+    # fpath = Path('/home/sommerl/Downloads/not_watertight_mesh.ply')
+    # verts, faces = load_ply(fpath)
+    # print(verts.shape, faces.shape)
+@app.command()
+def show_pts(fpath: str = typer.Option(None, '-f', '--fpath'), device: str = typer.Option('cpu', '-d', '--device')):
     from pathlib import Path
     from od3d.cv.io import read_pts3d, read_pts3d_colors, read_pts3d_with_colors_and_normals
-    fpath = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB_Preprocess/droid_slam/elephant/24_01_29__18_10/pcl_clean.ply')
+
+    # fpath = Path('/misc/lmbraid19/sommerl/datasets/MonoLMB_Preprocess/droid_slam/elephant/24_01_29__18_10/pcl_clean.ply')
 
     pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(fpath)
+
+    import open3d
+    from od3d.cv.geometry.downsample import random_sampling
+    import torch
+
+    o3d_pcl = open3d.geometry.PointCloud()
+    o3d_pcl.points = open3d.utility.Vector3dVector(pts3d.detach().cpu().numpy())
+    o3d_pcl.normals = open3d.utility.Vector3dVector(pts3d_normals.detach().cpu().numpy())  # invalidate existing normals
+    o3d_pcl.colors = open3d.utility.Vector3dVector(pts3d_colors.detach().cpu().numpy())
+    print(pts3d.shape)
+    pts3d = random_sampling(pts3d, pts3d_max_count=10000)  # 11 GB
+    print(pts3d.shape)
+
+    quantile = max(0.01, 3. / len(pts3d))
+    particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
+    alpha = particle_size / 2. * 2
+    print(quantile, particle_size, alpha)
+
+    o3d_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
     show.show_scene(pts3d=[pts3d], pts3d_colors=[pts3d_colors], pts3d_normals=[pts3d_normals])
+
 
 @app.command()
 def show_scene():
@@ -48,6 +109,7 @@ def show_scene():
 
     # 02958343 : car
     meshes = Meshes.load_from_files([fpath])
+
     meshes.feats = meshes.rgb
     show.show_scene(meshes=meshes, meshes_colors=meshes.rgb)
 

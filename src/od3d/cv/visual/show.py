@@ -413,6 +413,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                         img = crop_white_border_from_img(img, resize_to_orig=True)
                     imgs.append(img)
 
+
                 if viewpoints_count == 1:
                     imgs = imgs[0]
                 else:
@@ -422,11 +423,13 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                         imgs_placeholder[:viewpoints_count] = torch.stack(imgs, dim=0)
                         imgs = imgs_placeholder
                         imgs = imgs.reshape(viewpoints_count_sqrt, viewpoints_count_sqrt, 3, H, W)
+
+                        logger.info(imgs.shape)
                     else:
                         imgs = torch.stack(imgs, dim=0)
 
                 if fpath is not None:
-                    show_imgs(rgbs=imgs, fpath=fpath)
+                    show_imgs(rgbs=imgs, fpath=fpath, pad=0)
                 vis.update_renderer()
                 vis.destroy_window()
                 if return_visualization:

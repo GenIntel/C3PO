@@ -25,5 +25,7 @@ Host slurm
     HostName kis3bat1.rz.ki.privat
     # ProxyJump freiburg
 
-Host github.com
+Host *.github.com
     Port 22
+    ServerAliveInterval 60 # keep alive 30 x 60 seconds
+    ServerAliveCountMax 30

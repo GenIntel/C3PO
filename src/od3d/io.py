@@ -69,24 +69,40 @@ def rm_dir(path: Path):
         logger.warning(e)
 
 from tqdm import tqdm
-def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", multiple_ablations=[], multiple_overrides=[]):
-    config_dir_rel = "../../config"
-    cfgs= []
-    with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):
-        for a, ablations in tqdm(enumerate(multiple_ablations)):
-            # logger.info(ablations)
-            if len(multiple_overrides) > a:
-                overrides = multiple_overrides[a]
-            else:
-                overrides = []
-            overrides = [f"+ablations/{Path(ablation).parent}={Path(ablation).stem}" for ablation in ablations] + [
-                "platform=" + platform] + overrides
-            cfg = compose(config_name=benchmark, overrides=overrides)
-            cfg.ablation_name = '_'.join(
-                [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
-            logger.info(cfg.ablation_name)
+from omegaconf import open_dict
+import multiprocessing
 
-            cfgs.append(cfg)
+def load_single_hierarchical_config(procnum, return_dict, config_dir_rel, benchmark, platform, ablations, overrides):
+    """worker function"""
+    logger.info(f'start process {procnum}')
+    return_dict[procnum] = procnum
+    with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):
+        overrides = [f"+ablations/{Path(ablation).parent}={Path(ablation).stem}" for ablation in ablations] + [
+            "platform=" + platform] + overrides
+        cfg = compose(config_name=benchmark, overrides=overrides)
+
+        with open_dict(cfg):
+            cfg.ablation_name = '_'.join([ablation.stem for ablation in ablations])
+
+        logger.info(cfg.ablation_name)
+        return_dict[procnum] = cfg
+
+def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", multiple_ablations=[]):
+    manager = multiprocessing.Manager()
+    return_dict = manager.dict()
+    jobs = []
+    config_dir_rel = "../../config"
+    cfgs = []
+    overrides = []
+    for a, ablations in tqdm(enumerate(multiple_ablations)):
+        p = multiprocessing.Process(target=load_single_hierarchical_config, args=(a, return_dict, config_dir_rel, benchmark, platform, ablations,
+                                                                                  overrides))
+        jobs.append(p)
+        p.start()
+
+    for a, proc in enumerate(jobs):
+        proc.join()
+        cfgs.append(return_dict[a])
     return cfgs
 
 def load_hierarchical_config(benchmark="defaults", platform="local", ablations=[], overrides=[]):
@@ -146,6 +162,11 @@ def read_json(fpath: Path):
         config = json.load(openfile)
     return config
 
+def read_yaml(fpath: Path):
+    cfg = OmegaConf.load(fpath)
+    cfg = OmegaConf.to_container(cfg, resolve=True)
+    return cfg
+
 def run_cmd(cmd, logger, live=False, background=False):
     if logger is not None:
         logger.info(f'Run command {cmd}')
@@ -172,8 +193,32 @@ def run_cmd(cmd, logger, live=False, background=False):
                 logger.info(res.stderr.decode("utf-8"))
             return res.stdout.decode("utf-8")
         else:
-            subprocess.run(cmd, capture_output=False, shell=True)
+            #child = RunCmdBackgroundProcess(cmd, os.getpid())
+            from multiprocessing import Process
+            pid = os.getpid()
+            child_proc = Process(target=run_child, args=(cmd, pid,))
+            child_proc.daemon = True
+            child_proc.start()
 
+def run_child(cmd, parent_pid):
+    """
+    Start a child process by running self._cmd.
+    Wait until the parent process (self._parent) has died, then kill the
+    child.
+    """
+    import psutil
+    from time import sleep
+    _parent = psutil.Process(pid=parent_pid)
+    _child = subprocess.Popen(cmd, shell=True)
+    try:
+        #with open("log.txt", "a") as myfile:
+        #    myfile.write(_parent.status())
+        while _parent.status() == psutil.STATUS_RUNNING or _parent.status() == psutil.STATUS_SLEEPING:
+            sleep(1)
+    except psutil.NoSuchProcess:
+        pass
+    finally:
+        _child.terminate()
 
 def read_str_from_file(fpath: Path):
     with open(fpath, 'r') as file:

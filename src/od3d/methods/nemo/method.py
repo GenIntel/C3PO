@@ -110,7 +110,13 @@ class NeMo(OD3D_Method):
         # self.path_shapenemo = Path(config.path_shapenemo)
         # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
         self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
-        self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes)
+        fpaths_meshes_tform_obj = self.config.get('fpaths_meshes_tform_obj', None)
+        if fpaths_meshes_tform_obj is not None:
+            self.fpaths_meshes_tform_obj = [fpaths_meshes_tform_obj[cls] for cls in config.categories]
+        else:
+            self.fpaths_meshes_tform_obj = [None for _ in config.categories]
+
+        self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes, fpaths_meshes_tforms=self.fpaths_meshes_tform_obj)
         self.meshes.gaussian_splat_enabled = self.config.meshes_gaussian_splat_enabled
         self.meshes.gaussian_splat_opacity = self.config.meshes_gaussian_splat_opacity
         self.meshes.geodesic_prob_sigma = self.config.train.geodesic_prob_sigma
@@ -407,6 +413,10 @@ class NeMo(OD3D_Method):
 
         logger.info(f'batch.size {batch.size}')
         feats2d_net_mask = torch.ones(size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3])).to(device=self.device)
+
+        if self.config.train.use_mask_rgb:
+            feats2d_net_mask = 1. * resize(batch.rgb_mask, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+
         if self.config.train.use_mask_object:
             feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
                                                               W_out=feats2d_net.shape[3])
@@ -427,8 +437,13 @@ class NeMo(OD3D_Method):
         prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
         noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise, replacement=True)].permute(1, 2, 0)
 
-        #from od3d.cv.visual.show import show_imgs
-        #show_imgs(prob_noise.reshape(-1, 1, H, W))
+        # note: visual for debug
+        # from od3d.cv.visual.show import show_imgs
+        # from od3d.cv.visual.draw import draw_pixels
+        # prob_noise_pxls = prob_noise.reshape(-1, 1, H, W).clone().repeat(1, 3, 1, 1)
+        # for b in range(len(prob_noise_pxls)):
+        #     prob_noise_pxls[b] = draw_pixels(prob_noise_pxls[b], noise2d[b])
+        # show_imgs(prob_noise_pxls)
 
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
         vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
@@ -570,6 +585,17 @@ class NeMo(OD3D_Method):
                                                                                        feats2d_net=feats2d_net,
                                                                                        categories_ids=batch.category_id,
                                                                                        feats2d_net_mask=feats2d_net_mask)
+
+            # if self.config.inference.live:
+            #     from od3d.cv.visual.show import show_imgs
+            #     show_imgs(
+            #         blend_rgb(batch.rgb[:1], (self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj[0],
+            #                                                           cams_intr4x4=b_cams_multiview_intr4x4[0],
+            #                                                           imgs_sizes=batch.size,
+            #                                                           meshes_ids=batch.category_id[:1],
+            #                                                           modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
+            #                                                           broadcast_batch_and_cams=True)[0]).to(dtype=batch.rgb.dtype)), duration=-1)
+
             #  OPTION A: Use 2d gradient of rendered features
             sim = self.get_sim_feats2d_net_with_cams(
                 feats2d_net=feats2d_net,

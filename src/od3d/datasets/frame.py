@@ -261,7 +261,7 @@ class OD3D_FrameCamIntr4x4Mixin(OD3D_Frame):
 
     def get_cam_intr4x4(self):
         if self.cam_intr4x4 is None:
-            self.cam_intr4x4 = self.meta.cam_intr4x4
+            self.cam_intr4x4 = self.read_cam_intr4x4()
         return self.cam_intr4x4
 
     def read_cam_intr4x4(self):
@@ -504,17 +504,16 @@ from od3d.datasets.frame_meta import OD3D_FrameMeta
 
 @dataclass
 class OD3D_FrameCamIntr4x4Mixin(OD3D_Frame):
-    _cam_intr4x4 = None
+    cam_intr4x4 = None
 
-    @property
-    def cam_intr4x4(self):
-        if self._cam_intr4x4 is None:
-            self._cam_intr4x4 = self.meta.cam_intr4x4
-        return self._cam_intr4x4
+    def read_cam_intr(self):
+        return self.meta.cam_intr4x4.clone()
 
-    @cam_intr4x4.setter
-    def cam_intr4x4(self, value: torch.Tensor):
-            self._cam_intr4x4 = value
+    def get_cam_intr(self):
+        if self.cam_intr4x4 is None:
+            self.cam_intr4x4 = self.read_cam_intr()
+        return self.cam_intr4x4
+
 
 
 @dataclass

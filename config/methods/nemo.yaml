@@ -15,7 +15,7 @@ categories: ${train_datasets.labeled.categories}
 fpaths_meshes: ${train_datasets.labeled.fpaths_cuboids}
 meshes_gaussian_splat_enabled: False
 meshes_gaussian_splat_opacity: 1.
-meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist: 0.5
+meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist: 0.1
 meshes_pt3d_raster_perspective_correct: False
 
 multiview:
@@ -23,6 +23,7 @@ multiview:
 
 train:
   early_stopping: True
+  use_mask_rgb: True
   use_mask_object: False
   use_mask_rendered_object: True
   loss: cross_entropy # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared

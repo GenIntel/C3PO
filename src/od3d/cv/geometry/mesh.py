@@ -197,10 +197,14 @@ class Meshes(torch.nn.Module):
         rendering: torch.Tensor
 
     @staticmethod
-    def load_from_files(fpaths_meshes: List[Path], device='cpu'):
+    def load_from_files(fpaths_meshes: List[Path], fpaths_meshes_tforms: List[Path] = None, device='cpu'):
         meshes = []
-        for fpath_mesh in fpaths_meshes:
-            meshes.append(Mesh.load_from_file(fpath=fpath_mesh, device=device))
+        for i, fpath_mesh in enumerate(fpaths_meshes):
+            mesh = Mesh.load_from_file(fpath=fpath_mesh, device=device)
+            if fpaths_meshes_tforms is not None and fpaths_meshes_tforms[i] is not None:
+                mesh_tform = torch.load(fpaths_meshes_tforms[i]).to(device)
+                mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=mesh_tform)
+            meshes.append(mesh)
         return Meshes.load_from_meshes(meshes=meshes)
 
     @staticmethod
@@ -824,7 +828,15 @@ class Meshes(torch.nn.Module):
         self.to(device)
 
         if down_sample_rate != 1.:
-            cams_intr4x4 = cams_intr4x4.clone() / down_sample_rate
+            cams_intr4x4 = cams_intr4x4.clone()
+            if cams_intr4x4.dim() == 2:
+                cams_intr4x4[:2] /= down_sample_rate
+            elif cams_intr4x4.dim() == 3:
+                cams_intr4x4[:, :2] /= down_sample_rate
+            elif cams_intr4x4.dim() == 4:
+                cams_intr4x4[:, :, :2] /= down_sample_rate
+            else:
+                raise NotImplementedError
             imgs_sizes = imgs_sizes.clone() // down_sample_rate
         else:
             cams_intr4x4 = cams_intr4x4.clone()
@@ -861,7 +873,9 @@ class Meshes(torch.nn.Module):
 
         if self.gaussian_splat_enabled and modality in \
                 [MESH_RENDER_MODALITIES.VERTS_NCDS, MESH_RENDER_MODALITIES.RGB, MESH_RENDER_MODALITIES.FEATS, MESH_RENDER_MODALITIES.MASK]: # MESH_RENDER_MODALITIES.FEATS:
-            from od3d.cv.render.gaussian_splats import render_gaussians
+            #from od3d.cv.render.gaussian_splats import render_gaussians
+            from od3d.cv.render.gaussians_splats_v2 import render_gaussians
+
             pts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device).clone().detach()
             if modality == MESH_RENDER_MODALITIES.VERTS_NCDS:
                 feats = self.get_verts_ncds_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)
@@ -926,7 +940,7 @@ class Meshes(torch.nn.Module):
             bin_size=None,
             max_faces_per_bin=None,
             perspective_correct=self.pt3d_raster_perspective_correct,
-            cull_backfaces=True
+            cull_backfaces=False # cull_backfaces=True
         )
 
         rasterizer = MeshRasterizer(

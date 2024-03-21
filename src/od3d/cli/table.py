@@ -49,6 +49,33 @@ DATASET_OBJECTNET3D = 'objectnet3d'
 
 
 @app.command()
+def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchmark'),
+             ablation: str = typer.Option(None, '-a', '--ablation'),
+             platform: str = typer.Option(None, '-p', '--platform'),
+             age_in_hours_gt: int = typer.Option(0, '-g', '--age-in-hours-gt'),
+             age_in_hours_lt: int = typer.Option(1000, '-l', '--age-in-hours-lt'),
+             metrics: str = typer.Option(None, '-m', '--metrics'),
+             configs: str = typer.Option(None, '-c', '--configs'),):
+
+    logging.basicConfig(level=logging.INFO)
+
+    from od3d.cli.benchmark import get_dataframe_multiple
+
+    if metrics is not None:
+        metrics = metrics.split(',')
+    else:
+        metrics = []
+
+    if configs is not None:
+        configs = configs.split(',')
+    else:
+        configs = []
+
+    df = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt, metrics=metrics, configs=configs)
+
+    logger.info(df)
+
+@app.command()
 def pascal3d(
         name_regex: str = typer.Option('Pascal3D_NeMo', '-n', '--name'),
         age_in_hours: int = typer.Option(182, '-h', '--hours'),
@@ -268,7 +295,7 @@ def pascal3d(
     metrics = ['test/pascal3d_test/label/acc', 'test/pascal3d_test/pose/acc_pi6', 'test/pascal3d_test/pose/acc_pi18']
     metrics_names = ['CLS [%]', '3D Pose PI/6 [%]', '3D Pose PI/18 [%]']
 
-    df = get_dataframe(name_regex=name_regex, metrics=metrics, age_in_hours=age_in_hours)
+    df = get_dataframe(name_regex=name_regex, metrics=metrics, age_in_hours_lt=age_in_hours)
     # filter pandas df with column name and list map_runs_names.keys()
     if map_runs_names is not None:
         df = df[df['name'].isin(map_runs_names.keys())]
@@ -424,7 +451,7 @@ def ablation_dist():
         align3d_1on1_columns_map[align3d_1on1_metrics[-2]] = category
         align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = category
 
-    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, age_in_hours=age_in_hours, name_regex=align3d_1on1_name_partial)
+    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, age_in_hours_lt=age_in_hours, name_regex=align3d_1on1_name_partial)
     #align3d_1on1_df['ablation_name'] = align3d_1on1_df['ablation_name'].values
     #align3d_1on1_df['ablation_name'] = align3d_1on1_df['ablation_name'].str
     align3d_1on1_df = align3d_1on1_df.rename(columns=align3d_1on1_columns_map)
@@ -479,8 +506,8 @@ def get_categorical_results_from_multiple_runs(metrics, age_in_hours: float, con
     COLUMN_REFERENCE = "ref"
     COLUMN_CATEGORY_MEAN = "mean"
     COLUMN_INDEX = "index"
-    df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours,
-                                     name_regex=name_regex, name_regex_groups=[COLUMN_CATEGORY, COLUMN_REFERENCE], filter_runs_with_metrics=False)
+    df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours,
+                       name_regex=name_regex, name_regex_groups=[COLUMN_CATEGORY, COLUMN_REFERENCE], filter_runs_with_metrics=False)
     metrics_dfs = []
     for m, metric in enumerate(metrics):
         if metrics_scales is not None and len(metrics_scales) > m:
@@ -527,7 +554,7 @@ def get_categorical_results_from_single_runs(metrics_templates, categories, age_
             columns_std.append(columns_map[metrics[-1]])
             columns_std_map[columns_map[metrics[-1]]] = category
 
-        df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_regex=name_regex)
+        df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours, name_regex=name_regex)
         df = df.rename(columns=columns_map)
 
         if metrics_scales is not None and len(metrics_scales) > m:
@@ -742,7 +769,7 @@ def pose_pi6_categories_align3d_co3dv1():
     columns_mean_map = dict(zip(columns_mean, columns_map.values()))
     columns_std_map = dict(zip(columns_std, columns_map.values()))
 
-    df = get_dataframe(configs=configs, metrics=metrics, age_in_hours=age_in_hours, name_regex=name_regex)
+    df = get_dataframe(configs=configs, metrics=metrics, age_in_hours_lt=age_in_hours, name_regex=name_regex)
     df = df.rename(columns=columns_map)
     metric_df = pd.concat([df[columns_mean].rename(columns=columns_mean_map), df[columns_std].rename(columns=columns_std_map)])
     metric_df = metric_df * 100.
@@ -782,7 +809,7 @@ def pose_pi6_categories():
     for category in categories:
         pascal3d_nemo_metrics.append(f'test/pascal3d_test/pose/prefix/{category}_acc_pi6')
         pascal3d_nemo_columns_map[pascal3d_nemo_metrics[-1]] = category
-    pascal3d_nemo_df = get_dataframe(configs=configs, metrics=pascal3d_nemo_metrics, age_in_hours=age_in_hours, name_regex=pascal3d_nemo_name_partial)
+    pascal3d_nemo_df = get_dataframe(configs=configs, metrics=pascal3d_nemo_metrics, age_in_hours_lt=age_in_hours, name_regex=pascal3d_nemo_name_partial)
     pascal3d_nemo_df = pascal3d_nemo_df.rename(columns=pascal3d_nemo_columns_map)
 
     # CO3Dv1_NeMo_Align3D, metrics
@@ -804,11 +831,11 @@ def pose_pi6_categories():
         align3d_1on1_columns_map[align3d_1on1_metrics[-1]] = category
 
 
-    nemo_df = get_dataframe(configs=configs, metrics=nemo_metrics, age_in_hours=age_in_hours, name_partial=nemo_name_partial)
+    nemo_df = get_dataframe(configs=configs, metrics=nemo_metrics, age_in_hours_lt=age_in_hours, name_partial=nemo_name_partial)
     nemo_df = nemo_df.rename(columns=nemo_columns_map)
-    align3d_df = get_dataframe(configs=configs, metrics=align3d_metrics, age_in_hours=age_in_hours, name_partial=align3d_name_partial)
+    align3d_df = get_dataframe(configs=configs, metrics=align3d_metrics, age_in_hours_lt=age_in_hours, name_partial=align3d_name_partial)
     align3d_df = align3d_df.rename(columns=align3d_columns_map)
-    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, age_in_hours=age_in_hours, name_partial=align3d_1on1_name_partial)
+    align3d_1on1_df = get_dataframe(configs=configs, metrics=align3d_1on1_metrics, age_in_hours_lt=age_in_hours, name_partial=align3d_1on1_name_partial)
     align3d_1on1_df = align3d_1on1_df.rename(columns=align3d_1on1_columns_map)
 
     df = pd.concat([nemo_df, align3d_df, align3d_1on1_df, pascal3d_nemo_df])

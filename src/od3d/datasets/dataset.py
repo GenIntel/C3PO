@@ -137,7 +137,9 @@ class OD3D_Dataset(Dataset):
     def get_subset_with_dict_nested_frames(self, dict_nested_frames: Dict):
         import copy
         dataset = copy.deepcopy(self)
-        dataset.set_list_frames_unique(list_frames_unique=OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames))
+        dict_nested_frames_compl = OD3D_FrameMeta.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_frames)
+        list_frames_unique = OD3D_FrameMeta.unroll_nested_metas(dict_nested_meta=dict_nested_frames_compl)
+        dataset.set_list_frames_unique(list_frames_unique=list_frames_unique)
         return dataset
 
     def set_list_frames_unique(self, list_frames_unique):
@@ -442,9 +444,11 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                  categories: List=None,
                  dict_nested_frames: Dict=None,
                  dict_nested_frames_ban: Dict=None,
-                 transform=None, index_shift=0, subset_fraction=1., frames_count_max_per_sequence=None):
+                 transform=None, index_shift=0, subset_fraction=1., frames_count_max_per_sequence=None,
+                 sequences_count_max_per_category=None):
 
         self.frames_count_max_per_sequence = frames_count_max_per_sequence
+        self.sequences_count_max_per_category = sequences_count_max_per_category
         if categories is not None:
             if self.map_od3d_categories is not None:
                 self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
@@ -458,7 +462,8 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
         logger.info("filtering sequences...")
         self.dict_category_sequences_names = self.filter_dict_nested_sequences(dict_nested_frames=dict_nested_frames,
-                                                                               dict_nested_frames_ban=dict_nested_frames_ban)
+                                                                               dict_nested_frames_ban=dict_nested_frames_ban,
+                                                                               count_max_per_category=self.sequences_count_max_per_category)
 
         logger.info(f'sequences filtered')
         sequences_filtered_str = '\n'
@@ -497,8 +502,9 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                         # category / sequence not in dict_nested_frames
                         dict_nested_frames_seqs_filtered[category][sequence_name] = []
         dict_nested_frames = dict_nested_frames_seqs_filtered
-        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames, dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities, path_raw=path_raw,
-                         path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
+        super().__init__(categories=categories, dict_nested_frames=dict_nested_frames,
+                         dict_nested_frames_ban=dict_nested_frames_ban, name=name, modalities=modalities,
+                         path_raw=path_raw, path_preprocess=path_preprocess, transform=transform, index_shift=index_shift,
                          subset_fraction=subset_fraction)
 
     def filter_dict_nested_frames(self, dict_nested_frames: Dict[str, Dict[str, List[str]]]):
@@ -529,7 +535,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         return dict_nested_frames
 
 
-    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None):
+    def filter_dict_nested_sequences(self, dict_nested_frames: Dict[str, Dict[str, List[str]]], dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None, count_max_per_category=None):
         logger.info("filtering frames...")
         if dict_nested_frames is not None:
             dict_nested_sequences = {}
@@ -565,15 +571,58 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         # get sequences
         dict_nested_sequences = OD3D_SequenceMetaCategoryMixin.complete_nested_metas(path_meta=self.path_meta, dict_nested_metas=dict_nested_sequences, dict_nested_metas_ban=dict_nested_sequences_ban)
 
+        # filter dict_nested_sequences
+        for i, category in tqdm(enumerate(dict_nested_sequences.keys())):
+            if category not in self.categories:
+                dict_nested_sequences[category] = []
+                continue
+            if count_max_per_category is not None:
+                dict_nested_sequences[category] = dict_nested_sequences[category][:count_max_per_category]
+
+            #
+            # if require_pcl or require_gt_pose or count_max_per_category is not None or sequences_require_mesh or require_good_cam_movement:
+            #
+            #     sequences = [self.get_sequence_by_category_and_name(category=category, name=sequence_name) for sequence_name
+            #                  in dict_nested_sequences[category]]
+            #
+            #     if require_no_missing_frames:
+            #         sequences = list(filter(lambda sequence: sequence.no_missing_frames, sequences))
+            #
+            #     if require_good_cam_movement:
+            #         sequences = list(filter(lambda sequence: sequence.good_cam_movement, sequences))
+            #
+            #     #if dict_nested_sequences_ban is not None and category in dict_nested_sequences_ban.keys():
+            #     #    sequences = [seq for seq in sequences if seq not in dict_nested_sequences_ban[category]]
+            #     if require_gt_pose:
+            #         sequences = list(filter(lambda sequence: sequence.gt_pose_available, sequences))
+            #
+            #     if require_pcl:
+            #         sequences = list(filter(lambda sequence: sequence.meta.rfpath_pcl != Path('None'), sequences))
+            #         if require_pcl_score is not None:
+            #             sequences = list(
+            #                 filter(lambda sequence: sequence.meta.pcl_quality_score > require_pcl_score, sequences))
+            #         if sort_pcl_score:
+            #             sequences = sorted(sequences, key=lambda sequence: -sequence.meta.pcl_quality_score)
+            #     if sequences_require_mesh:
+            #         sequences_no_fpath_mesh = list(filter(lambda sequence: not sequence.fpath_mesh.exists(), sequences))
+            #         sequences = list(filter(lambda sequence: sequence.fpath_mesh.exists(), sequences))
+            #         if len(sequences_no_fpath_mesh) > 0:
+            #             sequences_no_fpath_mesh_names = [s.name for s in sequences_no_fpath_mesh]
+            #             logger.info(f'Filtering out sequences due to no mesh available for category {category}: \n{sequences_no_fpath_mesh_names}')
+            #             if count_max_per_category is not None:
+            #                 sequences = sequences[:count_max_per_category]
+            #             dict_nested_sequences[category] = [sequence.name for sequence in sequences]
         return dict_nested_sequences
 
 
     def get_subset_by_sequences(self, dict_category_sequences: Dict[str, List[str]], frames_count_max_per_sequence=None):
         dict_nested_frames = {}
-        for cat, seqs in dict_category_sequences.items():
+        for cat, seqs_names in dict_category_sequences.items():
             dict_nested_frames[cat] = {}
-            for seq in seqs:
-                 dict_nested_frames[cat][seq] = None
+            for seq_name in seqs_names:
+                seq = self.get_sequence_by_name_unique(name_unique=f'{cat}/{seq_name}')
+                dict_nested_frames[cat][seq_name] = OD3D_Sequence.get_subset_frames_names_uniform(
+                    frames_names=seq.frames_names, count_max_per_sequence=frames_count_max_per_sequence)
 
         return self.get_subset_with_dict_nested_frames(dict_nested_frames)
         #return OD3D_SequenceDataset(
@@ -699,10 +748,10 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             sequences.append(self.get_sequence_by_name_unique(name_unique=sequence_name_unique))
         return sequences
 
-    def save_sequences_as_video(self, H=1080, W=1920, fps=2, fpath_video=None, imgs_count=30):
+    def save_sequences_as_video(self, H=1080, W=1920, fps=5, fpath_video=None, imgs_count=60):
 
         if fpath_video is None:
-            fpath_video = Path(f'{self.name}.mp4')
+            fpath_video = Path(f'{self.name}.avi')
 
         sequences = self.get_sequences()
         category_sequences_count = {}
@@ -731,7 +780,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         from od3d.cv.visual.video import save_video
         save_video(fpath=fpath_video, imgs=tstamp_category_sequence_imgs, fps=fps)
 
-    def visualize_category_sequences(self, imgs_count=10):
+    def visualize_category_sequences(self, imgs_count=5, viewpoints_count=16, H=1080, W=1980):
         sequences = self.get_sequences()
         from od3d.cv.visual.resize import resize
         from od3d.cv.visual.show import show_scene, show_imgs
@@ -760,15 +809,15 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             #category_cams_imgs = torch.cat(category_cams_imgs, dim=0)
             logger.info(f'mesh has {len(category_mesh.verts)} vertices and {len(category_mesh.faces)} faces.')
             show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
-                       cams_imgs=category_cams_imgs, meshes=[category_mesh], viewpoints_count=9,
-                       fpath=f'{category}.png')
+                       cams_imgs=category_cams_imgs, meshes=[category_mesh], viewpoints_count=viewpoints_count,
+                       fpath=f'{category}.png', H=H, W=W)
 
 
             #show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
             #           cams_imgs=category_cams_imgs, pts3d_colors=[category_pts3d_colors], pts3d=[category_pts3d],
             #           viewpoints_count=9, fpath=f'{category}.png')
 
-    def visualize_category_meshes(self, imgs_count=10):
+    def visualize_category_meshes(self, viewpoints_count=16, H=1080, W=1980):
         sequences = self.get_sequences()
         from od3d.cv.visual.resize import resize
         from od3d.cv.visual.show import show_scene, show_imgs
@@ -824,4 +873,4 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
                     sequence_mesh.rgb = category_mesh.verts_ncds[argmin_ref_from_src] * (src_cyclic_dist != torch.inf).float()[:, None]
                     sequence_mesh.rgb *= cycle_weight[:, None]
-                    show_scene(meshes=[sequence_mesh], viewpoints_count=9, fpath=f'{category}_{sequence.name}.png')
+                    show_scene(meshes=[sequence_mesh], viewpoints_count=viewpoints_count, fpath=f'{category}_{sequence.name}.png', H=H, W=W)

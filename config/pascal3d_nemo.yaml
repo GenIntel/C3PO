@@ -20,6 +20,7 @@ test: True
 
 train_datasets:
   labeled:
+    # path_cuboids: '${.path_preprocess}/mesh/cuboid1000' # 250 500 1000
     #subset_fraction: 0.1
     categories: ${categories}
 
