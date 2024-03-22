@@ -350,10 +350,10 @@ class Meshes(torch.nn.Module):
         return _geodesic_prob
 
 
-    @property
-    def geodesic_prob_with_noise(self):
+
+    def get_geodesic_prob_with_noise(self):
         geodesic_prob_with_noise = torch.eye(self.verts.shape[0]+1, device=self.device)
-        geodesic_prob_with_noise[:-1, :-1] = self.get_geodesic_prob
+        geodesic_prob_with_noise[:-1, :-1] = self.get_geodesic_prob()
         return geodesic_prob_with_noise
 
     def get_verts_ncds_with_mesh_id(self, mesh_id):

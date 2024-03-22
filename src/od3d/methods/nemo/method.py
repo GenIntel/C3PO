@@ -155,7 +155,7 @@ class NeMo(OD3D_Method):
             self.criterion = torch.nn.CrossEntropyLoss().cuda()
         elif self.config.train.loss == 'cross_entropy_smooth_geo':
             from od3d.cv.metric.cross_entropy_smooth import CrossEntropyLabelsSmoothed
-            labels_smoothed = self.meshes.get_geodesic_prob_with_noise.to(device=self.device)
+            labels_smoothed = self.meshes.get_geodesic_prob_with_noise().to(device=self.device)
             self.criterion = CrossEntropyLabelsSmoothed(labels_smoothed=labels_smoothed)
         elif self.config.train.loss == 'nll_softmax':
             self.softmax = torch.nn.LogSoftmax(dim=1)
