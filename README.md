@@ -83,6 +83,8 @@ To stop a job running on slurm use
 `od3d dataset visualize-category-sequences -d co3d_no_zsp_aligned_visual`  
 `od3d dataset visualize-category-meshes -d co3d_no_zsp_aligned_visual`  
 
+### Tables
+`od3d table multiple -b co3d_aligned_nemo -a categories/cross,nemo_aligned/ref -m test/pascal3d_test/pose/acc_pi6 -r categories/cross -l 24`
 
 ### Figures
 `od3d figure multiple -a nemo3d_align/dataset,nemo3d_align/mesh_type,nemo3d_align/dist_app_weight,nemo3d_align/dist_cyclic_temp -c method.nemo.geo_cyclic_weight_temp,method.nemo.dist_appear_weight -m pose/acc_pi6,pose/acc_pi18`    
