@@ -102,7 +102,13 @@ def get_dataframe_multiple(ablation: str=None, platform: str=None, benchmark: st
         configs = get_ablations_configs(ablation=ablation)
         configs = ['platform.link', 'train_datasets.labeled.class_name', 'method.class_name'] + configs
 
-    return get_dataframe(configs=configs, metrics=metrics, name_regex=run_name_regex, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt)
+    if ablation is not None:
+        ablation_regex_groups = ablation.split(',')
+    else:
+        ablation_regex_groups = []
+    return get_dataframe(configs=configs, metrics=metrics, name_regex=run_name_regex,
+                         name_regex_groups=['bench', 'method'] + ablation_regex_groups,
+                         age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt)
 
 
 def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[], age_in_hours_lt=1000, age_in_hours_gt=0, name_partial_ban=None, filter_runs_with_metrics=True):
@@ -576,11 +582,11 @@ def get_run_name_regex(benchmark: str=None, platform: str = None, ablation:str =
     if benchmark is not None:
         cfg_platform = platform if platform is not None else 'local'
         cfg = od3d.io.load_hierarchical_config(benchmark=benchmark, platform=cfg_platform)
-        bench_regex = cfg.train_datasets.labeled.class_name
-        method_regex = "|".join([method_cfg.class_name for method_cfg in cfg.method.values()])
+        bench_regex = f'({cfg.train_datasets.labeled.class_name})'
+        method_regex = f'({"|".join([method_cfg.class_name for method_cfg in cfg.method.values()])})'
     else:
-        bench_regex = '.*'
-        method_regex = '.*'
+        bench_regex = '(.*)'
+        method_regex = '(.*)'
 
     platform_regex = platform if platform is not None else '.*'
     run_name_regex = get_run_name(bench_name=bench_regex,
@@ -771,7 +777,7 @@ def recent(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
         logger.info(f'{run.name} {run.state}')
 
 @app.command()
-def delete_slurm(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
+def delete_wandb(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
                  timestamp_lt_age_in_hours: int = typer.Option(0, '-l', '--lower'),
                  name_regex: str = typer.Option('.*', '-n', '--name')):
 

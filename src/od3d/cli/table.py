@@ -55,7 +55,8 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
              age_in_hours_gt: int = typer.Option(0, '-g', '--age-in-hours-gt'),
              age_in_hours_lt: int = typer.Option(1000, '-l', '--age-in-hours-lt'),
              metrics: str = typer.Option(None, '-m', '--metrics'),
-             configs: str = typer.Option(None, '-c', '--configs'),):
+             configs: str = typer.Option(None, '-c', '--configs'),
+             results_cols: str = typer.Option(None, '-r', '--results_cols'),):
 
     logging.basicConfig(level=logging.INFO)
 
@@ -73,7 +74,11 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
 
     df = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt, metrics=metrics, configs=configs)
 
-    logger.info(df)
+    if results_cols is not None:
+        for metric in metrics:
+            logger.info(df.groupby(results_cols.split(','))[metric].agg(['mean', 'std']))
+    else:
+        logger.info(df)
 
 @app.command()
 def pascal3d(
