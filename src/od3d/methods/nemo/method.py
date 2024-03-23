@@ -498,7 +498,7 @@ class NeMo(OD3D_Method):
         results_batch['sim'] = sim_batchwise
 
         # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
-        # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, loss
+        # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, average
         loss = self.criterion(sim / self.config.train.T, batch_vts_ids)
         if self.back_propagate:
             loss.backward()
