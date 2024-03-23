@@ -68,7 +68,7 @@ def get_runs_multiple(benchmark: str=None, platform: str = None, ablation:str = 
     return get_runs(name_regex=run_name_regex, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt)
 
 
-def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000):
+def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000, state =None):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config()
 
@@ -84,15 +84,27 @@ def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000):
 
     # config.logger.wandb_project_name
     # Fetch all the runs in your project
-    runs = api.runs(config.logger.wandb_project_name, filters={
-                            "display_name": {"$regex": name_regex},
-                            "$and": [{
-                                'created_at': {
-                                    "$lt": timestamp_created_lt,
-                                    "$gt": timestamp_created_gt,
-                                }
-                            }]}
-                    )
+    if state is not None:
+        runs = api.runs(config.logger.wandb_project_name, filters={
+                                "display_name": {"$regex": name_regex},
+                                "$and": [{
+                                    'created_at': {
+                                        "$lt": timestamp_created_lt,
+                                        "$gt": timestamp_created_gt,
+                                    },
+                                "state": state
+                                }]}
+                        )
+    else:
+        runs = api.runs(config.logger.wandb_project_name, filters={
+                                "display_name": {"$regex": name_regex},
+                                "$and": [{
+                                    'created_at': {
+                                        "$lt": timestamp_created_lt,
+                                        "$gt": timestamp_created_gt,
+                                    },
+                                }]}
+                        )
     return runs
 
 def get_dataframe_multiple(ablation: str=None, platform: str=None, benchmark: str = None, age_in_hours_gt=0, age_in_hours_lt=1000, configs=None, metrics=[]):
