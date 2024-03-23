@@ -225,7 +225,7 @@ class NeMo_DINO(NeMo):
                                                                   feats2d_net_mask=feats2d_net_mask,
                                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                                   cam_intr4x4=batch.cam_intr4x4,
-                                                                  categories_ids= torch.full((B),fill_value=mesh_id,device=batch.device), return_sim_pxl=True,
+                                                                  categories_ids= torch.full((B,),fill_value=mesh_id,device=batch.device), return_sim_pxl=True,
                                                                   broadcast_batch_and_cams=False,
                                                                   pre_rendered=False,
                                                                   only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
