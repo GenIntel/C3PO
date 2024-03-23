@@ -221,11 +221,12 @@ class NeMo_DINO(NeMo):
                 out_shape = feats2d_net.shape[:1] + torch.Size([1]) + feats2d_net.shape[2:]
                 inner_feats2d_net_bank_vts_max_vals = self.calc_sim('bchw,kc->bkhw', feats2d_net, bank_feats).max(dim=1,
                                                                                                                  keepdim=True).values
+                
                 sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
                                                                   feats2d_net_mask=feats2d_net_mask,
                                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                                   cam_intr4x4=batch.cam_intr4x4,
-                                                                  categories_ids= torch.full((B,),fill_value=mesh_id,device=batch.device), return_sim_pxl=True,
+                                                                  categories_ids= torch.LongTensor([mesh_id]*B).to(device=batch.device), return_sim_pxl=True,
                                                                   broadcast_batch_and_cams=False,
                                                                   pre_rendered=False,
                                                                   only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
