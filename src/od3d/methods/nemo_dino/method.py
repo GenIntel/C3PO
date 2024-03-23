@@ -20,6 +20,7 @@ from od3d.cv.visual.show import imgs_to_img
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
 from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4_broadcast, tform4x4, rot3x3
+from od3d.cv.metric.pose import get_pose_diff_in_rad
 
 from od3d.cv.geometry.transform import inv_tform4x4
 from od3d.methods.nemo import NeMo
