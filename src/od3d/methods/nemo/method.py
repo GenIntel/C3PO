@@ -107,6 +107,7 @@ class NeMo(OD3D_Method):
         # init Meshes / Features
         self.total_params = sum(p.numel() for p in self.net.parameters())
         self.trainable_params = sum(p.numel() for p in self.net.parameters() if p.requires_grad) 
+        
         # self.path_shapenemo = Path(config.path_shapenemo)
         # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
         self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
@@ -149,7 +150,8 @@ class NeMo(OD3D_Method):
         # dict to save estimated tforms, sequence : tform,
         self.seq_obj_tform4x4_est_obj = {}
         self.seq_obj_tform4x4_est_obj_sim = {}
-
+        self.total_params_mesh_clutter  = sum(p.numel() for p in self.meshes.parameters()) + self.clutter_feats.numel()
+        self.trainable_params_mesh_clutter = sum(p.numel() for p in self.meshes.parameters() if p.requires_grad) + self.clutter_feats.numel()
         self.normalize_feats()
 
         if self.config.train.loss == 'cross_entropy':
@@ -177,6 +179,7 @@ class NeMo(OD3D_Method):
         self.net.eval()
         self.back_propagate = True
         logger.info(f'total params: {self.total_params}, trainable params: {self.trainable_params}')
+        logger.info(f'total params mesh and clutter: {self.total_params_mesh_clutter}, trainable params mesh and clutter: {self.trainable_params_mesh_clutter}')
         if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
             if self.trainable_params == 0:
                 logger.info('no trainable params, no optimizer needed.')
