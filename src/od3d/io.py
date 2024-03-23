@@ -19,6 +19,13 @@ import subprocess
 import importlib
 
 
+def is_fpath_video(fpath: Path):
+    return fpath.suffix in ['.mp4', '.avi', '.mov', '.mkv', '.webm']
+
+def is_fpath_image(fpath: Path):
+    return fpath.suffix in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+
+
 def reporthook(count, block_size, total_size):
     global start_time
     if count == 0:

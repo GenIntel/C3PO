@@ -35,17 +35,21 @@ def show_mesh():
 
     from od3d.cv.geometry.mesh import Meshes
 
-    sequence_name = '373_41715_83384'  #
+    sequence_name = '354_37645_70054'  #
     # co3dv2:  354_37645_70054 372_41153_81941 270_28771_56661 136_15656_31168 373_41715_83384
     fpaths_meshes = [
-        '/misc/lmbraid19/sommerl/datasets/PASCAL3D_Preprocess/mesh/cuboid250/bicycle/mesh.ply',
-        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/mesh/alpha500/meta_mask/meta/bicycle/{sequence_name}/mesh.ply',
+        #'/misc/lmbraid19/sommerl/datasets/PASCAL3D_Preprocess/mesh/cuboid250/bicycle/mesh.ply',
+        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/mesh/cuboid500/meta_mask/meta/bicycle/{sequence_name}/mesh.ply',
+        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/mesh/alphawrap500/meta_mask/meta/bicycle/{sequence_name}/mesh.ply',
+
         #'/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/mesh/alpha500/meta_mask/meta/bicycle/397_49943_98337/mesh.ply'
 
     ]
     fpaths_meshes_tform_obj = [
-        None,
-        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt'
+        #None,
+        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt',
+        f'/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/tform_obj/label3d_cuboid/meta_mask/meta/bicycle/{sequence_name}/tform_obj.pt',
+
         #'/misc/lmbraid19/sommerl/datasets/CO3Dv1_Preprocess/tform_obj/label3d_zsp_cuboid/meta_mask/meta/bicycle/397_49943_98337/tform_obj.pt'
         #
     ]
@@ -106,11 +110,12 @@ def show_scene():
     fpath = '/misc/lmbraid19/sommerl/datasets/ShapeNetCore.v2/03325088/ad51249f5960d841c36fb70296e45483/models/model_normalized.obj'
     fpath = '/misc/lmbraid19/sommerl/datasets/ShapeNetCore.v2/02958343/adc6f0f3274cf92cd4f6529a209c5dc0/models/model_normalized.obj'
     fpath = '/misc/lmbraid19/sommerl/datasets/ShapeNetCore.v2/02958343/bac6953b6866ec02300856337cd5b2e/models/model_normalized.obj'
+    fpath = 'not_watertight_mesh.ply'
 
     # 02958343 : car
     meshes = Meshes.load_from_files([fpath])
 
-    meshes.feats = meshes.rgb
+    # meshes.feats = meshes.rgb
     show.show_scene(meshes=meshes, meshes_colors=meshes.rgb)
 
     # import open3d as o3d

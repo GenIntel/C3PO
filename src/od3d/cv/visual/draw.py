@@ -5,6 +5,14 @@ import cv2
 import numpy as np
 from od3d.cv.visual.blend import rgb_to_range01
 
+def random_colors_as_img(K: int, res=100, device='cpu'):
+    colors = get_colors(K*3, device=device)
+    colors = colors[torch.randperm(K*3).to(device=device)]
+    img = torch.zeros(size=(3, res, res*K)).to(device=device)
+    for k in range(K):
+        img[:, :, res*k: res*(k+1)] = colors[k][:, None, None].repeat(1, res, res)
+    return img
+
 def tensor_to_cv_img(x_in):
     # x_in : CxHxW float32
     # x_out : HxWxC uint8

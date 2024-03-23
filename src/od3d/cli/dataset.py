@@ -23,7 +23,7 @@ def classes():
 def visualize_category_sequences(
         dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
         imgs_count: int = typer.Option(5, '-i', '--imgs-count'),
-        viewpoints_count: int = typer.Option(16, '-v', '--viewpoints-count'),
+        viewpoints_count: int = typer.Option(16, '-v', '--viewpoints-count'), # 16
         height: int = typer.Option(1080, '-h', '--height'),
         width: int = typer.Option(1080, '-h', '--height'),
         platform: str = typer.Option('local', '-p', '--platform')):
