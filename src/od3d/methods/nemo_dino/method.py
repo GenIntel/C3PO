@@ -59,7 +59,7 @@ class NeMo_DINO(NeMo):
         logging_dir,
     ):
         super().__init__(config=config, logging_dir=logging_dir)
-        self.mesh_update_count = torch.ones(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],), device=self.device)
+        self.mesh_update_count = torch.zeros(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],), device=self.device)
         # hard coded for now
         self.mesh_feats_total = torch.zeros(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],384), device=self.device)
 
@@ -155,8 +155,8 @@ class NeMo_DINO(NeMo):
             bank_feats_new =  self.mesh_feats_total[batch_vts_ids]  + net_feats
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
             self.mesh_update_count[batch_vts_ids_unique] += 1
-            self.mesh_feats_total[batch_vts_ids_unique] = bank_feats_new
-            bank_feats.data = self.mesh_feats_total/ self.mesh_update_count[:, None]
+            self.mesh_feats_total[batch_vts_ids_unique] += bank_feats_new
+            bank_feats[batch_vts_ids_unique].data = self.mesh_feats_total[batch_vts_ids_unique]/ self.mesh_update_count[batch_vts_ids_unique, None]
             self.normalize_feats()
 
         else:
