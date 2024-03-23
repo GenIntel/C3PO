@@ -60,8 +60,7 @@ class NeMo_DINO(NeMo):
     ):
         super().__init__(config=config, logging_dir=logging_dir)
         self.mesh_update_count = torch.zeros(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],), device=self.device)
-        # hard coded for now
-        self.mesh_feats_total = torch.zeros(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],384), device=self.device)
+        self.mesh_feats_total = None
 
 
 
@@ -138,6 +137,8 @@ class NeMo_DINO(NeMo):
         # batch_vts_ids = self.meshes.get_feats_ids_stacked(batch.category_id.tolist())
 
         bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
+        if self.mesh_feats_total is None:
+            self.mesh_feats_total = torch.zeros_like(bank_feats)
         if self.config.train.bank_feats_update == 'loss_gradient':
             sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats)
         elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
@@ -224,7 +225,7 @@ class NeMo_DINO(NeMo):
                                                                   feats2d_net_mask=feats2d_net_mask,
                                                                   cam_tform4x4_obj=batch.cam_tform4x4_obj,
                                                                   cam_intr4x4=batch.cam_intr4x4,
-                                                                  categories_ids= [mesh_id] * B, return_sim_pxl=True,
+                                                                  categories_ids= torch.tensor([mesh_id] * B), return_sim_pxl=True,
                                                                   broadcast_batch_and_cams=False,
                                                                   pre_rendered=False,
                                                                   only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
