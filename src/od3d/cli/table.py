@@ -57,7 +57,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
              metrics: str = typer.Option(None, '-m', '--metrics'),
              configs: str = typer.Option(None, '-c', '--configs'),
              results_cols: str = typer.Option(None, '-r', '--results_cols'),):
-
+    digits = 3
     logging.basicConfig(level=logging.INFO)
 
     from od3d.cli.benchmark import get_dataframe_multiple
@@ -76,9 +76,13 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
 
     if results_cols is not None:
         for metric in metrics:
-            logger.info(df.groupby(results_cols.split(','))[metric].agg(['mean', 'std']))
+            df_metric = df.groupby(results_cols.split(','))[metric].agg(['mean', 'std']).reset_index()
+            logger.info(tabulate(df_metric, headers='keys', tablefmt='tsv', floatfmt=f".{digits}f", showindex=False)) # latex
+            #logger.info(df_metric)
+
     else:
-        logger.info(df)
+        logger.info(tabulate(df, headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+        # logger.info(df)
 
 @app.command()
 def pascal3d(
