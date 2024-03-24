@@ -113,7 +113,7 @@ def show_scene2d(
     import matplotlib.pyplot as plt
     import matplotlib
     import itertools
-    matplotlib.use("TkAgg")
+    #matplotlib.use("TkAgg")
     if pts2d_lengths is not None:
         pts2d_lengths_sum =np.cumsum([0,*pts2d_lengths])
     
