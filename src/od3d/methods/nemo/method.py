@@ -212,7 +212,7 @@ class NeMo(OD3D_Method):
         color_ = plt.get_cmap('gist_ncar' ,len(config.categories))
         self.feats_all_colors = []
         for i, cat in enumerate(config.categories):
-            self.feats_all_colors.extend( [color_(i),] * self.verts_count_max )
+            self.feats_all_colors.extend( [color_(i),] * self.meshes.verts_counts[i] ) 
 
 
     def normalize_feats(self):
