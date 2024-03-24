@@ -801,8 +801,14 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
 
                 from od3d.cv.geometry.mesh_simplification import simplify_mesh
                 logger.info(o3d_obj_mesh)
+                if o3d_obj_mesh.is_watertight():
+                    pass
+                else:
+                    alpha = alpha * 1.3
+                    continue
                 assert o3d_obj_mesh.is_watertight()
-                o3d_obj_mesh_downsampled = simplify_mesh(o3d_obj_mesh, mesh_vertices_count=mesh_vertices_count,
+                o3d_obj_mesh_downsampled = simplify_mesh(o3d_obj_mesh,
+                                                         mesh_vertices_count=mesh_vertices_count,
                                                          isotropic=True, valence_aware=True)
                 logger.info(o3d_obj_mesh_downsampled)
                 if o3d_obj_mesh_downsampled.is_watertight():
