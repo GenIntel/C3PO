@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 import torch
 torch.multiprocessing.set_sharing_strategy('file_system')
 from od3d.cv.geometry.transform import se3_exp_map
-from od3d.cv.visual.show import imgs_to_img
+from od3d.cv.visual.show import imgs_to_img, show_scene2d
 from od3d.cv.geometry.mesh import Meshes
 from pathlib import Path
 from od3d.cv.geometry.transform import transf4x4_from_spherical, tform4x4, rot3x3, inv_tform4x4, tform4x4_broadcast
@@ -56,6 +56,7 @@ class VISUAL_MODALITIES(str, ExtEnum):
     NET_FEATS_NEAREST_VERTS = 'net_feats_nearest_verts'
     SIM_PXL = 'sim_pxl'
     SAMPLES = 'samples'
+    TSNE = 'tsne'
 
 class SIM_FEATS_MESH_WITH_IMAGE(str, ExtEnum):
     VERTS2D = 'verts2d'
@@ -180,8 +181,8 @@ class NeMo(OD3D_Method):
         self.back_propagate = True
         logger.info(f'total params: {self.total_params}, trainable params: {self.trainable_params}')
         logger.info(f'total params mesh and clutter: {self.total_params_mesh_clutter}, trainable params mesh and clutter: {self.trainable_params_mesh_clutter}')
-        logger.info(f'mesh named parameters: {self.meshes}')
-        
+ 
+
         if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
             if self.trainable_params == 0:
                 logger.info('no trainable params, no optimizer needed.')
@@ -207,6 +208,11 @@ class NeMo(OD3D_Method):
         # note: somehow vertices are stored in wrong order of classes (starting with last class tvmonitor until first class aeroplane
         # self.verts_feats = self.verts_feats.reshape(len(self.meshes), self.verts_count_max, -1).flip(dims=(0,)).reshape(len(self.meshes) * self.verts_count_max, -1)
         self.down_sample_rate = self.net.downsample_rate
+
+        color_ = plt.get_cmap('gist_ncar' ,len(config.categories))
+        self.feats_all_colors = []
+        for i, cat in enumerate(config.categories):
+            self.feats_all_colors.extend( [color_(i),] * self.verts_count_max )
 
 
     def normalize_feats(self):
@@ -930,6 +936,17 @@ class NeMo(OD3D_Method):
                                                  collate_fn=dataset.collate_fn,
                                                  num_workers=self.config.test.dataloader.num_workers,
                                                  pin_memory=self.config.test.dataloader.pin_memory)
+        
+        if VISUAL_MODALITIES.TSNE in modalities:
+                    logger.info('create tsne plots for the mesh...')
+                    from od3d.cv.cluster.embed import tsne
+                    feats_tsne = tsne(self.meshes.feats, C=2)
+                    
+                    img  = show_scene2d([feats_tsne], pts2d_colors=[self.feats_all_colors], return_visualization=True)
+                    
+                    results[f'visual/{VISUAL_MODALITIES.TSNE}'] = image_as_wandb_image(img, caption=f'tsne of mesh feats')
+                    
+
         for i, batch in tqdm(enumerate(iter(dataloader))):
             with torch.no_grad():
                 batch.to(device=self.device)
