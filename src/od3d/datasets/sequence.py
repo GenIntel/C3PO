@@ -738,20 +738,21 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                 except Exception as e:
                     logger.warning(f'alpha {alpha} failed with {e}')
 
-                logger.info(o3d_obj_mesh)
-                o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
-                logger.info(o3d_obj_mesh)
-                faces_count = mesh_vertices_count * 2
+                if o3d_obj_mesh is not None:
+                    logger.info(o3d_obj_mesh)
+                    o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
+                    logger.info(o3d_obj_mesh)
+                    faces_count = mesh_vertices_count * 2
 
-                o3d_obj_mesh_downsampled = o3d_obj_mesh
-                vertices_count = len(o3d_obj_mesh_downsampled.vertices)
-                while vertices_count > mesh_vertices_count:
-                    faces_count = int(faces_count * 0.9)
-                    o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=faces_count)
-                    logger.info(o3d_obj_mesh_downsampled)
+                    o3d_obj_mesh_downsampled = o3d_obj_mesh
                     vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+                    while vertices_count > mesh_vertices_count:
+                        faces_count = int(faces_count * 0.9)
+                        o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=faces_count)
+                        logger.info(o3d_obj_mesh_downsampled)
+                        vertices_count = len(o3d_obj_mesh_downsampled.vertices)
 
-                obj_mesh = Mesh.from_o3d(o3d_obj_mesh_downsampled, device=device)
+                    obj_mesh = Mesh.from_o3d(o3d_obj_mesh_downsampled, device=device)
                 alpha = alpha * 1.3
 
 
