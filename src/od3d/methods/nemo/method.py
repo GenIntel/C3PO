@@ -191,7 +191,10 @@ class NeMo(OD3D_Method):
             else:
                 self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()))
         else:
-            self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=list(self.net.parameters()) + [self.meshes.feats] + [self.clutter_feats])
+            if self.trainable_params == 0:
+                self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=[self.meshes.feats] + [self.clutter_feats])
+            else:
+                self.optim = od3d.io.get_obj_from_config(config=self.config.train.optimizer, params=[self.meshes.feats] + [self.clutter_feats] + list(self.net.parameters()))
         
         self.scheduler = od3d.io.get_obj_from_config(self.optim, config=self.config.train.scheduler)
 
