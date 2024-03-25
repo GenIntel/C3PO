@@ -107,7 +107,9 @@ def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000, state =No
                         )
     return runs
 
-def get_dataframe_multiple(ablation: str=None, platform: str=None, benchmark: str = None, age_in_hours_gt=0, age_in_hours_lt=1000, configs=None, metrics=[]):
+def get_dataframe_multiple(ablation: str=None, platform: str=None, benchmark: str = None,
+                           age_in_hours_gt=0, age_in_hours_lt=1000, configs=None, metrics=[],
+                           duplicates_keep='all'):
 
     run_name_regex = get_run_name_regex(ablation=ablation, platform=platform, benchmark=benchmark)
     if configs is None:
@@ -120,10 +122,13 @@ def get_dataframe_multiple(ablation: str=None, platform: str=None, benchmark: st
         ablation_regex_groups = []
     return get_dataframe(configs=configs, metrics=metrics, name_regex=run_name_regex,
                          name_regex_groups=['bench', 'method'] + ablation_regex_groups,
-                         age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt)
+                         age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt,
+                         duplicates_keep=duplicates_keep)
 
 
-def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[], age_in_hours_lt=1000, age_in_hours_gt=0, name_partial_ban=None, filter_runs_with_metrics=True):
+def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
+                  age_in_hours_lt=1000, age_in_hours_gt=0, name_partial_ban=None,
+                  filter_runs_with_metrics=True, duplicates_keep='all'):
 
     # Initialize wandb
      # wandb.init(project=config.logger.wandb_project_name)
@@ -205,6 +210,11 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
     cols = ['name'] + configs + metrics + name_regex_groups
 
     df = pd.DataFrame(rows, columns=cols)
+    df = df.sort_values('name')
+
+    if duplicates_keep == 'first' or duplicates_keep == 'last':
+        subset_cols = configs + name_regex_groups
+        df = df.drop_duplicates(subset=subset_cols, keep=duplicates_keep)
 
     #logger.info(tabulate(rows, headers=cols, tablefmt='github',  floatfmt=".3f")) # 'github', 'tsv'
     #logger.info(tabulate(rows, headers=cols, tablefmt='html',  floatfmt=".3f")) # 'github', 'tsv'
@@ -594,7 +604,7 @@ def get_run_name_regex(benchmark: str=None, platform: str = None, ablation:str =
     if benchmark is not None:
         cfg_platform = platform if platform is not None else 'local'
         cfg = od3d.io.load_hierarchical_config(benchmark=benchmark, platform=cfg_platform)
-        bench_regex = f'({cfg.train_datasets.labeled.class_name})'
+        bench_regex = f'({cfg.train_datasets.labeled.class_name}.*)'
         method_regex = f'({"|".join([method_cfg.class_name for method_cfg in cfg.method.values()])})'
     else:
         bench_regex = '(.*)'
@@ -731,7 +741,7 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
 
     if ablation is not None:
         prev_runs = get_runs_multiple(benchmark=benchmark, ablation=ablation, age_in_hours_lt=age_in_hours_lt)
-        prev_runs = [run for run in prev_runs if (run.state == 'finished' or run.state =='running')]
+        prev_runs = [run for run in prev_runs if (run.state == 'finished' or run.state == 'running')]
         prev_runs_names = [get_run_name_without_timestamp(run.name) for run in prev_runs]
     else:
         prev_runs_names = []
@@ -799,6 +809,37 @@ def delete_wandb(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--gr
     for run in runs:
         logger.info(run.name)
         run.delete()
+
+@app.command()
+def delete_wandb_failed(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
+                              timestamp_lt_age_in_hours: int = typer.Option(0, '-l', '--lower'),
+                              name_regex: str = typer.Option('.*', '-n', '--name')):
+
+    logging.basicConfig(level=logging.INFO)
+    runs_failed = get_runs(name_regex=name_regex, age_in_hours_lt=timestamp_gt_age_in_hours, age_in_hours_gt=timestamp_lt_age_in_hours, state='failed')
+    runs_crashed = get_runs(name_regex=name_regex, age_in_hours_lt=timestamp_gt_age_in_hours, age_in_hours_gt=timestamp_lt_age_in_hours, state='crashed')
+
+    logger.info(f'deleting following runs: ')
+    for run in runs_failed:
+        logger.info(run.name)
+        run.delete()
+    for run in runs_crashed:
+        logger.info(run.name)
+        run.delete()
+
+@app.command()
+def delete_wandb_running(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
+                              timestamp_lt_age_in_hours: int = typer.Option(0, '-l', '--lower'),
+                              name_regex: str = typer.Option('.*', '-n', '--name')):
+
+    logging.basicConfig(level=logging.INFO)
+    runs_running = get_runs(name_regex=name_regex, age_in_hours_lt=timestamp_gt_age_in_hours, age_in_hours_gt=timestamp_lt_age_in_hours, state='running')
+
+    logger.info(f'deleting following runs: ')
+    for run in runs_running:
+        logger.info(run.name)
+        run.delete()
+
 @app.command()
 def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
                   name_regex: str = typer.Option('.*', '-n', '--name')):

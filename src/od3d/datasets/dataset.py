@@ -810,7 +810,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             logger.info(f'mesh has {len(category_mesh.verts)} vertices and {len(category_mesh.faces)} faces.')
             show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
                        cams_imgs=category_cams_imgs, meshes=[category_mesh], viewpoints_count=viewpoints_count,
-                       fpath=Path(f'{category}.png'), H=H, W=W)
+                       fpath=Path(f'{category}.webm'), H=H, W=W)
 
 
             #show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
@@ -826,43 +826,29 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         from od3d.cv.visual.show import show_scene, show_imgs
 
         for category in tqdm(self.categories):
-            category_sequence = None
-            category_mesh = None
-            category_sequences_mesh = []
-            category_pts3d = None
-            category_pts3d_colors = None
-            category_pts3d_normals = None
-            category_sequences_pts3d = []
-            category_sequences_pts3d_colors = []
-            category_sequences_pts3d_normals = []
-
-            for sequence in tqdm(sequences):
-                if sequence.category == category:
-                    sequence_mesh = sequence.read_mesh()
-                    sequence_pts3d, sequence_pts3d_colors, sequence_pts3d_normals = sequence.read_pcl()
-
-                    if category_mesh is None:
-                        category_sequence = sequence
-                        category_pts3d = sequence_pts3d
-                        #category_pts3d_colors = sequence_pts3d_colors
-                        #category_pts3d_normals = sequence_pts3d_normals
-                        category_mesh = sequence_mesh
-                        category_mesh.rgb = category_mesh.verts_ncds
+            for ref_sequence in tqdm(sequences):
+                for src_sequence in tqdm(sequences):
+                    if ref_sequence.category == src_sequence.category:
+                        ref_sequence_mesh = ref_sequence.read_mesh()
+                        src_sequence_mesh = src_sequence.read_mesh()
+                    else:
+                        continue
+                        #ref_sequence_pts3d, ref_sequence_pts3d_colors, ref_sequence_pts3d_normals = ref_sequence.read_pcl()
 
                     if modalities != ['ncds']:
-                        sequence.preprocess_mesh_feats(override=False)
+                        #sequence.preprocess_mesh_feats(override=False)
                         # logger.info(f'mesh is watertight: {sequence_mesh.to_o3d().is_watertight()}')
-                        category_sequence.preprocess_mesh_feats(override=False)
-                        sequence.preprocess_mesh_feats_dist(category_sequence, override=False)
-                        mesh_feats_dist = sequence.read_mesh_feats_dist(category_sequence)
+                        #category_sequence.preprocess_mesh_feats(override=False)
+                        #sequence.preprocess_mesh_feats_dist(category_sequence, override=False)
+                        mesh_feats_dist = ref_sequence.read_mesh_feats_dist(src_sequence)
 
-                        dist_ref_geo_max = torch.cdist(category_mesh.verts[None,], category_mesh.verts[None,]).max().detach()  #
-                        dist_src_geo_max = torch.cdist(sequence_mesh.verts[None,], sequence_mesh.verts[None,]).max().detach()  #
+                        dist_ref_geo_max = torch.cdist(src_sequence_mesh.verts[None,], src_sequence_mesh.verts[None,]).max().detach()  #
+                        dist_src_geo_max = torch.cdist(ref_sequence_mesh.verts[None,], ref_sequence_mesh.verts[None,]).max().detach()  #
 
                         argmin_ref_from_src = mesh_feats_dist.argmin(dim=-1)  # N,
                         argmin_src_from_ref = mesh_feats_dist.argmin(dim=-2)  # R,
-                        src_cyclic_dist = (sequence_mesh.verts - sequence_mesh.verts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1,).detach() / dist_src_geo_max  # N,
-                        ref_cyclic_dist = (category_mesh.verts - category_mesh.verts[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1,).detach() / dist_ref_geo_max  # R,
+                        src_cyclic_dist = (ref_sequence_mesh.verts - ref_sequence_mesh.verts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1,).detach() / dist_src_geo_max  # N,
+                        ref_cyclic_dist = (src_sequence_mesh.verts - src_sequence_mesh.verts[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1,).detach() / dist_ref_geo_max  # R,
 
                         from od3d.cv.select import batched_index_select
                         src_cyclic_dist[
@@ -875,20 +861,24 @@ class OD3D_SequenceDataset(OD3D_Dataset):
 
 
                     for modality in modalities:
-                        sequence_mesh = sequence.read_mesh()
+                        ref_sequence_mesh = ref_sequence.read_mesh()
 
                         if modality == 'ncds':
-                            sequence_mesh.rgb = sequence_mesh.verts_ncds
+                            ref_sequence_mesh.rgb = ref_sequence_mesh.verts_ncds
                         elif modality == 'nn_app':  #  'nn_geo', 'nn_app', 'cycle_weight', 'nn_app_cycle_weight'
-                            sequence_mesh.rgb = category_mesh.verts_ncds[argmin_ref_from_src]
+                            ref_sequence_mesh.rgb = src_sequence_mesh.verts_ncds[argmin_ref_from_src].clone()
                                                #  * (src_cyclic_dist != torch.inf).float()[:, None]
                         elif modality == 'nn_app_cycle_weight':
-                            sequence_mesh.rgb = category_mesh.verts_ncds[argmin_ref_from_src] * cycle_weight[:, None]
+                            ref_sequence_mesh.rgb = src_sequence_mesh.verts_ncds[argmin_ref_from_src].clone() * cycle_weight[:, None]
                         elif modality == 'nn_geo':
-                            dist_geo = torch.cdist(sequence_mesh.verts[None,], category_mesh.verts[None,]).detach()[0]
-                            sequence_mesh.rgb = category_mesh.verts_ncds[dist_geo.argmin(dim=-1)]
+                            dist_geo = torch.cdist(ref_sequence_mesh.verts[None,], src_sequence_mesh.verts[None,]).detach()[0]
+                            ref_sequence_mesh.rgb = src_sequence_mesh.verts_ncds[dist_geo.argmin(dim=-1)].clone()
                         elif modality == 'cycle_weight':
-                            sequence_mesh.rgb = cycle_weight[:, None].repeat(1, 3) * 0.9
+                            ref_sequence_mesh.rgb = cycle_weight[:, None].repeat(1, 3) * 0.9
 
-                        show_scene(meshes=[sequence_mesh], viewpoints_count=viewpoints_count,
-                                   fpath=Path(f'{category}_{sequence.name}_{modality}.webm'), H=H, W=W)
+                        if modality == 'ncds':
+                            fpath = Path(f'{category}_{ref_sequence.name}_{modality}.webm')
+                        else:
+                            fpath = Path(f'{category}_{ref_sequence.name}_{src_sequence.name}_{modality}.webm')
+                        show_scene(meshes=[ref_sequence_mesh], viewpoints_count=viewpoints_count,
+                                   fpath=fpath, H=H, W=W)

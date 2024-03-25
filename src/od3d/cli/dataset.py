@@ -38,11 +38,12 @@ def visualize_category_meshes(
         viewpoints_count: int = typer.Option(16, '-v', '--viewpoints-count'),
         height: int = typer.Option(1080, '-h', '--height'),
         width: int = typer.Option(1080, '-h', '--height'),
-        platform: str = typer.Option('local', '-p', '--platform')):
+        platform: str = typer.Option('local', '-p', '--platform'),
+        modalities: str = typer.Option('ncds,nn_geo,nn_app,cycle_weight,nn_app_cycle_weight', '-m', '--modalities')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
-    dataset.visualize_category_meshes(viewpoints_count=viewpoints_count, H=height, W=width)
+    dataset.visualize_category_meshes(viewpoints_count=viewpoints_count, H=height, W=width, modalities=modalities.split(','))
 
 @app.command()
 def save_sequences_as_video(

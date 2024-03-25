@@ -377,8 +377,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 # open3d version 0.17.0 bug, view control does not work
                 #camera_orig = view_control.convert_to_pinhole_camera_parameters()
                 #cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
-
-                for v in range(viewpoints_count):
+                from tqdm import tqdm
+                for v in tqdm(range(viewpoints_count)):
                     #camera_orig.extrinsic = tform4x4_broadcast(cam_tform4x4_obj,
                     #                                           objs_new_tform4x4_obj[v]).detach().cpu().numpy()
                     #view_control.convert_from_pinhole_camera_parameters(camera_orig)

@@ -56,7 +56,9 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
              age_in_hours_lt: int = typer.Option(1000, '-l', '--age-in-hours-lt'),
              metrics: str = typer.Option(None, '-m', '--metrics'),
              configs: str = typer.Option(None, '-c', '--configs'),
-             results_cols: str = typer.Option(None, '-r', '--results_cols'),):
+             results_cols: str = typer.Option(None, '-r', '--results_cols'),
+             duplicates_keep: str = typer.Option('last', '-d', '--duplicates_keep'),
+             show_index: bool = typer.Option(False, '-i', '--show_index'),):
     digits = 3
     logging.basicConfig(level=logging.INFO)
 
@@ -72,17 +74,25 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
     else:
         configs = []
 
-    df = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt, metrics=metrics, configs=configs)
+    df = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform,
+                                age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt,
+                                metrics=metrics, configs=configs, duplicates_keep=duplicates_keep)
+
 
     if results_cols is not None:
         for metric in metrics:
             df_metric = df.groupby(results_cols.split(','))[metric].agg(['mean', 'std']).reset_index()
-            logger.info(tabulate(df_metric, headers='keys', tablefmt='tsv', floatfmt=f".{digits}f", showindex=False)) # latex
+            # logger.info(tabulate(df_metric, headers='keys', tablefmt='tsv', floatfmt=f".{digits}f", showindex=False)) # latex
+            logger.info(re.sub(r'[^\S\r\n]+', ', ', tabulate(df_metric, headers='keys', stralign="left", tablefmt="plain", floatfmt=f".{digits}f", showindex=show_index))) # latex
+
             #logger.info(df_metric)
 
     else:
-        logger.info(tabulate(df, headers='keys', tablefmt='latex', floatfmt=f".{digits}f"))
+        # logger.info(tabulate(df, headers='keys', tablefmt='csv', floatfmt=f".{digits}f")) # latex csv tsv
+        logger.info(re.sub(r'[^\S\r\n]+', ', ', tabulate(df, headers='keys', stralign="left", tablefmt="plain", floatfmt=f".{digits}f", showindex=show_index))) # latex csv tsv
+        # , stralign="right", numalign="right"
         # logger.info(df)
+        # , stralign="left", tablefmt="plain").replace('  ', ', '))
 
 @app.command()
 def pascal3d(
