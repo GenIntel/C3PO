@@ -799,25 +799,25 @@ def recent(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
         logger.info(f'{run.name} {run.state}')
 
 @app.command()
-def delete_wandb(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
-                 timestamp_lt_age_in_hours: int = typer.Option(0, '-l', '--lower'),
+def delete_wandb(age_in_hours_gt: int = typer.Option(0, '-g', '--greater'),
+                 age_in_hours_lt: int = typer.Option(1000, '-l', '--lower'),
                  name_regex: str = typer.Option('.*', '-n', '--name')):
 
     logging.basicConfig(level=logging.INFO)
-    runs = get_runs(name_regex=name_regex, age_in_hours_lt=timestamp_gt_age_in_hours, age_in_hours_gt=timestamp_lt_age_in_hours)
+    runs = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt)
     logger.info(f'deleting following runs: ')
     for run in runs:
         logger.info(run.name)
         run.delete()
 
 @app.command()
-def delete_wandb_failed(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
-                              timestamp_lt_age_in_hours: int = typer.Option(0, '-l', '--lower'),
-                              name_regex: str = typer.Option('.*', '-n', '--name')):
+def delete_wandb_failed(age_in_hours_gt: int = typer.Option(0, '-g', '--greater'),
+                        age_in_hours_lt: int = typer.Option(1000, '-l', '--lower'),
+                        name_regex: str = typer.Option('.*', '-n', '--name')):
 
     logging.basicConfig(level=logging.INFO)
-    runs_failed = get_runs(name_regex=name_regex, age_in_hours_lt=timestamp_gt_age_in_hours, age_in_hours_gt=timestamp_lt_age_in_hours, state='failed')
-    runs_crashed = get_runs(name_regex=name_regex, age_in_hours_lt=timestamp_gt_age_in_hours, age_in_hours_gt=timestamp_lt_age_in_hours, state='crashed')
+    runs_failed = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt, state='failed')
+    runs_crashed = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt, state='crashed')
 
     logger.info(f'deleting following runs: ')
     for run in runs_failed:
@@ -828,12 +828,12 @@ def delete_wandb_failed(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g'
         run.delete()
 
 @app.command()
-def delete_wandb_running(timestamp_gt_age_in_hours: int = typer.Option(1000, '-g', '--greater'),
-                              timestamp_lt_age_in_hours: int = typer.Option(0, '-l', '--lower'),
-                              name_regex: str = typer.Option('.*', '-n', '--name')):
+def delete_wandb_running(age_in_hours_gt: int = typer.Option(0, '-g', '--greater'),
+                         age_in_hours_lt: int = typer.Option(1000, '-l', '--lower'),
+                         name_regex: str = typer.Option('.*', '-n', '--name')):
 
     logging.basicConfig(level=logging.INFO)
-    runs_running = get_runs(name_regex=name_regex, age_in_hours_lt=timestamp_gt_age_in_hours, age_in_hours_gt=timestamp_lt_age_in_hours, state='running')
+    runs_running = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt, state='running')
 
     logger.info(f'deleting following runs: ')
     for run in runs_running:
