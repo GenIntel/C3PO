@@ -4,3 +4,4 @@ method:
   nemo:
     inference:
       use_mask_object: True
+      use_mask_object: False

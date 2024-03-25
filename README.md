@@ -56,6 +56,13 @@ pip install git@github.com:Generative-Vision-Robust-Learning/od3d.git
   - Synchronize the target with the source platform
     - `od3d dataset rsync -s local -t slurm -d co3d`  
     - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d"`  
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d -r mesh/alphawrapuniform250"`        
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d -r feats/M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc/alphawrapuniform250"`  
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d -r feats_dist/min_avg/M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc/alphawrapuniform250"`
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d -r mesh/aligned_N_alphawrapuniform250_dinov2s"`  
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d -r mesh/aligned_N_alphawrapuniform250_dinov2s_filtered"`    
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d -r tform_obj/aligned_N_alphawrapuniform250_dinov2s"`    
+    - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s local -t torque -d co3d -r tform_obj/aligned_N_alphawrapuniform250_dinov2s_filtered"`    
     - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s torque -t local -d objectnet3d"`
     - `od3d platform run -p slurm -c "od3d dataset rsync-preprocess -s torque -t local -d pascal3d"`  
 

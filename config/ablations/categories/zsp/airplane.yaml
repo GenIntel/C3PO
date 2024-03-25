@@ -1,8 +1,4 @@
 # @package _global_
-defaults:
-  - /ablations/categories@: _default
-
-ablation_name: cat1_airplane
 
 categories:
 #  - bicycle
