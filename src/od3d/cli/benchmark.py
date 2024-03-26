@@ -63,12 +63,12 @@ def get_nested_value(data, key):
     return value
 
 def get_runs_multiple(benchmark: str=None, platform: str = None, ablation:str = None,
-                      age_in_hours_gt: int = 0, age_in_hours_lt: int = 1000):
+                      age_in_hours_gt: int = 0, age_in_hours_lt: int = 1000, state=None):
     run_name_regex = get_run_name_regex(ablation=ablation, platform=platform, benchmark=benchmark)
-    return get_runs(name_regex=run_name_regex, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt)
+    return get_runs(name_regex=run_name_regex, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt, state=state)
 
 
-def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000, state =None):
+def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000, state=None):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config()
 
@@ -92,7 +92,7 @@ def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000, state =No
                                         "$lt": timestamp_created_lt,
                                         "$gt": timestamp_created_gt,
                                     },
-                                "state": state
+                                "state": {"$regex": state}
                                 }]}
                         )
     else:
@@ -109,12 +109,16 @@ def get_runs(name_regex='.*', age_in_hours_gt=0, age_in_hours_lt=1000, state =No
 
 def get_dataframe_multiple(ablation: str=None, platform: str=None, benchmark: str = None,
                            age_in_hours_gt=0, age_in_hours_lt=1000, configs=None, metrics=[],
-                           duplicates_keep='all'):
+                           duplicates_keep='all', state=None, add_configs_ablation=True, add_configs_default=True):
 
     run_name_regex = get_run_name_regex(ablation=ablation, platform=platform, benchmark=benchmark)
     if configs is None:
-        configs = get_ablations_configs(ablation=ablation)
-        configs = ['platform.link', 'train_datasets.labeled.class_name', 'method.class_name'] + configs
+        configs = []
+
+    if add_configs_ablation:
+        configs += get_ablations_configs(ablation=ablation)
+    if add_configs_default:
+        configs += ['platform.link', 'train_datasets.labeled.class_name', 'method.class_name']
 
     if ablation is not None:
         ablation_regex_groups = ablation.split(',')
@@ -123,12 +127,12 @@ def get_dataframe_multiple(ablation: str=None, platform: str=None, benchmark: st
     return get_dataframe(configs=configs, metrics=metrics, name_regex=run_name_regex,
                          name_regex_groups=['bench', 'method'] + ablation_regex_groups,
                          age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt,
-                         duplicates_keep=duplicates_keep)
+                         duplicates_keep=duplicates_keep, state=state)
 
 
 def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
                   age_in_hours_lt=1000, age_in_hours_gt=0, name_partial_ban=None,
-                  filter_runs_with_metrics=True, duplicates_keep='all'):
+                  filter_runs_with_metrics=True, duplicates_keep='all', state=None):
 
     # Initialize wandb
      # wandb.init(project=config.logger.wandb_project_name)
@@ -150,7 +154,8 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
     #                 )
 
 
-    runs = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt)
+    runs = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt,
+                    state=state)
 
     # if name_regex is not None:
     #     #runs_names_regex_matches = [re.match(name_regex, run.name) for run in runs]
@@ -211,9 +216,9 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
 
     df = pd.DataFrame(rows, columns=cols)
     df = df.sort_values('name')
-
-    if duplicates_keep == 'first' or duplicates_keep == 'last':
+    if duplicates_keep is not None and (duplicates_keep == 'first' or duplicates_keep == 'last'):
         subset_cols = configs + name_regex_groups
+        logger.info(subset_cols)
         df = df.drop_duplicates(subset=subset_cols, keep=duplicates_keep)
 
     #logger.info(tabulate(rows, headers=cols, tablefmt='github',  floatfmt=".3f")) # 'github', 'tsv'
@@ -668,7 +673,7 @@ def get_ablations_configs(ablation:str=None):
     ablations_configs = []
     for ablation_configs_fpaths in ablations_configs_fpaths:
         for fpath in ablation_configs_fpaths:
-            config = dict(read_yaml(fpath))
+            config = dict(read_yaml(fpath, resolve=False)) # problem: ablation not interpolatable
             #logger.info(type(config))
             config = unroll_nested_dict(config, separator='.')
             #logger.info(config.keys())
@@ -699,6 +704,9 @@ def get_ablations_fpaths_rel_comb(ablation:str=None):
 
 def get_run_name_without_timestamp(run_name: str):
     return run_name[15:]
+
+def get_run_name_without_ts_and_platform(run_name: str):
+    return run_name[15:].rsplit('_', 1)[0]
 
 @app.command()
 def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
@@ -740,11 +748,20 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
     current_branch = Repository('.').head.shorthand  # 'master'
 
     if ablation is not None:
-        prev_runs = get_runs_multiple(benchmark=benchmark, ablation=ablation, age_in_hours_lt=age_in_hours_lt)
-        prev_runs = [run for run in prev_runs if (run.state == 'finished' or run.state == 'running')]
-        prev_runs_names = [get_run_name_without_timestamp(run.name) for run in prev_runs]
+        prev_runs_lt = get_runs_multiple(benchmark=benchmark, ablation=ablation, age_in_hours_lt=age_in_hours_lt,
+                                         state='(finished|running)')
+        prev_runs_names_without_ts_and_platform = [get_run_name_without_ts_and_platform(run.name) for run in prev_runs_lt]
     else:
-        prev_runs_names = []
+        prev_runs_names_without_ts_and_platform = []
+
+    prev_runs_all = get_dataframe_multiple(benchmark=benchmark, ablation=ablation,
+                                           duplicates_keep='last', state='(finished|running)',
+                                           add_configs_default=True, add_configs_ablation=False)
+    prev_runs_all_names = prev_runs_all['name'].tolist()
+    prev_runs_all_names_without_ts_and_platform = \
+        [get_run_name_without_ts_and_platform(run_name) for run_name in prev_runs_all_names]
+    prev_runs_all_names = prev_runs_all_names[::-1]
+    prev_runs_all_names_without_ts_and_platform = prev_runs_all_names_without_ts_and_platform[::-1] # reverse to order from latest to oldest
 
     started_runs = 0
     for i, method_cfg in tqdm(enumerate(methods_cfgs)):
@@ -758,9 +775,18 @@ def multiple(benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
                                                method_name=method_cfg.method.class_name,
                                                platform_name=method_cfg.platform.link,
                                                ablation_name=ablation_name)
-            if get_run_name_without_timestamp(run_name) in prev_runs_names:
+            run_name_without_ts_and_platform = get_run_name_without_ts_and_platform(run_name)
+            if run_name_without_ts_and_platform in prev_runs_names_without_ts_and_platform:
                 logger.info(f'{run_name} already exists. Skipping...')
                 continue
+
+            checkpoint = method_cfg.method.get('checkpoint', None)
+            if checkpoint is not None and '__LAST_RUN__' in checkpoint:
+                if run_name_without_ts_and_platform in prev_runs_all_names_without_ts_and_platform:
+                    method_cfg.method.checkpoint = method_cfg.method.checkpoint.replace('__LAST_RUN__', prev_runs_all_names[prev_runs_all_names_without_ts_and_platform.index(run_name_without_ts_and_platform)])
+                    logger.info(f'Found last checkpoint for {run_name} in {method_cfg.method.checkpoint}')
+                else:
+                    logger.warning(f'Could not find last checkpoint for {run_name}. Running anyway...')
 
             method_cfg.run_name = run_name
 
@@ -816,14 +842,10 @@ def delete_wandb_failed(age_in_hours_gt: int = typer.Option(0, '-g', '--greater'
                         name_regex: str = typer.Option('.*', '-n', '--name')):
 
     logging.basicConfig(level=logging.INFO)
-    runs_failed = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt, state='failed')
-    runs_crashed = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt, state='crashed')
+    runs_failed = get_runs(name_regex=name_regex, age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt, state='(failed|crashed)')
 
-    logger.info(f'deleting following runs: ')
+    logger.info(f'deleting following failed runs: ')
     for run in runs_failed:
-        logger.info(run.name)
-        run.delete()
-    for run in runs_crashed:
         logger.info(run.name)
         run.delete()
 
@@ -893,6 +915,12 @@ def rsync(platform_source: str = typer.Option('slurm', '-s', '--source'),
           platform_target: str = typer.Option('local', '-t', '--target'),
           run: str = typer.Option(None, '-r', '--run')):
     logging.basicConfig(level=logging.INFO)
+
+    prev_runs_all = get_dataframe_multiple(benchmark=benchmark, ablation=ablation,
+                                           duplicates_keep='last', state='(finished|running)',
+                                           add_configs_default=True, add_configs_ablation=False)
+    prev_runs_all_names = prev_runs_all['name'].tolist()
+
     if run is None:
         logger.warning('Please specify a run.')
         return
@@ -905,6 +933,35 @@ def rsync(platform_source: str = typer.Option('slurm', '-s', '--source'),
     path_source = Path(config_source.platform.path_exps).joinpath(run)
     path_target = Path(config_target.platform.path_exps).joinpath(run)
     od3d.io.run_cmd(cmd=f'rsync -avrzP {source_link}{path_source} {target_link}{path_target.parent}', live=True, logger=logger)
+
+@app.command()
+def rsync_multiple(platform_source: str = typer.Option('slurm', '-s', '--source'),
+                   platform_target: str = typer.Option('local', '-t', '--target'),
+                   benchmark: str = typer.Option('co3d_nemo', '-b', '--benchmark'),
+                   ablation: str = typer.Option(None, '-a', '--ablation'),
+                   platform: str = typer.Option(None, '-p', '--platform'),
+                   age_in_hours_lt: int = typer.Option(24, '-l', '--age-in-hours-lt'),
+                   age_in_hours_gt: int = typer.Option(0, '-g', '--age-in-hours-gt'),
+                   duplicates_keep: str = typer.Option('last', '-d', '--duplicates_keep')):
+    logging.basicConfig(level=logging.INFO)
+    prev_runs_all = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform,
+                                           duplicates_keep=duplicates_keep, state='(finished|running)',
+                                           add_configs_default=True, add_configs_ablation=False,
+                                           age_in_hours_lt=age_in_hours_lt, age_in_hours_gt=age_in_hours_gt)
+    prev_runs_all_names = prev_runs_all['name'].tolist()
+
+    for run in prev_runs_all_names:
+        logger.info(f'rsync run {run}')
+
+        config_source = od3d.io.load_hierarchical_config(platform=platform_source)
+        config_target = od3d.io.load_hierarchical_config(platform=platform_target)
+        source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
+        target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
+
+        path_source = Path(config_source.platform.path_exps).joinpath(run)
+        path_target = Path(config_target.platform.path_exps).joinpath(run)
+        od3d.io.run_cmd(cmd=f'rsync -avrzP {source_link}{path_source} {target_link}{path_target.parent}', live=True, logger=logger)
+
 
 @app.command()
 def status_slurm():

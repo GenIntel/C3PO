@@ -19,7 +19,6 @@ from od3d.cv.geometry.transform import proj3d2d_broadcast
 from od3d.datasets.sequence import OD3D_Sequence
 from od3d.datasets.sequence_meta import OD3D_SequenceMeta
 
-
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
 
@@ -35,13 +34,21 @@ class OD3D_DATASET_SPLITS(str, ExtEnum):
     RANDOM = 'random'
     SEQUENCES_SHARED = 'sequences_shared'
 
-
 class OD3D_Dataset(Dataset):
     from od3d.datasets.enum import OD3D_CATEGORIES
     map_od3d_categories = None
     all_categories = list(OD3D_CATEGORIES)
     subclasses = {}
     frame_type = OD3D_Frame
+    modalities = None
+    path_raw: Path = None
+    path_preprocess: Path = None
+    categories: List[str] = None
+    transform = None
+    index_shift = 0
+    subset_fraction = 1.
+    dict_nested_frames: Dict = None
+    dict_nested_frames_ban: Dict = None
 
     @classmethod
     def create_from_config(cls, config: DictConfig, transform=None):
@@ -57,6 +64,25 @@ class OD3D_Dataset(Dataset):
             od3d_dataset.preprocess(config_preprocess=config.preprocess)
 
         return od3d_dataset
+
+    def get_as_dict(self):
+        from od3d.cv.transforms.transform import OD3D_Transform
+        _dict = {}
+        keys = inspect.getfullargspec(self.__init__)[0][1:]
+        for key in keys:
+            if hasattr(self, key):
+                _dict[key] = getattr(self, key)
+                if isinstance(_dict[key], Enum):
+                    _dict[key] = str(_dict[key])
+                if isinstance(_dict[key], OD3D_Transform):
+                    _dict[key] = _dict[key].get_as_dict()
+        _dict['class_name'] = type(self).__name__
+        return _dict
+
+    def save_to_config(self, fpath: Path):
+        _dict = self.get_as_dict()
+        from od3d.io import write_dict_as_yaml
+        write_dict_as_yaml(fpath=fpath, _dict=_dict, save_enum_as_str=True)
 
     @classmethod
     def create_by_name(cls, name: str, config: dict = None):
@@ -438,6 +464,8 @@ class OD3D_Dataset(Dataset):
 
 class OD3D_SequenceDataset(OD3D_Dataset):
     sequence_type = OD3D_Sequence
+    frames_count_max_per_sequence = None
+    sequences_count_max_per_category = None
 
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES],
                  path_raw: Path, path_preprocess: Path,

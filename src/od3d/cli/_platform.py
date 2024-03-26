@@ -176,13 +176,13 @@ def status(platform: str = typer.Option(None, '-p', '--platform')):
         format = '"%.18i %.9P %.60j %.8u %.8T %.10M %.9l %.6D %R"'
         slurm_result = subprocess.run(f"ssh slurm 'squeue --me --format={format}'", capture_output=True, shell=True)
         slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
-        for slurm_job in slurm_jobs:
-            logger.info(slurm_job)
+        for i, slurm_job in enumerate(slurm_jobs):
+            logger.info(f'{i}: {slurm_job}')
     elif platform == 'torque':
         torque_result = subprocess.run(f"ssh torque 'qstat -a -u $(whoami)'", capture_output=True, shell=True)
         torque_jobs = torque_result.stdout.decode("utf-8").split("\n")
-        for torque_job in torque_jobs:
-            logger.info(torque_job)
+        for i, torque_job in enumerate(torque_jobs):
+            logger.info(f'{i}: {torque_job}')
     else:
         raise NotImplementedError
 

@@ -180,9 +180,9 @@ class NeMo(OD3D_Method):
 
         # load checkpoint
         if config.get("checkpoint", None) is not None:
-            self.load_checkpoint(config.checkpoint)
+            self.load_checkpoint(Path(config.checkpoint))
         elif config.get("checkpoint_old", None) is not None:
-            self.load_checkpoint_old(config.checkpoint_old)
+            self.load_checkpoint_old(Path(config.checkpoint_old))
         # load_mesh(config.path_shapenemo)
 
         # self.meshes.show()
@@ -257,14 +257,18 @@ class NeMo(OD3D_Method):
         self.clutter_feats = checkpoint['clutter_feats']
 
     @property
-    def path_checkpoint(self):
-        return self.logging_dir.joinpath('nemo.ckpt')
+    def fpath_checkpoint(self):
+        return self.logging_dir.joinpath(self.rfpath_checkpoint)
+
+    @property
+    def rfpath_checkpoint(self):
+        return Path('nemo.ckpt')
 
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
-        self.save_checkpoint(path_checkpoint=self.path_checkpoint)
+        self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
         if 'main' in datasets_val.keys():
             dataset_train_sub = datasets_train['labeled']
@@ -277,24 +281,25 @@ class NeMo(OD3D_Method):
         for epoch in range(self.config.train.epochs):
             if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
                 for dataset_val_key, dataset_val in datasets_val.items():
-                    results_val = self.test(dataset_val)
+                    results_val = self.test(dataset_val, val=True)
                     results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
                     if dataset_val_key == 'main':
                         score_latest = results_val[score_metric_name]
 
                 if not self.config.train.early_stopping or score_latest > score_ckpt_val:
                     score_ckpt_val = score_latest
-                    self.save_checkpoint(path_checkpoint=self.path_checkpoint)
+                    self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
             results_epoch = self.train_epoch(dataset=dataset_train_sub)
             results_epoch.log_with_prefix('train')
-        self.load_checkpoint(path_checkpoint=self.path_checkpoint)
+        self.load_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
+    def test(self, dataset: OD3D_Dataset, val=False):
+        # note: ensure that checkpoint is saved for checkpointed runs
+        if not self.fpath_checkpoint.exists():
+            self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
-    def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
         logger.info(f'test dataset {dataset.name}')
-        if config_inference is None:
-            config_inference = self.config.inference
         self.net.eval()
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
@@ -320,7 +325,7 @@ class NeMo(OD3D_Method):
                                                      pin_memory=self.config.test.dataloader.pin_memory)
             logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
-        results_epoch = OD3D_Results()
+        results_epoch = OD3D_Results(logging_dir=self.logging_dir)
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
 
@@ -332,12 +337,17 @@ class NeMo(OD3D_Method):
 
         count_pred_frames = len(results_epoch['item_id'])
         logger.info(f'Predicted {count_pred_frames} frames.')
+        if not val and self.config.test.save_results:
+            results_epoch.save_with_dataset(prefix='test', dataset=dataset)
+
         if not isinstance(dataset, CO3D):
             results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
                                                      config_visualize=self.config.test.visualize)
         else:
             results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset_sub,
                                                      config_visualize=self.config.test.visualize)
+
+
         results_epoch = results_epoch.mean()
         results_epoch += results_visual
         return results_epoch
@@ -355,7 +365,7 @@ class NeMo(OD3D_Method):
                                                        num_workers=self.config.train.dataloader.num_workers,
                                                        pin_memory=self.config.train.dataloader.pin_memory)
 
-        results_epoch = OD3D_Results()
+        results_epoch = OD3D_Results(logging_dir=self.logging_dir)
         accumulate_steps = 0
         for i, batch in enumerate(iter(dataloader_train)):
             results_batch: OD3D_Results = self.train_batch(batch=batch)
@@ -371,6 +381,8 @@ class NeMo(OD3D_Method):
         self.scheduler.step()
         self.optim.zero_grad()
 
+        # results_epoch.log_dict_to_dir(name=f'train_frames/{dataset.name}')
+
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
                                                  config_visualize=self.config.train.visualize)
         results_epoch = results_epoch.mean()
@@ -379,7 +391,7 @@ class NeMo(OD3D_Method):
 
 
     def train_batch(self, batch) -> OD3D_Results:
-        results_batch = OD3D_Results()
+        results_batch = OD3D_Results(logging_dir=self.logging_dir)
 
         batch.to(device=self.device)
 
@@ -513,7 +525,7 @@ class NeMo(OD3D_Method):
 
 
     def inference_batch_single_view(self, batch, return_samples_with_sim=True):
-        results = OD3D_Results()
+        results = OD3D_Results(logging_dir=self.logging_dir)
         B = len(batch)
 
         """
@@ -684,7 +696,7 @@ class NeMo(OD3D_Method):
 
 
     def inference_batch_multiview(self, batch, return_samples_with_sim=True):
-        results = OD3D_Results()
+        results = OD3D_Results(logging_dir=self.logging_dir)
         B = len(batch)
 
         """
@@ -850,7 +862,7 @@ class NeMo(OD3D_Method):
         return results
 
     def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_visualize: DictConfig, filter_name_unique=True):
-        results = OD3D_Results()
+        results = OD3D_Results(logging_dir=self.logging_dir)
 
         count_best = config_visualize.count_best
         count_worst = config_visualize.count_worst
