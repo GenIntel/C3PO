@@ -31,7 +31,7 @@ from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 import math
 from od3d.datasets.co3d import CO3D
 
-from od3d.cv.io import image_as_wandb_image
+from od3d.cv.io import image_as_wandb_image ,watch_model_in_wandb 
 from od3d.cv.visual.resize import resize
 from od3d.models.model import OD3D_Model
 
@@ -130,6 +130,7 @@ class NeMo(OD3D_Method):
 
         #self.meshes.rgb = (self.meshes.geodesic_prob[3, :, None].repeat(1, 3)).clamp(0, 1)
         # self.meshes.show()
+        watch_model_in_wandb((self.net, self.meshes), log="all")
 
         logger.info(f'loading meshes from following fpaths: {self.fpaths_meshes}...')
         # self.meshes.show()
@@ -173,6 +174,9 @@ class NeMo(OD3D_Method):
         elif self.config.train.loss == 'l2_squared':
             self.criterion = torch.nn.MSELoss().cuda()
 
+        # for averaging 
+        self.mesh_update_count = torch.zeros(size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],), device=self.device)
+        self.mesh_feats_total = None
 
         # self.net = torch.nn.DataParallel(self.net).cuda()
         self.net.cuda()
@@ -487,7 +491,8 @@ class NeMo(OD3D_Method):
 
         bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
 
-
+        if self.mesh_feats_total is None:
+            self.mesh_feats_total = torch.zeros_like(bank_feats)
         if self.config.train.bank_feats_update == 'loss_gradient':
             sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats)
         elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
@@ -497,9 +502,20 @@ class NeMo(OD3D_Method):
             bank_feats_new = self.config.train.alpha * bank_feats[batch_vts_ids].detach() + (1. - self.config.train.alpha) * net_feats.detach()
             batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
-            bank_feats[batch_vts_ids_unique].data = bank_feats_new
-            self.meshes.feats.data = bank_feats[:-1]
-            self.clutter_feats.data = bank_feats[-1:]
+            bank_feats[batch_vts_ids_unique] = bank_feats_new
+            self.meshes.feats.data = bank_feats[:self.meshes.feats.shape[0]]
+            self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0]:]
+            self.normalize_feats()
+        elif self.config.train.bank_feats_update == 'average':
+            batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
+            sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.detach())  
+            bank_feats_new =  self.mesh_feats_total[batch_vts_ids]  + net_feats
+            bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
+            self.mesh_update_count[batch_vts_ids_unique] += 1
+            self.mesh_feats_total[batch_vts_ids_unique] = bank_feats_new
+            bank_feats[batch_vts_ids_unique]= self.mesh_feats_total[batch_vts_ids_unique]/ self.mesh_update_count[batch_vts_ids_unique, None]
+            self.meshes.feats.data = bank_feats[:self.meshes.feats.shape[0]]
+            self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0]:]
             self.normalize_feats()
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
