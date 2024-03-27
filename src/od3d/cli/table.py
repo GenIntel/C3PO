@@ -76,7 +76,8 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
 
     df = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform,
                                 age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt,
-                                metrics=metrics, configs=configs, duplicates_keep=duplicates_keep)
+                                metrics=metrics, configs=configs, duplicates_keep=duplicates_keep,
+                                add_configs_ablation=False)
 
 
     if results_cols is not None:
