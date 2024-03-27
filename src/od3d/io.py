@@ -237,11 +237,8 @@ def write_str_to_file(fpath: Path, text: str):
         file.write(text)
 
 from typing import List
-import tempfile
 from copy import deepcopy
 from enum import Enum
-import pyarrow as pa
-import pyarrow.parquet as pq
 import numpy as np
 import torch
 
@@ -259,33 +256,35 @@ def read_dict_from_yaml(fpath: Path):
         loaded = OmegaConf.load(fp.name)
     return loaded
 
-def save_dict_as_pandas_df(fpath: Path, _dict: Dict):
-
-    # Convert PyTorch tensors to NumPy arrays
-    data_np = {key: value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else value for key, value in _dict.items()}
-
-    # Convert NumPy arrays to PyArrow arrays
-    arrays = {key: pa.array(value) if isinstance(value, np.ndarray) else value for key, value in data_np.items()}
-
-    # Create a PyArrow Table from the arrays
-    table = pa.Table.from_pydict(arrays)
-
-    # Write the table to a Parquet file
-    pq.write_table(table, fpath)
-
-def load_dict_from_parquet(fpath):
-    # Read the Parquet file into a PyArrow Table
-    table = pq.read_table(fpath)
-    # Access the schema of the table
-    schema = table.schema
-
-    # Convert PyArrow arrays to NumPy arrays
-    arrays = {column.name: column.to_numpy() if schema.field(column.name).type == pa.Array else column for column in table.columns}
-
-    # Convert NumPy arrays to PyTorch tensors
-    data = {key: torch.tensor(value) if isinstance(value, np.array) else value for key, value in arrays.items()}
-
-    return data
+# import pyarrow as pa
+# import pyarrow.parquet as pq
+# def save_dict_as_pandas_df(fpath: Path, _dict: Dict):
+#
+#     # Convert PyTorch tensors to NumPy arrays
+#     data_np = {key: value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else value for key, value in _dict.items()}
+#
+#     # Convert NumPy arrays to PyArrow arrays
+#     arrays = {key: pa.array(value) if isinstance(value, np.ndarray) else value for key, value in data_np.items()}
+#
+#     # Create a PyArrow Table from the arrays
+#     table = pa.Table.from_pydict(arrays)
+#
+#     # Write the table to a Parquet file
+#     pq.write_table(table, fpath)
+#
+# def load_dict_from_parquet(fpath):
+#     # Read the Parquet file into a PyArrow Table
+#     table = pq.read_table(fpath)
+#     # Access the schema of the table
+#     schema = table.schema
+#
+#     # Convert PyArrow arrays to NumPy arrays
+#     arrays = {column.name: column.to_numpy() if schema.field(column.name).type == pa.Array else column for column in table.columns}
+#
+#     # Convert NumPy arrays to PyTorch tensors
+#     data = {key: torch.tensor(value) if isinstance(value, np.array) else value for key, value in arrays.items()}
+#
+#     return data
 
 def write_list_as_yaml(fpath: Path, _list: List[str]):
     conf = OmegaConf.create(_list)
