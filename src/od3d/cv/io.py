@@ -115,6 +115,15 @@ def image_as_wandb_image(img, caption="Caption Blub"):
     )
     return img
 
+def watch_model_in_wandb(model, log="gradient", config=None):
+    """
+    args:
+        model: (torch.Module) The model to hook, can be a tuple
+        log: (str) One of "gradients", "parameters", "all", or None
+        config: dict
+    """
+    wandb.watch(model, log=log, log_freq=1000)
+    
 
 def extract_frames_from_video(fpath_video: Path, path_frames: Path, fps=5):
 
