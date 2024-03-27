@@ -182,7 +182,7 @@ def get_dataframe(configs=[], metrics=[], name_regex='.*', name_regex_groups=[],
 
     logger.info(f'found {len(runs)} runs')
     runs_names = [run.name for run in runs]
-    logger.info(f'runs: \n{runs_names}')
+    #logger.info(f'runs: \n{runs_names}')
     rows = []
     for run in runs:
         try:
@@ -915,11 +915,6 @@ def rsync(platform_source: str = typer.Option('slurm', '-s', '--source'),
           platform_target: str = typer.Option('local', '-t', '--target'),
           run: str = typer.Option(None, '-r', '--run')):
     logging.basicConfig(level=logging.INFO)
-
-    prev_runs_all = get_dataframe_multiple(benchmark=benchmark, ablation=ablation,
-                                           duplicates_keep='last', state='(finished|running)',
-                                           add_configs_default=True, add_configs_ablation=False)
-    prev_runs_all_names = prev_runs_all['name'].tolist()
 
     if run is None:
         logger.warning('Please specify a run.')

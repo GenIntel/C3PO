@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 
 from sklearn.metrics import RocCurveDisplay
 import numpy as np
+from pathlib import Path
+
 
 class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
     def __init__(self, device: torch.device='cpu', init_dict: Dict[str, Union[torch.Tensor, List]]=None, logging_dir=None):
@@ -377,14 +379,27 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
         filtered_log_results_with_prefix = {prefix + f'{prefix_append_char}' + k: v for k, v in filtered_log_results.items()}
         wandb.log(filtered_log_results_with_prefix)
 
+
+    def save_visual(self, prefix: str):
+        for key, val in self.items():
+            if isinstance(val, wandb.data_types.Image):
+                fpath = self.logging_dir.joinpath(f'{prefix}/{key}.png')
+                fpath.parent.mkdir(parents=True, exist_ok=True)
+                val.image.save(fpath)
+
+        #fpath.parent.mkdir(parents=True, exist_ok=True)
+        #torch.save(obj=self.get_log_results(), f=fpath)
+
     def save_with_dataset(self, prefix: str, dataset, _dict: dict=None):
         if _dict is None:
             _dict = self.get_log_results()
-        fpath = self.logging_dir.joinpath(f'results_{prefix}_{dataset.name}.pt')
+        fpath = self.logging_dir.joinpath(f'{prefix}/{dataset.name}/results.pt')
         fpath.parent.mkdir(parents=True, exist_ok=True)
         torch.save(obj=_dict, f=fpath)
-        dataset.save_to_config(fpath=self.logging_dir.joinpath(f'dataset_{prefix}_{dataset.name}.yaml'))
+        dataset.save_to_config(fpath=self.logging_dir.joinpath(f'{prefix}/{dataset.name}/config.yaml'))
 
-
-
-
+    @classmethod
+    def read_from_local(cls, logging_dir: Path, dataset_rpath: Path):
+        fpath = logging_dir.joinpath(f'{dataset_rpath}/results.pt')
+        _dict = torch.load(fpath)
+        return cls(logging_dir=logging_dir, init_dict=_dict)

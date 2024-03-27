@@ -72,7 +72,7 @@ train:
 
 
 test:
-  save_results: True
+  save_results: False
   transform:
       class_name: CenterZoom3D
       W: 512
