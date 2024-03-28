@@ -96,6 +96,13 @@ def rm_installing_txt(platform: str = typer.Option(None, '-p', '--platform')):
     run_cmd(f"ssh {platform} 'rm {config.platform.path_od3d}/installing.txt'", logger=logger)
 
 @app.command()
+def rm_git_lock(platform: str = typer.Option(None, '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform)
+    run_cmd(f"ssh {platform} 'rm {config.platform.path_od3d}/installing.txt'", logger=logger)
+
+
+@app.command()
 def stop(platform: str = typer.Option(None, '-p', '--platform'),
          job: str = typer.Option(None, '-j', '--job')):
     if platform == 'torque':
@@ -176,6 +183,13 @@ def status(platform: str = typer.Option(None, '-p', '--platform')):
         format = '"%.18i %.9P %.60j %.8u %.8T %.10M %.9l %.6D %R"'
         slurm_result = subprocess.run(f"ssh slurm 'squeue --me --format={format}'", capture_output=True, shell=True)
         slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
+        slurm_jobs_columns = slurm_jobs[0]
+        slurm_jobs = slurm_jobs[1:-1]
+        import numpy as np
+        slurm_jobs_ids = np.array([int(slurm_job.split()[0]) for slurm_job in slurm_jobs])
+        slurm_jobs_ids = slurm_jobs_ids.argsort()
+        slurm_jobs = [slurm_jobs[id] for id in slurm_jobs_ids]
+        logger.info(slurm_jobs_columns)
         for i, slurm_job in enumerate(slurm_jobs):
             logger.info(f'{i}: {slurm_job}')
     elif platform == 'torque':

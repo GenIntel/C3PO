@@ -149,6 +149,8 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                H=1080,
                W=1980,
                fps=10,
+               pts3d_size=10.,
+               background_color=(0.9, 0.9, 0.9),
                device='cpu',
                meshes_as_wireframe=False,
                crop_white_border=False):
@@ -348,7 +350,9 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             vis = o3d.visualization.Visualizer()
             vis.create_window(visible=False, height=H, width=W)
             opt = vis.get_render_option()
+            opt.point_size = pts3d_size
             opt.mesh_show_back_face = False
+            opt.background_color = np.asarray(background_color)
             #opt.background_color = np.asarray([0, 0, 0])
             #opt.mesh_show_wireframe = mesh_show_wireframe
 
