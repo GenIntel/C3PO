@@ -130,7 +130,8 @@ class NeMo(OD3D_Method):
 
         #self.meshes.rgb = (self.meshes.geodesic_prob[3, :, None].repeat(1, 3)).clamp(0, 1)
         # self.meshes.show()
-        watch_model_in_wandb((self.net, self.meshes), log="all")
+        #watch_model_in_wandb(self.net, log="all")
+        watch_model_in_wandb(self.meshes, log="all")
 
         logger.info(f'loading meshes from following fpaths: {self.fpaths_meshes}...')
         # self.meshes.show()
