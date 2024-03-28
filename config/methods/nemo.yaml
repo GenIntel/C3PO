@@ -96,6 +96,7 @@ test:
         - 'net_feats_nearest_verts'
         - 'sim_pxl'
         - 'samples'
+        - 'tsne'
       samples_scores: True
       samples_sorted: True
       live: False
