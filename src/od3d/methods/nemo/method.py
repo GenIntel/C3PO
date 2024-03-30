@@ -223,7 +223,7 @@ class NeMo(OD3D_Method):
         self.feats_all_colors = []
         for i, cat in enumerate(config.categories):
             self.feats_all_colors.extend( [color_(i),] * self.meshes.verts_counts[i] ) 
-        watch_model_in_wandb((self.net,self.meshes), log="all")
+        watch_model_in_wandb((self.meshes), log="all")
 
 
     def normalize_feats(self):
