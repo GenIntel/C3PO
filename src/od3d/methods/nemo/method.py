@@ -57,6 +57,7 @@ class VISUAL_MODALITIES(str, ExtEnum):
     SIM_PXL = 'sim_pxl'
     SAMPLES = 'samples'
     TSNE = 'tsne'
+    RECONSTRUCTION_MAP = 'reconstruction_map'
 
 class SIM_FEATS_MESH_WITH_IMAGE(str, ExtEnum):
     VERTS2D = 'verts2d'
@@ -1093,6 +1094,28 @@ class NeMo(OD3D_Method):
                         if live:
                             show_img(img)
 
+                if VISUAL_MODALITIES.RECONSTRUCTION_MAP in modalities:
+                    logger.info('create sim pxl...')
+                    batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
+                    batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
+                    sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
+                                                                      cam_intr4x4=batch.cam_intr4x4,
+                                                                      cam_tform4x4_obj=batch_pred_cam_tform4x4,
+                                                                      categories_ids=batch.category_id, return_sim_pxl=True,
+                                                                      broadcast_batch_and_cams=False,
+                                                                      sim_feats_mesh_with_image=SIM_FEATS_MESH_WITH_IMAGE.RENDERED,
+                                                                      pre_rendered=False,
+                                                                      only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
+                                                                      allow_clutter=False,
+                                                                      use_sigmoid=self.config.inference.use_sigmoid)
+
+                    sim_pxl = resize(sim_pxl, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
+                    for b in range(len(batch)):
+                        img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
+                                        sim_pxl[b])
+                        results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.SIM_PXL}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, mean sim={sim[b].item()}')
+                        if live:
+                            show_img(img)
 
                 if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities or VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
                     logger.info('create pred verts ncds...')
