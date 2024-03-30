@@ -188,8 +188,8 @@ class NeMo(OD3D_Method):
         logger.info(f'total params: {self.total_params}, trainable params: {self.trainable_params}')
         logger.info(f'total params mesh and clutter: {self.total_params_mesh_clutter}, trainable params mesh and clutter: {self.trainable_params_mesh_clutter}')
         if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
-            self.meshes.parameters.requires_grad = False
-
+            for p in self.meshes.parameters():
+                p.requires_grad = False
         if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
             if self.trainable_params == 0:
                 logger.info('no trainable params, no optimizer needed.')
