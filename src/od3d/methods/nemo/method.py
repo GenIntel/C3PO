@@ -132,7 +132,7 @@ class NeMo(OD3D_Method):
         #self.meshes.rgb = (self.meshes.geodesic_prob[3, :, None].repeat(1, 3)).clamp(0, 1)
         # self.meshes.show()
         #watch_model_in_wandb(self.net, log="all")
-        watch_model_in_wandb(self.meshes, log="all")
+        
 
         logger.info(f'loading meshes from following fpaths: {self.fpaths_meshes}...')
         # self.meshes.show()
@@ -187,7 +187,8 @@ class NeMo(OD3D_Method):
         self.back_propagate = True
         logger.info(f'total params: {self.total_params}, trainable params: {self.trainable_params}')
         logger.info(f'total params mesh and clutter: {self.total_params_mesh_clutter}, trainable params mesh and clutter: {self.trainable_params_mesh_clutter}')
- 
+        if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
+            self.meshes.parameters.requires_grad = False
 
         if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
             if self.trainable_params == 0:
@@ -222,6 +223,7 @@ class NeMo(OD3D_Method):
         self.feats_all_colors = []
         for i, cat in enumerate(config.categories):
             self.feats_all_colors.extend( [color_(i),] * self.meshes.verts_counts[i] ) 
+        watch_model_in_wandb((self.net,self.meshes), log="all")
 
 
     def normalize_feats(self):
