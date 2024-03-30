@@ -154,6 +154,9 @@ class NeMo(OD3D_Method):
         # dict to save estimated tforms, sequence : tform,
         self.seq_obj_tform4x4_est_obj = {}
         self.seq_obj_tform4x4_est_obj_sim = {}
+        if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
+            for p in self.meshes.parameters():
+                p.requires_grad = False
         self.total_params_mesh_clutter  = sum(p.numel() for p in self.meshes.parameters()) + self.clutter_feats.numel()
         self.trainable_params_mesh_clutter = sum(p.numel() for p in self.meshes.parameters() if p.requires_grad) + self.clutter_feats.numel()
         self.normalize_feats()
@@ -187,9 +190,7 @@ class NeMo(OD3D_Method):
         self.back_propagate = True
         logger.info(f'total params: {self.total_params}, trainable params: {self.trainable_params}')
         logger.info(f'total params mesh and clutter: {self.total_params_mesh_clutter}, trainable params mesh and clutter: {self.trainable_params_mesh_clutter}')
-        if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
-            for p in self.meshes.parameters():
-                p.requires_grad = False
+        
         if self.config.train.bank_feats_update == "moving_average" or self.config.train.bank_feats_update == "average":
             if self.trainable_params == 0:
                 logger.info('no trainable params, no optimizer needed.')
