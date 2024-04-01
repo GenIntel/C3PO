@@ -15,7 +15,7 @@ from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL, PASCAL
 from od3d.cv.io import read_image, write_mask_image, write_depth_image, read_depth_image
 from od3d.cv.geometry.mesh import Mesh, Meshes
 from od3d.cv.geometry.mesh import Meshes, MESH_RENDER_MODALITIES
-
+from od3d.datasets.pascal3d.enum import MAP_CATEGORIES_OOD_CV_TO_PASCAL3D
 from od3d.datasets.frame_meta import OD3D_FrameMeta, \
     OD3D_FrameMetaMeshMixin, OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaRGBMixin, \
     OD3D_FrameMetaSizeMixin, OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD3D_FrameMetaSubsetMixin, \
@@ -39,6 +39,11 @@ class Pascal3DFrameMeta(OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD
     def load_category_mesh_bbox_kpts2d_cam_from_object_annotation_raw(object, rpath_meshes):
 
         category = object['class'][0]
+        if category == 'table':
+            category = 'diningtable'
+            logger.info(f"Change table to diningtable")
+       
+       
 
         mesh_index = object['cad_index'][0][0] - 1
         # label = classes.index(meta.category)
@@ -171,7 +176,7 @@ class Pascal3DFrameMeta(OD3D_FrameMetaKpts2D3DMixin, OD3D_FrameMetaBBoxMixin, OD
 
 
 
-from od3d.datasets.pascal3d.enum import MAP_CATEGORIES_PASCAL3D_TO_OD3D
+
 from od3d.datasets.frame import OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x4ObjMixin, \
     OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin, \
     OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin, OD3D_Frame, OD3D_FrameBBoxMixin, OD3D_FrameKpts2d3dMixin
@@ -185,7 +190,6 @@ class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObj
                     OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin, OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin,
                     OD3D_Frame):
     meta_type = Pascal3DFrameMeta
-    map_categories_to_od3d = MAP_CATEGORIES_PASCAL3D_TO_OD3D
 
     @staticmethod
     def get_rpath_raw_categorical_meshes(category: str):
