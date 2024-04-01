@@ -224,7 +224,7 @@ class OOD_CV(OD3D_Dataset):
             elif key == 'mask' and config_preprocess.mask.get('enabled', False):
                 override = config_preprocess.mask.get('override', False)
                 remove_previous = config_preprocess.mask.get('remove_previous', False)
-                self.preprocess_maget_frame_by_name_uniquesk(override=override, remove_previous=remove_previous)
+                self.preprocess_mask(override=override, remove_previous=remove_previous)
             elif key == 'depth' and config_preprocess.depth.get('enabled', False):
                 override = config_preprocess.depth.get('override', False)
                 remove_previous = config_preprocess.depth.get('remove_previous', False)
