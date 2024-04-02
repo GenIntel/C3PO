@@ -504,7 +504,7 @@ class NeMo(OD3D_Method):
         elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
             sim = self.calc_sim('nc,vc->nv', net_feats, torch.nn.functional.normalize(bank_feats, dim=1))
         elif self.config.train.bank_feats_update == 'moving_average':
-            sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.detach())
+            sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.clone())
             bank_feats_new = self.config.train.alpha * bank_feats[batch_vts_ids].detach() + (1. - self.config.train.alpha) * net_feats.detach()
             batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
