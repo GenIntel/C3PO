@@ -44,37 +44,9 @@ class OOD_CV_CATEGORIES(str, ExtEnum):
 
 
 class OOD_CV(OD3D_Dataset):
-    CATEGORIES = OOD_CV_CATEGORIES
-    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
+    map_od3d_categories = MAP_CATEGORIES_OD3D_TO_PASCAL3D
+    all_categories = list(PASCAL3D_CATEGORIES)
     frame_type = OOD_CV_Frame
-
-    def __init__(
-            self,
-            name: str,
-            modalities: List[OD3D_FRAME_MODALITIES],
-            path_raw: Path,
-            path_preprocess: Path,
-            path_pascal3d_raw: Path,
-            categories: List[PASCAL3D_CATEGORIES] = None,
-            dict_nested_frames: Dict[str, Dict[str, List[str]]] = None,
-            dict_nested_frames_ban: Dict[str, Dict[str, List[str]]] = None,
-            transform=None,
-            subset_fraction=1.,
-            index_shift=0,
-    ):
-        if categories is not None:
-            categories = [self.MAP_OD3D_CATEGORIES[category] if category not in self.CATEGORIES.list() else category for category in categories]
-          
-        else:
-            categories = self.CATEGORIES.list()
-        super().__init__(categories=categories, name=name,
-                         modalities=modalities, path_raw=path_raw,
-                         path_preprocess=path_preprocess, transform=transform,
-                         subset_fraction=subset_fraction, index_shift=index_shift,
-                         dict_nested_frames=dict_nested_frames,
-                         dict_nested_frames_ban=dict_nested_frames_ban)
-
-        self.path_pascal3d_raw = Path(path_pascal3d_raw)
 
     ##### DATASET PROPERTIES
     def get_frame_by_name_unique(self, name_unique):
