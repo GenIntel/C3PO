@@ -140,13 +140,15 @@ class OOD_CV(OD3D_Dataset):
     #### PREPROCESS META
     @staticmethod
     def extract_meta(config: DictConfig):
+        MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
         subsets = config.get("subsets", None)
         if subsets is None:
             subsets = OOD_CV_SUBSETS.list()
         categories = config.get("categories", None)
         if categories is None:
             categories = OOD_CV_CATEGORIES.list()
-
+        if categories is not None:
+            categories = [MAP_OD3D_CATEGORIES[category] if category not in OOD_CV_CATEGORIES.list() else category for category in categories]
         path_raw = OD3D_Dataset.get_path_raw(config=config)
         path_meta = OD3D_Dataset.get_path_meta(config=config)
         path_pascal3d_raw = Path(config.path_pascal3d_raw)
