@@ -44,7 +44,7 @@ class OOD_CV_CATEGORIES(str, ExtEnum):
 
 
 class OOD_CV(OD3D_Dataset):
-    all_categories = list(OD3D_CATEGORIES)
+    all_categories = list(OOD_CV_CATEGORIES)
     map_od3d_categories = MAP_CATEGORIES_OD3D_TO_PASCAL3D
     frame_type = OOD_CV_Frame
 
@@ -65,6 +65,7 @@ class OOD_CV(OD3D_Dataset):
         if categories is not None:
             if self.map_od3d_categories is not None:
                 self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
+                print(f'categories: {self.categories}')
             else:
                 self.categories = categories
         else:
