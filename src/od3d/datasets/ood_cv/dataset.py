@@ -9,7 +9,7 @@ from od3d.cv.geometry.mesh import Meshes
 from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_PASCAL3D
 from od3d.datasets.pascal3d.frame import Pascal3DFrameMeta , Pascal3DFrame
 from od3d.datasets.frame import OD3D_FRAME_MODALITIES, OD3D_FRAME_DEPTH_TYPES, OD3D_FRAME_KPTS2D_ANNOT_TYPES
-from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL, PASCAL3D_CATEGORIES
+from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL, PASCAL3D_CATEGORIES , OD3D_CATEGORIES
 from typing import Dict, List
 import shutil
 import od3d.io
@@ -44,9 +44,40 @@ class OOD_CV_CATEGORIES(str, ExtEnum):
 
 
 class OOD_CV(OD3D_Dataset):
-    map_od3d_categories = MAP_CATEGORIES_OD3D_TO_PASCAL3D
-    all_categories = list(PASCAL3D_CATEGORIES)
+    all_categories = list(OD3D_CATEGORIES)
+    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
     frame_type = OOD_CV_Frame
+
+    def __init__(
+            self,
+            name: str,
+            modalities: List[OD3D_FRAME_MODALITIES],
+            path_raw: Path,
+            path_preprocess: Path,
+            path_pascal3d_raw: Path,
+            categories: List[PASCAL3D_CATEGORIES] = None,
+            dict_nested_frames: Dict[str, Dict[str, List[str]]] = None,
+            dict_nested_frames_ban: Dict[str, Dict[str, List[str]]] = None,
+            transform=None,
+            subset_fraction=1.,
+            index_shift=0,
+    ):
+        if categories is not None:
+            if self.map_od3d_categories is not None:
+                self.categories = [self.map_od3d_categories.get(category, category) if category not in self.all_categories else category for category in categories]
+            else:
+                self.categories = categories
+        else:
+            self.categories = self.all_categories
+            
+        super().__init__(categories=categories, name=name,
+                         modalities=modalities, path_raw=path_raw,
+                         path_preprocess=path_preprocess, transform=transform,
+                         subset_fraction=subset_fraction, index_shift=index_shift,
+                         dict_nested_frames=dict_nested_frames,
+                         dict_nested_frames_ban=dict_nested_frames_ban)
+
+        self.path_pascal3d_raw = Path(path_pascal3d_raw)
 
     ##### DATASET PROPERTIES
     def get_frame_by_name_unique(self, name_unique):
