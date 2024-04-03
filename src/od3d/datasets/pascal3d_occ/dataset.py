@@ -100,7 +100,7 @@ class Pascal3D_Occ(OD3D_Dataset):
         path_raw = OD3D_Dataset.get_path_raw(config=config)
         path_meta = OD3D_Dataset.get_path_meta(config=config)
         path_pascal3d_raw = Path(config.path_pascal3d_raw)
-        rpath_meshes = Pascal3D.get_rpath_meshes()
+        rpath_meshes = Path('CAD')
 
         if config.extract_meta.remove_previous:
             if path_meta.exists():
