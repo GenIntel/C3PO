@@ -45,7 +45,7 @@ class OOD_CV_CATEGORIES(str, ExtEnum):
 
 class OOD_CV(OD3D_Dataset):
     all_categories = list(OD3D_CATEGORIES)
-    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
+    map_od3d_categories = MAP_CATEGORIES_OD3D_TO_PASCAL3D
     frame_type = OOD_CV_Frame
 
     def __init__(
