@@ -201,7 +201,7 @@ class Meshes(torch.nn.Module):
         meshes = []
         for i, fpath_mesh in enumerate(fpaths_meshes):
             mesh = Mesh.load_from_file(fpath=fpath_mesh, device=device)
-            if fpaths_meshes_tforms is not None:
+            if fpaths_meshes_tforms is not None and fpaths_meshes_tforms[i] is not None:
                 mesh_tform = torch.load(fpaths_meshes_tforms[i]).to(device)
                 mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=mesh_tform)
             meshes.append(mesh)
@@ -343,17 +343,17 @@ class Meshes(torch.nn.Module):
 
 
     def get_geodesic_prob(self):
-        _geodesic_dist = self.get_geodesic_dist.clone()
+        _geodesic_dist = self.get_geodesic_dist().clone()
         _geodesic_prob = torch.exp(input=- 0.5 * (_geodesic_dist / (self.geodesic_prob_sigma + 1e-10))**2)
         # replace inf with 0
         _geodesic_prob[torch.isinf(_geodesic_dist)] = 0.
         return _geodesic_prob
 
 
-    @property
-    def geodesic_prob_with_noise(self):
+
+    def get_geodesic_prob_with_noise(self):
         geodesic_prob_with_noise = torch.eye(self.verts.shape[0]+1, device=self.device)
-        geodesic_prob_with_noise[:-1, :-1] = self.get_geodesic_prob
+        geodesic_prob_with_noise[:-1, :-1] = self.get_geodesic_prob()
         return geodesic_prob_with_noise
 
     def get_verts_ncds_with_mesh_id(self, mesh_id):
@@ -828,7 +828,15 @@ class Meshes(torch.nn.Module):
         self.to(device)
 
         if down_sample_rate != 1.:
-            cams_intr4x4 = cams_intr4x4.clone() / down_sample_rate
+            cams_intr4x4 = cams_intr4x4.clone()
+            if cams_intr4x4.dim() == 2:
+                cams_intr4x4[:2] /= down_sample_rate
+            elif cams_intr4x4.dim() == 3:
+                cams_intr4x4[:, :2] /= down_sample_rate
+            elif cams_intr4x4.dim() == 4:
+                cams_intr4x4[:, :, :2] /= down_sample_rate
+            else:
+                raise NotImplementedError
             imgs_sizes = imgs_sizes.clone() // down_sample_rate
         else:
             cams_intr4x4 = cams_intr4x4.clone()
@@ -865,7 +873,9 @@ class Meshes(torch.nn.Module):
 
         if self.gaussian_splat_enabled and modality in \
                 [MESH_RENDER_MODALITIES.VERTS_NCDS, MESH_RENDER_MODALITIES.RGB, MESH_RENDER_MODALITIES.FEATS, MESH_RENDER_MODALITIES.MASK]: # MESH_RENDER_MODALITIES.FEATS:
-            from od3d.cv.render.gaussian_splats import render_gaussians
+            #from od3d.cv.render.gaussian_splats import render_gaussians
+            from od3d.cv.render.gaussians_splats_v2 import render_gaussians
+
             pts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device).clone().detach()
             if modality == MESH_RENDER_MODALITIES.VERTS_NCDS:
                 feats = self.get_verts_ncds_stacked_with_mesh_ids(mesh_ids=meshes_ids).to(device)

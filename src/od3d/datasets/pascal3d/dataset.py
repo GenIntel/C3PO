@@ -15,7 +15,7 @@ from od3d.cv.geometry.mesh import Meshes
 from od3d.cv.geometry.primitives import Cuboids
 from od3d.cv.io import save_ply
 from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
-from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS, PASCAL3D_SCALE_NORMALIZE_TO_REAL, MAP_CATEGORIES_OD3D_TO_PASCAL3D
+from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, PASCAL3D_SUBSETS, MAP_CATEGORIES_PASCAL3D_TO_OD3D, PASCAL3D_SCALE_NORMALIZE_TO_REAL, MAP_CATEGORIES_OD3D_TO_PASCAL3D
 from typing import Dict
 import inspect
 from od3d.datasets.object import OD3D_MESH_TYPES
@@ -130,6 +130,7 @@ class Pascal3D(OD3D_Dataset):
     def preprocess_cuboid(self, override=False, remove_previous=False):
         logger.info('preprocess cuboid...')
 
+        scale_pascal3d_to_od3d = {}
         for category in self.categories:
             if category not in self.all_categories:
                 continue
@@ -154,23 +155,33 @@ class Pascal3D(OD3D_Dataset):
 
                 fpaths_meshes_category = [fpath for fpath in self.path_raw.joinpath(Pascal3DFrame.get_rpath_raw_categorical_meshes(category=category)).iterdir()]
                 meshes = Meshes.load_from_files(fpaths_meshes_category)
-                meshes.verts.data = meshes.verts * PASCAL3D_SCALE_NORMALIZE_TO_REAL[category]
+                meshes.verts.data = meshes.verts
                 pts3d = meshes.verts
 
                 from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
+                from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
 
+                cuboids, tform_obj = fit_cuboid_to_pts3d(pts3d=pts3d,
+                                                         optimize_rot=False,
+                                                         optimize_transl=False,
+                                                         vertices_max_count=mesh_vertices_count,
+                                                         optimize_steps=0,
+                                                         q=0.95,
+                                                         size=OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]])
 
-                cuboids, _ = fit_cuboid_to_pts3d(pts3d=pts3d,
-                                                 optimize_rot=False,
-                                                 optimize_transl=False,
-                                                 vertices_max_count=mesh_vertices_count,
-                                                 optimize_steps=1)
+                scale_pascal3d_to_od3d[category] = tform_obj[:3, :3].norm(dim=-1).mean()
 
                 # show:
+                #meshes.verts *= scale_pascal3d_to_od3d[category]
                 #Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
 
                 obj_mesh = cuboids.get_mesh_with_id(0)
                 obj_mesh.write_to_file(fpath=fpath_mesh_out)
+
+        log_str = '\n'
+        for key, val in scale_pascal3d_to_od3d.items():
+            log_str += str(key) + f': {val}, \n'
+        logger.info(log_str)
 
     ##### DATASET PROPERTIES
     def get_frame_by_name_unique(self, name_unique):

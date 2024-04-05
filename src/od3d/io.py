@@ -19,6 +19,13 @@ import subprocess
 import importlib
 
 
+def is_fpath_video(fpath: Path):
+    return fpath.suffix in ['.mp4', '.avi', '.mov', '.mkv', '.webm']
+
+def is_fpath_image(fpath: Path):
+    return fpath.suffix in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+
+
 def reporthook(count, block_size, total_size):
     global start_time
     if count == 0:
@@ -69,28 +76,40 @@ def rm_dir(path: Path):
         logger.warning(e)
 
 from tqdm import tqdm
-def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", multiple_ablations=[], multiple_overrides=[]):
-    config_dir_rel = "../../config"
-    cfgs= []
+from omegaconf import open_dict
+import multiprocessing
+
+def load_single_hierarchical_config(procnum, return_dict, config_dir_rel, benchmark, platform, ablations, overrides):
+    """worker function"""
+    logger.info(f'start process {procnum}')
+    return_dict[procnum] = procnum
     with initialize(version_base=None, config_path=config_dir_rel, job_name="test_app"):
-        for a, ablations in tqdm(enumerate(multiple_ablations)):
-            # logger.info(ablations)
-            if len(multiple_overrides) > a:
-                overrides = multiple_overrides[a]
-            else:
-                overrides = []
-            overrides = [f"+ablations/{Path(ablation).parent}={Path(ablation).stem}" for ablation in ablations] + [
-                "platform=" + platform] + overrides
-            cfg = compose(config_name=benchmark, overrides=overrides)
-            #cfg.ablation_name = '_'.join(
-            #    [cfg[key] for key in list(filter(lambda k: k.startswith('ablation_name_'), cfg.keys()))])
+        overrides = [f"+ablations/{Path(ablation).parent}={Path(ablation).stem}" for ablation in ablations] + [
+            "platform=" + platform] + overrides
+        cfg = compose(config_name=benchmark, overrides=overrides)
 
-            from omegaconf import open_dict
-            with open_dict(cfg):
-                cfg.ablation_name = '_'.join([ablation.stem for ablation in ablations])
-            logger.info(cfg.ablation_name)
+        with open_dict(cfg):
+            cfg.ablation_name = '_'.join([ablation.stem for ablation in ablations])
 
-            cfgs.append(cfg)
+        logger.info(cfg.ablation_name)
+        return_dict[procnum] = cfg
+
+def load_multiple_hierarchical_configs(benchmark="defaults", platform="local", multiple_ablations=[]):
+    manager = multiprocessing.Manager()
+    return_dict = manager.dict()
+    jobs = []
+    config_dir_rel = "../../config"
+    cfgs = []
+    overrides = []
+    for a, ablations in tqdm(enumerate(multiple_ablations)):
+        p = multiprocessing.Process(target=load_single_hierarchical_config, args=(a, return_dict, config_dir_rel, benchmark, platform, ablations,
+                                                                                  overrides))
+        jobs.append(p)
+        p.start()
+
+    for a, proc in enumerate(jobs):
+        proc.join()
+        cfgs.append(return_dict[a])
     return cfgs
 
 def load_hierarchical_config(benchmark="defaults", platform="local", ablations=[], overrides=[]):
@@ -149,6 +168,11 @@ def read_json(fpath: Path):
     with open(fpath.expanduser(), 'r') as openfile:
         config = json.load(openfile)
     return config
+
+def read_yaml(fpath: Path, resolve=True):
+    cfg = OmegaConf.load(fpath)
+    cfg = OmegaConf.to_container(cfg, resolve=resolve)
+    return cfg
 
 def run_cmd(cmd, logger, live=False, background=False):
     if logger is not None:
@@ -213,9 +237,16 @@ def write_str_to_file(fpath: Path, text: str):
         file.write(text)
 
 from typing import List
-import tempfile
+from copy import deepcopy
+from enum import Enum
+import numpy as np
+import torch
 
-def write_dict_as_yaml(fpath: Path, _dict: Dict):
+
+def write_dict_as_yaml(fpath: Path, _dict: Dict, save_enum_as_str=False):
+    if save_enum_as_str:
+        _dict = {key: str(value) if isinstance(value, Enum) else value for key, value in deepcopy(_dict).items()}
+
     conf = OmegaConf.create(_dict)
     fpath.parent.mkdir(exist_ok=True, parents=True)
     with open(fpath, 'w') as fp: #  tempfile.NamedTemporaryFile()
@@ -224,6 +255,36 @@ def read_dict_from_yaml(fpath: Path):
     with open(fpath, 'r') as fp:
         loaded = OmegaConf.load(fp.name)
     return loaded
+
+# import pyarrow as pa
+# import pyarrow.parquet as pq
+# def save_dict_as_pandas_df(fpath: Path, _dict: Dict):
+#
+#     # Convert PyTorch tensors to NumPy arrays
+#     data_np = {key: value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else value for key, value in _dict.items()}
+#
+#     # Convert NumPy arrays to PyArrow arrays
+#     arrays = {key: pa.array(value) if isinstance(value, np.ndarray) else value for key, value in data_np.items()}
+#
+#     # Create a PyArrow Table from the arrays
+#     table = pa.Table.from_pydict(arrays)
+#
+#     # Write the table to a Parquet file
+#     pq.write_table(table, fpath)
+#
+# def load_dict_from_parquet(fpath):
+#     # Read the Parquet file into a PyArrow Table
+#     table = pq.read_table(fpath)
+#     # Access the schema of the table
+#     schema = table.schema
+#
+#     # Convert PyArrow arrays to NumPy arrays
+#     arrays = {column.name: column.to_numpy() if schema.field(column.name).type == pa.Array else column for column in table.columns}
+#
+#     # Convert NumPy arrays to PyTorch tensors
+#     data = {key: torch.tensor(value) if isinstance(value, np.array) else value for key, value in arrays.items()}
+#
+#     return data
 
 def write_list_as_yaml(fpath: Path, _list: List[str]):
     conf = OmegaConf.create(_list)

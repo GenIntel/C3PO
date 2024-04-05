@@ -183,10 +183,10 @@ def score_tform4x4_fit(pts: torch.Tensor, tform4x4: torch.Tensor, pts_ref: torch
     proposal_cyclic_dist_ref_geometry = torch.cat([proposal_cyclic_dist_avg_ref[:, :N], proposal_cyclic_dist_avg_ref[:, 2*N:2*N+R]], dim=-1)
     proposal_cyclic_dist_ref_appear = torch.cat([proposal_cyclic_dist_avg_ref[:, N:2*N], proposal_cyclic_dist_avg_ref[:, 2*N+R:]], dim=-1)
 
-    proposal_dist_ref_geometry_weight = torch.exp(-((proposal_cyclic_dist_ref_geometry / geo_cyclic_weight_temp)**2))
+    proposal_dist_ref_geometry_weight = torch.exp(-((proposal_cyclic_dist_ref_geometry / geo_cyclic_weight_temp)))
     proposal_dist_ref_geometry_weight = proposal_dist_ref_geometry_weight / proposal_dist_ref_geometry_weight.mean(dim=-1, keepdim=True)
     proposal_dist_ref_geometry_weight = proposal_dist_ref_geometry_weight.nan_to_num(1.)
-    proposal_dist_ref_appear_weight = torch.exp(- ((proposal_cyclic_dist_ref_appear / app_cyclic_weight_temp)**2))
+    proposal_dist_ref_appear_weight = torch.exp(- ((proposal_cyclic_dist_ref_appear / app_cyclic_weight_temp)))
     proposal_dist_ref_appear_weight = proposal_dist_ref_appear_weight / proposal_dist_ref_appear_weight.mean(dim=-1, keepdim=True)
     proposal_dist_ref_appear_weight = proposal_dist_ref_appear_weight.nan_to_num(1.)
 

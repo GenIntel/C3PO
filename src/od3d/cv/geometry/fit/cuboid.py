@@ -1,11 +1,11 @@
 import logging
 logger = logging.getLogger(__name__)
 import torch
-from od3d.cv.geometry.transform import rot3x3, transf4x4_from_rot3x3, tform4x4, se3_exp_map, transf3d_broadcast
+from od3d.cv.geometry.transform import rot3x3, transf4x4_from_rot3x3, tform4x4, se3_exp_map, transf3d_broadcast, transf4x4_to_rot4x4_without_scale
 from od3d.cv.geometry.primitives import Cuboids
 
 def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=False, vertices_max_count=1000, q=0.98,
-                        optimize_steps=100, force_symmetric=True):
+                        optimize_steps=100, force_symmetric=True, tform_obj_label=None):
     """
     Args:
         pts3d (torch.Tensor): Nx3
@@ -21,7 +21,14 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
 
     dtype = pts3d.dtype
     device = pts3d.device
-    cuboid_tform4x4_obj = torch.eye(4).to(dtype=dtype, device=device)
+
+    normalize_scale = (pts3d - pts3d.mean(dim=0)).abs().max()
+    pts3d = pts3d.clone() / normalize_scale
+
+    if tform_obj_label is not None:
+        cuboid_tform4x4_obj = transf4x4_to_rot4x4_without_scale(tform_obj_label)
+    else:
+        cuboid_tform4x4_obj = torch.eye(4).to(dtype=dtype, device=device)
     tmp_tform6_cuboid = torch.zeros(6).to(dtype=dtype, device=device)
 
     # using min max
@@ -40,7 +47,10 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
 
     if optimize_transl:
         pts3d_mean = (cuboid_pts3d_limits[3:6] + cuboid_pts3d_limits[0:3]) / 2.
-        tmp_tform6_cuboid[:3] = - pts3d_mean
+        tmp_tform6_cuboid[:3] = -pts3d_mean
+
+    if optimize_steps == 0:
+        cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid.detach()), cuboid_tform4x4_obj.detach())
 
     for i in range(optimize_steps):
         if not optimize_rot:
@@ -52,11 +62,13 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
 
         tmp_tform6_cuboid = torch.nn.Parameter(torch.zeros(6).to(device=pts3d.device),
                                                requires_grad=True)
-        optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.0001, momentum=0.)
+        optimizer = torch.optim.SGD(params=[tmp_tform6_cuboid], lr=0.01, momentum=0.)
 
         cuboid_tform4x4_obj = tform4x4(se3_exp_map(tmp_tform6_cuboid), cuboid_tform4x4_obj)
 
         cuboid_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=cuboid_tform4x4_obj)
+
+        # logger.info(cuboid_tform4x4_obj[:3, 3])
 
         # using min max
         # _, cuboid_pts3d_ids_min = cuboid_pts3d.min(dim=0)
@@ -88,6 +100,8 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
 
     cuboid_tform4x4_obj = cuboid_tform4x4_obj.detach()
 
+    pts3d = pts3d * normalize_scale
+    cuboid_tform4x4_obj[:3, 3] *= normalize_scale
 
     cuboid_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=cuboid_tform4x4_obj).detach()
 
@@ -105,21 +119,25 @@ def fit_cuboid_to_pts3d(pts3d, size=None, optimize_transl=True, optimize_rot=Fal
     # # 1 x 2 x 3
     cuboid_pts3d_limits = torch.cat([cuboid_pts3d.quantile(q=(1.0 - q) / 2., dim=0), cuboid_pts3d.quantile(q=1. - (1.0 - q) / 2., dim=0)], dim=0).reshape(1, 2, 3)
 
-    if size is not None:
-        cuboid_size = (cuboid_pts3d_limits[0, 1] - cuboid_pts3d_limits[0, 0]).max()
-        scale = size / cuboid_size
-        cuboid_pts3d *= scale
-        cuboid_pts3d_limits *= scale
-        cuboid_tform4x4_obj[:3] *= scale
-        #cuboid_pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=cuboid_tform4x4_obj)
-
     if force_symmetric:
+        logger.info(cuboid_pts3d_limits)
         cuboid_pts3d_limits = cuboid_pts3d_limits.abs().max(dim=1, keepdim=True).values.expand(1, 2, 3).clone()
         cuboid_pts3d_limits[:, 0, :] *= -1
 
-    logger.info(cuboid_pts3d_limits)
+    if size is not None:
+        cuboid_size = (cuboid_pts3d_limits[0, 1] - cuboid_pts3d_limits[0, 0]).max()
+        scale = size / cuboid_size
+
+        cuboid_pts3d *= scale
+        cuboid_pts3d_limits *= scale
+        cuboid_tform4x4_obj[:3] *= scale
+
 
     cuboid = Cuboids.create_dense_from_limits(limits=cuboid_pts3d_limits, verts_count=vertices_max_count, device=device)
+
+    logger.info(size)
+    logger.info(cuboid_pts3d_limits)
+
     #from od3d.cv.visual.show import show_scene
     #show_scene(meshes=cuboid, pts3d=[cuboid_pts3d], meshes_add_translation=False, pts3d_add_translation=False)
 

@@ -41,7 +41,8 @@ class CO3D(OD3D_SequenceDataset):
                  categories: List[CO3D_CATEGORIES]=None,
                  dict_nested_frames: Dict[str, Dict[str, List[str]]]=None,
                  dict_nested_frames_ban: Dict[str, Dict[str, List[str]]]=None,
-                 frames_count_max_per_sequence=None, transform=None, index_shift=0, subset_fraction=1.,
+                 frames_count_max_per_sequence=None, sequences_count_max_per_category=None,
+                 transform=None, index_shift=0, subset_fraction=1.,
                  mesh_type=OD3D_MESH_TYPES.CUBOID500,
                  mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
                  mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
@@ -51,7 +52,8 @@ class CO3D(OD3D_SequenceDataset):
                          path_preprocess=path_preprocess, transform=transform, subset_fraction=subset_fraction,
                          index_shift=index_shift, dict_nested_frames=dict_nested_frames,
                          dict_nested_frames_ban=dict_nested_frames_ban,
-                         frames_count_max_per_sequence=frames_count_max_per_sequence)
+                         frames_count_max_per_sequence=frames_count_max_per_sequence,
+                         sequences_count_max_per_category=sequences_count_max_per_category)
 
         self.mesh_type = mesh_type
         self.mesh_feats_type = mesh_feats_type

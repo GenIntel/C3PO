@@ -7,6 +7,15 @@ import math
 from pytorch3d.transforms import axis_angle_to_matrix, rotation_6d_to_matrix, matrix_to_rotation_6d
 import pytorch3d.transforms
 
+def transf4x4_to_rot4x4_without_scale(transf4x4):
+    # note: note alignment of droid slam may include scale, therefore remove this scale.
+    # note: projection does not change as we scale the depth z to the object as well
+    rot4x4 = transf4x4.clone()
+    scale = rot4x4[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
+    rot4x4[:3] = rot4x4[:3] / scale
+    rot4x4[:3, 3] = 0.
+    return rot4x4
+
 def so3_exp_map(so3_log:torch.Tensor):
 
     so3_log_shape = so3_log.shape
@@ -191,34 +200,45 @@ def get_spherical_uniform_tform4x4(azim_min=-math.pi, azim_max=math.pi, azim_ste
 
     return cams_multiview_tform4x4_cuboid
 
-def get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=1, dist: float=1., device=None, dtype=None):
-    if viewpoints_count == 1:
-        # front:
-        azim = torch.Tensor([0.])
-        elev = torch.Tensor([0.])
-        theta = torch.Tensor([0.])
-    elif viewpoints_count == 2:
-        # front, top
-        azim = torch.Tensor([0., 0.])
-        elev = torch.Tensor([0., math.pi / 2. - 0.01])
-        theta = torch.Tensor([0., 0.])
-    elif viewpoints_count == 3:
-        # front, top, right
-        azim = torch.Tensor([0., 0., math.pi / 2.])
-        elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0.])
-        theta = torch.Tensor([0., 0., 0.])
-    elif viewpoints_count == 4:
-        # front, top, right, bottom
-        azim = torch.Tensor([0., 0., math.pi / 2., 0.])
-        elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0., -math.pi/2. + 0.01])
-        theta = torch.Tensor([0., 0., 0., 0.])
+def get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=1, dist: float=1., device=None, dtype=None, spiral=False):
+
+    if not spiral:
+        if viewpoints_count == 1:
+            # front:
+            azim = torch.Tensor([0.])
+            elev = torch.Tensor([0.])
+            theta = torch.Tensor([0.])
+        elif viewpoints_count == 2:
+            # front, top
+            azim = torch.Tensor([0., 0.])
+            elev = torch.Tensor([0., math.pi / 2. - 0.01])
+            theta = torch.Tensor([0., 0.])
+        elif viewpoints_count == 3:
+            # front, top, right
+            azim = torch.Tensor([0., 0., math.pi / 2.])
+            elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0.])
+            theta = torch.Tensor([0., 0., 0.])
+        elif viewpoints_count == 4:
+            # front, top, right, bottom
+            azim = torch.Tensor([0., 0., math.pi / 2., 0.])
+            elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0., -math.pi/2. + 0.01])
+            theta = torch.Tensor([0., 0., 0., 0.])
+        else:
+            viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
+            range_max = 1. - 1./ viewpoints_count_sqrt
+            azim = torch.linspace(-math.pi * range_max, math.pi * range_max, viewpoints_count_sqrt)
+            elev = torch.linspace(+math.pi / 2. * range_max, -math.pi / 2. * range_max, viewpoints_count_sqrt)
+            azim = azim.repeat(viewpoints_count_sqrt)[:viewpoints_count]
+            elev = elev.repeat_interleave(viewpoints_count_sqrt)[:viewpoints_count]
+            theta = torch.zeros_like(elev)
     else:
-        viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
-        range_max = 1. - 1./ viewpoints_count_sqrt
-        azim = torch.linspace(-math.pi * range_max, math.pi * range_max, viewpoints_count_sqrt)
-        elev = torch.linspace(+math.pi / 2. * range_max, -math.pi / 2. * range_max, viewpoints_count_sqrt)
-        azim = azim.repeat(viewpoints_count_sqrt)[:viewpoints_count]
-        elev = elev.repeat_interleave(viewpoints_count_sqrt)[:viewpoints_count]
+        azim = torch.linspace(-math.pi, math.pi, viewpoints_count)
+        viewpoints_count_first = viewpoints_count // 2
+        viewpoints_count_second = viewpoints_count - viewpoints_count_first
+        elev = torch.cat([
+            torch.linspace(-math.pi / 2 * 0.4, math.pi / 2 * 0.6, viewpoints_count_first),
+            torch.linspace(math.pi / 2 * 0.6, -math.pi / 2 * 0.4, viewpoints_count_second)], dim=0)
+        elev = elev
         theta = torch.zeros_like(elev)
 
     if dist == 0.:
@@ -364,8 +384,12 @@ def proj3d2d_origin(proj4x4):
 def add_homog_dim(pts, dim):
     device = pts.device
     dtype = pts.dtype
+    if dim == -1:
+        dim = pts.dim() - 1
     ones1d = torch.ones(size=list(pts.shape[:dim]) + [1] + list(pts.shape[dim+1:])).to(device=device, dtype=dtype)
     return torch.cat([pts, ones1d], dim=dim)
+
+
 
 def proj3d2d(pts3d, proj4x4):
     device = pts3d.device

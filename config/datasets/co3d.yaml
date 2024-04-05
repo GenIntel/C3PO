@@ -28,6 +28,7 @@ mesh_feats_dist_reduce_type: 'min_avg' # 'avg', 'min', 'min_avg'
 # tform_obj_type: 'label3d_cuboid' # 'label3d_cuboid' 'aligned_N_alpha500_dinov2b/r0'
 
 frames_count_max_per_sequence:
+sequences_count_max_per_category:
 block_negative_depth: False
 
 path_raw: ${platform.path_datasets_raw}/CO3D

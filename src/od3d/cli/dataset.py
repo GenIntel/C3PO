@@ -20,23 +20,43 @@ def classes():
     print(list(OD3D_Dataset.subclasses.keys()))
 
 @app.command()
-def visualize_category_sequences(
+def visualize_category_frames(
         dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        imgs_count: int = typer.Option(5, '-i', '--imgs-count'),
+        viewpoints_count: int = typer.Option(16, '-v', '--viewpoints-count'), # 16
+        height: int = typer.Option(1080, '-h', '--height'),
+        width: int = typer.Option(1080, '-h', '--height'),
         platform: str = typer.Option('local', '-p', '--platform')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
-    dataset.visualize_category_sequences()
+    dataset.visualize_category_frames(imgs_count=imgs_count, viewpoints_count=viewpoints_count, H=height, W=width)
+
+@app.command()
+def visualize_category_pcls(
+        dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
+        viewpoints_count: int = typer.Option(16, '-v', '--viewpoints-count'), # 16
+        height: int = typer.Option(1080, '-h', '--height'),
+        width: int = typer.Option(1080, '-h', '--height'),
+        platform: str = typer.Option('local', '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
+    dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
+    dataset.visualize_category_pcls(viewpoints_count=viewpoints_count, H=height, W=width)
 
 @app.command()
 def visualize_category_meshes(
         dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
-        platform: str = typer.Option('local', '-p', '--platform')):
+        viewpoints_count: int = typer.Option(16, '-v', '--viewpoints-count'),
+        height: int = typer.Option(1080, '-h', '--height'),
+        width: int = typer.Option(1080, '-h', '--height'),
+        platform: str = typer.Option('local', '-p', '--platform'),
+        modalities: str = typer.Option('ncds,nn_geo,nn_app,nn_cycle,cycle_weight,nn_app_cycle_weight', '-m', '--modalities')):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset])
     dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(config=config.dataset)
-    dataset.visualize_category_meshes()
-
+    dataset.visualize_category_meshes(viewpoints_count=viewpoints_count, H=height, W=width, modalities=modalities.split(','))
+#
 @app.command()
 def save_sequences_as_video(
         dataset: str = typer.Option('co3d_no_zsp_1s_labeled_ref', '-d', '--dataset'),
@@ -149,13 +169,14 @@ def rsync_raw(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
 @app.command()
 def rsync_preprocess(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
           platform_source: str = typer.Option('local', '-s', '--source'),
-          platform_target: str = typer.Option('slurm', '-t', '--target')):
+          platform_target: str = typer.Option('slurm', '-t', '--target'),
+          rpath: str = typer.Option('', '-r', '--relative-path')):
     logging.basicConfig(level=logging.INFO)
     config_source = od3d.io.load_hierarchical_config(platform=platform_source, overrides=["+datasets@dataset=" + dataset])
     config_target = od3d.io.load_hierarchical_config(platform=platform_target, overrides=["+datasets@dataset=" + dataset])
 
-    paths_source = Path(config_source.dataset.path_preprocess)
-    paths_target = Path(config_target.dataset.path_preprocess)
+    paths_source = Path(config_source.dataset.path_preprocess).joinpath(rpath)
+    paths_target = Path(config_target.dataset.path_preprocess).joinpath(rpath)
 
     source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
     target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
@@ -314,7 +335,7 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
         imgs.append(img)
 
     from od3d.cv.visual.video import save_gif, save_video
-    save_video(imgs=imgs, fpath=Path(config.platform.path_exps).joinpath('videos', dataset.name + '.mp4'))
+    save_video(imgs=imgs, fpath=Path(config.platform.path_exps).joinpath('videos', dataset.name + '.mkv'))
 import http.server
 import socketserver
 import torchvision

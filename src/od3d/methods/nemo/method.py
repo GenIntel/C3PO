@@ -109,7 +109,11 @@ class NeMo(OD3D_Method):
         # self.path_shapenemo = Path(config.path_shapenemo)
         # self.fpaths_meshes_shapenemo = [self.path_shapenemo.joinpath(cls, '01.off') for cls in config.categories]
         self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
-        self.fpaths_meshes_tform_obj = [self.config.fpaths_meshes_tform_obj[cls] for cls in config.categories]
+        fpaths_meshes_tform_obj = self.config.get('fpaths_meshes_tform_obj', None)
+        if fpaths_meshes_tform_obj is not None:
+            self.fpaths_meshes_tform_obj = [fpaths_meshes_tform_obj[cls] for cls in config.categories]
+        else:
+            self.fpaths_meshes_tform_obj = [None for _ in config.categories]
 
         self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes, fpaths_meshes_tforms=self.fpaths_meshes_tform_obj)
         self.meshes.gaussian_splat_enabled = self.config.meshes_gaussian_splat_enabled
@@ -151,7 +155,7 @@ class NeMo(OD3D_Method):
             self.criterion = torch.nn.CrossEntropyLoss().cuda()
         elif self.config.train.loss == 'cross_entropy_smooth_geo':
             from od3d.cv.metric.cross_entropy_smooth import CrossEntropyLabelsSmoothed
-            labels_smoothed = self.meshes.get_geodesic_prob_with_noise.to(device=self.device)
+            labels_smoothed = self.meshes.get_geodesic_prob_with_noise().to(device=self.device)
             self.criterion = CrossEntropyLabelsSmoothed(labels_smoothed=labels_smoothed)
         elif self.config.train.loss == 'nll_softmax':
             self.softmax = torch.nn.LogSoftmax(dim=1)
@@ -176,9 +180,9 @@ class NeMo(OD3D_Method):
 
         # load checkpoint
         if config.get("checkpoint", None) is not None:
-            self.load_checkpoint(config.checkpoint)
+            self.load_checkpoint(Path(config.checkpoint))
         elif config.get("checkpoint_old", None) is not None:
-            self.load_checkpoint_old(config.checkpoint_old)
+            self.load_checkpoint_old(Path(config.checkpoint_old))
         # load_mesh(config.path_shapenemo)
 
         # self.meshes.show()
@@ -253,14 +257,18 @@ class NeMo(OD3D_Method):
         self.clutter_feats = checkpoint['clutter_feats']
 
     @property
-    def path_checkpoint(self):
-        return self.logging_dir.joinpath('nemo.ckpt')
+    def fpath_checkpoint(self):
+        return self.logging_dir.joinpath(self.rfpath_checkpoint)
+
+    @property
+    def rfpath_checkpoint(self):
+        return Path('nemo.ckpt')
 
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
         score_metric_name = 'pose/acc_pi18'  # 'pose/acc_pi18' 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
-        self.save_checkpoint(path_checkpoint=self.path_checkpoint)
+        self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
         if 'main' in datasets_val.keys():
             dataset_train_sub = datasets_train['labeled']
@@ -273,24 +281,25 @@ class NeMo(OD3D_Method):
         for epoch in range(self.config.train.epochs):
             if self.config.train.val and self.config.train.epochs_to_next_test > 0 and epoch % self.config.train.epochs_to_next_test == 0:
                 for dataset_val_key, dataset_val in datasets_val.items():
-                    results_val = self.test(dataset_val)
+                    results_val = self.test(dataset_val, val=True)
                     results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
                     if dataset_val_key == 'main':
                         score_latest = results_val[score_metric_name]
 
                 if not self.config.train.early_stopping or score_latest > score_ckpt_val:
                     score_ckpt_val = score_latest
-                    self.save_checkpoint(path_checkpoint=self.path_checkpoint)
+                    self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
             results_epoch = self.train_epoch(dataset=dataset_train_sub)
             results_epoch.log_with_prefix('train')
-        self.load_checkpoint(path_checkpoint=self.path_checkpoint)
+        self.load_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
+    def test(self, dataset: OD3D_Dataset, val=False):
+        # note: ensure that checkpoint is saved for checkpointed runs
+        if not self.fpath_checkpoint.exists():
+            self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
-    def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
         logger.info(f'test dataset {dataset.name}')
-        if config_inference is None:
-            config_inference = self.config.inference
         self.net.eval()
         self.meshes.feats.requires_grad = False
         clutter_feats = self.clutter_feats.detach()
@@ -316,7 +325,7 @@ class NeMo(OD3D_Method):
                                                      pin_memory=self.config.test.dataloader.pin_memory)
             logger.info(f"Dataset contains {len(dataset_sub)} frames.")
 
-        results_epoch = OD3D_Results()
+        results_epoch = OD3D_Results(logging_dir=self.logging_dir)
         for i, batch in tqdm(enumerate(iter(dataloader))):
             batch.to(device=self.device)
 
@@ -326,14 +335,24 @@ class NeMo(OD3D_Method):
                 results_batch = self.inference_batch_multiview(batch=batch, return_samples_with_sim=True)
             results_epoch += results_batch
 
+            if not val and self.config.test.save_results:
+                results_visual_batch = self.get_results_visual_batch(batch=batch, results_batch=results_batch,
+                                                                         config_visualize=self.config.test.visualize)
+                results_visual_batch.save_visual(prefix=f'test/{dataset.name}')
+
         count_pred_frames = len(results_epoch['item_id'])
         logger.info(f'Predicted {count_pred_frames} frames.')
+        if not val and self.config.test.save_results:
+            results_epoch.save_with_dataset(prefix='test', dataset=dataset)
+
         if not isinstance(dataset, CO3D):
             results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
                                                      config_visualize=self.config.test.visualize)
         else:
             results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset_sub,
                                                      config_visualize=self.config.test.visualize)
+
+
         results_epoch = results_epoch.mean()
         results_epoch += results_visual
         return results_epoch
@@ -351,7 +370,7 @@ class NeMo(OD3D_Method):
                                                        num_workers=self.config.train.dataloader.num_workers,
                                                        pin_memory=self.config.train.dataloader.pin_memory)
 
-        results_epoch = OD3D_Results()
+        results_epoch = OD3D_Results(logging_dir=self.logging_dir)
         accumulate_steps = 0
         for i, batch in enumerate(iter(dataloader_train)):
             results_batch: OD3D_Results = self.train_batch(batch=batch)
@@ -367,6 +386,8 @@ class NeMo(OD3D_Method):
         self.scheduler.step()
         self.optim.zero_grad()
 
+        # results_epoch.log_dict_to_dir(name=f'train_frames/{dataset.name}')
+
         results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
                                                  config_visualize=self.config.train.visualize)
         results_epoch = results_epoch.mean()
@@ -375,7 +396,7 @@ class NeMo(OD3D_Method):
 
 
     def train_batch(self, batch) -> OD3D_Results:
-        results_batch = OD3D_Results()
+        results_batch = OD3D_Results(logging_dir=self.logging_dir)
 
         batch.to(device=self.device)
 
@@ -397,6 +418,10 @@ class NeMo(OD3D_Method):
 
         logger.info(f'batch.size {batch.size}')
         feats2d_net_mask = torch.ones(size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3])).to(device=self.device)
+
+        if self.config.train.use_mask_rgb:
+            feats2d_net_mask = 1. * resize(batch.rgb_mask, H_out=feats2d_net.shape[2], W_out=feats2d_net.shape[3])
+
         if self.config.train.use_mask_object:
             feats2d_net_mask = feats2d_net_mask * 1. * resize(batch.mask, H_out=feats2d_net.shape[2],
                                                               W_out=feats2d_net.shape[3])
@@ -417,8 +442,13 @@ class NeMo(OD3D_Method):
         prob_noise[prob_noise.sum(dim=-1) <= 0.] = 1.
         noise2d = xy.flatten(1)[:, torch.multinomial(prob_noise, self.config.num_noise, replacement=True)].permute(1, 2, 0)
 
-        #from od3d.cv.visual.show import show_imgs
-        #show_imgs(prob_noise.reshape(-1, 1, H, W))
+        # note: visual for debug
+        # from od3d.cv.visual.show import show_imgs
+        # from od3d.cv.visual.draw import draw_pixels
+        # prob_noise_pxls = prob_noise.reshape(-1, 1, H, W).clone().repeat(1, 3, 1, 1)
+        # for b in range(len(prob_noise_pxls)):
+        #     prob_noise_pxls[b] = draw_pixels(prob_noise_pxls[b], noise2d[b])
+        # show_imgs(prob_noise_pxls)
 
         vts2d_feats2d_net_mask = sample_pxl2d_pts(feats2d_net_mask, pxl2d=torch.cat([vts2d], dim=1))
         vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
@@ -500,7 +530,7 @@ class NeMo(OD3D_Method):
 
 
     def inference_batch_single_view(self, batch, return_samples_with_sim=True):
-        results = OD3D_Results()
+        results = OD3D_Results(logging_dir=self.logging_dir)
         B = len(batch)
 
         """
@@ -558,6 +588,17 @@ class NeMo(OD3D_Method):
                                                                                        feats2d_net=feats2d_net,
                                                                                        categories_ids=batch.category_id,
                                                                                        feats2d_net_mask=feats2d_net_mask)
+
+            # if self.config.inference.live:
+            #     from od3d.cv.visual.show import show_imgs
+            #     show_imgs(
+            #         blend_rgb(batch.rgb[:1], (self.meshes.render_feats(cams_tform4x4_obj=b_cams_multiview_tform4x4_obj[0],
+            #                                                           cams_intr4x4=b_cams_multiview_intr4x4[0],
+            #                                                           imgs_sizes=batch.size,
+            #                                                           meshes_ids=batch.category_id[:1],
+            #                                                           modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
+            #                                                           broadcast_batch_and_cams=True)[0]).to(dtype=batch.rgb.dtype)), duration=-1)
+
             #  OPTION A: Use 2d gradient of rendered features
             sim = self.get_sim_feats2d_net_with_cams(
                 feats2d_net=feats2d_net,
@@ -660,7 +701,7 @@ class NeMo(OD3D_Method):
 
 
     def inference_batch_multiview(self, batch, return_samples_with_sim=True):
-        results = OD3D_Results()
+        results = OD3D_Results(logging_dir=self.logging_dir)
         B = len(batch)
 
         """
@@ -825,22 +866,236 @@ class NeMo(OD3D_Method):
 
         return results
 
-    def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_visualize: DictConfig, filter_name_unique=True):
-        results = OD3D_Results()
+    def get_results_visual_batch(self, batch, results_batch: OD3D_Results, config_visualize: DictConfig,
+                                 dict_name_unique_to_sel_name = None, dict_name_unique_to_result_id=None,
+                                 caption_metrics = ['sim', 'rot_diff_rad']):
+        results_batch_visual = OD3D_Results(logging_dir=self.logging_dir)
+        modalities = config_visualize.modalities
+        if len(modalities) == 0:
+            return results_batch_visual
 
+        down_sample_rate = config_visualize.down_sample_rate
+        samples_sorted = config_visualize.samples_sorted
+        samples_scores = config_visualize.samples_scores
+        samples_scores = config_visualize.samples_scores
+        live = config_visualize.live
+
+
+        with torch.no_grad():
+            batch.to(device=self.device)
+            B = len(batch)
+            if dict_name_unique_to_result_id is not None:
+                batch_result_ids = torch.LongTensor(
+                    [dict_name_unique_to_result_id[batch.name_unique[b]] for b in range(B)]).to(device=self.device)
+            else:
+                batch_result_ids = torch.LongTensor(range(B)).to(device=self.device)
+
+            if 'gt_cam_tform4x4_obj' in results_batch.keys():
+                batch.cam_tform4x4_obj = results_batch['gt_cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
+            if 'noise2d' in results_batch.keys():
+                batch.noise2d = results_batch['noise2d'].to(device=self.device)[batch_result_ids]
+
+            if dict_name_unique_to_sel_name is not None:
+                batch_sel_names = [dict_name_unique_to_sel_name[batch.name_unique[b]] for b in range(B)]
+            else:
+                batch_sel_names = [batch.name_unique[b] for b in range(B)]
+
+            batch_names = [batch.name_unique[b] for b in range(B)]
+            batch_sel_scores = []
+            for b in range(B):
+                batch_sel_scores.append('\n'.join([f'{metric}={results_batch[metric].to(device=self.device)[batch_result_ids[b]].cpu().detach().item():.3f}'
+                                                   for metric in caption_metrics if metric in results_batch.keys()]))
+
+            feats2d_net = self.net(batch.rgb)
+            # feats2d_net = resize(feats2d_net,
+            #                     scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
+
+            if VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS in modalities:
+
+                logger.info('create net_feats_nearest_verts ...')
+                verts3d = self.get_nearest_verts3d_to_feats2d_net(feats2d_net=feats2d_net,
+                                                                  categories_ids=batch.category_id,
+                                                                  zero_if_sim_clutter_larger=True)
+                verts3d = resize(verts3d, scale_factor=self.down_sample_rate / down_sample_rate)
+                for b in range(len(batch)):
+                    img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / down_sample_rate),
+                                    verts3d[b])
+                    results_batch_visual[
+                        f'visual/{VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS}/{batch_sel_names[b]}'] = image_as_wandb_image(
+                        img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
+                    if live:
+                        show_img(img)
+
+            if VISUAL_MODALITIES.SAMPLES in modalities:
+                logger.info('create samples ...')
+                s_cam_tform4x4_obj = results_batch['samples_cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
+                s_cam_intr4x4 = results_batch['samples_cam_intr4x4'].to(device=self.device)[batch_result_ids]
+                sim = results_batch['samples_sim'].to(device=self.device)[batch_result_ids]
+
+                """        
+                s_cam_tform4x4_obj, s_cam_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
+                                                                                           cam_intr4x4=batch.cam_intr4x4,
+                                                                                           cam_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                                                           feats2d_net=feats2d_net,
+                                                                                           categories_ids=batch.category_id)
+                sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
+                                                         cam_tform4x4_obj=s_cam_tform4x4_obj,
+                                                         cam_intr4x4=s_cam_intr4x4,
+                                                         categories_ids=batch.category_id,
+                                                         broadcast_batch_and_cams=True)
+                """
+
+                ncds = self.get_ncds_with_cam(cam_tform4x4_obj=s_cam_tform4x4_obj,
+                                              cam_intr4x4=s_cam_intr4x4, size=batch.size,
+                                              categories_ids=batch.category_id,
+                                              down_sample_rate=down_sample_rate,
+                                              broadcast_batch_and_cams=True, pre_rendered=False)
+
+                for b in range(len(batch)):
+                    imgs = ncds[b]
+                    imgs_sim = sim[b][:].expand(*sim[b].shape)  # , *mesh_feats2d_rendered.shape[-2:]
+                    if self.config.inference.sample.method == 'uniform':
+                        imgs = imgs.reshape(self.config.inference.sample.uniform.azim.steps,
+                                            self.config.inference.sample.uniform.elev.steps,
+                                            self.config.inference.sample.uniform.theta.steps,
+                                            *imgs.shape[-3:])[:, :, :]
+                        imgs_sim = imgs_sim.reshape(self.config.inference.sample.uniform.azim.steps,
+                                                    self.config.inference.sample.uniform.elev.steps,
+                                                    self.config.inference.sample.uniform.theta.steps)[:, :, :]
+                    imgs = blend_rgb(resize(batch.rgb[b], scale_factor=1. / down_sample_rate), imgs)
+
+                    if samples_sorted:
+                        imgs_sim = imgs_sim.flatten(0)
+                        imgs = imgs.reshape(-1, *imgs.shape[-3:])
+                        imgs_sim_ids = imgs_sim.sort(descending=True)[1]
+                        imgs_sim_ids = imgs_sim_ids[:49]
+                        imgs = imgs[imgs_sim_ids]
+                        imgs_sim = imgs_sim[imgs_sim_ids]
+
+                    if samples_scores:
+                        logger.info('create plot samples scores...')
+
+                        plt.ioff()
+                        fig, ax = plt.subplots()
+                        ax.plot(imgs_sim.detach().cpu().numpy(), label='sim')  # density=False would make counts
+                        # ax.set_ylim(0., 1.)
+                        # ax.ylabel('sim')
+                        # ax.xlabel('samples')
+
+                        img = get_img_from_plot(ax=ax, fig=fig)
+                        plt.close(fig)
+                        img = resize(img, H_out=imgs.shape[-2], W_out=imgs.shape[-1])
+                        img = draw_text_in_rgb(img, fontScale=0.4, lineThickness=2, fontColor=(0, 0, 0),
+                                               text=f'{batch_sel_scores[b]}\nmin={imgs_sim.min().item():.3f}\nmax={imgs_sim.max().item():.3f}')
+                        imgs = torch.cat([imgs, img[None,].to(device=imgs.device)], dim=0)
+                        # resize(img, )
+                        """
+                        samples_score_size = imgs.shape[-1] // 5
+                        imgs[..., -samples_score_size:, -samples_score_size:] = (
+                                255 * imgs_sim.reshape(*imgs_sim.shape, 1, 1, 1).expand(*imgs.shape[:-2],
+                                                                                        samples_score_size,
+                                                                                        samples_score_size)).to(
+                            torch.uint8)
+                        """
+
+                    img = imgs_to_img(imgs)
+                    results_batch_visual[f'visual/{VISUAL_MODALITIES.SAMPLES}/{batch_sel_names[b]}'] = image_as_wandb_image(img,
+                                                                                                               caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}, min={imgs_sim.min().item():.3f}, max={imgs_sim.max().item():.3f}')
+                    if live:
+                        show_img(img)
+
+            if VISUAL_MODALITIES.SIM_PXL in modalities:
+                logger.info('create sim pxl...')
+                batch_pred_label = results_batch['label_pred'].to(device=self.device)[batch_result_ids]
+                batch_pred_cam_tform4x4 = results_batch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
+                sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
+                                                                  cam_intr4x4=batch.cam_intr4x4,
+                                                                  cam_tform4x4_obj=batch_pred_cam_tform4x4,
+                                                                  categories_ids=batch.category_id, return_sim_pxl=True,
+                                                                  broadcast_batch_and_cams=False,
+                                                                  sim_feats_mesh_with_image=SIM_FEATS_MESH_WITH_IMAGE.RENDERED,
+                                                                  pre_rendered=False,
+                                                                  only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
+                                                                  allow_clutter=self.config.inference.allow_clutter,
+                                                                  use_sigmoid=self.config.inference.use_sigmoid)
+
+                sim_pxl = resize(sim_pxl, scale_factor=self.down_sample_rate / down_sample_rate)
+                for b in range(len(batch)):
+                    img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / down_sample_rate),
+                                    sim_pxl[b])
+                    results_batch_visual[f'visual/{VISUAL_MODALITIES.SIM_PXL}/{batch_sel_names[b]}'] = image_as_wandb_image(img,
+                                                                                                               caption=f'{batch_sel_names[b]}, {batch_names[b]}, mean sim={sim[b].item()}')
+                    if live:
+                        show_img(img)
+
+            if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities or VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
+                logger.info('create pred verts ncds...')
+                batch_pred_label = results_batch['label_pred'].to(device=self.device)[batch_result_ids]
+                batch_pred_cam_tform4x4 = results_batch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
+                pred_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4,
+                                                         cam_tform4x4_obj=batch_pred_cam_tform4x4,
+                                                         categories_ids=batch.category_id, size=batch.size,
+                                                         down_sample_rate=down_sample_rate,
+                                                         pre_rendered=False)
+                if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities:
+                    for b in range(len(batch)):
+                        img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / down_sample_rate),
+                                        pred_verts_ncds[b])
+                        results_batch_visual[
+                            f'visual/{VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB}/{batch_sel_names[b]}'] = image_as_wandb_image(
+                            img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
+                        if live:
+                            show_img(img)
+
+            if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities or VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
+                logger.info('create gt verts ncds...')
+                gt_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4,
+                                                       cam_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                       categories_ids=batch.category_id, size=batch.size,
+                                                       down_sample_rate=down_sample_rate,
+                                                       pre_rendered=False)
+                if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities:
+                    for b in range(len(batch)):
+                        img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / down_sample_rate),
+                                        gt_verts_ncds[b])
+                        if 'noise2d' in results_batch.keys():
+                            from od3d.cv.visual.draw import draw_pixels
+                            img = draw_pixels(img, batch.noise2d[b] * (
+                                        self.down_sample_rate / down_sample_rate))
+
+                        results_batch_visual[
+                            f'visual/{VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB}/{batch_sel_names[b]}'] = image_as_wandb_image(
+                            img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
+                        if live:
+                            show_img(img)
+            if VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
+                logger.info('create pred vs gt verts ncds...')
+                for b in range(len(batch)):
+                    # if 'noise2d' in results
+                    img1 = blend_rgb(resize(batch.rgb[b], scale_factor=1. / down_sample_rate),
+                                     pred_verts_ncds[b])
+                    img2 = blend_rgb(resize(batch.rgb[b], scale_factor=1. / down_sample_rate),
+                                     gt_verts_ncds[b])
+                    img = imgs_to_img(torch.stack([img1, img2], dim=0)[None,])
+
+                    results_batch_visual[
+                        f'visual/{VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB}/{batch_sel_names[b]}'] = image_as_wandb_image(
+                        img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
+                    if live:
+                        show_img(img)
+        return results_batch_visual
+
+    def get_results_visual(self, results_epoch, dataset: OD3D_Dataset, config_visualize: DictConfig,
+                           filter_name_unique=True, caption_metrics=['sim', 'rot_diff_rad']):
+        results = OD3D_Results(logging_dir=self.logging_dir)
         count_best = config_visualize.count_best
         count_worst = config_visualize.count_worst
         count_rand = config_visualize.count_rand
         modalities = config_visualize.modalities
-        live = config_visualize.live
-
         if len(modalities) == 0:
             return results
 
-        caption_metrics = ['sim', 'rot_diff_rad']
-
         if 'rot_diff_rad' in results_epoch.keys():
-
             rank_metric_name = 'rot_diff_rad'
             # sorts values ascending
             epoch_ranked_ids = results_epoch[rank_metric_name].sort(dim=0)[1]
@@ -888,179 +1143,10 @@ class NeMo(OD3D_Method):
                                                  num_workers=self.config.test.dataloader.num_workers,
                                                  pin_memory=self.config.test.dataloader.pin_memory)
         for i, batch in tqdm(enumerate(iter(dataloader))):
-            with torch.no_grad():
-                batch.to(device=self.device)
-                B = len(batch)
-                batch_result_ids = torch.LongTensor([dict_name_unique_to_result_id[batch.name_unique[b]] for b in range(B)]).to(device=self.device)
-                if 'gt_cam_tform4x4_obj' in results_epoch.keys():
-                    batch.cam_tform4x4_obj = results_epoch['gt_cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
-                if 'noise2d' in results_epoch.keys():
-                    batch.noise2d = results_epoch['noise2d'].to(device=self.device)[batch_result_ids]
-                batch_sel_names = [dict_name_unique_to_sel_name[batch.name_unique[b]] for b in range(B)]
-                batch_names = [batch.name_unique[b] for b in range(B)]
-                batch_sel_scores = []
-                for b in range(B):
-                    batch_sel_scores.append('\n'.join([f'{metric}={results_epoch[metric].to(device=self.device)[batch_result_ids[b]].cpu().detach().item():.3f}' for metric in caption_metrics if metric in results_epoch.keys()]))
-
-                feats2d_net = self.net(batch.rgb)
-                #feats2d_net = resize(feats2d_net,
-                #                     scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
-
-                if VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS in modalities:
-
-                    logger.info('create net_feats_nearest_verts ...')
-                    verts3d = self.get_nearest_verts3d_to_feats2d_net(feats2d_net=feats2d_net, categories_ids=batch.category_id,
-                                                                      zero_if_sim_clutter_larger=True)
-                    verts3d = resize(verts3d, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
-                    for b in range(len(batch)):
-                        img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate), verts3d[b])
-                        results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
-                        if live:
-                            show_img(img)
-
-                if VISUAL_MODALITIES.SAMPLES in modalities:
-                    logger.info('create samples ...')
-                    s_cam_tform4x4_obj = results_epoch['samples_cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
-                    s_cam_intr4x4 = results_epoch['samples_cam_intr4x4'].to(device=self.device)[batch_result_ids]
-                    sim = results_epoch['samples_sim'].to(device=self.device)[batch_result_ids]
-
-                    """        
-                    s_cam_tform4x4_obj, s_cam_intr4x4 = self.get_samples(config_sample=self.config.inference.sample,
-                                                                                               cam_intr4x4=batch.cam_intr4x4,
-                                                                                               cam_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                                                               feats2d_net=feats2d_net,
-                                                                                               categories_ids=batch.category_id)
-                    sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
-                                                             cam_tform4x4_obj=s_cam_tform4x4_obj,
-                                                             cam_intr4x4=s_cam_intr4x4,
-                                                             categories_ids=batch.category_id,
-                                                             broadcast_batch_and_cams=True)
-                    """
-
-                    ncds = self.get_ncds_with_cam(cam_tform4x4_obj=s_cam_tform4x4_obj,
-                                                  cam_intr4x4=s_cam_intr4x4, size=batch.size,
-                                                  categories_ids=batch.category_id, down_sample_rate=config_visualize.down_sample_rate, broadcast_batch_and_cams=True, pre_rendered=False)
-
-
-                    for b in range(len(batch)):
-                        imgs = ncds[b]
-                        imgs_sim = sim[b][:].expand(*sim[b].shape)  # , *mesh_feats2d_rendered.shape[-2:]
-                        if self.config.inference.sample.method == 'uniform':
-                            imgs = imgs.reshape(self.config.inference.sample.uniform.azim.steps, self.config.inference.sample.uniform.elev.steps, self.config.inference.sample.uniform.theta.steps,
-                                                *imgs.shape[-3:])[:, :, :]
-                            imgs_sim = imgs_sim.reshape(self.config.inference.sample.uniform.azim.steps, self.config.inference.sample.uniform.elev.steps, self.config.inference.sample.uniform.theta.steps)[:, :, :]
-                        imgs = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate), imgs)
-
-                        if config_visualize.samples_sorted:
-                            imgs_sim = imgs_sim.flatten(0)
-                            imgs = imgs.reshape(-1, *imgs.shape[-3:])
-                            imgs_sim_ids = imgs_sim.sort(descending=True)[1]
-                            imgs_sim_ids = imgs_sim_ids[:49]
-                            imgs = imgs[imgs_sim_ids]
-                            imgs_sim = imgs_sim[imgs_sim_ids]
-
-                        if config_visualize.samples_scores:
-                            logger.info('create plot samples scores...')
-
-                            plt.ioff()
-                            fig, ax = plt.subplots()
-                            ax.plot(imgs_sim.detach().cpu().numpy(), label='sim')  # density=False would make counts
-                            #ax.set_ylim(0., 1.)
-                            #ax.ylabel('sim')
-                            #ax.xlabel('samples')
-
-                            img = get_img_from_plot(ax=ax, fig=fig)
-                            plt.close(fig)
-                            img = resize(img, H_out=imgs.shape[-2], W_out=imgs.shape[-1])
-                            img = draw_text_in_rgb(img, fontScale=0.4, lineThickness=2, fontColor=(0, 0, 0), text=f'{batch_sel_scores[b]}\nmin={imgs_sim.min().item():.3f}\nmax={imgs_sim.max().item():.3f}')
-                            imgs = torch.cat([imgs, img[None,].to(device=imgs.device)], dim=0)
-                            #resize(img, )
-                            """
-                            samples_score_size = imgs.shape[-1] // 5
-                            imgs[..., -samples_score_size:, -samples_score_size:] = (
-                                    255 * imgs_sim.reshape(*imgs_sim.shape, 1, 1, 1).expand(*imgs.shape[:-2],
-                                                                                            samples_score_size,
-                                                                                            samples_score_size)).to(
-                                torch.uint8)
-                            """
-
-                        img = imgs_to_img(imgs)
-                        results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.SAMPLES}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}, min={imgs_sim.min().item():.3f}, max={imgs_sim.max().item():.3f}')
-                        if live:
-                            show_img(img)
-
-
-                if VISUAL_MODALITIES.SIM_PXL in modalities:
-                    logger.info('create sim pxl...')
-                    batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
-                    batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
-                    sim, sim_pxl = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
-                                                                      cam_intr4x4=batch.cam_intr4x4,
-                                                                      cam_tform4x4_obj=batch_pred_cam_tform4x4,
-                                                                      categories_ids=batch.category_id, return_sim_pxl=True,
-                                                                      broadcast_batch_and_cams=False,
-                                                                      sim_feats_mesh_with_image=SIM_FEATS_MESH_WITH_IMAGE.RENDERED,
-                                                                      pre_rendered=False,
-                                                                      only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                                                                      allow_clutter=self.config.inference.allow_clutter,
-                                                                      use_sigmoid=self.config.inference.use_sigmoid)
-
-                    sim_pxl = resize(sim_pxl, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
-                    for b in range(len(batch)):
-                        img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
-                                        sim_pxl[b])
-                        results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.SIM_PXL}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, mean sim={sim[b].item()}')
-                        if live:
-                            show_img(img)
-
-
-                if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities or VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
-                    logger.info('create pred verts ncds...')
-                    batch_pred_label = results_epoch['label_pred'].to(device=self.device)[batch_result_ids]
-                    batch_pred_cam_tform4x4 = results_epoch['cam_tform4x4_obj'].to(device=self.device)[batch_result_ids]
-                    pred_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4, cam_tform4x4_obj=batch_pred_cam_tform4x4, categories_ids=batch.category_id, size=batch.size, down_sample_rate=config_visualize.down_sample_rate, pre_rendered=False)
-                    if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities:
-                        for b in range(len(batch)):
-                            img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
-                                            pred_verts_ncds[b])
-                            results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
-                            if live:
-                                show_img(img)
-
-                if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities or VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
-                    logger.info('create gt verts ncds...')
-                    gt_verts_ncds = self.get_ncds_with_cam(cam_intr4x4=batch.cam_intr4x4,
-                                                  cam_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                  categories_ids=batch.category_id, size=batch.size,
-                                                  down_sample_rate=config_visualize.down_sample_rate, pre_rendered=False)
-                    if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities:
-                        for b in range(len(batch)):
-                            img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
-                                            gt_verts_ncds[b])
-                            if 'noise2d' in results_epoch.keys():
-                                from od3d.cv.visual.draw import draw_pixels
-                                img = draw_pixels(img, batch.noise2d[b] * (self.down_sample_rate / config_visualize.down_sample_rate))
-
-                            results[
-                                f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB}'] = image_as_wandb_image(
-                                img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
-                            if live:
-                                show_img(img)
-                if VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities:
-                    logger.info('create pred vs gt verts ncds...')
-                    for b in range(len(batch)):
-                        # if 'noise2d' in results
-                        img1 = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
-                                         pred_verts_ncds[b])
-                        img2 = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate),
-                                         gt_verts_ncds[b])
-                        img = imgs_to_img(torch.stack([img1, img2], dim=0)[None,])
-
-                        results[
-                            f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB}'] = image_as_wandb_image(
-                            img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
-                        if live:
-                            show_img(img)
+            results += self.get_results_visual_batch(batch, results_epoch, config_visualize=config_visualize,
+                                                     dict_name_unique_to_sel_name=dict_name_unique_to_sel_name,
+                                                     caption_metrics=caption_metrics,
+                                                     dict_name_unique_to_result_id=dict_name_unique_to_result_id)
         return results
 
 

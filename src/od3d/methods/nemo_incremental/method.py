@@ -170,7 +170,7 @@ class NeMo_Incremental(NeMo):
         score_metric_name = 'pose/acc_pi6'
         score_ckpt_val = 0.
         score_latest = 0.
-        self.save_checkpoint(path_checkpoint=self.path_checkpoint)
+        self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
         if 'main' in datasets_val.keys():
             dataset_labeled = datasets_train['labeled']
@@ -209,7 +209,7 @@ class NeMo_Incremental(NeMo):
 
                 if not self.config.train.early_stopping or score_latest > score_ckpt_val:
                     score_ckpt_val = score_latest
-                    self.save_checkpoint(path_checkpoint=self.path_checkpoint)
+                    self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
             if self.config.train.incremental.enabled and epoch % self.config.train.incremental.pseudo_labels_update.epochs_to_next_update == 0:
                 self.update_pseudo_labels(dataset_train=dataset_unlabeled)
@@ -224,7 +224,7 @@ class NeMo_Incremental(NeMo):
             results_epoch = self.train_epoch(dataset=train_datset_sub_sub)
             results_epoch.log_with_prefix('train')
 
-        self.load_checkpoint(path_checkpoint=self.path_checkpoint)
+        self.load_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
     """
     def train_batch(self, batch) -> OD3D_Results:

@@ -15,6 +15,22 @@ import torch
 # masked_scatter: input, mask, source -> return tensor with masked copy of source into target
 #   -> mask must be broadcastable for source and target
 
+def append_const_front(pts, dim, value=1.):
+    device = pts.device
+    dtype = pts.dtype
+    if dim == -1:
+        dim = pts.dim() - 1
+    ones1d = torch.ones(size=list(pts.shape[:dim]) + [1] + list(pts.shape[dim + 1:])).to(device=device, dtype=dtype) * value
+    return torch.cat([ones1d, pts], dim=dim)
+
+def append_const_back(pts, dim, value=1.):
+    device = pts.device
+    dtype = pts.dtype
+    if dim == -1:
+        dim = pts.dim() - 1
+    ones1d = torch.ones(size=list(pts.shape[:dim]) + [1] + list(pts.shape[dim + 1:])).to(device=device, dtype=dtype) * value
+    return torch.cat([pts, ones1d], dim=dim)
+
 def batched_index_fill(input, value, index, dim=None):
     """
     Args:

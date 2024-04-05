@@ -9,6 +9,7 @@ defaults:
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
+  - _self_
 
 seed_number: 0
 
@@ -46,14 +47,18 @@ metrics:
   - metricA
   - metricB
 
-mesh_feats_type: 'M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc' # M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm', 'R_min50'
-mesh_type: 'alpha500' # 'alpha500' 'convex500', 'voxel500' 'poisson500', 'alpha500'
-mesh_feats_dist_reduce_type: 'negdot_min_avg' # 'pca32_', 'avg', 'min', 'min_avg'
-
+mesh_feats_type: 'M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc'
+# M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc
+# M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc
+# M_dino_vits8_frozen_base_no_norm_T_centerzoom512_R_acc
+#  'R_acc' # 'R_avg', 'R_avg_norm', 'R_min50'
+mesh_type: 'alpha500' # 'alphawrap500' 'alpha500' 'convex500', 'voxel500' 'poisson500', 'alpha500'
+mesh_feats_dist_reduce_type: 'min_avg' # 'pca32_', 'avg', 'min', 'min_avg'
+aligned_name: '${mesh_type}_dinov2s' # 'alpha500_dinov2s_test' # 'alphawrap500_dinov2b' 'latest_50s_to_5s_sota' # _sota_ref_86_64
 
 method:
   nemo:
-    refine_optimization_steps: 20
+    refine_optimization_steps: 0 # 20
     refine_lr: 2e-2 # 2e-2
     refine_pts_weight: 0. # 0.5 # 0.1 too small, 1 too large
     refine_arap_weight: 1. # 1.
@@ -64,13 +69,13 @@ method:
       samples: 1000
       score_perc: 1.
     use_only_first_reference: False
-    geo_cyclic_weight_temp: 0.9
-    app_cyclic_weight_temp: 0.9
+    geo_cyclic_weight_temp: 0.9  # 0.9
+    app_cyclic_weight_temp: 0.9  # 0.9
     gt_cam_tform_obj_source: labeled_cuboid # zsp_labeled, labeled, labeled_cuboid or '' for only align
     dist_appear_weight: 0.2
     global_optimization_steps: 1
     categories: ${categories}
-    aligned_name: # 'alpha500_dinov2b' 'latest_50s_to_5s_sota' # _sota_ref_86_64
+    aligned_name: ${aligned_name}
 
     preprocess:
       pcl:
@@ -81,13 +86,13 @@ method:
         override: False
       mesh:
         enabled: True
-        override: True
+        override: False
       mesh_feats:
         enabled: True
-        override: True
+        override: False
       mesh_feats_dist:
         enabled: True
-        override: True
+        override: False
 
 
 train_datasets:

@@ -1,7 +1,5 @@
 # @package _global_
 
-ablation_name: cat1_truck
-
 categories:
 #  - bicycle
   - truck
