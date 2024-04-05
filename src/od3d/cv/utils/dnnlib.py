@@ -27,7 +27,7 @@ from typing import Any
 from typing import List
 from typing import Tuple
 from typing import Union
-
+from omegaconf import DictConfig
 import numpy as np
 import requests
 from distutils.util import strtobool
@@ -221,17 +221,18 @@ def get_obj_by_name(name: str) -> Any:
     return get_obj_from_module(module, obj_name)
 
 
-def call_func_by_name(*args, func_name: str = None, **kwargs) -> Any:
+def call_func_by_name(func_name: str, config: DictConfig, **kwargs) -> Any:
     """Finds the python object with the given name and calls it as a function."""
     assert func_name is not None
     func_obj = get_obj_by_name(func_name)
     assert callable(func_obj)
-    return func_obj(*args, **kwargs)
+    return func_obj(config, **{**kwargs, **config.get("kwargs", {})})
 
 
-def construct_class_by_name(*args, class_name: str = None, **kwargs) -> Any:
+def construct_class_by_name(config: DictConfig, **kwargs) -> Any:
     """Finds the python class with the given name and constructs it with the given arguments."""
-    return call_func_by_name(*args, func_name=class_name, **kwargs)
+    assert "class_name" in config, f"Missing 'class_name' in config, got {list(config.keys())}."
+    return call_func_by_name(config.get("class_name", None), config, **kwargs)
 
 
 def get_module_dir_by_obj_name(obj_name: str) -> str:

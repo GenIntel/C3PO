@@ -1,38 +1,28 @@
 import collections.abc as collections
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, List, Optional, Tuple, Union
-
+from typing import Callable, List, Optional, Tuple, Union, Dict
+from abc import abstractmethod
 import cv2
 import kornia
 import numpy as np
 import torch
-
+from omegaconf import DictConfig
 
 class ImagePreprocessor:
-    default_conf = {
-        "resize": None,  # target edge length, None for no resizing
-        "side": "long",
-        "interpolation": "bilinear",
-        "align_corners": None,
-        "antialias": True,
-    }
-
-    def __init__(self, **conf) -> None:
-        super().__init__()
-        self.conf = {**self.default_conf, **conf}
-        self.conf = SimpleNamespace(**self.conf)
+    def __init__(self, config) -> None:
+        self.config = config
 
     def __call__(self, img: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Resize and preprocess an image, return image and resize scale"""
         h, w = img.shape[-2:]
-        if self.conf.resize is not None:
+        if self.config.resize is not None:
             img = kornia.geometry.transform.resize(
                 img,
-                self.conf.resize,
-                side=self.conf.side,
-                antialias=self.conf.antialias,
-                align_corners=self.conf.align_corners,
+                self.config.resize,
+                side=self.config.side,
+                antialias=self.config.antialias,
+                align_corners=self.config.align_corners,
             )
         scale = torch.Tensor([img.shape[-1] / w, img.shape[-2] / h]).to(img)
         return img, scale
@@ -129,37 +119,31 @@ def load_image(path: Path, resize: int = None, **kwargs) -> torch.Tensor:
 
 
 class Extractor(torch.nn.Module):
-    def __init__(self, **conf):
+    def __init__(self, config: DictConfig, device="cpu"):
         super().__init__()
-        self.conf = SimpleNamespace(**{**self.default_conf, **conf})
+        self.config = config
+        self.device = device
+
+    def to(self, device):
+        super().to(device)
+        self.device = device
+        return self
+        
+    @abstractmethod
+    def load_checkpoint(self, checkpoint_path: str = None):
+        pass
 
     @torch.no_grad()
-    def extract(self, img: torch.Tensor, **conf) -> dict:
+    def extract(self, data: Dict[str, torch.Tensor], preprocess_conf: DictConfig) -> dict:
         """Perform extraction with online resizing"""
+        img = data["image"]
         if img.dim() == 3:
             img = img[None]  # add batch dim
         assert img.dim() == 4 and img.shape[0] == 1
         shape = img.shape[-2:][::-1]
-        img, scales = ImagePreprocessor(**{**self.preprocess_conf, **conf})(img)
-        feats = self.forward({"image": img})
+        img, scales = ImagePreprocessor(preprocess_conf)(img)
+        data["image"] = img
+        feats = self.forward(data)
         feats["image_size"] = torch.tensor(shape)[None].to(img).float()
         feats["keypoints"] = (feats["keypoints"] + 0.5) / scales[None] - 0.5
         return feats
-
-
-def match_pair(
-    extractor,
-    matcher,
-    image0: torch.Tensor,
-    image1: torch.Tensor,
-    device: str = "cpu",
-    **preprocess,
-):
-    """Match a pair of images (image0, image1) with an extractor and matcher"""
-    feats0 = extractor.extract(image0, **preprocess)
-    feats1 = extractor.extract(image1, **preprocess)
-    matches01 = matcher({"image0": feats0, "image1": feats1})
-    data = [feats0, feats1, matches01]
-    # remove batch dim and move to target device
-    feats0, feats1, matches01 = [batch_to_device(rbd(x), device) for x in data]
-    return feats0, feats1, matches01

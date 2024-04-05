@@ -40,12 +40,12 @@
 # --------------------------------------------------------------------*/
 # %BANNER_END%
 
-# Adapted by Remi Pautrat, Philipp Lindenberger
+# Adapted by Remi Pautrat, Philipp Lindenberger, Artur Jesslen
 
 import torch
 from kornia.color import rgb_to_grayscale
 from torch import nn
-
+import warnings
 from .extractor import Extractor
 
 
@@ -103,19 +103,6 @@ class SuperPoint(Extractor):
     Rabinovich. In CVPRW, 2019. https://arxiv.org/abs/1712.07629
 
     """
-
-    default_conf = {
-        "output_dim": 256,
-        "nms_radius": 4,
-        "max_num_keypoints": None,
-        "detection_threshold": 0.0005,
-        "remove_borders": 4,
-    }
-
-    preprocess_conf = {
-        "resize": 1024,
-    }
-
     required_data_keys = ["image"]
 
     def __init__(self, **conf):
@@ -138,14 +125,17 @@ class SuperPoint(Extractor):
 
         self.convDa = nn.Conv2d(c4, c5, kernel_size=3, stride=1, padding=1)
         self.convDb = nn.Conv2d(
-            c5, self.conf.output_dim, kernel_size=1, stride=1, padding=0
+            c5, self.config.output_dim, kernel_size=1, stride=1, padding=0
         )
+        if self.config.max_num_keypoints is not None and self.config.max_num_keypoints <= 0:
+            raise ValueError("max_num_keypoints must be positive or None")
 
+    def load_checkpoint(self, checkpoint_path: str = None):
+        if checkpoint_path is not None:
+            warnings.warn("SuperPoint does not support loading checkpoints. Using pre-trained weights.")
         url = "https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/superpoint_v1.pth"  # noqa
         self.load_state_dict(torch.hub.load_state_dict_from_url(url))
 
-        if self.conf.max_num_keypoints is not None and self.conf.max_num_keypoints <= 0:
-            raise ValueError("max_num_keypoints must be positive or None")
 
     def forward(self, data: dict) -> dict:
         """Compute keypoints, scores, descriptors for image"""
@@ -175,18 +165,18 @@ class SuperPoint(Extractor):
         b, _, h, w = scores.shape
         scores = scores.permute(0, 2, 3, 1).reshape(b, h, w, 8, 8)
         scores = scores.permute(0, 1, 3, 2, 4).reshape(b, h * 8, w * 8)
-        scores = simple_nms(scores, self.conf.nms_radius)
+        scores = simple_nms(scores, self.config.nms_radius)
 
         # Discard keypoints near the image borders
-        if self.conf.remove_borders:
-            pad = self.conf.remove_borders
+        if self.config.remove_borders:
+            pad = self.config.remove_borders
             scores[:, :pad] = -1
             scores[:, :, :pad] = -1
             scores[:, -pad:] = -1
             scores[:, :, -pad:] = -1
 
         # Extract keypoints
-        best_kp = torch.where(scores > self.conf.detection_threshold)
+        best_kp = torch.where(scores > self.config.detection_threshold)
         scores = scores[best_kp]
 
         # Separate into batches
@@ -196,11 +186,11 @@ class SuperPoint(Extractor):
         scores = [scores[best_kp[0] == i] for i in range(b)]
 
         # Keep the k keypoints with highest score
-        if self.conf.max_num_keypoints is not None:
+        if self.config.max_num_keypoints is not None:
             keypoints, scores = list(
                 zip(
                     *[
-                        top_k_keypoints(k, s, self.conf.max_num_keypoints)
+                        top_k_keypoints(k, s, self.config.max_num_keypoints)
                         for k, s in zip(keypoints, scores)
                     ]
                 )

@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.benchmark.results import OD3D_Results
@@ -7,6 +9,7 @@ import pandas as pd
 import numpy as np
 import warnings
 import logging
+from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
 import torch
@@ -15,13 +18,12 @@ from pathlib import Path
 
 # note: math is actually used by config
 import math
-
-from typing import Dict
+from torch.utils.tensorboard import SummaryWriter
 # import sys
 # sys.path.append(str(Path(__file__).parents[4] / 'third_party/LightGlue'))
 from od3d.models.feature_extractors import Extractor, rbd
 from od3d.cv.utils.dnnlib import construct_class_by_name
-from .utils import filter_matches, pad_to_length, normalize_keypoints, TokenConfidence, MatchAssignment, LearnableFourierPositionalEncoding, TransformerLayer
+from .utils import filter_matches, pad_to_length, normalize_keypoints, TokenConfidence, MatchAssignment, LearnableFourierPositionalEncoding, TransformerLayer, matcher_metrics
 import torch.nn.functional as F
 from torch import nn
 
@@ -38,16 +40,23 @@ else:
 torch.backends.cudnn.deterministic = True
 
 class FeatureExtractor(nn.Module):
-    def __init__(self, config: DictConfig):
+    def __init__(self, config: DictConfig, device="cpu"):
         super(FeatureExtractor, self).__init__()
         self.config = config
-        self.net: Extractor = construct_class_by_name(**self.config.features.backbone)
+        self.device = device
+        self.net: Extractor = construct_class_by_name(self.config.features.backbone)
+        
+    def to(self, device):
+        super().to(device)
+        self.net.to(device)
+        self.device = device
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, data: Dict[str, torch.Tensor]):
         """Forward pass of the feature extractor.
 
         Args:
-            x (torch.Tensor): input image with shape (B, C, H, W). B = 1 supported only
+            Dict: dictionary with the following keys:
+                - image (torch.Tensor): input image with shape (B, C, H, W). B = 1 supported only
 
         Returns:
             Dict: dictionary with the following keys:
@@ -55,8 +64,19 @@ class FeatureExtractor(nn.Module):
                 - keypoint_scores (torch.Tensor): keypoint scores with shape (B, K)
                 - descriptors (torch.Tensor): descriptors with shape (B, K, D)
         """
-        return self.net.extract(x, **self.config.features.preprocess)
+        return self.net.extract(data, self.config.features.preprocess)
 
+    def load_checkpoint(self, path_checkpoint: Path = None):
+        self.net.load_checkpoint(path_checkpoint)
+        
+    def save_checkpoint(self, path_checkpoint: Path = None):
+        pass
+    
+    @property
+    def evaluation(self):
+        return not self.training
+    
+    
 class Matcher(nn.Module):
     def __init__(self, config: DictConfig, device="cpu"):
         super(Matcher, self).__init__()
@@ -79,11 +99,18 @@ class Matcher(nn.Module):
         self.token_confidence = nn.ModuleList([TokenConfidence(d) for _ in range(n - 1)])
         self.register_buffer("confidence_thresholds", torch.Tensor([self.confidence_threshold(i) for i in range(self.config.lightglue.n_layers)]))
 
+        # training
+        self.loss_fn = construct_class_by_name(self.config.train.loss)
+
         # static lengths LightGlue is compiled for (only used with torch.compile)
         self.static_lengths = None
         self.to(device)
         
-    def forward(self, data: Dict):
+    @property
+    def evaluation(self):
+        return not self.training
+        
+    def forward(self, data: Dict) -> Dict[str, torch.Tensor | int]:
         with torch.autocast(enabled=self.config.lightglue.mp, device_type="cuda"):
             return self._compute_matches(data)
 
@@ -91,8 +118,9 @@ class Matcher(nn.Module):
         state_dict = None
         if path_checkpoint is not None:
             state_dict = torch.load(path_checkpoint, map_location=self.device)
-        if self.config.features is not None:
+        elif self.config.get("features", None) and self.config.lightglue.load_from_url:
             fname = f"{self.config.features.backbone.weights}_{self.config.lightglue.version.replace('.', '-')}.pth"
+            print(f"Loading checkpoint from {self.config.lightglue.url.format(self.config.lightglue.version,self.config.features.backbone.name)}")
             state_dict = torch.hub.load_state_dict_from_url(
                 self.config.lightglue.url.format(
                     self.config.lightglue.version,
@@ -114,7 +142,7 @@ class Matcher(nn.Module):
             if incompatible_keys.unexpected_keys:
                 logger.warning(f"Unexpected keys: {incompatible_keys.unexpected_keys}")
         else:
-            logger.warning("No checkpoint found.")
+            logger.warning("No checkpoint loaded for Matcher.")
      
     def compile(self, static_lengths, mode="reduce-overhead"):
         if self.config.lightglue.width_confidence != -1:
@@ -162,8 +190,11 @@ class Matcher(nn.Module):
         else:
             return self.config.lightglue.pruning_keypoint_thresholds[device.type]
 
-    def _compute_matches(self, data: Dict[str, torch.Tensor]):
+    def _compute_matches(self, data: Dict[str, Dict[str, torch.Tensor]]):
+        assert "image0" in data and "image1" in data, "Missing image0 or image1 in data."
         data0, data1 = data["image0"], data["image1"]
+        assert "keypoints" in data0 and "keypoints" in data1, "Missing keypoints in data."
+        assert "descriptors" in data0 and "descriptors" in data1, "Missing descriptors in data."
         kpts0, kpts1 = data0["keypoints"], data1["keypoints"]
         b, m, _ = kpts0.shape
         b, n, _ = kpts1.shape
@@ -179,9 +210,8 @@ class Matcher(nn.Module):
             kpts1 = torch.cat(
                 [kpts1] + [data1[k].unsqueeze(-1) for k in ("scales", "oris")], -1
             )
-        desc0 = data0["descriptors"].detach().contiguous()
-        desc1 = data1["descriptors"].detach().contiguous()
-
+        desc0 = data0["descriptors"].contiguous()
+        desc1 = data1["descriptors"].contiguous()
         if torch.is_autocast_enabled():
             desc0 = desc0.half()
             desc1 = desc1.half()
@@ -201,9 +231,11 @@ class Matcher(nn.Module):
         encoding0 = self.posenc(kpts0)
         encoding1 = self.posenc(kpts1)
 
+        all_desc0, all_desc1 = [], []
+
         # GNN + final_proj + assignment
-        do_early_stop = self.config.lightglue.depth_confidence > 0
-        do_point_pruning = self.config.lightglue.width_confidence > 0 and not do_compile
+        do_early_stop = self.config.lightglue.depth_confidence > 0 and self.evaluation
+        do_point_pruning = self.config.lightglue.width_confidence > 0 and not do_compile and self.evaluation
         pruning_th = self.pruning_min_kpts(device)
         if do_point_pruning:
             ind0 = torch.arange(0, m, device=device)[None]
@@ -211,13 +243,20 @@ class Matcher(nn.Module):
             # We store the index of the layer at which pruning is detected.
             prune0 = torch.ones_like(ind0)
             prune1 = torch.ones_like(ind1)
+        # TODO: What are these tokens ?
         token0, token1 = None, None
         for i in range(self.config.lightglue.n_layers):
-            if desc0.shape[1] == 0 or desc1.shape[1] == 0:  # no keypoints
+            no_keypoints = desc0.shape[1] == 0 or desc1.shape[1] == 0
+            if no_keypoints:
+                assert self.evaluation, "Keypoints should not be empty when training."
                 break
             desc0, desc1 = self.transformers[i](
                 desc0, desc1, encoding0, encoding1, mask0=mask0, mask1=mask1
             )
+            if self.training:
+                all_desc0.append(desc0)
+                all_desc1.append(desc1)
+
             if i == self.config.lightglue.n_layers - 1:
                 continue  # no early stopping or adaptive width at last layer
 
@@ -225,24 +264,26 @@ class Matcher(nn.Module):
                 token0, token1 = self.token_confidence[i](desc0, desc1)
                 if self.check_if_stop(token0[..., :m], token1[..., :n], i, m + n):
                     break
-            if do_point_pruning and desc0.shape[-2] > pruning_th:
-                scores0 = self.log_assignment[i].get_matchability(desc0)
-                prunemask0 = self.get_pruning_mask(token0, scores0, i)
-                keep0 = torch.where(prunemask0)[1]
-                ind0 = ind0.index_select(1, keep0)
-                desc0 = desc0.index_select(1, keep0)
-                encoding0 = encoding0.index_select(-2, keep0)
-                prune0[:, ind0] += 1
-            if do_point_pruning and desc1.shape[-2] > pruning_th:
-                scores1 = self.log_assignment[i].get_matchability(desc1)
-                prunemask1 = self.get_pruning_mask(token1, scores1, i)
-                keep1 = torch.where(prunemask1)[1]
-                ind1 = ind1.index_select(1, keep1)
-                desc1 = desc1.index_select(1, keep1)
-                encoding1 = encoding1.index_select(-2, keep1)
-                prune1[:, ind1] += 1
 
-        if desc0.shape[1] == 0 or desc1.shape[1] == 0:  # no keypoints
+            if do_point_pruning:
+                if desc0.shape[-2] < pruning_th:
+                    scores0 = self.log_assignment[i].get_matchability(desc0)
+                    prunemask0 = self.get_pruning_mask(token0, scores0, i)
+                    keep0 = torch.where(prunemask0)[1]
+                    ind0 = ind0.index_select(1, keep0)
+                    desc0 = desc0.index_select(1, keep0)
+                    encoding0 = encoding0.index_select(-2, keep0)
+                    prune0[:, ind0] += 1
+                if desc0.shape[-2] < pruning_th:
+                    scores1 = self.log_assignment[i].get_matchability(desc1)
+                    prunemask1 = self.get_pruning_mask(token1, scores1, i)
+                    keep1 = torch.where(prunemask1)[1]
+                    ind1 = ind1.index_select(1, keep1)
+                    desc1 = desc1.index_select(1, keep1)
+                    encoding1 = encoding1.index_select(-2, keep1)
+                    prune1[:, ind1] += 1
+
+        if no_keypoints:
             m0 = desc0.new_full((b, m), -1, dtype=torch.long)
             m1 = desc1.new_full((b, n), -1, dtype=torch.long)
             mscores0 = desc0.new_zeros((b, m))
@@ -267,16 +308,19 @@ class Matcher(nn.Module):
         desc0, desc1 = desc0[..., :m, :], desc1[..., :n, :]  # remove padding
         scores, _ = self.log_assignment[i](desc0, desc1)
         m0, m1, mscores0, mscores1 = filter_matches(scores, self.config.lightglue.filter_threshold)
-        matches, mscores = [], []
-        for k in range(b):
-            valid = m0[k] > -1
-            m_indices_0 = torch.where(valid)[0]
-            m_indices_1 = m0[k][valid]
-            if do_point_pruning:
-                m_indices_0 = ind0[k, m_indices_0]
-                m_indices_1 = ind1[k, m_indices_1]
-            matches.append(torch.stack([m_indices_0, m_indices_1], -1))
-            mscores.append(mscores0[k][valid])
+        
+        if self.evaluation:
+            matches, mscores = [], []
+            for k in range(b):
+                valid = m0[k] > -1
+                m_indices_0 = torch.where(valid)[0]
+                m_indices_1 = m0[k][valid]
+                if do_point_pruning:
+                    m_indices_0 = ind0[k, m_indices_0]
+                    m_indices_1 = ind1[k, m_indices_1]
+                matches.append(torch.stack([m_indices_0, m_indices_1], -1))
+                mscores.append(mscores0[k][valid])
+
 
         # TODO: Remove when hloc switches to the compact format.
         if do_point_pruning:
@@ -293,17 +337,72 @@ class Matcher(nn.Module):
             prune0 = torch.ones_like(mscores0) * self.config.lightglue.n_layers
             prune1 = torch.ones_like(mscores1) * self.config.lightglue.n_layers
 
+        
+        eval_results = {
+            "stop": i + 1,
+            "matches": matches,
+            "scores": mscores,
+        } if self.evaluation else {}
+        train_results = {
+            "ref_descriptors0": torch.stack(all_desc0, 1),
+            "ref_descriptors1": torch.stack(all_desc1, 1),
+            "log_assignment": scores,
+        } if self.training else {}
         return {
             "matches0": m0,
             "matches1": m1,
             "matching_scores0": mscores0,
             "matching_scores1": mscores1,
-            "stop": i + 1,
-            "matches": matches,
-            "scores": mscores,
             "prune0": prune0,
             "prune1": prune1,
-        }
+        } | eval_results | train_results
+        
+    def loss(self, pred, data):
+        def loss_params(pred, i):
+            la, _ = self.log_assignment[i](
+                pred["ref_descriptors0"][:, i], pred["ref_descriptors1"][:, i]
+            )
+            return {
+                "log_assignment": la,
+            }
+
+        sum_weights = 1.0
+        nll, gt_weights, loss_metrics = self.loss_fn(loss_params(pred, -1), data)
+        N = pred["ref_descriptors0"].shape[1]
+        losses = {"total": nll, "last": nll.clone().detach(), **loss_metrics}
+
+        if self.training:
+            losses["confidence"] = 0.0
+
+        # B = pred['log_assignment'].shape[0]
+        losses["row_norm"] = pred["log_assignment"].exp()[:, :-1].sum(2).mean(1)
+        for i in range(N - 1):
+            params_i = loss_params(pred, i)
+            nll, _, _ = self.loss_fn(params_i, data, weights=gt_weights)
+
+            if self.conf.loss.gamma > 0.0:
+                weight = self.conf.loss.gamma ** (N - i - 1)
+            else:
+                weight = i + 1
+            sum_weights += weight
+            losses["total"] = losses["total"] + nll * weight
+
+            losses["confidence"] += self.token_confidence[i].loss(
+                pred["ref_descriptors0"][:, i],
+                pred["ref_descriptors1"][:, i],
+                params_i["log_assignment"],
+                pred["log_assignment"],
+            ) / (N - 1)
+
+            del params_i
+        losses["total"] /= sum_weights
+
+        # confidences
+        if self.training:
+            losses["total"] = losses["total"] + losses["confidence"]
+
+        metrics = matcher_metrics(pred, data) if self.evaluation else {}
+        return losses, metrics
 
 class TransformerMatching(OD3D_Method):
     def __init__(
@@ -313,16 +412,23 @@ class TransformerMatching(OD3D_Method):
             device="cpu"
     ):
         super().__init__(config=config, logging_dir=logging_dir)
-        self.extractor = FeatureExtractor(config)
-        self.matcher = Matcher(config)
+        self.extractor = FeatureExtractor(config, device)
+        self.matcher = Matcher(config, device)
         self.to(device)
-
-
+        
+        
+    def set_requires_grad(self, extractor_grad=True, matcher_grad=True):
+        for param in self.extractor.parameters():
+            param.requires_grad = extractor_grad
+        for param in self.matcher.parameters():
+            param.requires_grad = matcher_grad
+    
     def save_checkpoint(self, path_checkpoint: Path):
         pass
 
-    def load_checkpoint(self, path_checkpoint: Path = None):
-        self.matcher.load_checkpoint(path_checkpoint)
+    def load_checkpoint(self, extractor_checkpoint: Path = None, matcher_checkpoint: Path = None):
+        self.extractor.load_checkpoint(extractor_checkpoint)
+        self.matcher.load_checkpoint(matcher_checkpoint)
 
     def to(self, device):
         self.extractor.to(device)
@@ -331,18 +437,33 @@ class TransformerMatching(OD3D_Method):
 
     def cuda(self):
         self.to("cuda")
+        
+    @property
+    def training(self):
+        return self.matcher.training and self.matcher.training
+    
+    @property
+    def evaluation(self):
+        return not self.training
 
     def compile(self, mode="reduce-overhead", static_lengths=[256, 512, 768, 1024, 1280, 1536]):
         self.extractor = torch.compile(self.extractor, mode=mode, fullgraph=True)
         self.matcher.compile(mode=mode, static_lengths=static_lengths)
 
-    def match_pair(self, image0: torch.Tensor, image1: torch.Tensor):
+    def match_pair(self, image0: Dict[str, torch.Tensor], image1: Dict[str, torch.Tensor]):
         """
         Match keypoints and descriptors between two images
 
-        Input (dict):
-            image0 (torch.Tensor): [B x C x H x W]
-            image1 (torch.Tensor): [B x C x H x W]
+        Input:
+            image0
+                image (torch.Tensor): [B x C x H x W]
+                ...
+            NEMO_ONLY:
+                keypoints: [B x N x 2]
+                keypoint_scores: [B x N]
+            image1
+                image (torch.Tensor): [B x C x H x W]
+                ...
         Output (tuple):
             feats0 (dict):
                 keypoints: [B x M x 2]
@@ -372,16 +493,87 @@ class TransformerMatching(OD3D_Method):
     def path_checkpoint(self):
         return self.logging_dir.joinpath('nemo.ckpt')
 
+
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+        if self.config.train.profile:
+            prof = torch.profiler.profile(
+                schedule=torch.profiler.schedule(wait=1, warmup=1, active=1, repeat=1),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler(str(self.logging_dir)),
+                record_shapes=True,
+                profile_memory=True,
+                with_stack=True,
+            )
+            prof.__enter__()
+        self.set_requires_grad(extractor_grad=self.config.backbone.freeze, matcher_grad=True)
         self.extractor.train()
         self.matcher.train()
-        pass
+        self.load_checkpoint(extractor_checkpoint=self.config.backbone.checkpoint, matcher_checkpoint=self.config.matcher.checkpoint)
+        train_dataset: OD3D_Dataset = datasets_train["main"]
+        eval_dataset: OD3D_Dataset = datasets_val["main"]
+
+        # setup optimizer and scheduler
+        params = self.matcher.parameters() if self.config.backbone.freeze else list(self.extractor.parameters()) + list(self.matcher.parameters())
+        optimizer: torch.optim.Optimizer = construct_class_by_name(
+            self.config.train.optimizer,
+            params=params,
+        )
+        scheduler: torch.optim.lr_scheduler._LRScheduler = construct_class_by_name(
+            self.config.train.scheduler,
+            optimizer=optimizer
+        )
+
+        for epoch in range(self.config.training.epochs):
+            for it, batch in enumerate(train_dataset):
+                optimizer.zero_grad()
+                losses = self._train_step(batch)
+                loss = torch.mean(losses["total"])
+                if torch.isnan(loss).any():
+                    logger.warn(f"Detected NAN, skipping epoch {epoch}, iteration {it}")
+                    del data, loss, losses
+                    continue
+                loss.backward()
+                optimizer.step()
+                # wandb.log(loss)
+            scheduler.step(epoch)
+            self.test(eval_dataset)
+            if self.config.train.profile:
+                prof.step()
+        self.save_checkpoint(self.path_checkpoint)
 
 
-    def test(self, dataset: OD3D_Dataset, config_inference: DictConfig = None):
+    def test(self, dataset: OD3D_Dataset):
         self.extractor.eval()
         self.matcher.eval()
         pass
+
+    def _train_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        data0 = {"image": batch["image0"]}
+        data1 = {"image": batch["image1"]}
+        if self.config.backbone.requires_kpts:
+            data0["keypoints"] = batch["keypoints0"]
+            data0["visibility"] = batch["visibility0"]
+            data1["keypoints"] = batch["keypoints1"]
+            data1["visibility"] = batch["visibility1"]
+        feats0 = self.extractor(data0)
+        feats1 = self.extractor(data1)
+        matches = self.matcher({'image0': feats0, 'image1': feats1})
+        loss, _ = self.matcher.loss(matches, batch)
+        return loss
+
+
+    def _test_step(self, batch: Dict[str, torch.Tensor]) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+        data0 = {"image": batch["image0"]}
+        data1 = {"image": batch["image1"]}
+        if self.config.backbone.requires_kpts:
+            data0["keypoints"] = batch["keypoints0"]
+            data0["visibility"] = batch["visibility0"]
+            data1["keypoints"] = batch["keypoints1"]
+            data1["visibility"] = batch["visibility1"]
+        feats0 = self.extractor(data0)
+        feats1 = self.extractor(data1)
+        matches = self.matcher({'image0': feats0, 'image1': feats1})
+        loss, metrics = self.matcher.loss(matches, batch)
+        return loss, metrics
 
     def _compute_matches_images(self, image0, image1):
         """Compute matches between two images.
