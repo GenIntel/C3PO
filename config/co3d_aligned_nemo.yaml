@@ -2,7 +2,7 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.labeled: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_50s_aligned
+  - datasets@train_datasets.labeled: co3d_no_zsp_50s_aligned # co3d_no_zsp_50s_aligned
   - datasets@train_datasets.unlabeled: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_50s_unlabeled
   - datasets@val_datasets.main: co3d_no_zsp_5s_labeled_ref
   - datasets@val_datasets.co3d_zsp: co3dv1_zsp_10s
@@ -16,91 +16,64 @@ defaults:
   - datasets/co3d_refs@co3d_refs: r0
   - platform@platform_local: local
   - platform: local
+  - _self_
 
 mesh_type: 'alpha500'
 aligned_name: 'aligned_N_${mesh_type}_dinov2s/${co3d_refs.ref_name}'
+# mesh_type_used: 'alphauniform250'
 
 test_subset_fraction: 1.
 val_subset_fraction: 0.05
 
 train: True
 test: True
+checkpoint: # ${platform.path_exps}/__LAST_RUN__/nemo.ckpt # 03-20_15-51-46_CO3D_NeMo_bicycle_slurm # note: not rfpath automatic now /nemo.ckpt
 
 train_sequences_count_max_per_category: 50
 
 categories:
   - bicycle
-#  - truck
-#  - train
-#  - teddybear
-#  - car
-#  - bus
-#  - motorcycle
-#  - keyboard
-#  - handbag
-#  - remote
-#  - airplane
-#  - toilet
-#  - hairdryer
-#  - mouse
-#  - toaster
-#  - hydrant
-#  - chair
-#  - laptop
-#  - book
-#  - backpack
-#  - cellphone # from cellphone on, no zsp categories
-#  - microwave
-#  - bench
-#  - bottle
-#  - couch
-#  - cup
-#  - suitcase
-#  - tv
+  - truck
+  - train
+  - teddybear
+  - car
+  - bus
+  - motorcycle
+  - keyboard
+  - handbag
+  - remote
+  - airplane
+  - toilet
+  - hairdryer
+  - mouse
+  - toaster
+  - hydrant
+  - chair
+  - laptop
+  - book
+  - backpack
+  - cellphone # from cellphone on, no zsp categories
+  - microwave
+  - bench
+  - bottle
+  - couch
+  - cup
+  - suitcase
+  - tv
 
 metrics:
   - metricA
   - metricB
 
 
-
 method:
   nemo:
-    inference:
-      pre_rendered: True
-      use_mask_object: True
-      sample:
-        method: uniform # epnp3d2d uniform
-        depth_from_box: False
-        epnp3d2d:
-          count_cams: 100
-          count_pts: 4
-#        uniform:
-#          azim:
-#            min: '0.'
-#            max: math.pi * 2 / 8.                 # math.pi * 2 - (math.pi * 2) / 12. # 12
-#            steps: 8               #  12
-#          elev:
-#            min: -math.pi / 2 + math.pi / 8  #-math.pi / 6
-#            max: math.pi / 2  - math.pi / 8 # math.pi / 3
-#            steps: 4
-#
-#          theta:
-#            min: -math.pi + math.pi / 8 # -math.pi / 6
-#            max: math.pi - math.pi / 8 # math.pi / 6
-#            steps: 4
-      refine:
-        enabled: True
-        dims_detached: [ 0, 1, 2 ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
-#    inference:
-#      pre_rendered: False
-#      sample:
-#        method: epnp3d2d # epnp3d2d uniform
-#        depth_from_box: False
-#      refine:
-#        enabled: True
-#        dims_detached: [ ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
+    checkpoint: ${checkpoint}
+    model:
+      head:
+        normalize: True
     train:
+      T: 0.07
       early_stopping: False
       epochs: 10
       dataloader:

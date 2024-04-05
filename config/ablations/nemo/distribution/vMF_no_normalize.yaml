@@ -1,8 +1,4 @@
 # @package _global_
-defaults:
-  - /ablations/nemo/inference/_default
-
-ablation_name_nemo_distribution: 'vMF_no_normalize'
 
 method:
   nemo:
@@ -12,4 +8,5 @@ method:
     train:
       T: 1.
     model:
+      head:
         normalize: False
