@@ -979,7 +979,7 @@ class NeMo(OD3D_Method):
                     
                     img  = show_scene2d([feats_pca], pts2d_colors=[self.feats_all_colors], return_visualization=True)
                     
-                    results[f'visual/{VISUAL_MODALITIES.TSNE}'] = image_as_wandb_image(img, caption=f'PCA of mesh feats')
+                    results[f'visual/{VISUAL_MODALITIES.PCA}'] = image_as_wandb_image(img, caption=f'PCA of mesh feats')
         for i, batch in tqdm(enumerate(iter(dataloader))):
             with torch.no_grad():
                 batch.to(device=self.device)
