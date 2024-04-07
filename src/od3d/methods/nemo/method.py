@@ -1006,7 +1006,8 @@ class NeMo(OD3D_Method):
                                                                       zero_if_sim_clutter_larger=True)
                     verts3d = resize(verts3d, scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
                     for b in range(len(batch)):
-                        img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate), verts3d[b])
+                        #img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate), verts3d[b])
+                        img = imgs_to_img([resize(batch.rgb[b], scale_factor=1. / config_visualize.down_sample_rate), verts3d[b]])
                         results[f'visual/{batch_sel_names[b]}_{VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS}'] = image_as_wandb_image(img, caption=f'{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}')
                         if live:
                             show_img(img)
