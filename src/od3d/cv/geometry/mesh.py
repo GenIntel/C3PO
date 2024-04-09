@@ -548,6 +548,14 @@ class Meshes(torch.nn.Module):
         verts_ids = [torch.arange(self.verts_counts_acc_from_0[mesh_id], self.verts_counts_acc_from_0[mesh_id] + self.verts_counts_max, device=device) for mesh_id in mesh_ids]
         return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
 
+    def get_verts_and_noise_ids_stacked_without_acc(self, mesh_ids: list=None, count_noise_ids=5):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        
+        device = self.verts.device
+        noise_ids = torch.ones(size=(count_noise_ids,), dtype=torch.long, device=device) * self.verts_counts_max
+        verts_ids = [torch.arange(0, self.verts_counts_max, device=device) for mesh_id in mesh_ids]
+        return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
     def normals3d(self, meshes_ids: Union[torch.LongTensor, List]=None):
         """
             Args:

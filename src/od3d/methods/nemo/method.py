@@ -417,7 +417,7 @@ class NeMo(OD3D_Method):
 
     def train_batch(self, batch) -> OD3D_Results:
         results_batch = OD3D_Results()
-
+        B = len(batch)
         batch.to(device=self.device)
 
         batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
@@ -478,34 +478,53 @@ class NeMo(OD3D_Method):
         # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
         # returns: BxF+NxC
 
-
+        
         # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
         logger.info(batch.category_id)
-        batch_vts_ids = self.meshes.get_verts_and_noise_ids_stacked(batch.category_id.tolist(),
+        
+        
+        if not self.config.train.get('inter_class_loss', True):
+            #to remove inter class contrastive loss
+            batch_vts_ids_stacked = self.meshes.get_verts_and_noise_ids_stacked_without_acc(batch.category_id.tolist(),
                                                                     count_noise_ids=self.config.num_noise)
+        else:
+            batch_vts_ids_stacked = self.meshes.get_verts_and_noise_ids_stacked(batch.category_id.tolist(),
+                                                                    count_noise_ids=self.config.num_noise)
+        if not self.config.train.get('inter_class_loss', True):
+            einsum_str = 'bnc,bvc->bnv'
+        else:
+            einsum_str = 'nc,vc->nv'
 
         # weighting with similarity score
         # net_feats = net_feats * (batch.cam_tform4x4_obj_sim[:, None, None] ** 4)
 
         # sim_weight = batch.cam_tform4x4_obj_sim[:, None].expand(*net_feats.shape[:2])
         # sim_weight = torch.cat([sim_weight[:, :N][mask_vts2d_vsbl], sim_weight[:, N:].reshape(-1)], dim=0)
+        
 
-        batch_vts_ids = torch.cat([batch_vts_ids[:, :N][vts2d_mask], batch_vts_ids[:, N:].reshape(-1)],
+        # noise ids are at the end of the bank_feats
+        batch_vts_ids = torch.cat([batch_vts_ids_stacked[:, :N][vts2d_mask], batch_vts_ids_stacked[:, N:].reshape(-1)],
                                   dim=0)
-        net_feats = torch.cat([net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)], dim=0)
+        
+        if self.config.train.get('inter_class_loss', True):
+            net_feats = torch.cat([net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)], dim=0)
 
         # batch_vts_ids = self.meshes.get_feats_ids_stacked(batch.category_id.tolist())
-
-        bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
-
+        if not self.config.train.get('inter_class_loss', True):
+            bank_feats = torch.cat([self.meshes.get_feats_stacked_with_mesh_ids(batch.category_id) , self.clutter_feats[None,:].expand((B,-1,-1)) ], dim =1)
+            #clutter feats are added to each batch
+        else:
+            bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
+        
+         
         if self.mesh_feats_total is None:
             self.mesh_feats_total = torch.zeros_like(bank_feats)
         if self.config.train.bank_feats_update == 'loss_gradient':
-            sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats)
+            sim = self.calc_sim(einsum_str, net_feats, bank_feats)
         elif self.config.train.bank_feats_update == 'normalize_loss_gradient':
-            sim = self.calc_sim('nc,vc->nv', net_feats, torch.nn.functional.normalize(bank_feats, dim=1))
+            sim = self.calc_sim(einsum_str, net_feats, torch.nn.functional.normalize(bank_feats, dim=1))
         elif self.config.train.bank_feats_update == 'moving_average':
-            sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.clone())
+            sim = self.calc_sim(einsum_str, net_feats, bank_feats.clone())
             bank_feats_new = self.config.train.alpha * bank_feats[batch_vts_ids].detach() + (1. - self.config.train.alpha) * net_feats.detach()
             batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             bank_feats_new = torch.einsum('nk,nc->kc', torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(dtype= bank_feats_new.dtype, device= bank_feats_new.device), bank_feats_new) / batch_vts_ids_unique_counts[:, None]
@@ -514,6 +533,7 @@ class NeMo(OD3D_Method):
             self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0]:]
             self.normalize_feats()
         elif self.config.train.bank_feats_update == 'average':
+            #needs to be fixed
             batch_vts_ids_unique, batch_vts_ids_unique_inverse, batch_vts_ids_unique_counts = batch_vts_ids.unique(return_inverse=True, return_counts=True)
             sim = self.calc_sim('nc,vc->nv', net_feats, bank_feats.detach())  
             bank_feats_new =  self.mesh_feats_total[batch_vts_ids]  + net_feats
@@ -527,7 +547,8 @@ class NeMo(OD3D_Method):
         else:
             logger.error(f'unknown bank_feats_update: {self.config.train.bank_feats_update}')
             sim = None
-
+        if not self.config.train.get('inter_class_loss', True):
+            sim = torch.cat([sim[:, :N][vts2d_mask], sim[:, N:].reshape((-1,sim.shape[-1]))], dim=0)
         sim_batchwise_borders = torch.cat([torch.LongTensor([0]).to(device=vts2d_mask.device), vts2d_mask.sum(dim=1).cumsum(dim=0)], dim=0)
         sim_batchwise = torch.stack([sim[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].max(dim=-1)[0].mean() for b in range(len(sim_batchwise_borders)-1)], dim=0)
         # in case there are 0 vertices inside one image
