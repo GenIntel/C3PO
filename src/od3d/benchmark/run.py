@@ -89,6 +89,8 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
 
         gpu_cfg_str = f':gpus={gpu_count}' if gpu_count > 0 else ""
         cuda_cfg_str = f':nvidiaMinCC75' if gpu_count > 0 else ""
+        if cfg.platform.queue is 'student':
+            cuda_cfg_str = ""
 
         if cfg.platform.pull_od3d:
             pull_od3d_cmds_str = f'''
