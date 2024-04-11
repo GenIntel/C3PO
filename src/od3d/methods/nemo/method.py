@@ -164,10 +164,7 @@ class NeMo(OD3D_Method):
         self.normalize_feats()
 
         if self.config.train.loss == 'cross_entropy':
-            if not self.config.train.get('inter_class_loss', True):
-                self.criterion = torch.nn.CrossEntropyLoss(reduction='none').cuda()
-            else:
-                self.criterion = torch.nn.CrossEntropyLoss().cuda()
+            self.criterion = torch.nn.CrossEntropyLoss().cuda()
         elif self.config.train.loss == 'cross_entropy_smooth_geo':
             from od3d.cv.metric.cross_entropy_smooth import CrossEntropyLabelsSmoothed
             labels_smoothed = self.meshes.get_geodesic_prob_with_noise.to(device=self.device)
@@ -558,16 +555,10 @@ class NeMo(OD3D_Method):
         # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, average
         if not self.config.train.get('inter_class_loss', True):
             loss = self.criterion(sim / self.config.train.T, batch_vts_ids_without_acc)
-            loss = [loss[sim_batchwise_borders[b]:sim_batchwise_borders[b+1]].mean() for b in range(len(sim_batchwise_borders)-1)]
         else:
             loss = self.criterion(sim / self.config.train.T, batch_vts_ids_with_acc)
         if self.back_propagate:
-            if not self.config.train.get('inter_class_loss', True):
-                for l in loss:
-                    l.backward(retain_graph=True)
-                loss = torch.stack(loss).mean()
-            else:
-                loss.backward()
+            loss.backward()
         logger.info(f'loss {loss.item()}')
         results_batch['noise2d'] = noise2d
         results_batch['loss'] = loss[None,]
