@@ -1,6 +1,8 @@
 defaults:
+  - loss@train.selfsup.loss: crossentropy
   - optimizer@train.selfsup.optimizer: adam
   - scheduler@train.selfsup.scheduler: multistep
+  - loss@train.sup.loss: crossentropy
   - optimizer@train.sup.optimizer: adam
   - scheduler@train.sup.scheduler: multistep
   - model@model: dinov2_frozen_base # _no_norm
@@ -33,7 +35,6 @@ model:
 
 train:
   selfsup:
-    loss: cross_entropy # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
     val: True
     split: random # 'random' 'sequences_separated' 'seqences_shared'
 
@@ -59,7 +60,6 @@ train:
       samples_sorted: True
       live: False
   sup:
-    loss: cross_entropy # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob, l2, l2_squared
     val: True
     split: random # 'random' 'sequences_separated' 'seqences_shared'
 
