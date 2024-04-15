@@ -304,4 +304,5 @@ def get_obj_from_config(*args, config: DictConfig, **kwargs):
     class_name = class_name_split[-1]
     module = importlib.import_module(module_name)
     class_ = getattr(module, class_name)
-    return class_(*args, **{**kwargs, **config.kwargs})
+    config_kwargs = config.get('kwargs', {})
+    return class_(*args, **{**kwargs, **config_kwargs})
