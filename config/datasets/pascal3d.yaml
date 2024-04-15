@@ -87,15 +87,15 @@ image_sizes:
 #       n04037443_4668
 
 categories:
-#    - aeroplane
-#    - bicycle
-#    - boat
-#    - bottle
-#    - bus
-#     - car
-#    - chair
-#    - diningtable
-#    - motorbike
-#    - sofa
-#    - train
-#    - tvmonitor
+   - aeroplane
+   - bicycle
+   - boat
+   - bottle
+   - bus
+   - car
+   - chair
+   - diningtable
+   - motorbike
+   - sofa
+   - train
+   - tvmonitor

@@ -1,0 +1,14 @@
+defaults:
+  - extractor_base
+
+backbone:
+  class_name: od3d.models.feature_extractors.NeMoBackbone
+  downsample_rate: 8
+  freeze: True
+  output_dim: 256
+  weights: disk_lightglue 
+  name: disk
+  resnet_weights: IMAGENET1K_V1
+  checkpoint: /misc/lmbraid21/jesslen/Pascal3DforNeMo/dataOld/expClassification/2022_09_26/classification_saved_model_199.pth # nemo weights
+  strict_loading: False
+  requires_kpts: True

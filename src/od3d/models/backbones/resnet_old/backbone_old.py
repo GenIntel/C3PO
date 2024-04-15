@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-
+from omegaconf import DictConfig
 from od3d.models.unet import unet_res50
 from od3d.models.backbones.resnet_old.upsampling_layer import DoubleConv
 from od3d.models.backbones.resnet_old.upsampling_layer import Up
@@ -113,9 +113,13 @@ class ResNetExt3(nn.Module):
 
 
 class ResNetExt(nn.Module):
-    def __init__(self, pretrained):
+    def __init__(self, config: DictConfig):
         super().__init__()
-        net = models.resnet50(pretrained=pretrained)
+        resnet_kwargs = {
+            "progress": config.get("progress", True),
+            "weights": config.get("resnet_weights", None),
+        }
+        net = models.resnet50(**resnet_kwargs)
         self.extractor = nn.Sequential()
         self.extractor.add_module("0", net.conv1)
         self.extractor.add_module("1", net.bn1)

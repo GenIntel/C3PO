@@ -1,4 +1,5 @@
 import logging
+import warnings
 logger = logging.getLogger(__name__)
 from torch.utils.data import Dataset
 from omegaconf import OmegaConf, DictConfig
@@ -96,6 +97,8 @@ class OD3D_Dataset(Dataset):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.subclasses[cls.__name__] = cls
+        print(f"register {cls.__name__}")
+
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1.,
                  dict_nested_frames: Dict=None, dict_nested_frames_ban: Dict=None):
@@ -130,8 +133,7 @@ class OD3D_Dataset(Dataset):
         logger.info('completing nested frames..., can take up to 500 seconds...')
         dict_nested_frames = self.frame_type.meta_type.complete_nested_metas(path_meta=self.path_meta,
                                                                              dict_nested_metas=dict_nested_frames,
-                                                                             dict_nested_metas_ban=
-                                                                             dict_nested_frames_ban)
+                                                                             dict_nested_metas_ban=dict_nested_frames_ban)
 
 
         dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames)
@@ -172,6 +174,12 @@ class OD3D_Dataset(Dataset):
         self.list_frames_unique = list_frames_unique
         self.dict_nested_frames = OD3D_FrameMeta.rollup_flattened_frames(
             list_meta_names_unique=self.list_frames_unique)
+        # check the number of keys in dict_nested_frames
+        keys = list(self.dict_nested_frames.keys())
+        if len(keys) == 1:
+            self.subset = list(self.dict_nested_frames.keys())[0]
+        else:
+            warnings.warn(f"More than one subset in dict_nested_frames: {keys}")
         self.frames_count = len(self.list_frames_unique)
 
     def get_subset_with_item_ids(self, item_ids):
@@ -197,6 +205,7 @@ class OD3D_Dataset(Dataset):
         item_ids_subsetB = item_ids[~item_ids_maskA]
 
         return item_ids_subsetA, item_ids_subsetB
+
     def get_fractionA_from_fractionA_and_fraction_B(self, fraction1: float, fraction2: float=None):
         if fraction2 is None:
             assert fraction1 > 0. and fraction1 < 1.
@@ -282,7 +291,6 @@ class OD3D_Dataset(Dataset):
             if key == 'mask' and config_preprocess.mask.get('enabled', False):
                 override = config_preprocess.mask.get('override', False)
                 self.preprocess_mask(override=override)
-
 
 
     def preprocess_mask(self, override=False, remove_previous=False):

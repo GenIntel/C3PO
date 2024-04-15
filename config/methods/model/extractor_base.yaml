@@ -1,0 +1,12 @@
+backbone:
+  freeze: True
+  output_dim: 128
+  add_scale_ori: False
+  requires_kpts: False
+
+preprocess:
+  resize: null  # target edge length, None for no resizing
+  side: long
+  interpolation: bilinear
+  align_corners: null
+  antialias: True

@@ -33,12 +33,12 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
         job_name = cmd.replace(' ', '_').replace('/', '_').replace('-', '_').replace('$', '_').replace('(', '_').replace(')', '_')
 
     from pathlib import Path
-    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
+    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml')  # .resolve() # .resolve()
     if not local_tmp_config_fpath.resolve().parent.exists():
         local_tmp_config_fpath.parent.mkdir(parents=True)
     with open(local_tmp_config_fpath.resolve(), 'w') as fp:
         OmegaConf.save(config=cfg, f=fp)
-    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'run_{job_name}.sh') # .resolve()
+    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'run_{job_name}.sh')  # .resolve()
     if not local_tmp_script_fpath.parent.exists():
         local_tmp_script_fpath.parent.mkdir(parents=True)
 
@@ -66,7 +66,7 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
                 if gpu_mem_in_gb > 16:
                     if gpu_mem_in_gb > 24:
                         logger.warning(f'GPU memory of {gpu_mem_in_gb} GB is too large. Using 24 GB instead.')
-                    #gpu_mem_cfg_str = ':nvidiaMin24GB'
+                    # gpu_mem_cfg_str = ':nvidiaMin24GB'
                     gpu_mem_cfg_str = ':nvidiaRTX3090'
                 elif gpu_mem_in_gb > 12:
                     # gpu_mem_cfg_str = ':nvidiaMin16GB'
@@ -88,7 +88,7 @@ def torque_run_method_or_cmd(cfg: DictConfig, cmd=None):
             gpu_mem_cfg_str = ""
 
         gpu_cfg_str = f':gpus={gpu_count}' if gpu_count > 0 else ""
-        cuda_cfg_str = f':nvidiaMinCC75' if gpu_count > 0 else ""
+        cuda_cfg_str = ':nvidiaMinCC75' if gpu_count > 0 else ""
 
         if cfg.platform.pull_od3d:
             pull_od3d_cmds_str = f'''
@@ -100,7 +100,7 @@ git pull
             pull_od3d_cmds_str = ''
 
         if cfg.platform.pull_od3d_submodules:
-            pull_od3d_submodules_cmds_str = f'''
+            pull_od3d_submodules_cmds_str = '''
 git submodule init
 git submodule update
 git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-ref HEAD); git reset --hard origin/$(git rev-parse --abbrev-ref HEAD); git submodule update --recursive; git clean -dfx'
@@ -195,8 +195,8 @@ od3d debug hello-world
 exit 0
         '''
         rsh.write(script_as_string)
-    #subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
-    #subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
+    # subprocess.run(f'scp {tmp_script_fpath} torque:{tmp_script_fpath}', capture_output=True, shell=True)
+    # subprocess.run(f'scp {tmp_config_fpath} torque:{tmp_config_fpath}', capture_output=True, shell=True)
 
     if not cfg.platform.shared_home_with_local:
         run_cmd(f'ssh torque "mkdir -p {remote_tmp_script_fpath_parent}"', logger=None)
@@ -215,12 +215,12 @@ def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
         job_name = cmd.replace(' ', '_').replace('/', '_').replace('-', '_').replace('$', '_').replace('(', '_').replace(')', '_')
 
     from pathlib import Path
-    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml') # .resolve() # .resolve()
+    local_tmp_config_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'config_{job_name}.yaml')  # .resolve() # .resolve()
     if not local_tmp_config_fpath.resolve().parent.exists():
         local_tmp_config_fpath.parent.mkdir(parents=True)
     with open(local_tmp_config_fpath.resolve(), 'w') as fp:
         OmegaConf.save(config=cfg, f=fp)
-    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'run_{job_name}.sh') # .resolve()
+    local_tmp_script_fpath = Path(cfg.platform_local.path_home).joinpath('tmp', f'run_{job_name}.sh')  # .resolve()
     if not local_tmp_script_fpath.parent.exists():
         local_tmp_script_fpath.parent.mkdir(parents=True)
 
@@ -233,7 +233,7 @@ def slurm_run_method_or_cmd(cfg: DictConfig, cmd=None):
 
     with open(local_tmp_script_fpath, 'w') as rsh:
         gpu_count = cfg.platform.gpu_count
-        gpu_mem_in_gb = cfg.platform.gpu_mem_in_gb
+        # gpu_mem_in_gb = cfg.platform.gpu_mem_in_gb
         node_count = 1
         cpu_count = cfg.platform.cpu_count
         ram = cfg.platform.ram
@@ -249,7 +249,7 @@ git pull
             pull_od3d_cmds_str = ''
 
         if cfg.platform.pull_od3d_submodules:
-            pull_od3d_submodules_cmds_str = f'''
+            pull_od3d_submodules_cmds_str = '''
 git submodule init
 git submodule update
 git submodule foreach 'git fetch origin; git checkout $(git rev-parse --abbrev-ref HEAD); git reset --hard origin/$(git rev-parse --abbrev-ref HEAD); git submodule update --recursive; git clean -dfx'

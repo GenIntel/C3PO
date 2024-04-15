@@ -168,10 +168,12 @@ def rsync_raw(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
     od3d.io.run_cmd(cmd=f'rsync -avrzP --delete {source_link}{paths_source} {target_link}{paths_target.parent}', live=True, logger=logger)
 
 @app.command()
-def rsync_preprocess(dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
-          platform_source: str = typer.Option('local', '-s', '--source'),
-          platform_target: str = typer.Option('slurm', '-t', '--target'),
-          rpath: str = typer.Option('', '-r', '--relative-path')):
+def rsync_preprocess(
+    dataset: str = typer.Option('co3d_only_first', '-d', '--dataset'),
+    platform_source: str = typer.Option('local', '-s', '--source'),
+    platform_target: str = typer.Option('slurm', '-t', '--target'),
+    rpath: str = typer.Option('', '-r', '--relative-path')
+):
     logging.basicConfig(level=logging.INFO)
     config_source = od3d.io.load_hierarchical_config(platform=platform_source, overrides=["+datasets@dataset=" + dataset])
     config_target = od3d.io.load_hierarchical_config(platform=platform_target, overrides=["+datasets@dataset=" + dataset])
