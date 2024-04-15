@@ -1,8 +1,11 @@
 from od3d.data.ext_enum import ExtEnum
 from od3d.datasets.enum import OD3D_CATEGORIES
+
+
 class CIFAR10_SUBSETS(str, ExtEnum):
     VAL = "val"
     TRAIN = "train"
+
 
 class CIFAR10_CATEGORIES(str, ExtEnum):
     AIRPLANE = "airplane"
@@ -15,6 +18,7 @@ class CIFAR10_CATEGORIES(str, ExtEnum):
     HORSE = "horse"
     SHIP = "ship"
     TRUCK = "truck"
+
 
 MAP_CATEGORIES_OD3D_TO_CIFAR10 = {
     OD3D_CATEGORIES.AIRPLANE: CIFAR10_CATEGORIES.AIRPLANE,

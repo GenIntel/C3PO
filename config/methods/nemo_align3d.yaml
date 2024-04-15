@@ -54,4 +54,3 @@ train:
 
   val: True
   epochs: 100
-

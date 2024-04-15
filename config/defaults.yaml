@@ -14,4 +14,3 @@ training:
 
 inference:
     visualize_num_samples: 0
-

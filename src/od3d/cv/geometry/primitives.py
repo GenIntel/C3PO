@@ -1,12 +1,14 @@
 import logging
+
 logger = logging.getLogger(__name__)
 from typing import List
 import torch
-from pytorch3d.structures import Pointclouds
-from pytorch3d.structures import Meshes as PT3DMeshes
 from od3d.cv.geometry.mesh import Meshes
 import numpy as np
-from od3d.cv.geometry.transform import transf3d_broadcast, transf4x4_from_rot3x3_and_transl3
+from od3d.cv.geometry.transform import (
+    transf3d_broadcast,
+    transf4x4_from_rot3x3_and_transl3,
+)
 
 _cuboid_corner_verts_limit_ids = [
     [0, 0, 0],
@@ -31,7 +33,7 @@ _cuboid_rays = [
     [0, 4],
     [1, 5],
     [2, 6],
-    [3, 7]
+    [3, 7],
 ]
 
 _cuboid_planes = [
@@ -58,9 +60,14 @@ _cuboid_triangles = [
     [0, 4, 5],
 ]
 
-class CoordinateFrame():
 
-    def __init__(self, origin=torch.Tensor([0., 0., 0.,]), axes=torch.Tensor([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]), pts_count_axis=100):
+class CoordinateFrame:
+    def __init__(
+        self,
+        origin=torch.Tensor([0.0, 0.0, 0.0]),
+        axes=torch.Tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+        pts_count_axis=100,
+    ):
         """
         Args:
             origin (torch.Tensor): 3
@@ -70,43 +77,64 @@ class CoordinateFrame():
         # origin = world_transl_frame
         # axes = world_rot_frame
 
-        linspaceXYZ = torch.linspace(start=0., end=1., steps=pts_count_axis)
-        pts3d = torch.stack(torch.meshgrid(linspaceXYZ, linspaceXYZ, linspaceXYZ, indexing='xy'), dim=-1)
+        linspaceXYZ = torch.linspace(start=0.0, end=1.0, steps=pts_count_axis)
+        pts3d = torch.stack(
+            torch.meshgrid(linspaceXYZ, linspaceXYZ, linspaceXYZ, indexing="xy"),
+            dim=-1,
+        )
         # self.pts3d = pts3d[((pts3d == 0).sum(dim=-1)) >= 2]
         pts3d_axisX = pts3d[(pts3d[..., 1] == 0) * (pts3d[..., 2] == 0)]
         pts3d_axisY = pts3d[(pts3d[..., 0] == 0) * (pts3d[..., 2] == 0)]
         pts3d_axisZ = pts3d[(pts3d[..., 0] == 0) * (pts3d[..., 1] == 0)]
         self.pts3d_axis = torch.stack([pts3d_axisX, pts3d_axisY, pts3d_axisZ], dim=0)
 
-        world_tform_frame = transf4x4_from_rot3x3_and_transl3(rot3x3=axes, transl3=origin)
-        self.pts3d_axis = transf3d_broadcast(pts3d=self.pts3d_axis, transf4x4=world_tform_frame)
+        world_tform_frame = transf4x4_from_rot3x3_and_transl3(
+            rot3x3=axes,
+            transl3=origin,
+        )
+        self.pts3d_axis = transf3d_broadcast(
+            pts3d=self.pts3d_axis,
+            transf4x4=world_tform_frame,
+        )
+
 
 class Cuboids(Meshes):
-
-    def __int__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None, feats: List[torch.Tensor]=None):
+    def __int__(
+        self,
+        verts: List[torch.Tensor],
+        faces: List[torch.Tensor],
+        rgb: List[torch.Tensor] = None,
+        feats: List[torch.Tensor] = None,
+    ):
         super().__init__(verts=verts, faces=faces, rgb=rgb, feats=feats)
 
     @staticmethod
-    def create_dense_from_limits(limits, verts_count=1000, device='cpu'):
+    def create_dense_from_limits(limits, verts_count=1000, device="cpu"):
         """
-            Args:
-                limits (torch.Tensor): Bx2x3
-            Returns:
-                verts (list[torch.Tensor]): Bx[Vx3]
-                faces (list[torch.LongTensor]): Bx[Fx3]
+        Args:
+            limits (torch.Tensor): Bx2x3
+        Returns:
+            verts (list[torch.Tensor]): Bx[Vx3]
+            faces (list[torch.LongTensor]): Bx[Fx3]
 
         """
 
         from od3d.cv.geometry.mesh import Mesh
-        import open3d as o3d
+
         meshes = []
         for sample_limits in limits:
             sample_limits = sample_limits.detach().cpu().numpy()
             x_range = sample_limits[:, 0]
             y_range = sample_limits[:, 1]
             z_range = sample_limits[:, 2]
-            w, h, d = x_range[1] - x_range[0], y_range[1] - y_range[0], z_range[1] - z_range[0]
-            center3d = np.array([w / 2, h / 2, d / 2])# .translate(center3d.detach().cpu().numpy())
+            w, h, d = (
+                x_range[1] - x_range[0],
+                y_range[1] - y_range[0],
+                z_range[1] - z_range[0],
+            )
+            center3d = np.array(
+                [w / 2, h / 2, d / 2],
+            )  # .translate(center3d.detach().cpu().numpy())
 
             # v = vx * vy * 2 + (vz-2) * (vy * 2 + (vx-2) * 2)
             # ~ v = (vx * vy + vz * vy + vx * vz) * 2
@@ -119,31 +147,146 @@ class Cuboids(Meshes):
             xs = torch.linspace(x_range[0], x_range[1], steps=vx)
             ys = torch.linspace(y_range[0], y_range[1], steps=vy)
             zs = torch.linspace(z_range[0], z_range[1], steps=vz)
-            verts_x, verts_y, verts_z = torch.meshgrid(xs, ys, zs, indexing='xy')
-            verts_xyz = torch.stack([verts_x, verts_y, verts_z], dim=-1).to(device=device)
-            verts_xyz_ids = torch.arange(verts_xyz.shape[0] * verts_xyz.shape[1] * verts_xyz.shape[2]).reshape(verts_xyz.shape[:-1]).to(device=device)
+            verts_x, verts_y, verts_z = torch.meshgrid(xs, ys, zs, indexing="xy")
+            verts_xyz = torch.stack([verts_x, verts_y, verts_z], dim=-1).to(
+                device=device,
+            )
+            verts_xyz_ids = (
+                torch.arange(
+                    verts_xyz.shape[0] * verts_xyz.shape[1] * verts_xyz.shape[2],
+                )
+                .reshape(verts_xyz.shape[:-1])
+                .to(device=device)
+            )
             faces = []
             # front face
-            triangles_front_upper = torch.stack([verts_xyz_ids[:-1, -1, :-1], verts_xyz_ids[1:, -1, :-1], verts_xyz_ids[:-1, -1, 1:]], dim=-1).reshape(-1, 3)
-            triangles_front_lower = torch.stack([verts_xyz_ids[:-1, -1, 1:], verts_xyz_ids[1:, -1, :-1], verts_xyz_ids[1:, -1, 1:]], dim=-1).reshape(-1, 3)
+            triangles_front_upper = torch.stack(
+                [
+                    verts_xyz_ids[:-1, -1, :-1],
+                    verts_xyz_ids[1:, -1, :-1],
+                    verts_xyz_ids[:-1, -1, 1:],
+                ],
+                dim=-1,
+            ).reshape(-1, 3)
+            triangles_front_lower = torch.stack(
+                [
+                    verts_xyz_ids[:-1, -1, 1:],
+                    verts_xyz_ids[1:, -1, :-1],
+                    verts_xyz_ids[1:, -1, 1:],
+                ],
+                dim=-1,
+            ).reshape(-1, 3)
             # back face
-            triangles_back_upper = torch.stack([verts_xyz_ids[:-1, 0, :-1], verts_xyz_ids[1:, 0, :-1], verts_xyz_ids[:-1, 0, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
-            triangles_back_lower = torch.stack([verts_xyz_ids[:-1, 0, 1:], verts_xyz_ids[1:, 0, :-1], verts_xyz_ids[1:, 0, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
+            triangles_back_upper = (
+                torch.stack(
+                    [
+                        verts_xyz_ids[:-1, 0, :-1],
+                        verts_xyz_ids[1:, 0, :-1],
+                        verts_xyz_ids[:-1, 0, 1:],
+                    ],
+                    dim=-1,
+                )
+                .reshape(-1, 3)
+                .flip(dims=(-1,))
+            )
+            triangles_back_lower = (
+                torch.stack(
+                    [
+                        verts_xyz_ids[:-1, 0, 1:],
+                        verts_xyz_ids[1:, 0, :-1],
+                        verts_xyz_ids[1:, 0, 1:],
+                    ],
+                    dim=-1,
+                )
+                .reshape(-1, 3)
+                .flip(dims=(-1,))
+            )
 
             # right face
-            triangles_right_upper = torch.stack([verts_xyz_ids[-1, :-1, :-1], verts_xyz_ids[-1, 1:, :-1], verts_xyz_ids[-1, :-1, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
-            triangles_right_lower = torch.stack([verts_xyz_ids[-1, :-1, 1:], verts_xyz_ids[-1, 1:, :-1], verts_xyz_ids[-1, 1:, 1:]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
+            triangles_right_upper = (
+                torch.stack(
+                    [
+                        verts_xyz_ids[-1, :-1, :-1],
+                        verts_xyz_ids[-1, 1:, :-1],
+                        verts_xyz_ids[-1, :-1, 1:],
+                    ],
+                    dim=-1,
+                )
+                .reshape(-1, 3)
+                .flip(dims=(-1,))
+            )
+            triangles_right_lower = (
+                torch.stack(
+                    [
+                        verts_xyz_ids[-1, :-1, 1:],
+                        verts_xyz_ids[-1, 1:, :-1],
+                        verts_xyz_ids[-1, 1:, 1:],
+                    ],
+                    dim=-1,
+                )
+                .reshape(-1, 3)
+                .flip(dims=(-1,))
+            )
             # left face
-            triangles_left_upper = torch.stack([verts_xyz_ids[0, :-1, :-1], verts_xyz_ids[0, 1:, :-1], verts_xyz_ids[0, :-1, 1:]], dim=-1).reshape(-1, 3)
-            triangles_left_lower = torch.stack([verts_xyz_ids[0, :-1, 1:], verts_xyz_ids[0, 1:, :-1], verts_xyz_ids[0, 1:, 1:]], dim=-1).reshape(-1, 3)
+            triangles_left_upper = torch.stack(
+                [
+                    verts_xyz_ids[0, :-1, :-1],
+                    verts_xyz_ids[0, 1:, :-1],
+                    verts_xyz_ids[0, :-1, 1:],
+                ],
+                dim=-1,
+            ).reshape(-1, 3)
+            triangles_left_lower = torch.stack(
+                [
+                    verts_xyz_ids[0, :-1, 1:],
+                    verts_xyz_ids[0, 1:, :-1],
+                    verts_xyz_ids[0, 1:, 1:],
+                ],
+                dim=-1,
+            ).reshape(-1, 3)
 
             # top face
-            triangles_top_upper = torch.stack([verts_xyz_ids[:-1, :-1, -1], verts_xyz_ids[1:, :-1, -1], verts_xyz_ids[:-1, 1:, -1]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
-            triangles_top_lower = torch.stack([verts_xyz_ids[:-1, 1:, -1], verts_xyz_ids[1:, :-1, -1], verts_xyz_ids[1:, 1:, -1]], dim=-1).reshape(-1, 3).flip(dims=(-1,))
+            triangles_top_upper = (
+                torch.stack(
+                    [
+                        verts_xyz_ids[:-1, :-1, -1],
+                        verts_xyz_ids[1:, :-1, -1],
+                        verts_xyz_ids[:-1, 1:, -1],
+                    ],
+                    dim=-1,
+                )
+                .reshape(-1, 3)
+                .flip(dims=(-1,))
+            )
+            triangles_top_lower = (
+                torch.stack(
+                    [
+                        verts_xyz_ids[:-1, 1:, -1],
+                        verts_xyz_ids[1:, :-1, -1],
+                        verts_xyz_ids[1:, 1:, -1],
+                    ],
+                    dim=-1,
+                )
+                .reshape(-1, 3)
+                .flip(dims=(-1,))
+            )
             # bottom face
-            triangles_bottom_upper = torch.stack([verts_xyz_ids[:-1, :-1, 0], verts_xyz_ids[1:, :-1, 0], verts_xyz_ids[:-1, 1:, 0]], dim=-1).reshape(-1, 3)
-            triangles_bottom_lower = torch.stack([verts_xyz_ids[:-1, 1:, 0], verts_xyz_ids[1:, :-1, 0], verts_xyz_ids[1:, 1:, 0]], dim=-1).reshape(-1, 3)
-
+            triangles_bottom_upper = torch.stack(
+                [
+                    verts_xyz_ids[:-1, :-1, 0],
+                    verts_xyz_ids[1:, :-1, 0],
+                    verts_xyz_ids[:-1, 1:, 0],
+                ],
+                dim=-1,
+            ).reshape(-1, 3)
+            triangles_bottom_lower = torch.stack(
+                [
+                    verts_xyz_ids[:-1, 1:, 0],
+                    verts_xyz_ids[1:, :-1, 0],
+                    verts_xyz_ids[1:, 1:, 0],
+                ],
+                dim=-1,
+            ).reshape(-1, 3)
 
             faces.append(triangles_front_upper)
             faces.append(triangles_front_lower)
@@ -163,7 +306,9 @@ class Cuboids(Meshes):
 
             verts_ids_used, faces = faces.unique(return_inverse=True)
             verts_xyz = verts_xyz[verts_ids_used]
-            logger.info(f'Created cuboid with {len(verts_xyz)} vertices and {len(faces)} faces')
+            logger.info(
+                f"Created cuboid with {len(verts_xyz)} vertices and {len(faces)} faces",
+            )
 
             # Meshes(verts=[verts_xyz], faces=[faces]).show()
             # mesh_box = o3d.geometry.TriangleMesh.create_box(width=w, height=h, depth=d).translate(-center3d)
@@ -175,10 +320,9 @@ class Cuboids(Meshes):
         meshes = Meshes.load_from_meshes(meshes=meshes)
         return meshes
 
-    #@staticmethod
-    #def create_cuboid(center3d: torch.Tensor([0., 0., 0.]), size3d: torch.Tensor([1., 1., 1.]), device='cpu'):
+    # @staticmethod
+    # def create_cuboid(center3d: torch.Tensor([0., 0., 0.]), size3d: torch.Tensor([1., 1., 1.]), device='cpu'):
     #    return Mesh.from_o3d(o3d.geometry.TriangleMesh.create_box(width=size3d[0], height=size3d[1], depth=size3d[2]).translate(center3d.detach().cpu().numpy()), device=device)
-
 
     """
     def __init__(self, cuboids_limits: torch.Tensor, max_pts_count=1000):
@@ -238,7 +382,6 @@ class Cuboids(Meshes):
     #     faces = torch.tensor(_cuboid_triangles, dtype=torch.int64, device=limits.device)[None,].expand(B, 12, 3)
     #
     #     return Cuboids(verts=corner_verts, faces=faces)
-
 
     # @staticmethod
     # def create_dense_from_limits(limits, verts_count=1000):

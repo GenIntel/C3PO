@@ -1,46 +1,48 @@
-from pathlib import Path
-import numpy as np
-import torch
-
-from od3d.io import run_cmd
-from od3d.io import read_config_extern
-
 import logging
+from pathlib import Path
+
+from od3d.io import read_config_extern
+from od3d.io import run_cmd
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-STRIDE=1
+STRIDE = 1
 
-SEQ="216_22800_47486"
-SEQ="216_22827_48422"
-SEQ="216_22841_48461"
-SEQ="340_35306_64677"
+SEQ = "216_22800_47486"
+SEQ = "216_22827_48422"
+SEQ = "216_22841_48461"
+SEQ = "340_35306_64677"
 
 SEQS = [
-'206_21810_45890',
-'106_12650_23736',
-'206_21805_45881',
-'216_22836_48452',
-'216_22808_47498',
+    "206_21810_45890",
+    "106_12650_23736",
+    "206_21805_45881",
+    "216_22836_48452",
+    "216_22808_47498",
 ]
 
 for SEQ in SEQS:
-    OD3D_DIR=Path("/scratch/sommerl/repos/NeMo")
-    DROID_SLAM_DIR=OD3D_DIR.joinpath("third_party/DROID-SLAM")
-    CO3D_PREPROCESS_PATH=Path("/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess")
+    OD3D_DIR = Path("/scratch/sommerl/repos/NeMo")
+    DROID_SLAM_DIR = OD3D_DIR.joinpath("third_party/DROID-SLAM")
+    CO3D_PREPROCESS_PATH = Path("/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess")
 
-    IMAGE_DIR=Path(f"/misc/lmbraid19/sommerl/datasets/CO3D/car/{SEQ}/images")
-    META_PATH=list(Path("/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/meta/frames/car").joinpath(SEQ).iterdir())[0]
+    IMAGE_DIR = Path(f"/misc/lmbraid19/sommerl/datasets/CO3D/car/{SEQ}/images")
+    META_PATH = list(
+        Path("/misc/lmbraid19/sommerl/datasets/CO3D_Preprocess/meta/frames/car")
+        .joinpath(SEQ)
+        .iterdir(),
+    )[0]
     frame_meta_config = read_config_extern(META_PATH)
     fx = frame_meta_config.l_cam_intr4x4[0][0]
     fy = frame_meta_config.l_cam_intr4x4[1][1]
     cx = frame_meta_config.l_cam_intr4x4[0][2]
     cy = frame_meta_config.l_cam_intr4x4[1][2]
 
-    WEIGHTS_PATH=OD3D_DIR.joinpath("third_party/weights/droid.pth")
-    OUT_RPATH=Path("car").joinpath(SEQ)
-    OUT_DROID_PATH=DROID_SLAM_DIR.joinpath("reconstructions", OUT_RPATH)
-    OUT_CO3D_PREPROCESS_PATH=CO3D_PREPROCESS_PATH.joinpath("droid_slam", OUT_RPATH)
+    WEIGHTS_PATH = OD3D_DIR.joinpath("third_party/weights/droid.pth")
+    OUT_RPATH = Path("car").joinpath(SEQ)
+    OUT_DROID_PATH = DROID_SLAM_DIR.joinpath("reconstructions", OUT_RPATH)
+    OUT_CO3D_PREPROCESS_PATH = CO3D_PREPROCESS_PATH.joinpath("droid_slam", OUT_RPATH)
 
     # run droid_slam
     # run_cmd(cmd='echo "994.8076782226562 994.8076782226562 468.5 265.0" > calib.txt', logger=logger)
@@ -49,10 +51,10 @@ for SEQ in SEQS:
     # run_cmd(cmd=f'echo "1942.6253662109375 1941.634765625 1000.0 485.0" > calib.txt', logger=logger)
     run_cmd(cmd=f'echo "{fx} {fy} {cx} {cy}" > calib.txt', logger=logger)
 
-    cmd=f'mkdir -p {OUT_CO3D_PREPROCESS_PATH} && mv calib.txt {OUT_CO3D_PREPROCESS_PATH} && cd {DROID_SLAM_DIR} && python demo.py --imagedir={IMAGE_DIR} --calib={OUT_CO3D_PREPROCESS_PATH}/calib.txt --reconstruction_path {OUT_RPATH} --weights {WEIGHTS_PATH} --stride {STRIDE} --disable_vis && mv {OUT_DROID_PATH}/* {OUT_CO3D_PREPROCESS_PATH}'
+    cmd = f"mkdir -p {OUT_CO3D_PREPROCESS_PATH} && mv calib.txt {OUT_CO3D_PREPROCESS_PATH} && cd {DROID_SLAM_DIR} && python demo.py --imagedir={IMAGE_DIR} --calib={OUT_CO3D_PREPROCESS_PATH}/calib.txt --reconstruction_path {OUT_RPATH} --weights {WEIGHTS_PATH} --stride {STRIDE} --disable_vis && mv {OUT_DROID_PATH}/* {OUT_CO3D_PREPROCESS_PATH}"
     run_cmd(cmd=cmd, logger=logger)
 
-    logger.info(f'{OUT_CO3D_PREPROCESS_PATH}')
+    logger.info(f"{OUT_CO3D_PREPROCESS_PATH}")
 
 """
 # retrieve pointcloud

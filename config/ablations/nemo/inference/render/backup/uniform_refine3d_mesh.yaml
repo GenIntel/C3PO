@@ -1,4 +1,3 @@
 # @package _global_
 defaults:
   - /ablations/nemo/inference/render/_default
-

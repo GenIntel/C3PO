@@ -1,0 +1,6 @@
+[flake8]
+ignore = E203
+select = E711,E712,E901,F822,F823,W191,W292,W391
+max-line-length = 120
+exclude = .git,.eggs,__pycache__,build,dist,venv
+max-complexity = 11

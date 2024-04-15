@@ -65,7 +65,7 @@ test:
         num_workers: 4
         batch_size: 4
         pin_memory: True
-    
+
     visualize:
       count_best: 3
       count_worst: 3

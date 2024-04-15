@@ -1,13 +1,16 @@
-from torch import nn
-from omegaconf import DictConfig
 from typing import List
 
-class OD3D_Head(nn.Module):
+from omegaconf import DictConfig
+from torch import nn
 
+
+class OD3D_Head(nn.Module):
     subclasses = {}
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.subclasses[cls.__name__] = cls
+
     def __init__(self, in_dims: List, in_upsample_scales: List, config: DictConfig):
         super().__init__()
         self.config = config

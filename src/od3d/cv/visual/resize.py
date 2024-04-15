@@ -1,10 +1,7 @@
 import torch
 
 
-
-
-
-def resize_nearest_v2(x, H_out, W_out, align_corners = False):
+def resize_nearest_v2(x, H_out, W_out, align_corners=False):
     """resizes the input tensor by using the nearest neighbor
 
     Parameters
@@ -27,34 +24,71 @@ def resize_nearest_v2(x, H_out, W_out, align_corners = False):
         step_x = W_in / W_out
         step_y = H_in / H_out
 
-        #-step_y/2.0
+        # -step_y/2.0
         grid_y, grid_x = torch.meshgrid(
             [
-                torch.arange(step_y / 2.0 - 0.5, step_y / 2.0 - 0.5 + (H_out-1) * step_y + 1e-10, step_y, dtype=dtype, device=device),
-                torch.arange(step_x / 2.0 - 0.5, step_x / 2.0 - 0.5 + (W_out-1) * step_x + 1e-10, step_x, dtype=dtype, device=device),
-            ]
+                torch.arange(
+                    step_y / 2.0 - 0.5,
+                    step_y / 2.0 - 0.5 + (H_out - 1) * step_y + 1e-10,
+                    step_y,
+                    dtype=dtype,
+                    device=device,
+                ),
+                torch.arange(
+                    step_x / 2.0 - 0.5,
+                    step_x / 2.0 - 0.5 + (W_out - 1) * step_x + 1e-10,
+                    step_x,
+                    dtype=dtype,
+                    device=device,
+                ),
+            ],
         )
     else:
-        step_x = (W_in-1) / (W_out-1)
-        step_y = (H_in-1) / (H_out-1)
+        step_x = (W_in - 1) / (W_out - 1)
+        step_y = (H_in - 1) / (H_out - 1)
 
         # -step_y/2.0
         grid_y, grid_x = torch.meshgrid(
             [
-                torch.arange(0., (H_out-1) * step_y + 1e-10, step_y, dtype=dtype, device=device),
-                torch.arange(0., (W_out-1) * step_x + 1e-10, step_x, dtype=dtype, device=device),
-            ]
+                torch.arange(
+                    0.0,
+                    (H_out - 1) * step_y + 1e-10,
+                    step_y,
+                    dtype=dtype,
+                    device=device,
+                ),
+                torch.arange(
+                    0.0,
+                    (W_out - 1) * step_x + 1e-10,
+                    step_x,
+                    dtype=dtype,
+                    device=device,
+                ),
+            ],
         )
 
-    grid_x = (grid_x - (W_in-1) / 2.0) / (W_in-1) * 2.0
-    grid_y = (grid_y - (H_in-1) / 2.0) / (H_in-1) * 2.0
+    grid_x = (grid_x - (W_in - 1) / 2.0) / (W_in - 1) * 2.0
+    grid_y = (grid_y - (H_in - 1) / 2.0) / (H_in - 1) * 2.0
 
     grid_xy = torch.stack((grid_x, grid_y), dim=-1)
 
-    return torch.nn.functional.grid_sample(x, grid_xy[None,].repeat(B, 1, 1, 1), padding_mode='border', mode='nearest', align_corners=True)
+    return torch.nn.functional.grid_sample(
+        x,
+        grid_xy[None,].repeat(B, 1, 1, 1),
+        padding_mode="border",
+        mode="nearest",
+        align_corners=True,
+    )
+
 
 def resize(
-    x, H_out=None, W_out=None, scale_factor=None, mode="bilinear", vals_rescale=False, align_corners=False
+    x,
+    H_out=None,
+    W_out=None,
+    scale_factor=None,
+    mode="bilinear",
+    vals_rescale=False,
+    align_corners=False,
 ):
     """Resizes the input tensor depending on the mode.
     If target resolution is not specified with (H_out, W_out), then the scale_factor is used to calculate it.
@@ -83,18 +117,20 @@ def resize(
         x = x * 1.0
 
     x_dim_in = x.dim()
-    x_shape_in = x.shape
     if x_dim_in == 3:
-        x = x[
-            None,
-        ]
+        x = x[None,]
 
     B, C, H_in, W_in = x.shape
 
-    if H_out != None and W_out != None:
+    if H_out is not None and W_out is not None:
         if mode != "nearest":
             if mode == "nearest_v2":
-                x_out = resize_nearest_v2(x, H_out=H_out, W_out=W_out, align_corners=align_corners)
+                x_out = resize_nearest_v2(
+                    x,
+                    H_out=H_out,
+                    W_out=W_out,
+                    align_corners=align_corners,
+                )
             else:
                 x_out = torch.nn.functional.interpolate(
                     x,
@@ -105,7 +141,7 @@ def resize(
         else:
             x_out = torch.nn.functional.interpolate(x, size=(H_out, W_out), mode=mode)
 
-    elif scale_factor != None:
+    elif scale_factor is not None:
         if isinstance(scale_factor, float):
             H_scale = scale_factor
             W_scale = scale_factor
@@ -117,17 +153,22 @@ def resize(
                 W_scale = scale_factor[0]
                 H_scale = scale_factor[1]
             else:
-                msg = f'Unexpected number of elements in scale tensor {scale_factor}.'
+                msg = f"Unexpected number of elements in scale tensor {scale_factor}."
                 raise Exception(msg)
         else:
-            msg = f'Unknown scale type {scale_factor}.'
+            msg = f"Unknown scale type {scale_factor}."
             raise Exception(msg)
 
         H_out = int(H_in * H_scale)
         W_out = int(W_in * W_scale)
         if mode != "nearest":
             if mode == "nearest_v2":
-                x_out = resize_nearest_v2(x, H_out=H_out, W_out=W_out, align_corners=align_corners)
+                x_out = resize_nearest_v2(
+                    x,
+                    H_out=H_out,
+                    W_out=W_out,
+                    align_corners=align_corners,
+                )
             else:
                 x_out = torch.nn.functional.interpolate(
                     x,
@@ -140,7 +181,7 @@ def resize(
                 x,
                 size=(H_out, W_out),
                 mode=mode,
-                align_corners=align_corners
+                align_corners=align_corners,
             )
 
             _, _, H_out, W_out = x_out.shape

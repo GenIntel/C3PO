@@ -1,6 +1,4 @@
-
-
-def unroll_nested_dict(nested_dict, parent_key='', separator='/'):
+def unroll_nested_dict(nested_dict, parent_key="", separator="/"):
     items = {}
     for key, value in nested_dict.items():
         new_key = f"{parent_key}{separator}{key}" if parent_key else key
@@ -10,7 +8,8 @@ def unroll_nested_dict(nested_dict, parent_key='', separator='/'):
             items[new_key] = value
     return items
 
-def rollup_flattened_dict(flattened_dict, separator='/'):
+
+def rollup_flattened_dict(flattened_dict, separator="/"):
     nested_dict = {}
     for key, value in flattened_dict.items():
         keys = key.split(separator)

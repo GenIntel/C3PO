@@ -140,6 +140,3 @@ inference:
         beta1: 0.6
         lr: 2e-2 # 5e-3 5e-2
         epochs: 30 # 30
-
-
-

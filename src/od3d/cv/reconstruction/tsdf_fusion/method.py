@@ -60,17 +60,31 @@
 #     o3d.visualization.draw([mesh.to_legacy()])
 #
 #     return vbg
-
 import logging
+
 logger = logging.getLogger(__name__)
 
-from od3d.cv.reconstruction.tsdf_fusion.fusion import TSDFVolume, get_view_frustum, pcwrite, meshwrite
+from od3d.cv.reconstruction.tsdf_fusion.fusion import (
+    TSDFVolume,
+    get_view_frustum,
+    pcwrite,
+    meshwrite,
+)
 import numpy as np
-import cv2
 import time
 import torch
 
-def tsdf_fusion(depth, cam_tform4x4_obj, cam_intr4x4, voxel_size=0.02, rgb=None, fpath_pcl=None, fpath_mesh=None, obs_weight=1.):
+
+def tsdf_fusion(
+    depth,
+    cam_tform4x4_obj,
+    cam_intr4x4,
+    voxel_size=0.02,
+    rgb=None,
+    fpath_pcl=None,
+    fpath_mesh=None,
+    obs_weight=1.0,
+):
     """
     Args:
         depth (torch.Tensor): Kx1xHxW, depth values of 0. are flagged as invalid
@@ -97,17 +111,16 @@ def tsdf_fusion(depth, cam_tform4x4_obj, cam_intr4x4, voxel_size=0.02, rgb=None,
     K, _, H, W = depth.shape
     if rgb is None:
         rgb = torch.zeros((K, 3, H, W))
-    #cam_intr = np.loadtxt("data/camera-intrinsics.txt", delimiter=' ')
-    vol_bnds = np.zeros((3,2))
+    # cam_intr = np.loadtxt("data/camera-intrinsics.txt", delimiter=' ')
+    vol_bnds = np.zeros((3, 2))
     for i in range(K):
-
         # Read depth image and camera pose
 
         depth_im = depth[i, 0].detach().cpu().numpy()
 
         # depth_im = cv2.imread("data/frame-%06d.depth.png"%(i),-1).astype(float)
-        #depth_im /= 1000.  # depth is saved in 16-bit PNG in millimeters
-        #depth_im[depth_im == 65.535] = 0  # set invalid depth to 0 (specific to 7-scenes dataset)
+        # depth_im /= 1000.  # depth is saved in 16-bit PNG in millimeters
+        # depth_im[depth_im == 65.535] = 0  # set invalid depth to 0 (specific to 7-scenes dataset)
         # depth_im = depth[i].detach().cpu().numpy()
 
         # cam_pose = np.loadtxt("data/frame-%06d.pose.txt"%(i))  # 4x4 rigid transformation matrix
@@ -115,8 +128,8 @@ def tsdf_fusion(depth, cam_tform4x4_obj, cam_intr4x4, voxel_size=0.02, rgb=None,
         cam_intr = cam_intr4x4[i].detach().cpu().numpy()
         # Compute camera view frustum and extend convex hull
         view_frust_pts = get_view_frustum(depth_im, cam_intr, cam_pose)
-        vol_bnds[:,0] = np.minimum(vol_bnds[:,0], np.amin(view_frust_pts, axis=1))
-        vol_bnds[:,1] = np.maximum(vol_bnds[:,1], np.amax(view_frust_pts, axis=1))
+        vol_bnds[:, 0] = np.minimum(vol_bnds[:, 0], np.amin(view_frust_pts, axis=1))
+        vol_bnds[:, 1] = np.maximum(vol_bnds[:, 1], np.amax(view_frust_pts, axis=1))
     # ======================================================================================================== #
 
     # ======================================================================================================== #
@@ -129,29 +142,35 @@ def tsdf_fusion(depth, cam_tform4x4_obj, cam_intr4x4, voxel_size=0.02, rgb=None,
     # Loop through RGB-D images and fuse them together
     t0_elapse = time.time()
     for i in range(K):
-        logger.info("Fusing frame %d/%d"%(i+1, K))
+        logger.info("Fusing frame %d/%d" % (i + 1, K))
 
         # Read RGB-D image and camera pose
         color_image = rgb[i].permute(1, 2, 0).detach().cpu().numpy()
         depth_im = depth[i, 0].detach().cpu().numpy()
-        depth_im[depth_im == 0.] = -1. #  np.finfo(depth_im.dtype).max
+        depth_im[depth_im == 0.0] = -1.0  #  np.finfo(depth_im.dtype).max
 
-        #color_image = cv2.cvtColor(cv2.imread("data/frame-%06d.color.jpg"%(i)), cv2.COLOR_BGR2RGB)
-        #depth_im = cv2.imread("data/frame-%06d.depth.png"%(i),-1).astype(float)
-        #depth_im /= 1000.
-        #depth_im[depth_im == 65.535] = 0
-        #cam_pose = np.loadtxt("data/frame-%06d.pose.txt"%(i))
+        # color_image = cv2.cvtColor(cv2.imread("data/frame-%06d.color.jpg"%(i)), cv2.COLOR_BGR2RGB)
+        # depth_im = cv2.imread("data/frame-%06d.depth.png"%(i),-1).astype(float)
+        # depth_im /= 1000.
+        # depth_im[depth_im == 65.535] = 0
+        # cam_pose = np.loadtxt("data/frame-%06d.pose.txt"%(i))
 
         cam_pose = cam_tform4x4_obj[i].detach().cpu().numpy()
         cam_intr = cam_intr4x4[i].detach().cpu().numpy()
 
         # Integrate observation into voxel volume (assume color aligned with depth)
-        tsdf_vol.integrate(color_image, depth_im, cam_intr, cam_pose, obs_weight=obs_weight)
+        tsdf_vol.integrate(
+            color_image,
+            depth_im,
+            cam_intr,
+            cam_pose,
+            obs_weight=obs_weight,
+        )
 
         fps = K / (time.time() - t0_elapse)
-        logger.info("Average FPS: {:.2f}".format(fps))
+        logger.info(f"Average FPS: {fps:.2f}")
 
-    logger.info('extracting mesh from tsdf...')
+    logger.info("extracting mesh from tsdf...")
     # Get mesh from voxel volume and save to disk (can be viewed with Meshlab)
     verts, faces, norms, colors = tsdf_vol.get_mesh()
     if fpath_mesh is not None:

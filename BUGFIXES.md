@@ -12,9 +12,9 @@
 
 # BUG 2
 ### Symptom
-    RuntimeError: Cannot re-initialize CUDA in forked subprocess. To use CUDA with multiprocessing, you must use the ‘spawn’ start method   
+    RuntimeError: Cannot re-initialize CUDA in forked subprocess. To use CUDA with multiprocessing, you must use the ‘spawn’ start method
 ### Cause
-    Sharing GPU memory across multiprocesses   
+    Sharing GPU memory across multiprocesses
 ### Solution
     Don't use GPU with dataloader
 
@@ -27,7 +27,7 @@
 
 ### Cause
     nvcc not available in nvidia runtime image
-### Solution 
+### Solution
     use nvidia devel image, e.g. nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 
@@ -37,7 +37,7 @@
 [Open3D WARNING] Failed to initialize GLFW
 Segmentation fault (core dumped)
 
-export DISPLAY=:0.0; 
+export DISPLAY=:0.0;
 
 # BUG 5
 
@@ -63,4 +63,4 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID
 CUDA_VISIBLE_DEVICES=1
 export CUDA_VISIBLE_DEVICES
 export CUDA_DEVICE_ORDER
-if CUDA_DEVICE_ORDER is not set, 
+if CUDA_DEVICE_ORDER is not set,

@@ -1,16 +1,16 @@
 import warnings
-import torch
-from omegaconf import DictConfig
-from typing import Dict, Optional, Tuple, Callable, List
-from od3d.data.ext_enum import ExtEnum
+from typing import Callable
+from typing import List
+from typing import Optional
+from typing import Tuple
 
-import matplotlib.pyplot as plt
+import torch
+import torch.nn.functional as F
+from omegaconf import DictConfig
+from torch import nn
+
 # import sys
 # sys.path.append(str(Path(__file__).parents[4] / 'third_party/LightGlue'))
-from od3d.models.feature_extractors import Extractor, SuperPoint, rbd
-
-import torch.nn.functional as F
-from torch import nn
 try:
     from flash_attn.modules.mha import FlashCrossAttention
 except ModuleNotFoundError:
@@ -23,9 +23,11 @@ else:
 
 torch.backends.cudnn.deterministic = True
 
+
 @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
 def normalize_keypoints(
-    kpts: torch.Tensor, size: Optional[torch.Tensor] = None
+    kpts: torch.Tensor,
+    size: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     if size is None:
         size = 1 + kpts.max(-2).values - kpts.min(-2).values
@@ -42,7 +44,11 @@ def pad_to_length(x: torch.Tensor, length: int) -> Tuple[torch.Tensor]:
     if length <= x.shape[-2]:
         return x, torch.ones_like(x[..., :1], dtype=torch.bool)
     pad = torch.ones(
-        *x.shape[:-2], length - x.shape[-2], x.shape[-1], device=x.device, dtype=x.dtype
+        *x.shape[:-2],
+        length - x.shape[-2],
+        x.shape[-1],
+        device=x.device,
+        dtype=x.dtype,
     )
     y = torch.cat([x, pad], dim=-2)
     mask = torch.zeros(*y.shape[:-1], 1, dtype=torch.bool, device=x.device)
@@ -116,7 +122,7 @@ class Attention(nn.Module):
                 return v if mask is None else v.nan_to_num()
             else:
                 assert mask is None
-                q, k, v = [x.transpose(-2, -3).contiguous() for x in [q, k, v]]
+                q, k, v = (x.transpose(-2, -3).contiguous() for x in [q, k, v])
                 m = self.flash_(q.half(), torch.stack([k, v], 2).half())
                 return m.transpose(-2, -3).to(q.dtype).clone()
         elif self.has_sdp:
@@ -134,7 +140,11 @@ class Attention(nn.Module):
 
 class SelfBlock(nn.Module):
     def __init__(
-        self, embed_dim: int, num_heads: int, flash: bool = False, bias: bool = True
+        self,
+        embed_dim: int,
+        num_heads: int,
+        flash: bool = False,
+        bias: bool = True,
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
@@ -169,7 +179,11 @@ class SelfBlock(nn.Module):
 
 class CrossBlock(nn.Module):
     def __init__(
-        self, embed_dim: int, num_heads: int, flash: bool = False, bias: bool = True
+        self,
+        embed_dim: int,
+        num_heads: int,
+        flash: bool = False,
+        bias: bool = True,
     ) -> None:
         super().__init__()
         self.heads = num_heads
@@ -194,7 +208,10 @@ class CrossBlock(nn.Module):
         return func(x0), func(x1)
 
     def forward(
-        self, x0: torch.Tensor, x1: torch.Tensor, mask: Optional[torch.Tensor] = None
+        self,
+        x0: torch.Tensor,
+        x1: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
     ) -> List[torch.Tensor]:
         qk0, qk1 = self.map_(self.to_qk, x0, x1)
         v0, v1 = self.map_(self.to_v, x0, x1)
@@ -205,7 +222,10 @@ class CrossBlock(nn.Module):
         if self.flash is not None and qk0.device.type == "cuda":
             m0 = self.flash(qk0, qk1, v1, mask)
             m1 = self.flash(
-                qk1, qk0, v0, mask.transpose(-1, -2) if mask is not None else None
+                qk1,
+                qk0,
+                v0,
+                mask.transpose(-1, -2) if mask is not None else None,
             )
         else:
             qk0, qk1 = qk0 * self.scale**0.5, qk1 * self.scale**0.5
@@ -258,7 +278,9 @@ class TransformerLayer(nn.Module):
 
 
 def sigmoid_log_double_softmax(
-    sim: torch.Tensor, z0: torch.Tensor, z1: torch.Tensor
+    sim: torch.Tensor,
+    z0: torch.Tensor,
+    z1: torch.Tensor,
 ) -> torch.Tensor:
     """create the log assignment matrix from logits and similarity"""
     b, m, n = sim.shape
@@ -384,6 +406,7 @@ def weight_loss(log_assignment, weights):
 
     return nll_pos, nll_neg, num_pos, (num_neg0 + num_neg1) / 2.0
 
+
 def nll_loss(log_assignment, data):
     m, n = data["gt_matches0"].size(-1), data["gt_matches1"].size(-1)
     positive = data["gt_assignment"].float()
@@ -410,7 +433,8 @@ class NLLLoss(nn.Module):
             weights = self.loss_fn(log_assignment, data)
         nll_pos, nll_neg, num_pos, num_neg = weight_loss(log_assignment, weights)
         nll = (
-            self.config.nll_balancing * nll_pos + (1 - self.config.nll_balancing) * nll_neg
+            self.config.nll_balancing * nll_pos
+            + (1 - self.config.nll_balancing) * nll_neg
         )
 
         return (

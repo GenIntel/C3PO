@@ -1,35 +1,69 @@
 import logging
+
 logger = logging.getLogger(__name__)
-from omegaconf import OmegaConf, DictConfig
 import torch
 from typing import List
 from pathlib import Path
 from dataclasses import dataclass
-from od3d.datasets.frame import OD3D_FrameMeta, OD3D_Frame
-import scipy.io
-import math
-import numpy as np
 from od3d.cv.geometry.transform import transf4x4_from_spherical
-from od3d.datasets.dataset import OD3D_Frames, OD3D_FRAME_MODALITIES
-from od3d.datasets.pascal3d.enum import PASCAL3D_SCALE_NORMALIZE_TO_REAL, PASCAL3D_CATEGORIES
 from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
-from od3d.cv.io import read_image, write_mask_image
-from od3d.cv.geometry.mesh import Mesh, Meshes
 
 from od3d.datasets.frame_meta import OD3D_FrameMetaMaskMixin
-from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES, OD3D_FRAME_DEPTH_TYPES, OD3D_FRAME_KPTS2D_ANNOT_TYPES
-from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_MESH_TYPES, \
-            OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES, \
-            OD3D_TFROM_OBJ_TYPES
+from od3d.datasets.frame import (
+    OD3D_FRAME_MASK_TYPES,
+    OD3D_FRAME_DEPTH_TYPES,
+    OD3D_FRAME_KPTS2D_ANNOT_TYPES,
+)
+from od3d.datasets.object import (
+    OD3D_CAM_TFORM_OBJ_TYPES,
+    OD3D_FRAME_MASK_TYPES,
+    OD3D_MESH_TYPES,
+    OD3D_MESH_FEATS_TYPES,
+    OD3D_MESH_FEATS_DIST_REDUCE_TYPES,
+    OD3D_TFROM_OBJ_TYPES,
+)
+
 
 @dataclass
-class Pascal3D_OccFrameMeta( OD3D_FrameMetaMaskMixin,Pascal3DFrameMeta):
+class Pascal3D_OccFrameMeta(OD3D_FrameMetaMaskMixin, Pascal3DFrameMeta):
     pass
 
+
 class Pascal3D_OccFrame(Pascal3DFrame):
-    def __init__(self,path_raw: Path, path_preprocess: Path, modalities ,name_unique:str,path_meshes: Path,all_categories:List[str],depth_type:OD3D_FRAME_DEPTH_TYPES,mask_type:OD3D_FRAME_MASK_TYPES,cam_tform4x4_obj_type:OD3D_CAM_TFORM_OBJ_TYPES,kpts2d_annot_type:OD3D_FRAME_KPTS2D_ANNOT_TYPES,tform_obj_type:OD3D_TFROM_OBJ_TYPES,mesh_type:OD3D_MESH_TYPES,mesh_feats_type:OD3D_MESH_FEATS_TYPES,mesh_feats_dist_reduce_type:OD3D_MESH_FEATS_DIST_REDUCE_TYPES):
-        super().__init__(path_raw= path_raw,path_preprocess=path_preprocess,modalities=modalities,name_unique=name_unique,all_categories=all_categories,depth_type=depth_type,mask_type=mask_type,cam_tform4x4_obj_type=cam_tform4x4_obj_type,kpts2d_annot_type=kpts2d_annot_type,tform_obj_type=tform_obj_type,mesh_type=mesh_type,mesh_feats_type=mesh_feats_type,mesh_feats_dist_reduce_type=mesh_feats_dist_reduce_type)
+    def __init__(
+        self,
+        path_raw: Path,
+        path_preprocess: Path,
+        modalities,
+        name_unique: str,
+        path_meshes: Path,
+        all_categories: List[str],
+        depth_type: OD3D_FRAME_DEPTH_TYPES,
+        mask_type: OD3D_FRAME_MASK_TYPES,
+        cam_tform4x4_obj_type: OD3D_CAM_TFORM_OBJ_TYPES,
+        kpts2d_annot_type: OD3D_FRAME_KPTS2D_ANNOT_TYPES,
+        tform_obj_type: OD3D_TFROM_OBJ_TYPES,
+        mesh_type: OD3D_MESH_TYPES,
+        mesh_feats_type: OD3D_MESH_FEATS_TYPES,
+        mesh_feats_dist_reduce_type: OD3D_MESH_FEATS_DIST_REDUCE_TYPES,
+    ):
+        super().__init__(
+            path_raw=path_raw,
+            path_preprocess=path_preprocess,
+            modalities=modalities,
+            name_unique=name_unique,
+            all_categories=all_categories,
+            depth_type=depth_type,
+            mask_type=mask_type,
+            cam_tform4x4_obj_type=cam_tform4x4_obj_type,
+            kpts2d_annot_type=kpts2d_annot_type,
+            tform_obj_type=tform_obj_type,
+            mesh_type=mesh_type,
+            mesh_feats_type=mesh_feats_type,
+            mesh_feats_dist_reduce_type=mesh_feats_dist_reduce_type,
+        )
         self.path_meshes = path_meshes
+
     meta_type = Pascal3D_OccFrameMeta
     # @property
     # def mask(self):
@@ -70,16 +104,21 @@ class Pascal3D_OccFrame(Pascal3DFrame):
         if mesh_type == OD3D_MESH_TYPES.META:
             return self.path_meshes.joinpath(self.meta.rfpath_mesh)
         else:
-           
-            return self.path_preprocess.joinpath(self.get_rfpath_pp_categorical_mesh(mesh_type=mesh_type, category=self.category))
-        
+            return self.path_preprocess.joinpath(
+                self.get_rfpath_pp_categorical_mesh(
+                    mesh_type=mesh_type,
+                    category=self.category,
+                ),
+            )
+
     @staticmethod
     def calc_cam_tform_obj(azimuth, elevation, theta, distance):
         cam_tform4x4_obj = transf4x4_from_spherical(
             azim=torch.Tensor([azimuth]),
             elev=torch.Tensor([elevation]),
             theta=torch.Tensor([theta]),
-            dist=torch.Tensor([distance]))[0]
+            dist=torch.Tensor([distance]),
+        )[0]
         # cam_tform4x4_obj[0, :] = cam_tform4x4_obj[0, :]
         # cam_tform4x4_obj[1, :] = -cam_tform4x4_obj[1, :]
         # cam_tform4x4_obj[2, :] = -cam_tform4x4_obj[2, :]

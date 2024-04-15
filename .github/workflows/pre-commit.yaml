@@ -1,0 +1,21 @@
+name: pre-commit
+
+on: [push]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      with:
+        python-version: "3.9.16"
+    - name: Run pre-commit
+      run: |
+        pip3 install pre-commit
+        pre-commit run --all-files
+    - name: Upload changed files
+      if: ${{ failure() }}
+      uses: EndBug/add-and-commit@v7
+      with:
+        message: auto pre-commit fix

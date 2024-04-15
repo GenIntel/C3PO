@@ -1,11 +1,19 @@
-import torch
-import numpy as np
 import cv2
+import numpy as np
 import pytorch3d as t3d
-import pytorch3d.ops
+import torch
 
-def batchwise_fit_se3_to_corresp_3d_2d_and_masks(masks_in, pts1, pxl2, proj_mat, method="cpu-epnp", weights=None, prev_se3_mats=None):
-    """ calculates se3 fit
+
+def batchwise_fit_se3_to_corresp_3d_2d_and_masks(
+    masks_in,
+    pts1,
+    pxl2,
+    proj_mat,
+    method="cpu-epnp",
+    weights=None,
+    prev_se3_mats=None,
+):
+    """calculates se3 fit
     Paramters
     ---------
     masks_in torch.Tensor: BxKxHxW / BxKxN, bool
@@ -22,14 +30,41 @@ def batchwise_fit_se3_to_corresp_3d_2d_and_masks(masks_in, pts1, pxl2, proj_mat,
     for b in range(B):
         if weights is not None:
             tform4x4.append(
-                fit_se3_to_corresp_3d_2d_and_masks(masks_in[b], pts1[b], pxl2[b], proj_mat[b], method=method,
-                                                   weights=weights[b], prev_se3_mats=None))
+                fit_se3_to_corresp_3d_2d_and_masks(
+                    masks_in[b],
+                    pts1[b],
+                    pxl2[b],
+                    proj_mat[b],
+                    method=method,
+                    weights=weights[b],
+                    prev_se3_mats=None,
+                ),
+            )
         else:
-            tform4x4.append(fit_se3_to_corresp_3d_2d_and_masks(masks_in[b], pts1[b], pxl2[b], proj_mat[b], method=method, weights=None, prev_se3_mats=None))
+            tform4x4.append(
+                fit_se3_to_corresp_3d_2d_and_masks(
+                    masks_in[b],
+                    pts1[b],
+                    pxl2[b],
+                    proj_mat[b],
+                    method=method,
+                    weights=None,
+                    prev_se3_mats=None,
+                ),
+            )
     return torch.stack(tform4x4, dim=0)
 
-def fit_se3_to_corresp_3d_2d_and_masks(masks_in, pts1, pxl2, proj_mat, method="cpu-epnp", weights=None, prev_se3_mats=None):
-    """ calculates se3 fit
+
+def fit_se3_to_corresp_3d_2d_and_masks(
+    masks_in,
+    pts1,
+    pxl2,
+    proj_mat,
+    method="cpu-epnp",
+    weights=None,
+    prev_se3_mats=None,
+):
+    """calculates se3 fit
     Paramters
     ---------
     masks_in torch.Tensor: KxHxW / KxN, bool
@@ -44,10 +79,25 @@ def fit_se3_to_corresp_3d_2d_and_masks(masks_in, pts1, pxl2, proj_mat, method="c
     """
 
     pts1, pxl2, weights = mask_points(masks_in, pts1, pxl2, weights)
-    return fit_se3_to_corresp_3d_2d(pts1, pxl2, weights, proj_mat, method=method, prev_se3_mats=prev_se3_mats)
+    return fit_se3_to_corresp_3d_2d(
+        pts1,
+        pxl2,
+        weights,
+        proj_mat,
+        method=method,
+        prev_se3_mats=prev_se3_mats,
+    )
 
-def fit_se3_to_corresp_3d_2d(pts1, pxl2, weights, proj_mat, method="cpu-epnp", prev_se3_mats=None):
-    """ calculates se3 fit
+
+def fit_se3_to_corresp_3d_2d(
+    pts1,
+    pxl2,
+    weights,
+    proj_mat,
+    method="cpu-epnp",
+    prev_se3_mats=None,
+):
+    """calculates se3 fit
     Paramters
     ---------
     pts1 torch.Tensor: KxNxC1, float
@@ -62,12 +112,26 @@ def fit_se3_to_corresp_3d_2d(pts1, pxl2, weights, proj_mat, method="cpu-epnp", p
     transf_centroid1: Kx4x4, float
     """
 
-
     if method.startswith("cpu"):
-        #method2 = "cpu-epnp"
-        se3_mats = fit_se3_to_corresp_3d_2d_opencv(pts1, pxl2, weights, proj_mat, method, prev_se3_mats)
-        se3_mats[se3_mats.isnan().flatten(1).any(dim=1)] = torch.eye(4, device=se3_mats.device, dtype=se3_mats.dtype).expand(se3_mats.isnan().flatten(1).any(dim=1).sum(), 4, 4)
-        se3_mats[se3_mats.isinf().flatten(1).any(dim=1)] = torch.eye(4, device=se3_mats.device, dtype=se3_mats.dtype).expand(se3_mats.isinf().flatten(1).any(dim=1).sum(), 4, 4)
+        # method2 = "cpu-epnp"
+        se3_mats = fit_se3_to_corresp_3d_2d_opencv(
+            pts1,
+            pxl2,
+            weights,
+            proj_mat,
+            method,
+            prev_se3_mats,
+        )
+        se3_mats[se3_mats.isnan().flatten(1).any(dim=1)] = torch.eye(
+            4,
+            device=se3_mats.device,
+            dtype=se3_mats.dtype,
+        ).expand(se3_mats.isnan().flatten(1).any(dim=1).sum(), 4, 4)
+        se3_mats[se3_mats.isinf().flatten(1).any(dim=1)] = torch.eye(
+            4,
+            device=se3_mats.device,
+            dtype=se3_mats.dtype,
+        ).expand(se3_mats.isinf().flatten(1).any(dim=1).sum(), 4, 4)
 
         return se3_mats
     elif method == "gpu-epnp":
@@ -80,6 +144,7 @@ def fit_se3_to_corresp_3d_2d(pts1, pxl2, weights, proj_mat, method="cpu-epnp", p
         se3_mats[:, :3, 3] = se3s.T
         se3_mats[:, 3, 3] = 1.0
         return se3_mats
+
 
 def gpu_epnp(pts1, pxl2, weights, proj_mat):
     # 1. compute control points
@@ -99,14 +164,24 @@ def gpu_epnp(pts1, pxl2, weights, proj_mat):
     # 7.4. copmpute reprojection errror
     pass
 
+
 def gpu_dlt(pts1, pxl2, weights, proj_mat):
     pass
+
 
 def gpu_iterative(pts1, pxl2, weights, proj_mat):
     pass
 
-def fit_se3_to_corresp_3d_2d_opencv(pts1, pxl2, weights, proj_mat, method, prev_se3_mats=None):
-    """ calculates se3 fit
+
+def fit_se3_to_corresp_3d_2d_opencv(
+    pts1,
+    pxl2,
+    weights,
+    proj_mat,
+    method,
+    prev_se3_mats=None,
+):
+    """calculates se3 fit
     Paramters
     ---------
     pts1 torch.Tensor: KxNxC1, float
@@ -127,7 +202,8 @@ def fit_se3_to_corresp_3d_2d_opencv(pts1, pxl2, weights, proj_mat, method, prev_
     se3_mats = []  # torch.zeros(size=(K, 4, 4), dtype=dtype, device=device)
 
     proj_mat_ext = torch.cat(
-        (proj_mat, torch.zeros(size=(1, 3), dtype=dtype, device=device)), dim=0
+        (proj_mat, torch.zeros(size=(1, 3), dtype=dtype, device=device)),
+        dim=0,
     )
     proj_mat_ext[2, 2] = 1.0
     proj_mat_ext = proj_mat_ext.detach().cpu().numpy()
@@ -138,7 +214,6 @@ def fit_se3_to_corresp_3d_2d_opencv(pts1, pxl2, weights, proj_mat, method, prev_
         prev_so3_log_np = np.zeros(shape=(K, 3, 1), dtype=prev_transl_np.dtype)
         for k in range(K):
             prev_so3_log_np[k], _ = cv2.Rodrigues(prev_se3_mats_np[k])
-
 
     for k in range(K):
         pts1_k = pts1[k].permute(1, 0)
@@ -158,28 +233,66 @@ def fit_se3_to_corresp_3d_2d_opencv(pts1, pxl2, weights, proj_mat, method, prev_
         pxl2_k = pxl2_k.permute(1, 0).detach().cpu().numpy()
 
         if method == "cpu-iterative-continue":
-            retval, r, t = cv2.solvePnP(pts1_k, pxl2_k, proj_mat_ext, 0, prev_so3_log_np[k],
-                                        prev_transl_np[k][:, None], useExtrinsicGuess = True,
-                                        flags=cv2.SOLVEPNP_ITERATIVE)
+            retval, r, t = cv2.solvePnP(
+                pts1_k,
+                pxl2_k,
+                proj_mat_ext,
+                0,
+                prev_so3_log_np[k],
+                prev_transl_np[k][:, None],
+                useExtrinsicGuess=True,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+            )
 
         elif method == "cpu-iterative":
-            retval, r, t = cv2.solvePnP(pts1_k, pxl2_k, proj_mat_ext, 0, useExtrinsicGuess=False,
-                                        flags=cv2.SOLVEPNP_ITERATIVE)
+            retval, r, t = cv2.solvePnP(
+                pts1_k,
+                pxl2_k,
+                proj_mat_ext,
+                0,
+                useExtrinsicGuess=False,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+            )
 
         elif method == "cpu-epnp":
-            retval, r, t = cv2.solvePnP(pts1_k, pxl2_k, proj_mat_ext, 0, flags=cv2.SOLVEPNP_EPNP)
+            retval, r, t = cv2.solvePnP(
+                pts1_k,
+                pxl2_k,
+                proj_mat_ext,
+                0,
+                flags=cv2.SOLVEPNP_EPNP,
+            )
 
         elif method == "cpu-ransac-iterative-continue":
-            retval, r, t, mask_inliers = cv2.solvePnPRansac(pts1_k, pxl2_k, proj_mat_ext, 0, prev_so3_log_np[k],
-                                              prev_transl_np[k][:, None], useExtrinsicGuess = True,
-                                              flags=cv2.SOLVEPNP_ITERATIVE)
+            retval, r, t, mask_inliers = cv2.solvePnPRansac(
+                pts1_k,
+                pxl2_k,
+                proj_mat_ext,
+                0,
+                prev_so3_log_np[k],
+                prev_transl_np[k][:, None],
+                useExtrinsicGuess=True,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+            )
 
         elif method == "cpu-ransac-iterative":
-            retval, r, t, mask_inliers = cv2.solvePnPRansac(pts1_k, pxl2_k, proj_mat_ext, 0, useExtrinsicGuess=False,
-                                              flags=cv2.SOLVEPNP_ITERATIVE)
+            retval, r, t, mask_inliers = cv2.solvePnPRansac(
+                pts1_k,
+                pxl2_k,
+                proj_mat_ext,
+                0,
+                useExtrinsicGuess=False,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+            )
 
         elif method == "cpu-ransac-epnp":
-            retval, r, t, mask_inliers = cv2.solvePnPRansac(pts1_k, pxl2_k, proj_mat_ext, 0, flags=cv2.SOLVEPNP_EPNP)
+            retval, r, t, mask_inliers = cv2.solvePnPRansac(
+                pts1_k,
+                pxl2_k,
+                proj_mat_ext,
+                0,
+                flags=cv2.SOLVEPNP_EPNP,
+            )
 
         R, _ = cv2.Rodrigues(r)
         transf_pred = torch.eye(4, dtype=dtype, device=device)
@@ -191,9 +304,8 @@ def fit_se3_to_corresp_3d_2d_opencv(pts1, pxl2, weights, proj_mat, method, prev_
     return se3_mats
 
 
-
 def mask_points(masks_in, pts1, pts2, weights_in=None):
-    """ mask points and weights so that they are in the required forms for se3 fits. Masks should have same number of points M, otherwise M equals the maximum number of masked points.
+    """mask points and weights so that they are in the required forms for se3 fits. Masks should have same number of points M, otherwise M equals the maximum number of masked points.
     Paramters
     ---------
     masks_in torch.Tensor: KxHxW / KxN, bool #
@@ -267,22 +379,28 @@ def mask_points(masks_in, pts1, pts2, weights_in=None):
             N = masks_counts.max()
             N_k = masks_counts[k]
             pts1_k = pts1[:, masks_in[k]].permute(
-                1, 0
+                1,
+                0,
             )  # .repeat(int(torch.ceil(N/N_k)), 1)[:N, :]
             pts2_k = pts2[:, masks_in[k]].permute(
-                1, 0
+                1,
+                0,
             )  # .repeat(int(torch.ceil(N/N_k)), 1)[:N, :]
-            weights_k = weights_in[k:k+1, masks_in[k]].permute(
-                1, 0
+            weights_k = weights_in[k : k + 1, masks_in[k]].permute(
+                1,
+                0,
             )  # .repeat(int(torch.ceil(N/N_k)), 1)[:N, :]
             pts1_k = torch.cat(
-                (pts1_k, torch.zeros(size=(N - N_k, C1), device=device)), dim=0
+                (pts1_k, torch.zeros(size=(N - N_k, C1), device=device)),
+                dim=0,
             )
             pts2_k = torch.cat(
-                (pts2_k, torch.zeros(size=(N - N_k, C2), device=device)), dim=0
+                (pts2_k, torch.zeros(size=(N - N_k, C2), device=device)),
+                dim=0,
             )
             weights_k = torch.cat(
-                (weights_k, torch.zeros(size=(N - N_k, 1), device=device)), dim=0
+                (weights_k, torch.zeros(size=(N - N_k, 1), device=device)),
+                dim=0,
             )
             pts1_list.append(pts1_k)
             pts2_list.append(pts2_k)

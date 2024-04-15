@@ -1,3 +1,4 @@
-from .extractor import Extractor, rbd # noqa
-from .superpoint import SuperPoint # noqa
-from .nemo import NeMoBackbone # noqa
+from .extractor import Extractor
+from .extractor import rbd
+from .nemo import NeMoBackbone  # noqa
+from .superpoint import SuperPoint  # noqa

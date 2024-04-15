@@ -1,5 +1,6 @@
-from torchvision.transforms.transforms import Normalize
 from od3d.cv.transforms.transform import OD3D_Transform
+from torchvision.transforms.transforms import Normalize
+
 
 class RGB_Normalize(OD3D_Transform):
     def __init__(self, mean=None, std=None):

@@ -39,13 +39,13 @@
 # %AUTHORS_END%
 # --------------------------------------------------------------------*/
 # %BANNER_END%
-
 # Adapted by Remi Pautrat, Philipp Lindenberger, Artur Jesslen
+import warnings
 
 import torch
 from kornia.color import rgb_to_grayscale
 from torch import nn
-import warnings
+
 from .extractor import Extractor
 
 
@@ -55,7 +55,10 @@ def simple_nms(scores, nms_radius: int):
 
     def max_pool(x):
         return torch.nn.functional.max_pool2d(
-            x, kernel_size=nms_radius * 2 + 1, stride=1, padding=nms_radius
+            x,
+            kernel_size=nms_radius * 2 + 1,
+            stride=1,
+            padding=nms_radius,
         )
 
     zeros = torch.zeros_like(scores)
@@ -82,15 +85,20 @@ def sample_descriptors(keypoints, descriptors, s: int = 8):
     keypoints /= torch.tensor(
         [(w * s - s / 2 - 0.5), (h * s - s / 2 - 0.5)],
     ).to(
-        keypoints
+        keypoints,
     )[None]
     keypoints = keypoints * 2 - 1  # normalize to (-1, 1)
     args = {"align_corners": True} if torch.__version__ >= "1.3" else {}
     descriptors = torch.nn.functional.grid_sample(
-        descriptors, keypoints.view(b, 1, -1, 2), mode="bilinear", **args
+        descriptors,
+        keypoints.view(b, 1, -1, 2),
+        mode="bilinear",
+        **args,
     )
     descriptors = torch.nn.functional.normalize(
-        descriptors.reshape(b, c, -1), p=2, dim=1
+        descriptors.reshape(b, c, -1),
+        p=2,
+        dim=1,
     )
     return descriptors
 
@@ -103,6 +111,7 @@ class SuperPoint(Extractor):
     Rabinovich. In CVPRW, 2019. https://arxiv.org/abs/1712.07629
 
     """
+
     required_data_keys = ["image"]
 
     def __init__(self, **conf):
@@ -125,17 +134,25 @@ class SuperPoint(Extractor):
 
         self.convDa = nn.Conv2d(c4, c5, kernel_size=3, stride=1, padding=1)
         self.convDb = nn.Conv2d(
-            c5, self.config.output_dim, kernel_size=1, stride=1, padding=0
+            c5,
+            self.config.output_dim,
+            kernel_size=1,
+            stride=1,
+            padding=0,
         )
-        if self.config.max_num_keypoints is not None and self.config.max_num_keypoints <= 0:
+        if (
+            self.config.max_num_keypoints is not None
+            and self.config.max_num_keypoints <= 0
+        ):
             raise ValueError("max_num_keypoints must be positive or None")
 
     def load_checkpoint(self, checkpoint_path: str = None):
         if checkpoint_path is not None:
-            warnings.warn("SuperPoint does not support loading checkpoints. Using pre-trained weights.")
+            warnings.warn(
+                "SuperPoint does not support loading checkpoints. Using pre-trained weights.",
+            )
         url = "https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/superpoint_v1.pth"  # noqa
         self.load_state_dict(torch.hub.load_state_dict_from_url(url))
-
 
     def forward(self, data: dict) -> dict:
         """Compute keypoints, scores, descriptors for image"""
@@ -192,8 +209,8 @@ class SuperPoint(Extractor):
                     *[
                         top_k_keypoints(k, s, self.config.max_num_keypoints)
                         for k, s in zip(keypoints, scores)
-                    ]
-                )
+                    ],
+                ),
             )
 
         # Convert (h, w) to (x, y)

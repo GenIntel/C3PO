@@ -27,10 +27,11 @@ from typing import Any
 from typing import List
 from typing import Tuple
 from typing import Union
-from omegaconf import DictConfig
+
 import numpy as np
 import requests
 from distutils.util import strtobool
+from omegaconf import DictConfig
 
 
 # Cache directories
@@ -65,14 +66,16 @@ def format_time(seconds: Union[int, float]) -> str:
     s = int(np.rint(seconds))
 
     if s < 60:
-        return "{}s".format(s)
+        return f"{s}s"
     elif s < 60 * 60:
-        return "{}m {:02}s".format(s // 60, s % 60)
+        return f"{s // 60}m {s % 60:02}s"
     elif s < 24 * 60 * 60:
-        return "{}h {:02}m {:02}s".format(s // (60 * 60), (s // 60) % 60, s % 60)
+        return f"{s // (60 * 60)}h {(s // 60) % 60:02}m {s % 60:02}s"
     else:
         return "{}d {:02}h {:02}m".format(
-            s // (24 * 60 * 60), (s // (60 * 60)) % 24, (s // 60) % 60
+            s // (24 * 60 * 60),
+            (s // (60 * 60)) % 24,
+            (s // 60) % 60,
         )
 
 
@@ -81,20 +84,20 @@ def format_time_brief(seconds: Union[int, float]) -> str:
     s = int(np.rint(seconds))
 
     if s < 60:
-        return "{}s".format(s)
+        return f"{s}s"
     elif s < 60 * 60:
-        return "{}m {:02}s".format(s // 60, s % 60)
+        return f"{s // 60}m {s % 60:02}s"
     elif s < 24 * 60 * 60:
-        return "{}h {:02}m".format(s // (60 * 60), (s // 60) % 60)
+        return f"{s // (60 * 60)}h {(s // 60) % 60:02}m"
     else:
-        return "{}d {:02}h".format(s // (24 * 60 * 60), (s // (60 * 60)) % 24)
+        return f"{s // (24 * 60 * 60)}d {(s // (60 * 60)) % 24:02}h"
 
 
 def ask_yes_no(question: str) -> bool:
     """Ask the user the question until the user inputs a valid answer."""
     while True:
         try:
-            print("{} [y/n]".format(question))
+            print(f"{question} [y/n]")
             return strtobool(input().lower())
         except ValueError:
             pass
@@ -189,7 +192,7 @@ def get_module_from_obj_name(obj_name: str) -> Tuple[types.ModuleType, str]:
             importlib.import_module(module_name)  # may raise ImportError
         except ImportError:
             if not str(sys.exc_info()[1]).startswith(
-                "No module named '" + module_name + "'"
+                "No module named '" + module_name + "'",
             ):
                 raise
 
@@ -233,7 +236,9 @@ def call_func_by_name(func_name: str, config: DictConfig, **kwargs) -> Any:
 
 def construct_class_by_name(config: DictConfig, **kwargs) -> Any:
     """Finds the python class with the given name and constructs it with the given arguments."""
-    assert "class_name" in config, f"Missing 'class_name' in config, got {list(config.keys())}."
+    assert (
+        "class_name" in config
+    ), f"Missing 'class_name' in config, got {list(config.keys())}."
     return call_func_by_name(config.get("class_name", None), config, **kwargs)
 
 
@@ -262,7 +267,9 @@ def get_top_level_function_name(obj: Any) -> str:
 
 
 def list_dir_recursively_with_ignore(
-    dir_path: str, ignores: List[str] = None, add_base_to_relative: bool = False
+    dir_path: str,
+    ignores: List[str] = None,
+    add_base_to_relative: bool = False,
 ) -> List[Tuple[str, str]]:
     """List all files recursively in a given directory while ignoring given file and directory names.
     Returns list of tuples containing both absolute and relative paths."""
@@ -406,7 +413,7 @@ def open_url(
                                 raise OSError("Google Drive virus checker nag")
                         if "Google Drive - Quota exceeded" in content_str:
                             raise OSError(
-                                "Google Drive download quota exceeded -- please try again later"
+                                "Google Drive download quota exceeded -- please try again later",
                             )
 
                     match = re.search(
@@ -433,7 +440,8 @@ def open_url(
         safe_name = re.sub(r"[^0-9a-zA-Z-._]", "_", url_name)
         cache_file = os.path.join(cache_dir, url_md5 + "_" + safe_name)
         temp_file = os.path.join(
-            cache_dir, "tmp_" + uuid.uuid4().hex + "_" + url_md5 + "_" + safe_name
+            cache_dir,
+            "tmp_" + uuid.uuid4().hex + "_" + url_md5 + "_" + safe_name,
         )
         os.makedirs(cache_dir, exist_ok=True)
         with open(temp_file, "wb") as f:

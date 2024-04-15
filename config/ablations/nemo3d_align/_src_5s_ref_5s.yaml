@@ -43,4 +43,3 @@ method:
   nemo:
     gt_cam_tform_obj_source: 'labeled'  #  # 'zsp_labeled' 'labeled' 'droid_slam_aligned' 'droid_slam' 'zsp_labeled
     aligned_name: 'latest_5s_to_5s'
-
