@@ -13,9 +13,9 @@ import torch
 class OD3D_Benchmark:
     def __init__(self, config: DictConfig):
         self.config = config
-
+        print(OmegaConf.to_yaml(config))
         self.logging_dir = Path(self.config.logger.local_dir).joinpath(self.config.run_name)
-        self.logging_dir.mkdir(parents=True)
+        self.logging_dir.mkdir(parents=True, exist_ok=True)
         if self.config.logger.use_wandb:
             wandb.login()
             wandb.init(project=self.config.logger.wandb_project_name, config=OmegaConf.to_container(self.config, resolve=True),
@@ -44,6 +44,7 @@ class OD3D_Benchmark:
                 continue
             logger.info(f'create test dataset {self.config.test_datasets[dataset_test_key].name}')
 
+
             datasets_test.append(
                 OD3D_Dataset.subclasses[self.config.test_datasets[dataset_test_key].class_name].create_from_config(
                     config=self.config.test_datasets[dataset_test_key]))
@@ -64,7 +65,6 @@ class OD3D_Benchmark:
 
         # 4. test method (logs results inside class)
         if self.config.test:
-
             logger.info('test')
             for dataset_test in datasets_test:
                 results_test = method.test(dataset_test)

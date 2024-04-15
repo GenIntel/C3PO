@@ -6,14 +6,21 @@ defaults:
 name: transformer_matching
 class_name: TransformerMatching
 
+categories: ${train_datasets.main.categories}
+fpaths_meshes: ${train_datasets.main.fpaths_cuboids}
 
-categories: ${train_datasets.labeled.categories}
+neural_mesh:
+  num_noise: 5
+  max_group: 512
+
+  
 
 lightglue:
   descriptor_dim: 256
   load_from_url: False
   version: v0.1_arxiv
   url: 'https://github.com/cvg/LightGlue/releases/download/{}/{}_lightglue.pth'
+  checkpoint: null
   n_layers: 9
   num_heads: 4
   flash: True # enable FlashAttention if available.

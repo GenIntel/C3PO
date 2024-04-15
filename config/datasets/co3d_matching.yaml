@@ -25,7 +25,7 @@ frames_count_max_per_sequence:
 block_negative_depth: False
 
 path_raw: ${platform.path_datasets_raw}/CO3D
-path_preprocess: ${platform.path_datasets_processed}/CO3D_Matching
+path_preprocess: ${platform.path_datasets_preprocess}/CO3D_Matching
 
 setup:
   enabled: False

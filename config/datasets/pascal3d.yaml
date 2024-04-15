@@ -15,7 +15,7 @@ modalities:
     - 'size'
     - 'bbox'
     - 'depth'
-    # - 'mesh'
+    - 'mesh'
 
 url_pascal3d_raw: ftp://cs.stanford.edu/cs/cvgl/PASCAL3D+_release1.1.zip
 rpath_pascal3d_raw: PASCAL3D+_release1.1
@@ -42,7 +42,7 @@ fpaths_cuboids:
     tv: ${..path_cuboids}/tvmonitor/mesh.ply
 
 setup:
-  enabled: False
+  enabled: True
   override: False
   remove_previous: False
 
@@ -87,15 +87,15 @@ image_sizes:
 #       n04037443_4668
 
 categories:
-#    - aeroplane
-#    - bicycle
-#    - boat
-#    - bottle
-#    - bus
-#     - car
-#    - chair
-#    - diningtable
-#    - motorbike
-#    - sofa
-#    - train
-#    - tvmonitor
+   - aeroplane
+   - bicycle
+   - boat
+   - bottle
+   - bus
+   - car
+   - chair
+   - diningtable
+   - motorbike
+   - sofa
+   - train
+   - tvmonitor

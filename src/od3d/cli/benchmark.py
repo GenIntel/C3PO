@@ -888,7 +888,8 @@ def restart_slurm(age_in_hours: int = typer.Option(1000, '-h', '--hours'),
 @app.command()
 def single_local(config_fpath: str = typer.Option(None, '-c', '--config')):
     logging.basicConfig(level=logging.INFO)
-    method_cfg = OmegaConf.load(config_fpath)
+    # method_cfg = OmegaConf.load(config_fpath)
+    method_cfg = od3d.io.load_hierarchical_config(benchmark=config_fpath)
     bench_single_method_local(method_cfg)
 
 

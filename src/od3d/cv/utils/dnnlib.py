@@ -226,6 +226,8 @@ def call_func_by_name(func_name: str, config: DictConfig, **kwargs) -> Any:
     assert func_name is not None
     func_obj = get_obj_by_name(func_name)
     assert callable(func_obj)
+    if config.get("kwargs", {}):
+        return func_obj(**{**kwargs, **config.get("kwargs", {})})
     return func_obj(config, **{**kwargs, **config.get("kwargs", {})})
 
 

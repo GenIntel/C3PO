@@ -4,6 +4,7 @@ from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.benchmark.results import OD3D_Results
 from od3d.models.model import OD3D_Model
+from od3d.io import get_obj_from_config
 from omegaconf import DictConfig
 import pandas as pd
 import numpy as np
@@ -18,9 +19,9 @@ from pathlib import Path
 
 # note: math is actually used by config
 import math
-from torch.utils.tensorboard import SummaryWriter
 # import sys
 # sys.path.append(str(Path(__file__).parents[4] / 'third_party/LightGlue'))
+from od3d.cv.geometry.mesh import Meshes
 from od3d.models.feature_extractors import Extractor, rbd
 from od3d.cv.utils.dnnlib import construct_class_by_name
 from .utils import filter_matches, pad_to_length, normalize_keypoints, TokenConfidence, MatchAssignment, LearnableFourierPositionalEncoding, TransformerLayer, matcher_metrics
@@ -414,8 +415,46 @@ class TransformerMatching(OD3D_Method):
         super().__init__(config=config, logging_dir=logging_dir)
         self.extractor = FeatureExtractor(config, device)
         self.matcher = Matcher(config, device)
-        self.to(device)
+
+        # init neural meshes
+        self.total_params = sum(p.numel() for p in self.extractor.parameters()) + sum(p.numel() for p in self.matcher.parameters())
+        self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
+        fpaths_meshes_tform_obj = self.config.get('fpaths_meshes_tform_obj', None)
+        if fpaths_meshes_tform_obj is not None:
+            self.fpaths_meshes_tform_obj = [fpaths_meshes_tform_obj[cls] for cls in config.categories]
+        else:
+            self.fpaths_meshes_tform_obj = [None for _ in config.categories]
+
+        self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes, fpaths_meshes_tforms=self.fpaths_meshes_tform_obj)
+        self.meshes_ranges = self.meshes.get_ranges().detach().cuda()
+        logger.info(f'loading meshes from following fpaths: {self.fpaths_meshes}...')
         
+        self.verts_count_max = self.meshes.verts_counts_max
+        self.mem_verts_feats_count = len(config.categories) * self.verts_count_max
+        self.mem_clutter_feats_count = config.neural_mesh.num_noise * config.neural_mesh.max_group
+        self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
+
+        self.feats_bank_count = self.verts_count_max * len(self.meshes) + 1
+        self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, config.features.backbone.output_dim), device=device), requires_grad=True)
+        self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), config.features.backbone.output_dim), device=device), requires_grad=True))
+
+        self.seq_obj_tform4x4_est_obj = {}
+        self.seq_obj_tform4x4_est_obj_sim = {}
+
+
+        crit_kwargs = {}
+        if config.train.loss.class_name == "od3d.cv.metric.cross_entropy_smooth.CrossEntropyLabelsSmoothed":
+            crit_kwargs["labels_smoothed"] = self.meshes.get_geodesic_prob_with_noise().to(device=device)
+        self.criterion = construct_class_by_name(self.config.train.loss, **crit_kwargs).cuda()
+
+        self.to(device)
+
+
+    def setup_optimizers(self):
+        
+        params = [p for p in self.extractor.parameters() if p.requires_grad] + [p for p in self.matcher.parameters() if p.requires_grad] + [self.meshes.feats] + [self.clutter_feats]
+        self.optim = get_obj_from_config(config=self.config.train.optimizer, params=params)
+        self.scheduler = get_obj_from_config(self.optim, config=self.config.train.scheduler)
         
     def set_requires_grad(self, extractor_grad=True, matcher_grad=True):
         for param in self.extractor.parameters():
@@ -426,13 +465,17 @@ class TransformerMatching(OD3D_Method):
     def save_checkpoint(self, path_checkpoint: Path):
         pass
 
-    def load_checkpoint(self, extractor_checkpoint: Path = None, matcher_checkpoint: Path = None):
+    def load_checkpoint(self, extractor_checkpoint: Path = None, matcher_checkpoint: Path = None, mesh_checkpoint: Path = None):
         self.extractor.load_checkpoint(extractor_checkpoint)
         self.matcher.load_checkpoint(matcher_checkpoint)
+        if mesh_checkpoint is not None:
+            raise NotImplementedError("Loading mesh checkpoint is not implemented yet.")
+            self.meshes.load_state_dict(torch.load(mesh_checkpoint, map_location=self.device))
 
     def to(self, device):
         self.extractor.to(device)
         self.matcher.to(device)
+        self.meshes.to(device)
         self.device = device
 
     def cuda(self):
@@ -504,15 +547,17 @@ class TransformerMatching(OD3D_Method):
                 with_stack=True,
             )
             prof.__enter__()
-        self.set_requires_grad(extractor_grad=self.config.backbone.freeze, matcher_grad=True)
+        self.set_requires_grad(extractor_grad=self.config.features.backbone.freeze, matcher_grad=True)
         self.extractor.train()
         self.matcher.train()
-        self.load_checkpoint(extractor_checkpoint=self.config.backbone.checkpoint, matcher_checkpoint=self.config.matcher.checkpoint)
+        self.load_checkpoint(extractor_checkpoint=self.config.features.backbone.checkpoint, matcher_checkpoint=self.config.lightglue.checkpoint)
         train_dataset: OD3D_Dataset = datasets_train["main"]
-        eval_dataset: OD3D_Dataset = datasets_val["main"]
+        val = "main" in datasets_val
+        if val:
+            eval_dataset: OD3D_Dataset = datasets_val["main"]
 
         # setup optimizer and scheduler
-        params = self.matcher.parameters() if self.config.backbone.freeze else list(self.extractor.parameters()) + list(self.matcher.parameters())
+        params = self.matcher.parameters() if self.config.features.backbone.freeze else list(self.extractor.parameters()) + list(self.matcher.parameters())
         optimizer: torch.optim.Optimizer = construct_class_by_name(
             self.config.train.optimizer,
             params=params,
@@ -522,8 +567,9 @@ class TransformerMatching(OD3D_Method):
             optimizer=optimizer
         )
 
-        for epoch in range(self.config.training.epochs):
+        for epoch in range(self.config.train.epochs):
             for it, batch in enumerate(train_dataset):
+                print(batch)
                 optimizer.zero_grad()
                 losses = self._train_step(batch)
                 loss = torch.mean(losses["total"])
@@ -535,7 +581,8 @@ class TransformerMatching(OD3D_Method):
                 optimizer.step()
                 # wandb.log(loss)
             scheduler.step(epoch)
-            self.test(eval_dataset)
+            if val:
+                self.test(eval_dataset)
             if self.config.train.profile:
                 prof.step()
         self.save_checkpoint(self.path_checkpoint)
@@ -549,7 +596,7 @@ class TransformerMatching(OD3D_Method):
     def _train_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         data0 = {"image": batch["image0"]}
         data1 = {"image": batch["image1"]}
-        if self.config.backbone.requires_kpts:
+        if self.config.features.backbone.requires_kpts:
             data0["keypoints"] = batch["keypoints0"]
             data0["visibility"] = batch["visibility0"]
             data1["keypoints"] = batch["keypoints1"]
@@ -564,7 +611,7 @@ class TransformerMatching(OD3D_Method):
     def _test_step(self, batch: Dict[str, torch.Tensor]) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         data0 = {"image": batch["image0"]}
         data1 = {"image": batch["image1"]}
-        if self.config.backbone.requires_kpts:
+        if self.config.features.backbone.requires_kpts:
             data0["keypoints"] = batch["keypoints0"]
             data0["visibility"] = batch["visibility0"]
             data1["keypoints"] = batch["keypoints1"]
