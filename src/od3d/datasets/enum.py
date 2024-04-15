@@ -130,6 +130,12 @@ class OD3D_CATEGORIES(str, ExtEnum):
     WASHING_MACHINE = "washing_machine"
     WATCH = "watch"
     WHEELCHAIR = "wheelchair"
+    BIRD = "bird"
+    CAT = "cat"
+    DEER = "deer"
+    DOG = "dog"
+    FROG = "frog"
+    HORSE = "horse"
 
 OD3D_CATEGORIES_SIZES_IN_M = {
     OD3D_CATEGORIES.BICYCLE: 1.7,
@@ -260,5 +266,11 @@ OD3D_CATEGORIES_SIZES_IN_M = {
     OD3D_CATEGORIES.WATCH: 0.04,
     OD3D_CATEGORIES.WHEELCHAIR: 1,
     OD3D_CATEGORIES.ELEPHANT: 3.,
+    OD3D_CATEGORIES.BIRD: 0.2,
+    OD3D_CATEGORIES.CAT: 0.4,
+    OD3D_CATEGORIES.DEER: 1.7,
+    OD3D_CATEGORIES.DOG: 0.7,
+    OD3D_CATEGORIES.FROG: 0.1,
+    OD3D_CATEGORIES.HORSE: 2.,
 }
 

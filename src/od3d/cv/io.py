@@ -108,6 +108,14 @@ def read_image(path: Path):
     img = transform(img)
     return img
 
+def write_image(img: torch.Tensor, path: Path):
+    transform = transforms.Compose([
+        transforms.ToPILImage()
+    ])
+    img = transform(img)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path)
+
 def image_as_wandb_image(img, caption="Caption Blub"):
     img = wandb.Image(
         img.permute(1, 2, 0).detach().cpu().numpy(),
