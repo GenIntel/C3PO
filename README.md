@@ -9,6 +9,8 @@ source venv_od3d/bin/activate
 pip3 install pip --upgrade
 CUDA_HOME=/misc/software/cuda/cuda-11.7
 export CUDA_HOME
+export CPATH=$CPATH:${CUDA_HOME}/targets/x86_64-linux/include # pycuda requires this
+export LIBRARY_PATH=$LIBRARY_PATH:${CUDA_HOME}/targets/x86_64-linux/lib # pycuda requires this
 
 pip install wheel # pytorch3d requires this
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
