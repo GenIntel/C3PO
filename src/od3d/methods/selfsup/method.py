@@ -19,6 +19,42 @@ from tqdm import tqdm
 import torch.utils.data
 import od3d.io
 
+import torch.nn as nn
+
+class KoLeoLoss(nn.Module):
+    """Kozachenko-Leonenko entropic loss regularizer from Sablayrolles et al. - 2018 - Spreading vectors for similarity search"""
+
+    def __init__(self):
+        super().__init__()
+        self.pnorm = 1
+        self.pdist = nn.PairwiseDistance(self.pnorm, eps=1e-8)
+
+    def pairwise_NNs_inner(self, x):
+        """
+        Pairwise nearest neighbors for L2-normalized vectors.
+        Uses Torch rather than Faiss to remain on GPU.
+        """
+        # parwise dot products (= inverse distance)
+        dots = torch.mm(x, x.t())
+        dist = torch.cdist(x, x, p=self.pnorm)
+        n = x.shape[0]
+        dist.view(-1)[:: (n + 1)].fill_(torch.inf)  # Trick to fill diagonal with -1
+        # max inner prod -> min distance
+        _, I = torch.min(dist, dim=1)  # noqa: E741
+        return I
+
+    def forward(self, prob_pred, eps=1e-8):
+        """
+        Args:
+            prob_pred (BxD): backbone output of student
+        """
+        with torch.cuda.amp.autocast(enabled=False):
+            # prob_pred = F.normalize(prob_pred, eps=eps, p=2, dim=-1)
+            I = self.pairwise_NNs_inner(prob_pred)  # noqa: E741
+            distances = self.pdist(prob_pred, prob_pred[I])  # BxD, BxD -> B
+            loss = -torch.log(distances + eps).mean()
+        return loss
+
 
 class SelfSup(OD3D_Method):
 
@@ -40,14 +76,13 @@ class SelfSup(OD3D_Method):
 
 
 
-        self.backbone: OD3D_Backbone = OD3D_Backbone.subclasses[self.config.backbone.class_name](config=self.config.backbone)
         self.transform = self.backbone.transform
 
         self.to_device()
         self.optim_selfsup = od3d.io.get_obj_from_config(config=self.config.train.selfsup.optimizer, params=self.get_params_selfsup())
         self.scheduler_selfsup = od3d.io.get_obj_from_config(self.optim_selfsup, config=self.config.train.selfsup.scheduler)
         self.loss_selfsup = od3d.io.get_obj_from_config(config=self.config.train.selfsup.loss)
-
+        self.loss_selfsup_koleo = KoLeoLoss()
 
         self.loss_sup = od3d.io.get_obj_from_config(config=self.config.train.sup.loss)
 
@@ -70,7 +105,7 @@ class SelfSup(OD3D_Method):
             self.backbone.transform
         ])
 
-    def init_sup(self):
+    def init_sup(self, device=None):
         self.head_sup = OD3D_Head.subclasses[self.config.model.head.sup.class_name](config=self.config.model.head.sup,
                                                                                in_dims=self.backbone.out_dims,
                                                                                in_upsample_scales=
@@ -79,6 +114,9 @@ class SelfSup(OD3D_Method):
                                                          params=self.get_params_sup())
         self.scheduler_sup = od3d.io.get_obj_from_config(self.optim_sup,
                                                              config=self.config.train.sup.scheduler)
+        if device is None:
+            device = self.device
+        self.head_sup.to(device)
 
     def get_params_selfsup(self):
         return list(self.backbone.parameters()) + list(self.head_selfsup.parameters())
@@ -91,7 +129,6 @@ class SelfSup(OD3D_Method):
             device = self.device
         self.backbone.to(device)
         self.head_selfsup.to(device)
-        self.head_sup.to(device)
 
     def switch_mode_test(self):
         self.backbone.eval()
@@ -112,6 +149,9 @@ class SelfSup(OD3D_Method):
 
     def forward_sup(self, batch):
         return self.head_sup(self.backbone(batch.rgb))
+
+    def forward_sup_multiview(self, batch):
+        return self.forward_sup(self.backbone(batch.rgb))
 
     @property
     def fpath_checkpoint(self):
@@ -189,6 +229,22 @@ class SelfSup(OD3D_Method):
 
         return results_batch
 
+    def test_batch_sup(self, batch):
+        results_batch = OD3D_Results(logging_dir=self.logging_dir)
+
+        with torch.no_grad():
+            batch.to(device=self.device)
+
+            batch_pred = self.forward_sup(batch)
+
+            results_batch['label_gt'] = batch.category_id
+            results_batch['label_pred'] = batch_pred
+            results_batch['label_names'] = self.config.categories
+            results_batch['item_id'] = batch.item_id
+            results_batch['name_unique'] = batch.name_unique
+
+        return results_batch
+
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
         if 'main' in datasets_val.keys():
             dataset_train_sub = datasets_train['labeled']
@@ -250,9 +306,10 @@ class SelfSup(OD3D_Method):
         batch.to(device=self.device)
         batch_pred = self.forward_selfsup(batch)
 
-        B = batch_pred.shape[0]
-        batch_vts_ids = torch.arange(B, device=self.device)
-        loss = self.loss_selfsup(batch_pred, batch_vts_ids)
+        loss = self.loss_selfsup_koleo(batch_pred)
+        #B = batch_pred.shape[0]
+        #batch_vts_ids = torch.arange(B, device=self.device)
+        #loss = self.loss_selfsup(batch_pred, batch_vts_ids)
 
         loss.backward()
         results_batch['loss'] = loss.item()
@@ -293,9 +350,9 @@ class SelfSup(OD3D_Method):
             batch.to(device=self.device)
 
             if not isinstance(dataset, CO3D):
-                results_batch = self.inference_batch_single_view(batch=batch)
+                results_batch = self.forward_sup(batch=batch)
             else:
-                results_batch = self.inference_batch_multiview(batch=batch, return_samples_with_sim=True)
+                results_batch = self.forward_sup_multiview(batch=batch)
             results_epoch += results_batch
 
             if not val and self.config.test.save_results:

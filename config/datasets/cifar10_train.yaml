@@ -1,0 +1,7 @@
+defaults:
+  - cifar10
+
+name: cifar10_train
+
+dict_nested_frames:
+  train:
