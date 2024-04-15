@@ -13,7 +13,6 @@ import torch
 class OD3D_Benchmark:
     def __init__(self, config: DictConfig):
         self.config = config
-        print(OmegaConf.to_yaml(config))
         self.logging_dir = Path(self.config.logger.local_dir).joinpath(self.config.run_name)
         self.logging_dir.mkdir(parents=True, exist_ok=True)
         if self.config.logger.use_wandb:

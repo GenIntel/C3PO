@@ -177,8 +177,8 @@ def rsync_preprocess(
     config_source = od3d.io.load_hierarchical_config(platform=platform_source, overrides=["+datasets@dataset=" + dataset])
     config_target = od3d.io.load_hierarchical_config(platform=platform_target, overrides=["+datasets@dataset=" + dataset])
 
-    paths_source = Path(config_source.dataset.path_preprocess).joinpath("")
-    paths_target = Path(config_target.dataset.path_preprocess).joinpath("")
+    paths_source = Path(config_source.dataset.path_preprocess).joinpath(rpath)
+    paths_target = Path(config_target.dataset.path_preprocess).joinpath(rpath)
 
     source_link = f'{config_source.platform.link}:' if config_source.platform.link != 'local' else ''
     target_link = f'{config_target.platform.link}:' if config_target.platform.link != 'local' else ''
