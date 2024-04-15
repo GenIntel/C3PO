@@ -1,4 +1,5 @@
 import logging
+import warnings
 logger = logging.getLogger(__name__)
 from torch.utils.data import Dataset
 from omegaconf import OmegaConf, DictConfig
@@ -19,7 +20,6 @@ from od3d.cv.geometry.transform import proj3d2d_broadcast
 from od3d.datasets.sequence import OD3D_Sequence
 from od3d.datasets.sequence_meta import OD3D_SequenceMeta
 
-
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = 'pcl'
 
@@ -35,13 +35,21 @@ class OD3D_DATASET_SPLITS(str, ExtEnum):
     RANDOM = 'random'
     SEQUENCES_SHARED = 'sequences_shared'
 
-
 class OD3D_Dataset(Dataset):
     from od3d.datasets.enum import OD3D_CATEGORIES
     map_od3d_categories = None
     all_categories = list(OD3D_CATEGORIES)
     subclasses = {}
     frame_type = OD3D_Frame
+    modalities = None
+    path_raw: Path = None
+    path_preprocess: Path = None
+    categories: List[str] = None
+    transform = None
+    index_shift = 0
+    subset_fraction = 1.
+    dict_nested_frames: Dict = None
+    dict_nested_frames_ban: Dict = None
 
     @classmethod
     def create_from_config(cls, config: DictConfig, transform=None):
@@ -58,6 +66,25 @@ class OD3D_Dataset(Dataset):
 
         return od3d_dataset
 
+    def get_as_dict(self):
+        from od3d.cv.transforms.transform import OD3D_Transform
+        _dict = {}
+        keys = inspect.getfullargspec(self.__init__)[0][1:]
+        for key in keys:
+            if hasattr(self, key):
+                _dict[key] = getattr(self, key)
+                if isinstance(_dict[key], Enum):
+                    _dict[key] = str(_dict[key])
+                if isinstance(_dict[key], OD3D_Transform):
+                    _dict[key] = _dict[key].get_as_dict()
+        _dict['class_name'] = type(self).__name__
+        return _dict
+
+    def save_to_config(self, fpath: Path):
+        _dict = self.get_as_dict()
+        from od3d.io import write_dict_as_yaml
+        write_dict_as_yaml(fpath=fpath, _dict=_dict, save_enum_as_str=True)
+
     @classmethod
     def create_by_name(cls, name: str, config: dict = None):
         config_loaded = od3d.io.read_config_intern(rfpath=Path("datasets").joinpath(f"{name}.yaml"))
@@ -70,6 +97,8 @@ class OD3D_Dataset(Dataset):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.subclasses[cls.__name__] = cls
+        print(f"register {cls.__name__}")
+
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES], path_raw: Path, path_preprocess: Path,
                  categories: List[str]=None, transform=None, index_shift=0, subset_fraction=1.,
                  dict_nested_frames: Dict=None, dict_nested_frames_ban: Dict=None):
@@ -104,8 +133,7 @@ class OD3D_Dataset(Dataset):
         logger.info('completing nested frames..., can take up to 500 seconds...')
         dict_nested_frames = self.frame_type.meta_type.complete_nested_metas(path_meta=self.path_meta,
                                                                              dict_nested_metas=dict_nested_frames,
-                                                                             dict_nested_metas_ban=
-                                                                             dict_nested_frames_ban)
+                                                                             dict_nested_metas_ban=dict_nested_frames_ban)
 
 
         dict_nested_frames = self.filter_dict_nested_frames(dict_nested_frames)
@@ -146,6 +174,12 @@ class OD3D_Dataset(Dataset):
         self.list_frames_unique = list_frames_unique
         self.dict_nested_frames = OD3D_FrameMeta.rollup_flattened_frames(
             list_meta_names_unique=self.list_frames_unique)
+        # check the number of keys in dict_nested_frames
+        keys = list(self.dict_nested_frames.keys())
+        if len(keys) == 1:
+            self.subset = list(self.dict_nested_frames.keys())[0]
+        else:
+            warnings.warn(f"More than one subset in dict_nested_frames: {keys}")
         self.frames_count = len(self.list_frames_unique)
 
     def get_subset_with_item_ids(self, item_ids):
@@ -171,6 +205,7 @@ class OD3D_Dataset(Dataset):
         item_ids_subsetB = item_ids[~item_ids_maskA]
 
         return item_ids_subsetA, item_ids_subsetB
+
     def get_fractionA_from_fractionA_and_fraction_B(self, fraction1: float, fraction2: float=None):
         if fraction2 is None:
             assert fraction1 > 0. and fraction1 < 1.
@@ -256,7 +291,6 @@ class OD3D_Dataset(Dataset):
             if key == 'mask' and config_preprocess.mask.get('enabled', False):
                 override = config_preprocess.mask.get('override', False)
                 self.preprocess_mask(override=override)
-
 
 
     def preprocess_mask(self, override=False, remove_previous=False):
@@ -438,6 +472,8 @@ class OD3D_Dataset(Dataset):
 
 class OD3D_SequenceDataset(OD3D_Dataset):
     sequence_type = OD3D_Sequence
+    frames_count_max_per_sequence = None
+    sequences_count_max_per_category = None
 
     def __init__(self, name: str, modalities: List[OD3D_FRAME_MODALITIES],
                  path_raw: Path, path_preprocess: Path,
@@ -780,7 +816,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         from od3d.cv.visual.video import save_video
         save_video(fpath=fpath_video, imgs=tstamp_category_sequence_imgs, fps=fps)
 
-    def visualize_category_sequences(self, imgs_count=5, viewpoints_count=16, H=1080, W=1980):
+    def visualize_category_frames(self, imgs_count=5, viewpoints_count=16, H=1080, W=1980, ref_count=1):
         sequences = self.get_sequences()
         from od3d.cv.visual.resize import resize
         from od3d.cv.visual.show import show_scene, show_imgs
@@ -810,55 +846,71 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             logger.info(f'mesh has {len(category_mesh.verts)} vertices and {len(category_mesh.faces)} faces.')
             show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
                        cams_imgs=category_cams_imgs, meshes=[category_mesh], viewpoints_count=viewpoints_count,
-                       fpath=f'{category}.png', H=H, W=W)
+                       fpath=Path(f'{category}_frames.webm'), H=H, W=W, pts3d_size=1.)
 
 
             #show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,
             #           cams_imgs=category_cams_imgs, pts3d_colors=[category_pts3d_colors], pts3d=[category_pts3d],
             #           viewpoints_count=9, fpath=f'{category}.png')
 
-    def visualize_category_meshes(self, viewpoints_count=16, H=1080, W=1980):
+    def visualize_category_pcls(self, imgs_count=5, viewpoints_count=16, H=1080, W=1980, ref_count=1):
         sequences = self.get_sequences()
         from od3d.cv.visual.resize import resize
         from od3d.cv.visual.show import show_scene, show_imgs
 
+        categorical_fpaths = {category: [] for category in self.categories}
         for category in tqdm(self.categories):
-            category_sequence = None
-            category_mesh = None
-            category_sequences_mesh = []
-            category_pts3d = None
-            category_pts3d_colors = None
-            category_pts3d_normals = None
-            category_sequences_pts3d = []
-            category_sequences_pts3d_colors = []
-            category_sequences_pts3d_normals = []
-
             for sequence in tqdm(sequences):
                 if sequence.category == category:
-                    sequence_mesh = sequence.read_mesh()
-                    sequence_pts3d, sequence_pts3d_colors, sequence_pts3d_normals = sequence.read_pcl()
+                    fpath = Path(f'{category}_{sequence.name}_pcl.webm')
+                    categorical_fpaths[category].append(fpath)
+                    instance_pts3d, instance_pts3d_colors, instance_pts3d_normals = sequence.read_pcl()
+                    show_scene(pts3d_colors=[instance_pts3d_colors], pts3d=[instance_pts3d],
+                               viewpoints_count=viewpoints_count, fpath=fpath, H=H, W=W)
 
-                    if category_mesh is None:
-                        category_sequence = sequence
-                        category_pts3d = sequence_pts3d
-                        #category_pts3d_colors = sequence_pts3d_colors
-                        #category_pts3d_normals = sequence_pts3d_normals
-                        category_mesh = sequence_mesh
-                        category_mesh.rgb = category_mesh.verts_ncds
+            from od3d.cv.io import write_webm_videos_side_by_side
+            write_webm_videos_side_by_side(in_fpaths=categorical_fpaths[category],
+                                           out_fpath=Path(f'{category}_pcl.webm'))
 
-                    sequence.preprocess_mesh_feats(override=False)
+    def visualize_category_meshes(self, viewpoints_count=16, H=1080, W=1980,
+                                  modalities=['ncds'], #, 'nn_geo', 'nn_app', 'cycle_weight', 'nn_app_cycle_weight'],
+                                  cyclic_weight_temp=0.9, ref_count=1):
+        # modalities = ['ncds', 'nn_geo', 'nn_app', 'cycle_weight', 'nn_app_cycle_weight']
+        sequences = self.get_sequences()
+        from od3d.cv.visual.resize import resize
+        from od3d.cv.visual.show import show_scene, show_imgs
+        categorical_src_counter = {category: 0 for category in self.categories}
+        modality_categorical_ref_fpaths ={ modality: {category: {} for category in self.categories} for modality in modalities}
+        for src_sequence in tqdm(sequences):
+            categorical_src_counter[src_sequence.category] += 1
+            ref_counter = 0
+            for ref_sequence in tqdm(sequences):
+                if ref_counter >= ref_count and categorical_src_counter[src_sequence.category] > ref_count:
+                    break
+
+                if src_sequence.category == ref_sequence.category:
+                    src_sequence_mesh = src_sequence.read_mesh()
+                    ref_sequence_mesh = ref_sequence.read_mesh()
+                    ref_counter += 1
+                else:
+                    continue
+                    #ref_sequence_pts3d, ref_sequence_pts3d_colors, ref_sequence_pts3d_normals = ref_sequence.read_pcl()
+
+
+                if modalities != ['ncds']:
+                    #sequence.preprocess_mesh_feats(override=False)
                     # logger.info(f'mesh is watertight: {sequence_mesh.to_o3d().is_watertight()}')
-                    category_sequence.preprocess_mesh_feats(override=False)
-                    sequence.preprocess_mesh_feats_dist(category_sequence, override=False)
-                    mesh_feats_dist = sequence.read_mesh_feats_dist(category_sequence)
+                    #category_sequence.preprocess_mesh_feats(override=False)
+                    #sequence.preprocess_mesh_feats_dist(category_sequence, override=False)
+                    mesh_feats_dist = src_sequence.read_mesh_feats_dist(ref_sequence)
 
-                    dist_ref_geo_max = torch.cdist(category_mesh.verts[None,], category_mesh.verts[None,]).max().detach()  #
-                    dist_src_geo_max = torch.cdist(sequence_mesh.verts[None,], sequence_mesh.verts[None,]).max().detach()  #
+                    dist_ref_geo_max = torch.cdist(ref_sequence_mesh.verts[None,], ref_sequence_mesh.verts[None,]).max().detach()  #
+                    dist_src_geo_max = torch.cdist(src_sequence_mesh.verts[None,], src_sequence_mesh.verts[None,]).max().detach()  #
 
                     argmin_ref_from_src = mesh_feats_dist.argmin(dim=-1)  # N,
                     argmin_src_from_ref = mesh_feats_dist.argmin(dim=-2)  # R,
-                    src_cyclic_dist = (sequence_mesh.verts - sequence_mesh.verts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1,).detach() / dist_src_geo_max  # N,
-                    ref_cyclic_dist = (category_mesh.verts - category_mesh.verts[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1,).detach() / dist_ref_geo_max  # R,
+                    src_cyclic_dist = (src_sequence_mesh.verts - src_sequence_mesh.verts[argmin_src_from_ref[argmin_ref_from_src]]).norm(dim=-1,).detach() / dist_src_geo_max  # N,
+                    ref_cyclic_dist = (ref_sequence_mesh.verts - ref_sequence_mesh.verts[argmin_ref_from_src[argmin_src_from_ref]]).norm(dim=-1,).detach() / dist_ref_geo_max  # R,
 
                     from od3d.cv.select import batched_index_select
                     src_cyclic_dist[
@@ -867,10 +919,46 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                     ref_cyclic_dist[
                         batched_index_select(input=mesh_feats_dist.T, index=argmin_src_from_ref[..., None], dim=1).isinf()[
                         :, 0]] = torch.inf
+                    cycle_weight = torch.exp(-((src_cyclic_dist / cyclic_weight_temp)))
 
-                    cyclic_weight_temp = 0.5
-                    cycle_weight = torch.exp(-((src_cyclic_dist / cyclic_weight_temp)**2))
 
-                    sequence_mesh.rgb = category_mesh.verts_ncds[argmin_ref_from_src] * (src_cyclic_dist != torch.inf).float()[:, None]
-                    sequence_mesh.rgb *= cycle_weight[:, None]
-                    show_scene(meshes=[sequence_mesh], viewpoints_count=viewpoints_count, fpath=f'{category}_{sequence.name}.png', H=H, W=W)
+                for modality in modalities:
+                    src_sequence_mesh = src_sequence.read_mesh()
+
+                    if modality == 'ncds':
+                        src_sequence_mesh.rgb = src_sequence_mesh.verts_ncds
+                    elif modality == 'nn_app':  #  'nn_geo', 'nn_app', 'cycle_weight', 'nn_app_cycle_weight'
+                        src_sequence_mesh.rgb = ref_sequence_mesh.verts_ncds[argmin_ref_from_src].clone()
+                                           #  * (src_cyclic_dist != torch.inf).float()[:, None]
+                    elif modality == 'nn_cycle':
+                        src_sequence_mesh.rgb = src_sequence_mesh.verts_ncds[argmin_src_from_ref[argmin_ref_from_src]].clone()
+                    elif modality == 'nn_app_cycle_weight':
+                        src_sequence_mesh.rgb = ref_sequence_mesh.verts_ncds[argmin_ref_from_src].clone() * cycle_weight[:, None]
+                    elif modality == 'nn_geo':
+                        dist_geo = torch.cdist(src_sequence_mesh.verts[None,], ref_sequence_mesh.verts[None,]).detach()[0]
+                        src_sequence_mesh.rgb = ref_sequence_mesh.verts_ncds[dist_geo.argmin(dim=-1)].clone()
+                    elif modality == 'cycle_weight':
+                        src_sequence_mesh.rgb = cycle_weight[:, None].repeat(1, 3) * 0.9
+
+                    if modality == 'ncds':
+                        fpath = Path(f'{src_sequence.category}_{src_sequence.name}_ncds.webm')
+                    else:
+                        fpath = Path(f'{src_sequence.category}_src_{src_sequence.name}_ref_{ref_sequence.name}_{modality}.webm')
+                        if ref_sequence.name not in modality_categorical_ref_fpaths[modality][src_sequence.category].keys():
+                            modality_categorical_ref_fpaths[modality][src_sequence.category][ref_sequence.name] = []
+
+                        if ref_sequence.name == src_sequence.name:
+                            modality_categorical_ref_fpaths[modality][src_sequence.category][
+                                ref_sequence.name].append(Path(f'{src_sequence.category}_{src_sequence.name}_ncds.webm'))
+                        else:
+                            modality_categorical_ref_fpaths[modality][src_sequence.category][ref_sequence.name].append(fpath)
+                    show_scene(meshes=[src_sequence_mesh], viewpoints_count=viewpoints_count,
+                               fpath=fpath, H=H, W=W)
+
+        for modality in modalities:
+            for category in tqdm(self.categories):
+                for ref_name in modality_categorical_ref_fpaths[modality][category].keys():
+                    from od3d.cv.io import write_webm_videos_side_by_side
+                    if len(modality_categorical_ref_fpaths[modality][category][ref_name]) > 0:
+                        write_webm_videos_side_by_side(in_fpaths=modality_categorical_ref_fpaths[modality][category][ref_name],
+                                                       out_fpath=Path(f'{category}_{ref_name}_{modality}.webm'))

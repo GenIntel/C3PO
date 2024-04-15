@@ -145,5 +145,10 @@ config/platform/local.yaml
 config/platform/slurm.yaml
 config/platform/torque.yaml
 
+
+# any playground file
+*playground*
+
 # vscode
 .vscode/launch.json
+

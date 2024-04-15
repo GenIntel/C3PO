@@ -13,13 +13,16 @@ import matplotlib.pyplot as plt
 
 from sklearn.metrics import RocCurveDisplay
 import numpy as np
+from pathlib import Path
+
 
 class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
-    def __init__(self, device: torch.device='cpu', init_dict: Dict[str, Union[torch.Tensor, List]]=None):
+    def __init__(self, device: torch.device='cpu', init_dict: Dict[str, Union[torch.Tensor, List]]=None, logging_dir=None):
         super().__init__()
         self.mean_blocklist = ['label_gt', 'label_pred', 'rot_diff_rad', 'name_unique', 'item_id', 'cam_tform4x4_obj', 'label_names', 'pi6_pr_vs_sim_geo_and_appear', 'noise2d']
         self.log_blocklist = ['name_unique', 'item_id', 'cam_tform4x4_obj', 'noise2d']
         self.device = device
+        self.logging_dir = logging_dir
 
         if init_dict is not None:
             self.__add__(other=init_dict)
@@ -66,9 +69,9 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                         label_names = [str(i) for i in range(max(set(self[f'{prefix}label_gt'] + self[f'{prefix}label_pred'])) + 1)]
                     res[f'label/{prefix_saved}acc'] = (self[f'{prefix}label_gt'] == self[f'{prefix}label_pred']).to(dtype=float).mean(dim=0)
                     res[f'label/{prefix_saved}confusion'] = wandb.plot.confusion_matrix(probs=None,
-                                                                         y_true=self[f'{prefix}label_gt'].numpy(),
-                                                                         preds=self[f'{prefix}label_pred'].numpy(),
-                                                                         class_names=label_names)
+                                                                                        y_true=self[f'{prefix}label_gt'].numpy(),
+                                                                                        preds=self[f'{prefix}label_pred'].numpy(),
+                                                                                        class_names=label_names)
 
             if 'rot_diff_rad' in k:
                 prefix = k[:k.find('rot_diff_rad')]
@@ -159,7 +162,7 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                        showscale=False),
             go.Surface(z=Z_recall, x=X, y=Y, colorscale='Blues', name='Recall', hoverinfo='skip', opacity=0.5,
                        showscale=False),
-                              ])
+        ])
         #,  x='min. sim. appearance', y='min. sim. geometry'
         fig.update_layout(title=title,
                           #xaxis_title="X Axis Title",
@@ -358,8 +361,45 @@ class OD3D_Results(Dict[str, Union[torch.Tensor, List]]):
                 res[key] = val
         return res
 
+    def get_log_results(self):
+        res = {}
+        for key, val in self.items():
+            # if isinstance(val, torch.Tensor):
+            #     res[key] = val.detach().cpu().tolist()
+            # else:
+            res[key] = val
+        return res
+
     def log(self):
-        wandb.log(self.get_filtered_log_results())
+        filtered_log_results = self.get_filtered_log_results()
+        wandb.log(filtered_log_results)
 
     def log_with_prefix(self, prefix: str, prefix_append_char='/'):
-        wandb.log({prefix + f'{prefix_append_char}' + k: v for k, v in self.get_filtered_log_results().items()})
+        filtered_log_results = self.get_filtered_log_results()
+        filtered_log_results_with_prefix = {prefix + f'{prefix_append_char}' + k: v for k, v in filtered_log_results.items()}
+        wandb.log(filtered_log_results_with_prefix)
+
+
+    def save_visual(self, prefix: str):
+        for key, val in self.items():
+            if isinstance(val, wandb.data_types.Image):
+                fpath = self.logging_dir.joinpath(f'{prefix}/{key}.png')
+                fpath.parent.mkdir(parents=True, exist_ok=True)
+                val.image.save(fpath)
+
+        #fpath.parent.mkdir(parents=True, exist_ok=True)
+        #torch.save(obj=self.get_log_results(), f=fpath)
+
+    def save_with_dataset(self, prefix: str, dataset, _dict: dict=None):
+        if _dict is None:
+            _dict = self.get_log_results()
+        fpath = self.logging_dir.joinpath(f'{prefix}/{dataset.name}/results.pt')
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(obj=_dict, f=fpath)
+        dataset.save_to_config(fpath=self.logging_dir.joinpath(f'{prefix}/{dataset.name}/config.yaml'))
+
+    @classmethod
+    def read_from_local(cls, logging_dir: Path, dataset_rpath: Path):
+        fpath = logging_dir.joinpath(f'{dataset_rpath}/results.pt')
+        _dict = torch.load(fpath)
+        return cls(logging_dir=logging_dir, init_dict=_dict)

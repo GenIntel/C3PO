@@ -47,6 +47,47 @@ DATASET_CO3D_20 = 'co3d_20'
 DATASET_CO3D_28 = 'co3d_28'
 DATASET_OBJECTNET3D = 'objectnet3d'
 
+@app.command()
+def runs(runs_names_regex: str = typer.Option('.*', '-r', '--runs'),
+         runs_names_regex_groups: str = typer.Option('', '-n', '--runs-names-regex-groups'),
+         metrics: str = typer.Option(None, '-m', '--metrics'),
+         configs: str = typer.Option(None, '-c', '--configs'),
+         summary_cols: str = typer.Option(None, '-s', '--summary-cols'),
+         age_in_hours_gt: int = typer.Option(0, '-g', '--age-in-hours-gt'),
+         age_in_hours_lt: int = typer.Option(1000, '-l', '--age-in-hours-lt'),
+         duplicates_keep: str = typer.Option('last', '-d', '--duplicates_keep'),
+         show_index: bool = typer.Option(False, '-i', '--show_index'),):
+
+    digits = 3
+    logging.basicConfig(level=logging.INFO)
+    if configs is not None:
+        configs = configs.split(',')
+    else:
+        configs = []
+    if metrics is not None:
+        metrics = metrics.split(',')
+    else:
+        metrics = []
+    runs_names_regex_groups = runs_names_regex_groups.split(',')
+    df = get_dataframe(configs=configs, metrics=metrics, name_regex=runs_names_regex,
+                       name_regex_groups = runs_names_regex_groups,
+                       age_in_hours_gt = age_in_hours_gt, age_in_hours_lt = age_in_hours_lt,
+                       duplicates_keep = duplicates_keep)
+
+    if summary_cols is not None:
+        for metric in metrics:
+            df_metric = df.groupby(summary_cols.split(','))[metric].agg(['mean', 'std']).reset_index()
+            # logger.info(tabulate(df_metric, headers='keys', tablefmt='tsv', floatfmt=f".{digits}f", showindex=False)) # latex
+            logger.info(re.sub(r'[^\S\r\n]+', ', ', tabulate(df_metric, headers='keys', stralign="left", tablefmt="plain", floatfmt=f".{digits}f", showindex=show_index))) # latex
+
+            #logger.info(df_metric)
+
+    else:
+        # logger.info(tabulate(df, headers='keys', tablefmt='csv', floatfmt=f".{digits}f")) # latex csv tsv
+        logger.info(re.sub(r'[^\S\r\n]+', ', ', tabulate(df, headers='keys', stralign="left", tablefmt="plain", floatfmt=f".{digits}f", showindex=show_index))) # latex csv tsv
+        # , stralign="right", numalign="right"
+        # logger.info(df)
+        # , stralign="left", tablefmt="plain").replace('  ', ', '))
 
 @app.command()
 def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchmark'),
@@ -55,8 +96,11 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
              age_in_hours_gt: int = typer.Option(0, '-g', '--age-in-hours-gt'),
              age_in_hours_lt: int = typer.Option(1000, '-l', '--age-in-hours-lt'),
              metrics: str = typer.Option(None, '-m', '--metrics'),
-             configs: str = typer.Option(None, '-c', '--configs'),):
-
+             configs: str = typer.Option(None, '-c', '--configs'),
+             summary_cols: str = typer.Option(None, '-s', '--summary-cols'),
+             duplicates_keep: str = typer.Option('last', '-d', '--duplicates_keep'),
+             show_index: bool = typer.Option(False, '-i', '--show_index'), ):
+    digits = 3
     logging.basicConfig(level=logging.INFO)
 
     from od3d.cli.benchmark import get_dataframe_multiple
@@ -71,9 +115,26 @@ def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchma
     else:
         configs = []
 
-    df = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform, age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt, metrics=metrics, configs=configs)
+    df = get_dataframe_multiple(benchmark=benchmark, ablation=ablation, platform=platform,
+                                age_in_hours_gt=age_in_hours_gt, age_in_hours_lt=age_in_hours_lt,
+                                metrics=metrics, configs=configs, duplicates_keep=duplicates_keep,
+                                add_configs_ablation=False)
 
-    logger.info(df)
+
+    if summary_cols is not None:
+        for metric in metrics:
+            df_metric = df.groupby(summary_cols.split(','))[metric].agg(['mean', 'std']).reset_index()
+            # logger.info(tabulate(df_metric, headers='keys', tablefmt='tsv', floatfmt=f".{digits}f", showindex=False)) # latex
+            logger.info(re.sub(r'[^\S\r\n]+', ', ', tabulate(df_metric, headers='keys', stralign="left", tablefmt="plain", floatfmt=f".{digits}f", showindex=show_index))) # latex
+
+            #logger.info(df_metric)
+
+    else:
+        # logger.info(tabulate(df, headers='keys', tablefmt='csv', floatfmt=f".{digits}f")) # latex csv tsv
+        logger.info(re.sub(r'[^\S\r\n]+', ', ', tabulate(df, headers='keys', stralign="left", tablefmt="plain", floatfmt=f".{digits}f", showindex=show_index))) # latex csv tsv
+        # , stralign="right", numalign="right"
+        # logger.info(df)
+        # , stralign="left", tablefmt="plain").replace('  ', ', '))
 
 @app.command()
 def pascal3d(

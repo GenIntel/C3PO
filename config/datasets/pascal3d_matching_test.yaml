@@ -1,0 +1,24 @@
+defaults:
+  - pascal3d
+
+name: pascal3d_matching_test
+class_name: Pascal3D_Matching
+
+dict_nested_frames:
+  val:
+
+subset_fraction: 1. #0.05
+
+#categories:
+#  #- airplane
+#  - bicycle
+#  #- boat
+#  #- bottle
+#  - bus
+#  - car
+#  - chair
+#  #- dining_table
+#  - motorcycle
+#  - couch
+#  #- train
+#  - tv

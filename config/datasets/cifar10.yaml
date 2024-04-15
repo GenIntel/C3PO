@@ -1,0 +1,45 @@
+name: cifar10
+class_name: CIFAR10
+
+modalities:
+    - 'rgb'
+    - 'rgb_mask'
+    - 'category'
+    - 'category_id'
+    #- 'mask'
+    - 'size'
+
+rpath_cifar10_raw: CIFAR10
+
+path_raw: ${platform.path_datasets_raw}/${.rpath_cifar10_raw}
+path_preprocess: ${platform.path_datasets_preprocess}/CIFAR10_Preprocess
+
+setup:
+  enabled: False
+  override: False
+  remove_previous: False
+
+extract_meta:
+  enabled: False
+  override: False
+  remove_previous: False
+
+preprocess:
+  mask:
+    enabled: False
+    override: False
+    remove_previous: False
+
+categories:
+#    - aeroplane
+#    - bicycle
+#    - boat
+#    - bottle
+#    - bus
+#     - car
+#    - chair
+#    - diningtable
+#    - motorbike
+#    - sofa
+#    - train
+#    - tvmonitor

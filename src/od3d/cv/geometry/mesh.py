@@ -31,6 +31,7 @@ class MESH_RENDER_MODALITIES(str, Enum):
     FEATS = 'feats'
     MASK_VERTS_VSBL = 'mask_verts_vsbl'
     VERTS_NCDS = 'verts_ncds'
+    VERTS_ONEHOT = 'verts_onehot'
 
 class MESH_RENDER_MODALITIES_GAUSSIAN_SPLAT(str, Enum):
     RGB = MESH_RENDER_MODALITIES.RGB
@@ -74,6 +75,7 @@ class Mesh:
         logger.info(f'writing mesh to {fpath}')
         fpath.parent.mkdir(parents=True, exist_ok=True)
         save_ply(fpath, verts=self.verts, faces=self.faces)
+
     def verts_count(self):
         return self.verts.shape[0]
 
@@ -115,10 +117,10 @@ class Mesh:
     # ray.transform(inv_tform4x4(cam_tform4x4_obj).detach().cpu().numpy())
 
 class Meshes(torch.nn.Module):
-    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None,
-                 feats: List[torch.Tensor]=None, geodesic_prob_sigma=0.2,
+    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor] = None,
+                 feats: List[torch.Tensor] = None, geodesic_prob_sigma=0.2,
                  gaussian_splat_enabled=False, gaussian_splat_opacity=0.7,
-                 gaussian_splat_pts3d_size_rel_to_neighbor_dist =0.5,
+                 gaussian_splat_pts3d_size_rel_to_neighbor_dist=0.5,
                  pt3d_raster_perspective_correct=False):
         super().__init__()
 
@@ -348,17 +350,17 @@ class Meshes(torch.nn.Module):
 
 
     def get_geodesic_prob(self):
-        _geodesic_dist = self.get_geodesic_dist.clone()
+        _geodesic_dist = self.get_geodesic_dist().clone()
         _geodesic_prob = torch.exp(input=- 0.5 * (_geodesic_dist / (self.geodesic_prob_sigma + 1e-10))**2)
         # replace inf with 0
         _geodesic_prob[torch.isinf(_geodesic_dist)] = 0.
         return _geodesic_prob
 
 
-    @property
-    def geodesic_prob_with_noise(self):
+
+    def get_geodesic_prob_with_noise(self):
         geodesic_prob_with_noise = torch.eye(self.verts.shape[0]+1, device=self.device)
-        geodesic_prob_with_noise[:-1, :-1] = self.get_geodesic_prob
+        geodesic_prob_with_noise[:-1, :-1] = self.get_geodesic_prob()
         return geodesic_prob_with_noise
 
     def get_verts_ncds_with_mesh_id(self, mesh_id):
@@ -833,7 +835,8 @@ class Meshes(torch.nn.Module):
 
     #def get_pre_rendered_masks(self):
 
-    def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
+    def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None,
+                     modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
         # imgs_size: (height, width)
         dtype = cams_tform4x4_obj.dtype
         device = cams_tform4x4_obj.device
@@ -992,6 +995,10 @@ class Meshes(torch.nn.Module):
                 verts_vsbl_mask[b, verts_ids_vsbl] = 1
 
             return verts_vsbl_mask
+
+        if modality == MESH_RENDER_MODALITIES.VERTS_ONEHOT:
+            B = fragments.pix_to_face.shape[0]
+            pass
 
         if modality == MESH_RENDER_MODALITIES.FEATS:
             feats_from_faces = torch.cat([self.get_feats_from_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0)

@@ -729,30 +729,129 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
             quantile = max(0.01, 3. / len(pts3d))
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
-            vertices_count = mesh_vertices_count + 1
-            alpha = particle_size / 2.
-            # while vertices_count > mesh_vertices_count:
-            #     alpha = alpha * 1.3
+            alpha = particle_size
 
             o3d_obj_mesh = None
-            while o3d_obj_mesh is None:
+            while o3d_obj_mesh is None or not o3d_obj_mesh.is_watertight() or not o3d_obj_mesh.is_vertex_manifold():
                 try:
                     o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
                 except Exception as e:
                     logger.warning(f'alpha {alpha} failed with {e}')
+
+                if o3d_obj_mesh is not None:
+                    logger.info(o3d_obj_mesh)
+                    o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
+                    logger.info(o3d_obj_mesh)
+                    faces_count = mesh_vertices_count * 2
+
+                    o3d_obj_mesh_downsampled = o3d_obj_mesh
+                    vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+                    while vertices_count > mesh_vertices_count:
+                        faces_count = int(faces_count * 0.9)
+                        o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=faces_count)
+                        logger.info(o3d_obj_mesh_downsampled)
+                        vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+
+                    obj_mesh = Mesh.from_o3d(o3d_obj_mesh_downsampled, device=device)
+                alpha = alpha * 1.3
+
+
+        elif mesh_type == 'alphauniform':
+            # #### OPTION 3: ALPHA_SHAPE
+            pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
+            quantile = max(0.01, 3. / len(pts3d))
+            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
+            vertices_count = mesh_vertices_count + 1
+            alpha = particle_size
+            o3d_obj_mesh = None
+            while vertices_count > mesh_vertices_count:
+                try:
+                    o3d_obj_mesh = open3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(o3d_pcl, alpha)
+                except Exception as e:
+                    logger.warning(f'alpha {alpha} failed with {e}')
+
+                from od3d.cv.geometry.mesh_simplification import simplify_mesh
+                logger.info(o3d_obj_mesh)
+                if o3d_obj_mesh is not None and o3d_obj_mesh.is_watertight() and o3d_obj_mesh.is_vertex_manifold():
+                    pass
+                else:
+                    alpha = alpha * 1.3
+                    continue
+                assert o3d_obj_mesh.is_watertight()
+                o3d_obj_mesh_downsampled = simplify_mesh(o3d_obj_mesh,
+                                                         mesh_vertices_count=mesh_vertices_count,
+                                                         isotropic=True, valence_aware=True)
+                logger.info(o3d_obj_mesh_downsampled)
+                if o3d_obj_mesh_downsampled.is_watertight() and o3d_obj_mesh_downsampled.is_vertex_manifold():
+                    vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+                else:
                     alpha = alpha * 1.3
 
-            logger.info(o3d_obj_mesh)
-            o3d_obj_mesh = o3d_obj_mesh.remove_unreferenced_vertices()
-            logger.info(o3d_obj_mesh)
-            faces_count = mesh_vertices_count * 2
+            assert o3d_obj_mesh_downsampled.is_watertight()
+            obj_mesh = Mesh.from_o3d(o3d_obj_mesh_downsampled, device=device)
 
+        elif mesh_type == 'alphawrapuniform':
+            # #### OPTION 3: ALPHA_SHAPE
+            pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
+            quantile = max(0.01, 3. / len(pts3d))
+            particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
+            vertices_count = mesh_vertices_count + 1
+            alpha = particle_size
+            offset = particle_size / 100.
             while vertices_count > mesh_vertices_count:
-                faces_count = int(faces_count * 0.9)
-                o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(target_number_of_triangles=faces_count)
-                logger.info(o3d_obj_mesh_downsampled)
-                vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+                from CGAL.CGAL_Kernel import Point_3
+                from CGAL.CGAL_Alpha_wrap_3 import alpha_wrap_3
+                from CGAL.CGAL_Polyhedron_3 import Polyhedron_3
+                cgal_pts3d = [Point_3(pt[0].item(), pt[1].item(), pt[2].item()) for pt in pts3d]
+                cgal_poly = Polyhedron_3()
+                alpha_wrap_3(cgal_pts3d, alpha.item(), offset.item(), cgal_poly)
+                cgal_poly.points()
 
+                vertices = []
+                for v in cgal_poly.vertices():
+                    vertices.append([v.point().x(), v.point().y(), v.point().z()])
+                vertices = torch.Tensor(vertices)
+
+                # Get faces
+                faces = []
+                for f in cgal_poly.facets():
+                    edge = f.facet_begin()
+                    edge = edge.next()
+                    face_vertices = []
+                    for i in range(f.facet_degree()):
+                        vertex = torch.Tensor(
+                            [edge.vertex().point().x(), edge.vertex().point().y(), edge.vertex().point().z()])
+                        vertex_id = torch.where((vertices == vertex).all(dim=-1))[0]
+                        face_vertices.append(vertex_id)
+                        edge = edge.next()
+                    # Assuming each facet is a triangle
+                    assert len(face_vertices) == 3
+                    faces.append(face_vertices)
+                faces = torch.Tensor(faces).long()
+
+                vertices = open3d.utility.Vector3dVector(vertices.detach().cpu().numpy())
+                faces = open3d.utility.Vector3iVector(faces.detach().cpu().numpy())
+
+                o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
+
+                from od3d.cv.geometry.mesh_simplification import simplify_mesh
+                logger.info(o3d_obj_mesh)
+                if o3d_obj_mesh.is_watertight() and o3d_obj_mesh.is_vertex_manifold():
+                    pass
+                else:
+                    alpha = alpha * 1.3
+                    continue
+                assert o3d_obj_mesh.is_watertight()
+                o3d_obj_mesh_downsampled = simplify_mesh(o3d_obj_mesh,
+                                                         mesh_vertices_count=mesh_vertices_count,
+                                                         isotropic=True, valence_aware=True)
+                logger.info(o3d_obj_mesh_downsampled)
+                if o3d_obj_mesh_downsampled.is_watertight() and o3d_obj_mesh_downsampled.is_vertex_manifold():
+                    vertices_count = len(o3d_obj_mesh_downsampled.vertices)
+                else:
+                    alpha = alpha * 1.3
+
+            assert o3d_obj_mesh_downsampled.is_watertight()
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh_downsampled, device=device)
 
         elif mesh_type == 'alphawrap':
@@ -760,8 +859,8 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
             pts3d = random_sampling(pts3d, pts3d_max_count=10000) # 11 GB
             quantile = max(0.01, 3. / len(pts3d))
             particle_size = torch.cdist(pts3d[None,], pts3d[None,]).quantile(dim=-1, q=quantile).mean()
-            alpha = particle_size / 2.
-            offset = particle_size / 20.
+            alpha = particle_size
+            offset = particle_size / 100.
             vertices_count = mesh_vertices_count + 1
             while vertices_count > mesh_vertices_count:
 
@@ -805,34 +904,6 @@ class OD3D_SequenceMeshMixin(OD3D_MeshFeatsTypeMixin, OD3D_MeshTypeMixin, OD3D_S
                 vertices_count = len(o3d_obj_mesh.vertices)
 
                 alpha = alpha * 1.3
-
-            # tol = particle_size / 2.
-            # import pymesh2
-            # pymesh_mesh = pymesh2.form_mesh(vertices, faces)
-            # while vertices_count > mesh_vertices_count:
-            #     pymesh_mesh, info = pymesh_mesh2.collapse_short_edges(pymesh_mesh, tol)
-            #     vertices_count = len(pymesh_mesh.vertices)
-
-            #o3d_obj_mesh = o3d_obj_mesh.filter_smooth_laplacian(number_of_iterations=10)
-
-            # faces_count = mesh_vertices_count * 2
-            # voxel_size = particle_size / 2.
-            # while vertices_count > mesh_vertices_count:
-            #     #faces_count = faces_count * 0.9
-            #     #o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_quadric_decimation(int(faces_count))
-            #
-            #     voxel_size = voxel_size * 1.3
-            #     o3d_obj_mesh_downsampled = o3d_obj_mesh.simplify_vertex_clustering(
-            #         voxel_size=voxel_size,
-            #         contraction=open3d.geometry.SimplificationContraction.Quadric) # Average, Quadric
-            #
-            #     logger.info(o3d_obj_mesh_downsampled)
-            #     vertices_count = len(o3d_obj_mesh_downsampled.vertices)
-            #
-            # o3d_obj_mesh = o3d_obj_mesh_downsampled
-
-            #logger.info(o3d_obj_mesh)
-            #o3d_obj_mesh = o3d_obj_mesh.filter_smooth_simple(number_of_iterations=10) # breaks watertightness
 
             logger.info(o3d_obj_mesh)
             obj_mesh = Mesh.from_o3d(o3d_obj_mesh, device=device)

@@ -19,6 +19,13 @@ import subprocess
 import importlib
 
 
+def is_fpath_video(fpath: Path):
+    return fpath.suffix in ['.mp4', '.avi', '.mov', '.mkv', '.webm']
+
+def is_fpath_image(fpath: Path):
+    return fpath.suffix in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+
+
 def reporthook(count, block_size, total_size):
     global start_time
     if count == 0:
@@ -162,9 +169,9 @@ def read_json(fpath: Path):
         config = json.load(openfile)
     return config
 
-def read_yaml(fpath: Path):
+def read_yaml(fpath: Path, resolve=True):
     cfg = OmegaConf.load(fpath)
-    cfg = OmegaConf.to_container(cfg, resolve=True)
+    cfg = OmegaConf.to_container(cfg, resolve=resolve)
     return cfg
 
 def run_cmd(cmd, logger, live=False, background=False):
@@ -230,9 +237,16 @@ def write_str_to_file(fpath: Path, text: str):
         file.write(text)
 
 from typing import List
-import tempfile
+from copy import deepcopy
+from enum import Enum
+import numpy as np
+import torch
 
-def write_dict_as_yaml(fpath: Path, _dict: Dict):
+
+def write_dict_as_yaml(fpath: Path, _dict: Dict, save_enum_as_str=False):
+    if save_enum_as_str:
+        _dict = {key: str(value) if isinstance(value, Enum) else value for key, value in deepcopy(_dict).items()}
+
     conf = OmegaConf.create(_dict)
     fpath.parent.mkdir(exist_ok=True, parents=True)
     with open(fpath, 'w') as fp: #  tempfile.NamedTemporaryFile()
@@ -241,6 +255,36 @@ def read_dict_from_yaml(fpath: Path):
     with open(fpath, 'r') as fp:
         loaded = OmegaConf.load(fp.name)
     return loaded
+
+# import pyarrow as pa
+# import pyarrow.parquet as pq
+# def save_dict_as_pandas_df(fpath: Path, _dict: Dict):
+#
+#     # Convert PyTorch tensors to NumPy arrays
+#     data_np = {key: value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else value for key, value in _dict.items()}
+#
+#     # Convert NumPy arrays to PyArrow arrays
+#     arrays = {key: pa.array(value) if isinstance(value, np.ndarray) else value for key, value in data_np.items()}
+#
+#     # Create a PyArrow Table from the arrays
+#     table = pa.Table.from_pydict(arrays)
+#
+#     # Write the table to a Parquet file
+#     pq.write_table(table, fpath)
+#
+# def load_dict_from_parquet(fpath):
+#     # Read the Parquet file into a PyArrow Table
+#     table = pq.read_table(fpath)
+#     # Access the schema of the table
+#     schema = table.schema
+#
+#     # Convert PyArrow arrays to NumPy arrays
+#     arrays = {column.name: column.to_numpy() if schema.field(column.name).type == pa.Array else column for column in table.columns}
+#
+#     # Convert NumPy arrays to PyTorch tensors
+#     data = {key: torch.tensor(value) if isinstance(value, np.array) else value for key, value in arrays.items()}
+#
+#     return data
 
 def write_list_as_yaml(fpath: Path, _list: List[str]):
     conf = OmegaConf.create(_list)
@@ -260,4 +304,5 @@ def get_obj_from_config(*args, config: DictConfig, **kwargs):
     class_name = class_name_split[-1]
     module = importlib.import_module(module_name)
     class_ = getattr(module, class_name)
-    return class_(*args, **{**kwargs, **config.kwargs})
+    config_kwargs = config.get('kwargs', {})
+    return class_(*args, **{**kwargs, **config_kwargs})

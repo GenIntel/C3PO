@@ -1,0 +1,38 @@
+defaults:
+  - logger: wandb
+  - methods@method: transformer_matching
+  - datasets@train_datasets.main: pascal3d_matching_train
+  - datasets@val_datasets.main: null
+  - datasets@test_datasets.main: pascal3d_matching_test
+  - datasets@texture_dataset: dtd
+  - platform@platform_local: local
+  - platform: local
+  - datasets/categories@categories: pascal3d
+
+
+metrics:
+  - null
+  - null
+
+seed_number: 42
+
+train: True
+test: True
+
+train_datasets:
+  main:
+    categories: ${categories}
+
+val_datasets:
+  main:
+    categories: ${categories}
+
+test_datasets:
+  main:
+    categories: ${categories}
+
+run_name: transformer_matching
+logger:
+  local_dir: /home/jesslen/Documents/Github/od3d/output
+  use_wandb: true
+  wandb_project_name: TransformerMatching

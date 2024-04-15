@@ -1,0 +1,115 @@
+defaults:
+  - loss@train.selfsup.loss: crossentropy
+  - optimizer@train.selfsup.optimizer: adam
+  - scheduler@train.selfsup.scheduler: multistep
+  - loss@train.sup.loss: crossentropy
+  - optimizer@train.sup.optimizer: adam
+  - scheduler@train.sup.scheduler: multistep
+  - model@model: dinov2_frozen_base # _no_norm
+
+name: selfsup
+class_name: SelfSup
+
+categories: ${train_datasets.labeled.categories}
+
+model:
+  head:
+    selfsup:
+      class_name: ViT
+      blocks:
+        dim: 128
+        depth: 0
+        num_heads: 4 # not dim must be devisiable by num_heads
+      fully_connected:
+        out_dim: 10 # None means that there is no linear layer
+      normalize: False
+    sup:
+      class_name: ViT
+      blocks:
+        dim: 128
+        depth: 0
+        num_heads: 4 # not dim must be devisiable by num_heads
+      fully_connected:
+        out_dim: 10 # None means that there is no linear layer
+      normalize: False
+
+train:
+  selfsup:
+    val: True
+    split: random # 'random' 'sequences_separated' 'seqences_shared'
+
+    transform:
+      class_name: SequentialTransform
+      transforms:
+        - class_name: Identity
+        - class_name: RGB_Random
+
+    epochs_to_next_test: 1
+    epochs: 5
+    val_fraction: 0.01
+    batch_accumulate_to_next_step: 2
+
+    visualize:
+      down_sample_rate: 4.
+      count_best: 3
+      count_worst: 3
+      count_rand: 1
+      modalities:
+        - 'gt_verts_ncds_in_rgb'
+      samples_scores: True
+      samples_sorted: True
+      live: False
+  sup:
+    val: True
+    split: random # 'random' 'sequences_separated' 'seqences_shared'
+
+    transform:
+      class_name: SequentialTransform
+      transforms:
+        - class_name: Identity
+        - class_name: RGB_Random
+
+    epochs_to_next_test: 1
+    epochs: 5
+    val_fraction: 0.01
+    batch_accumulate_to_next_step: 2
+
+    visualize:
+        down_sample_rate: 4.
+        count_best: 3
+        count_worst: 3
+        count_rand: 1
+        modalities:
+          - 'gt_verts_ncds_in_rgb'
+        samples_scores: True
+        samples_sorted: True
+        live: False
+
+
+test:
+  save_results: False
+  transform:
+      class_name: Identity
+
+  dataloader:
+      num_workers: 0
+      batch_size: 1
+      pin_memory: True
+
+  visualize:
+    down_sample_rate: 4.
+    count_best: 3
+    count_worst: 3
+    count_rand: 1
+    modalities:
+      - 'pred_vs_gt_verts_ncds_in_rgb'
+      - 'net_feats_nearest_verts'
+      - 'sim_pxl'
+      - 'samples'
+    samples_scores: True
+    samples_sorted: True
+    live: False
+
+
+
+

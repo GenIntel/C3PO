@@ -36,7 +36,13 @@ import open3d
 WINDOW_WIDTH = 1980
 WINDOW_HEIGHT = 1080
 
-
+@app.command()
+def feature_vectors(count: int = typer.Option(1, '-c', '--count')):
+    from od3d.cv.visual.draw import random_colors_as_img
+    from od3d.cv.visual.show import show_img
+    for i in range(count):
+        img = random_colors_as_img(6)
+        show_img(img, fpath=f'feature_vector_{i}.png')
 @app.command()
 def multiple(benchmark: str = typer.Option('co3d_nemo_align3d', '-b', '--benchmark'),
              ablation: str = typer.Option(None, '-a', '--ablation'),

@@ -1,0 +1,7 @@
+defaults:
+  - cifar10
+
+name: cifar10_test
+
+dict_nested_frames:
+  test:

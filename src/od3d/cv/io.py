@@ -8,7 +8,7 @@ import torch
 import wandb
 import open3d as o3d
 import numpy as np
-
+from typing import List
 import cv2
 
 def get_default_device():
@@ -108,6 +108,14 @@ def read_image(path: Path):
     img = transform(img)
     return img
 
+def write_image(img: torch.Tensor, path: Path):
+    transform = transforms.Compose([
+        transforms.ToPILImage()
+    ])
+    img = transform(img)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path)
+
 def image_as_wandb_image(img, caption="Caption Blub"):
     img = wandb.Image(
         img.permute(1, 2, 0).detach().cpu().numpy(),
@@ -152,3 +160,36 @@ def extract_frames_from_video(fpath_video: Path, path_frames: Path, fps=5):
         cv2.waitKey(1)
 
 
+def write_webm_videos_side_by_side(out_fpath: Path, in_fpaths=List[Path], W=1280,
+                                   padding_size=10, padding_color=(0.89, 0.89, 0.89)):
+    from moviepy.editor import VideoFileClip, clips_array, ColorClip
+
+    # Load the webm videos
+    video_clips = [VideoFileClip(str(fpath)) for fpath in in_fpaths]
+
+    # Set the desired width and padding size
+
+    # Resize videos to have the same height (keeping the aspect ratio)
+    for i in range(len(video_clips)):
+        video_clips[i] = video_clips[i].resize(height=(W / 2) * video_clips[i].size[1] / video_clips[i].size[0])
+    #video1 = video1.resize(height=(final_width / 2) * video1.size[1] / video1.size[0])
+    #video2 = video2.resize(height=(final_width / 2) * video2.size[1] / video2.size[0])
+
+    # Create white-gray padding
+    padding = ColorClip((padding_size, video_clips[0].h),
+                        color=(padding_color[0] * 255, padding_color[1] * 255, padding_color[2] * 255)).set_duration(video_clips[0].duration)
+
+    # Combine videos and padding side by side
+    video_clips_with_pad = []#  = [ for video in video_clips]
+    for i, video in enumerate(video_clips):
+        video_clips_with_pad.append(video)
+        if i < len(video_clips) - 1:
+            video_clips_with_pad.append(padding)
+    final_clip = clips_array([video_clips_with_pad])
+
+    # Write the combined video to a file
+    final_clip.write_videofile(str(out_fpath), codec="libvpx", bitrate="5000k")
+
+    # Close the video clips
+    for i in range(len(video_clips)):
+        video_clips[i].close()

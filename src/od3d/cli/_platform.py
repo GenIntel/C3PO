@@ -96,6 +96,13 @@ def rm_installing_txt(platform: str = typer.Option(None, '-p', '--platform')):
     run_cmd(f"ssh {platform} 'rm {config.platform.path_od3d}/installing.txt'", logger=logger)
 
 @app.command()
+def rm_git_lock(platform: str = typer.Option(None, '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    config = od3d.io.load_hierarchical_config(platform=platform)
+    run_cmd(f"ssh {platform} 'rm {config.platform.path_od3d}/installing.txt'", logger=logger)
+
+
+@app.command()
 def stop(platform: str = typer.Option(None, '-p', '--platform'),
          job: str = typer.Option(None, '-j', '--job')):
     if platform == 'torque':
@@ -110,10 +117,8 @@ def stop(platform: str = typer.Option(None, '-p', '--platform'),
                 logger.info(f'stop torque job ids {job}')
                 torque_jobs_ids = [int(job)]
 
-            for job_id in torque_jobs_ids:
-                torque_result = subprocess.run(f'ssh torque "qdel {job_id}"', capture_output=True, shell=True)
-                for line in torque_result.stdout.decode("utf-8").split("\n"):
-                    logger.info(line)
+            stop_torque_jobs_ids(torque_jobs_ids)
+
 
     elif platform == 'slurm':
         logging.basicConfig(level=logging.INFO)
@@ -126,13 +131,48 @@ def stop(platform: str = typer.Option(None, '-p', '--platform'),
             else:
                 slurm_jobs_ids = [int(job)]
 
-            for job_id in slurm_jobs_ids:
-                slurm_result = subprocess.run(f'ssh slurm "scancel {str(job_id)}"', capture_output=True, shell=True)
-                for line in slurm_result.stdout.decode("utf-8").split("\n"):
-                    logger.info(line)
+            stop_slurm_jobs(slurm_jobs_ids)
     else:
         raise NotImplementedError
 
+
+def stop_slurm_jobs(slurm_jobs_ids):
+    for job_id in slurm_jobs_ids:
+        slurm_result = subprocess.run(f'ssh slurm "scancel {str(job_id)}"', capture_output=True, shell=True)
+        for line in slurm_result.stdout.decode("utf-8").split("\n"):
+            logger.info(line)
+
+def stop_torque_jobs_ids(torque_jobs_ids):
+    for job_id in torque_jobs_ids:
+        torque_result = subprocess.run(f'ssh torque "qdel {job_id}"', capture_output=True, shell=True)
+        for line in torque_result.stdout.decode("utf-8").split("\n"):
+            logger.info(line)
+@app.command()
+def stop_not_running(platform: str = typer.Option(None, '-p', '--platform')):
+    logging.basicConfig(level=logging.INFO)
+    from od3d.cli.benchmark import get_runs
+    runs_running_online = get_runs(state='running')
+
+    if platform == 'slurm':
+        # 60j = 60 characters
+        format = '"%.18i %.9P %.60j %.8u %.8T %.10M %.9l %.6D %R"'
+        slurm_result = subprocess.run(f"ssh slurm 'squeue --me --format={format}'", capture_output=True, shell=True)
+        slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")[1:-1]
+        jobs_names_partial = [slurm_job.split()[2] for slurm_job in slurm_jobs]
+        jobs_ids = [int(slurm_job.split()[0]) for slurm_job in slurm_jobs]
+    else:
+        raise NotImplementedError
+
+    jobs_ids_not_running = []
+    for j in range(len(jobs_ids)):
+        partial_length = len(jobs_names_partial[j])
+        runs_running_online_partial = [run_running_online.name[:partial_length] for run_running_online in runs_running_online]
+        if jobs_names_partial[j] not in runs_running_online_partial:
+            logger.info(f'job {jobs_names_partial[j]} not running.')
+            jobs_ids_not_running.append(jobs_ids[j])
+
+    if platform == 'slurm':
+        stop_slurm_jobs(jobs_ids_not_running)
 
 
 @app.command()
@@ -143,13 +183,20 @@ def status(platform: str = typer.Option(None, '-p', '--platform')):
         format = '"%.18i %.9P %.60j %.8u %.8T %.10M %.9l %.6D %R"'
         slurm_result = subprocess.run(f"ssh slurm 'squeue --me --format={format}'", capture_output=True, shell=True)
         slurm_jobs = slurm_result.stdout.decode("utf-8").split("\n")
-        for slurm_job in slurm_jobs:
-            logger.info(slurm_job)
+        slurm_jobs_columns = slurm_jobs[0]
+        slurm_jobs = slurm_jobs[1:-1]
+        import numpy as np
+        slurm_jobs_ids = np.array([int(slurm_job.split()[0]) for slurm_job in slurm_jobs])
+        slurm_jobs_ids = slurm_jobs_ids.argsort()
+        slurm_jobs = [slurm_jobs[id] for id in slurm_jobs_ids]
+        logger.info(slurm_jobs_columns)
+        for i, slurm_job in enumerate(slurm_jobs):
+            logger.info(f'{i}: {slurm_job}')
     elif platform == 'torque':
         torque_result = subprocess.run(f"ssh torque 'qstat -a -u $(whoami)'", capture_output=True, shell=True)
         torque_jobs = torque_result.stdout.decode("utf-8").split("\n")
-        for torque_job in torque_jobs:
-            logger.info(torque_job)
+        for i, torque_job in enumerate(torque_jobs):
+            logger.info(f'{i}: {torque_job}')
     else:
         raise NotImplementedError
 

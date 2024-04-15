@@ -188,7 +188,7 @@ from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
 class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, OD3D_FrameKpts2d3dMixin,
                     OD3D_CamProj4x4ObjMixin, OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin,
                     OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin, OD3D_FrameCategoryMixin, OD3D_FrameSizeMixin,
-                    OD3D_Frame):
+                    OD3D_Frame): 
     meta_type = Pascal3DFrameMeta
 
     @staticmethod
@@ -233,7 +233,7 @@ class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObj
 
     def read_cam_tform4x4_obj_raw(self):
         cam_tform4x4_obj = torch.Tensor(self.meta.cam_tform4x4_obj)
-        cam_tform4x4_obj[2, 3] *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
+        cam_tform4x4_obj[:3, 3] *= PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category]
         return cam_tform4x4_obj
 
     def get_fpath_tform_obj(self, tform_obj_type=None):
@@ -241,7 +241,7 @@ class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObj
             tform_obj_type = self.tform_obj_type
         return self.path_preprocess.joinpath('tform_obj', f'{tform_obj_type}', 'tform_obj.pt')
 
-    def read_cam_tform4x4_obj(self, cam_tform4x4_obj_type=None, tform_obj_type =None):
+    def read_cam_tform4x4_obj(self, cam_tform4x4_obj_type=None, tform_obj_type=None):
         cam_tform4x4_obj = self.read_cam_tform4x4_obj_raw()
 
         tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
@@ -253,7 +253,7 @@ class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObj
         scale = cam_tform4x4_obj[:3, :3].norm(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
         cam_tform4x4_obj[:3] = cam_tform4x4_obj[:3] / scale
 
-        if (cam_tform4x4_obj_type is None or cam_tform4x4_obj_type == self.cam_tform4x4_obj_type) and (tform_obj_type == self.tform_obj_type or tform_obj_type is None) :
+        if (cam_tform4x4_obj_type is None or cam_tform4x4_obj_type == self.cam_tform4x4_obj_type) and (tform_obj_type == self.tform_obj_type or tform_obj_type is None):
             self.cam_tform4x4_obj = cam_tform4x4_obj
         return cam_tform4x4_obj
 
@@ -274,3 +274,5 @@ class Pascal3DFrame(OD3D_FrameBBoxMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObj
         # cam_tform4x4_obj[2, 2:3] = -cam_tform4x4_obj[2, 2:3]
         return cam_tform4x4_obj
 
+    def get_verts2d(self, ):
+        return self.mesh.get_verts2d(...)

@@ -200,34 +200,45 @@ def get_spherical_uniform_tform4x4(azim_min=-math.pi, azim_max=math.pi, azim_ste
 
     return cams_multiview_tform4x4_cuboid
 
-def get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=1, dist: float=1., device=None, dtype=None):
-    if viewpoints_count == 1:
-        # front:
-        azim = torch.Tensor([0.])
-        elev = torch.Tensor([0.])
-        theta = torch.Tensor([0.])
-    elif viewpoints_count == 2:
-        # front, top
-        azim = torch.Tensor([0., 0.])
-        elev = torch.Tensor([0., math.pi / 2. - 0.01])
-        theta = torch.Tensor([0., 0.])
-    elif viewpoints_count == 3:
-        # front, top, right
-        azim = torch.Tensor([0., 0., math.pi / 2.])
-        elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0.])
-        theta = torch.Tensor([0., 0., 0.])
-    elif viewpoints_count == 4:
-        # front, top, right, bottom
-        azim = torch.Tensor([0., 0., math.pi / 2., 0.])
-        elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0., -math.pi/2. + 0.01])
-        theta = torch.Tensor([0., 0., 0., 0.])
+def get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=1, dist: float=1., device=None, dtype=None, spiral=False):
+
+    if not spiral:
+        if viewpoints_count == 1:
+            # front:
+            azim = torch.Tensor([0.])
+            elev = torch.Tensor([0.])
+            theta = torch.Tensor([0.])
+        elif viewpoints_count == 2:
+            # front, top
+            azim = torch.Tensor([0., 0.])
+            elev = torch.Tensor([0., math.pi / 2. - 0.01])
+            theta = torch.Tensor([0., 0.])
+        elif viewpoints_count == 3:
+            # front, top, right
+            azim = torch.Tensor([0., 0., math.pi / 2.])
+            elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0.])
+            theta = torch.Tensor([0., 0., 0.])
+        elif viewpoints_count == 4:
+            # front, top, right, bottom
+            azim = torch.Tensor([0., 0., math.pi / 2., 0.])
+            elev = torch.Tensor([0., math.pi / 2. - 0.01 , 0., -math.pi/2. + 0.01])
+            theta = torch.Tensor([0., 0., 0., 0.])
+        else:
+            viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
+            range_max = 1. - 1./ viewpoints_count_sqrt
+            azim = torch.linspace(-math.pi * range_max, math.pi * range_max, viewpoints_count_sqrt)
+            elev = torch.linspace(+math.pi / 2. * range_max, -math.pi / 2. * range_max, viewpoints_count_sqrt)
+            azim = azim.repeat(viewpoints_count_sqrt)[:viewpoints_count]
+            elev = elev.repeat_interleave(viewpoints_count_sqrt)[:viewpoints_count]
+            theta = torch.zeros_like(elev)
     else:
-        viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
-        range_max = 1. - 1./ viewpoints_count_sqrt
-        azim = torch.linspace(-math.pi * range_max, math.pi * range_max, viewpoints_count_sqrt)
-        elev = torch.linspace(+math.pi / 2. * range_max, -math.pi / 2. * range_max, viewpoints_count_sqrt)
-        azim = azim.repeat(viewpoints_count_sqrt)[:viewpoints_count]
-        elev = elev.repeat_interleave(viewpoints_count_sqrt)[:viewpoints_count]
+        azim = torch.linspace(-math.pi, math.pi, viewpoints_count)
+        viewpoints_count_first = viewpoints_count // 2
+        viewpoints_count_second = viewpoints_count - viewpoints_count_first
+        elev = torch.cat([
+            torch.linspace(-math.pi / 2 * 0.4, math.pi / 2 * 0.6, viewpoints_count_first),
+            torch.linspace(math.pi / 2 * 0.6, -math.pi / 2 * 0.4, viewpoints_count_second)], dim=0)
+        elev = elev
         theta = torch.zeros_like(elev)
 
     if dist == 0.:

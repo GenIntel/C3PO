@@ -173,6 +173,9 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                dtype=torch.float,
                H=1080,
                W=1980,
+               fps=10,
+               pts3d_size=10.,
+               background_color=(0.9, 0.9, 0.9),
                device='cpu',
                meshes_as_wireframe=False,
                crop_white_border=False):
@@ -372,7 +375,9 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             vis = o3d.visualization.Visualizer()
             vis.create_window(visible=False, height=H, width=W)
             opt = vis.get_render_option()
+            opt.point_size = pts3d_size
             opt.mesh_show_back_face = False
+            opt.background_color = np.asarray(background_color)
             #opt.background_color = np.asarray([0, 0, 0])
             #opt.mesh_show_wireframe = mesh_show_wireframe
 
@@ -394,14 +399,15 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
             # view_control = vis.get_view_control()
             if return_visualization or fpath is not None:
                 imgs = []
-
+                from od3d.io import is_fpath_video
                 from od3d.cv.geometry.transform import get_cam_tform4x4_obj_for_viewpoints_count, transf3d, tform4x4_broadcast
-                cams_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.).to(dtype=dtype, device=device)
+                cams_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(viewpoints_count=viewpoints_count, dist=0.,
+                                                                                  spiral=is_fpath_video(fpath)).to(dtype=dtype, device=device)
                 # open3d version 0.17.0 bug, view control does not work
                 #camera_orig = view_control.convert_to_pinhole_camera_parameters()
                 #cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
-
-                for v in range(viewpoints_count):
+                from tqdm import tqdm
+                for v in tqdm(range(viewpoints_count)):
                     #camera_orig.extrinsic = tform4x4_broadcast(cam_tform4x4_obj,
                     #                                           objs_new_tform4x4_obj[v]).detach().cpu().numpy()
                     #view_control.convert_from_pinhole_camera_parameters(camera_orig)
@@ -431,7 +437,7 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                 if viewpoints_count == 1:
                     imgs = imgs[0]
                 else:
-                    if viewpoints_count > 4:
+                    if viewpoints_count > 4 and not is_fpath_video(fpath):
                         viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
                         imgs_placeholder = torch.zeros(size=(viewpoints_count_sqrt ** 2, 3, H, W), dtype=dtype, device=device)
                         imgs_placeholder[:viewpoints_count] = torch.stack(imgs, dim=0)
@@ -443,7 +449,11 @@ def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None
                         imgs = torch.stack(imgs, dim=0)
 
                 if fpath is not None:
-                    show_imgs(rgbs=imgs, fpath=fpath, pad=0)
+                    if is_fpath_video(fpath):
+                        from od3d.cv.visual.video import save_video
+                        save_video(imgs=imgs, fpath=fpath, fps=fps)
+                    else:
+                        show_imgs(rgbs=imgs, fpath=fpath, pad=0)
                 vis.update_renderer()
                 vis.destroy_window()
                 if return_visualization:
