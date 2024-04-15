@@ -1,0 +1,1 @@
+from od3d.methods.selfsup.method import SelfSup

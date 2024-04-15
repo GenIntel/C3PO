@@ -31,6 +31,7 @@ class MESH_RENDER_MODALITIES(str, Enum):
     FEATS = 'feats'
     MASK_VERTS_VSBL = 'mask_verts_vsbl'
     VERTS_NCDS = 'verts_ncds'
+    VERTS_ONEHOT = 'verts_onehot'
 
 class MESH_RENDER_MODALITIES_GAUSSIAN_SPLAT(str, Enum):
     RGB = MESH_RENDER_MODALITIES.RGB
@@ -820,7 +821,8 @@ class Meshes(torch.nn.Module):
 
     #def get_pre_rendered_masks(self):
 
-    def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None, modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
+    def render_feats(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, meshes_ids=None,
+                     modality=MESH_RENDER_MODALITIES.FEATS, broadcast_batch_and_cams=False, down_sample_rate=1.):
         # imgs_size: (height, width)
         dtype = cams_tform4x4_obj.dtype
         device = cams_tform4x4_obj.device
@@ -979,6 +981,10 @@ class Meshes(torch.nn.Module):
                 verts_vsbl_mask[b, verts_ids_vsbl] = 1
 
             return verts_vsbl_mask
+
+        if modality == MESH_RENDER_MODALITIES.VERTS_ONEHOT:
+            B = fragments.pix_to_face.shape[0]
+            pass
 
         if modality == MESH_RENDER_MODALITIES.FEATS:
             feats_from_faces = torch.cat([self.get_feats_from_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0)

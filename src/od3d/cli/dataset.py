@@ -12,6 +12,7 @@ from od3d.cv.transforms.crop import Crop
 from od3d.cv.transforms.centerzoom3d import CenterZoom3D
 from od3d.cv.transforms.randomcenterzoom3d import RandomCenterZoom3D
 from od3d.cv.transforms.sequential import SequentialTransform
+import torch
 
 app = typer.Typer()
 
@@ -280,7 +281,8 @@ def visualize_sequences(dataset: str = typer.Option('pascal3d', '-d', '--dataset
 
 @app.command()
 def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
-              platform: str = typer.Option('local', '-p', '--platform')):
+              platform: str = typer.Option('local', '-p', '--platform'),
+              transform_name: str = typer.Option('centerzoom512', '-t', '--transform')):
     import torch.utils.data
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(platform=platform, overrides=["+datasets@dataset=" + dataset, "+datasets@dtd=dtd"])
@@ -300,7 +302,10 @@ def visualize(dataset: str = typer.Option('pascal3d', '-d', '--dataset'),
     #for seq in sequences:
     #    logger.info(seq.name_unique)
     #    seq.show(show_imgs=True)
-    dataset.transform = OD3D_Transform.create_by_name('centerzoom512')
+
+    if transform_name != 'None':
+        dataset.transform = OD3D_Transform.create_by_name(transform_name)
+
     # dataset.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
     #dataset.transform = OD3D_Transform.create_by_name('scale_mask_shorter_1_centerzoom512')
 
