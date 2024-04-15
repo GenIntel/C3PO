@@ -74,6 +74,7 @@ class Mesh:
         logger.info(f'writing mesh to {fpath}')
         fpath.parent.mkdir(parents=True, exist_ok=True)
         save_ply(fpath, verts=self.verts, faces=self.faces)
+
     def verts_count(self):
         return self.verts.shape[0]
 
@@ -115,10 +116,10 @@ class Mesh:
     # ray.transform(inv_tform4x4(cam_tform4x4_obj).detach().cpu().numpy())
 
 class Meshes(torch.nn.Module):
-    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor]= None,
-                 feats: List[torch.Tensor]=None, geodesic_prob_sigma=0.2,
+    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], rgb: List[torch.Tensor] = None,
+                 feats: List[torch.Tensor] = None, geodesic_prob_sigma=0.2,
                  gaussian_splat_enabled=False, gaussian_splat_opacity=0.7,
-                 gaussian_splat_pts3d_size_rel_to_neighbor_dist =0.5,
+                 gaussian_splat_pts3d_size_rel_to_neighbor_dist=0.5,
                  pt3d_raster_perspective_correct=False):
         super().__init__()
 

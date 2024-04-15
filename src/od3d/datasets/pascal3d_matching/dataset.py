@@ -1,8 +1,8 @@
 import logging
+import random
 logger = logging.getLogger(__name__)
 import torch.nn
 from typing import List, Tuple
-
 from od3d.datasets.dataset import OD3D_Dataset, OD3D_FRAME_MODALITIES
 from od3d.datasets.frame import OD3D_FRAME_KPTS2D_ANNOT_TYPES
 from od3d.datasets.object import OD3D_FRAME_DEPTH_TYPES
@@ -21,7 +21,7 @@ import inspect
 from od3d.datasets.object import OD3D_MESH_TYPES
 
 
-class Pascal3D(OD3D_Dataset):
+class Pascal3D_Matching(OD3D_Dataset):
     map_od3d_categories = MAP_CATEGORIES_OD3D_TO_PASCAL3D
     all_categories = list(PASCAL3D_CATEGORIES)
     frame_type = Pascal3DFrame
@@ -31,7 +31,7 @@ class Pascal3D(OD3D_Dataset):
         path_pascal3d_raw = Path(config.path_raw)
 
         if path_pascal3d_raw.exists() and config.setup.remove_previous:
-            logger.info(f"Removing previous Pascal3D+")
+            logger.info("Removing previous Pascal3D+")
             shutil.rmtree(path_pascal3d_raw)
 
         if path_pascal3d_raw.exists():
@@ -43,8 +43,8 @@ class Pascal3D(OD3D_Dataset):
             od3d.io.unzip(fpath=fpath, dst=fpath.parent)
             od3d.io.move_dir(src=fpath.parent.joinpath(Path(config.url_pascal3d_raw).with_suffix("").name),
                              dst=fpath.parent)
-    
-    ##### SETUP
+
+    # SETUP
     def filter_dict_nested_frames(self, dict_nested_frames):
         dict_nested_frames = super().filter_dict_nested_frames(dict_nested_frames)
         logger.info('filtering frames categorical...')
@@ -58,21 +58,17 @@ class Pascal3D(OD3D_Dataset):
         dict_nested_frames = dict_nested_frames_filtered
         return dict_nested_frames
 
-
-
-    #### PREPROCESS META
+    # PREPROCESS META
     @staticmethod
     def extract_meta(config: DictConfig):
         subsets = config.get("subsets", None)
         if subsets is None:
             subsets = PASCAL3D_SUBSETS.list()
-        categories = config.get("categories", None)
-        if categories is None:
-            categories = PASCAL3D_CATEGORIES.list()
+        categories = PASCAL3D_CATEGORIES.list()
 
-        path_raw = Pascal3D.get_path_raw(config=config)
-        path_meta = Pascal3D.get_path_meta(config=config)
-        rpath_meshes = Pascal3D.get_rpath_meshes()
+        path_raw = Pascal3D_Matching.get_path_raw(config=config)
+        path_meta = Pascal3D_Matching.get_path_meta(config=config)
+        rpath_meshes = Pascal3D_Matching.get_rpath_meshes()
 
         if config.extract_meta.remove_previous:
             if path_meta.exists():
@@ -90,27 +86,34 @@ class Pascal3D(OD3D_Dataset):
                 frames_categories += [category] * len(frame_names_partial)
                 frames_subsets += [subset] * len(frame_names_partial)
 
-        #frames_subsets, frames_categories, frames_names = Pascal3DFrameMeta.get_frames_names_from_subsets_and_cateogories_from_raw(path_pascal3d_raw=path_raw, subsets=subsets, categories=categories)
+        # frames_subsets, frames_categories, frames_names = Pascal3DFrameMeta.get_frames_names_from_subsets_and_cateogories_from_raw(path_pascal3d_raw=path_raw, subsets=subsets, categories=categories)
 
         if config.get('frames', None) is not None:
             frames_names = list(filter(lambda f: f in config.frames, frames_names))
 
         for i in tqdm(range(len(frames_names))):
-            fpath = path_meta.joinpath(Pascal3DFrameMeta.get_rfpath_from_name_unique(name_unique=
-                                                                                     Pascal3DFrameMeta.get_name_unique_from_category_subset_name(subset=frames_subsets[i],
-                                                                                                                                                             category=frames_categories[i], name=frames_names[i])))
+            fpath = path_meta.joinpath(
+                Pascal3DFrameMeta.get_rfpath_from_name_unique(
+                    Pascal3DFrameMeta.get_name_unique_from_category_subset_name(
+                        subset=frames_subsets[i],
+                        category=frames_categories[i],
+                        name=frames_names[i]
+                    )
+                )
+            )
             if not fpath.exists() or config.extract_meta.override:
-
-                frame_meta = Pascal3DFrameMeta.load_from_raw(frame_name=frames_names[i], subset=frames_subsets[i],
-                                                             category=frames_categories[i],
-                                                             path_raw=path_raw, rpath_meshes=rpath_meshes)
+                frame_meta = Pascal3DFrameMeta.load_from_raw(
+                    frame_name=frames_names[i],
+                    subset=frames_subsets[i],
+                    category=frames_categories[i],
+                    path_raw=path_raw,
+                    rpath_meshes=rpath_meshes
+                )
 
                 if frame_meta is not None:
                     frame_meta.save(path_meta=path_meta)
 
-
-
-    ##### PREPROCESS
+    # PREPROCESS
     def preprocess(self, config_preprocess: DictConfig):
         logger.info("preprocess")
         for key in config_preprocess.keys():
@@ -172,8 +175,8 @@ class Pascal3D(OD3D_Dataset):
                 scale_pascal3d_to_od3d[category] = tform_obj[:3, :3].norm(dim=-1).mean()
 
                 # show:
-                #meshes.verts *= scale_pascal3d_to_od3d[category]
-                #Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
+                # meshes.verts *= scale_pascal3d_to_od3d[category]
+                # Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
 
                 obj_mesh = cuboids.get_mesh_with_id(0)
                 obj_mesh.write_to_file(fpath=fpath_mesh_out)
@@ -183,32 +186,82 @@ class Pascal3D(OD3D_Dataset):
             log_str += str(key) + f': {val}, \n'
         logger.info(log_str)
 
-    ##### DATASET PROPERTIES
+    # DATASET PROPERTIES
     def get_frame_by_name_unique(self, name_unique):
         from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_MESH_TYPES, \
             OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES, \
             OD3D_TFROM_OBJ_TYPES
-        return self.frame_type(path_raw=self.path_raw, path_preprocess=self.path_preprocess,
-                               name_unique=name_unique, all_categories=self.categories,
-                               mask_type=OD3D_FRAME_MASK_TYPES.MESH,
-                               cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.META,
-                               mesh_type=OD3D_MESH_TYPES.META,
-                               mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
-                               mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
-                               modalities=self.modalities,
-                               tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,
-                               depth_type=OD3D_FRAME_DEPTH_TYPES.MESH,
-                               kpts2d_annot_type=OD3D_FRAME_KPTS2D_ANNOT_TYPES.META,)
+        frame1 = self.frame_type(
+            path_raw=self.path_raw,
+            path_preprocess=self.path_preprocess,
+            name_unique=name_unique, all_categories=self.categories,
+            mask_type=OD3D_FRAME_MASK_TYPES.MESH,
+            cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.META,
+            mesh_type=OD3D_MESH_TYPES.META,
+            mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+            mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
+            modalities=self.modalities,
+            tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,
+            depth_type=OD3D_FRAME_DEPTH_TYPES.MESH,
+            kpts2d_annot_type=OD3D_FRAME_KPTS2D_ANNOT_TYPES.META
+        )
+        frame1.read_mesh(OD3D_MESH_TYPES.META)
+        keypoints, keypoints_vis = frame1.get_verts2d()
+                # B x x N x 2
+        vts2d, vts2d_mask = self.meshes.verts2d(cams_intr4x4=batch.cam_intr4x4,
+                                                cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                imgs_sizes=batch.size, mesh_ids=batch.category_id,
+                                                down_sample_rate=self.down_sample_rate)
+        matching_name, item_id2 = self._get_random_frame_of_category(frame1.category)
+        
+        frame2 = self.frame_type(
+            path_raw=self.path_raw,
+            path_preprocess=self.path_preprocess,
+            name_unique=matching_name, all_categories=self.categories,
+            mask_type=OD3D_FRAME_MASK_TYPES.MESH,
+            cam_tform4x4_obj_type=OD3D_CAM_TFORM_OBJ_TYPES.META,
+            mesh_type=OD3D_MESH_TYPES.META,
+            mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
+            mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
+            modalities=self.modalities,
+            tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,
+            depth_type=OD3D_FRAME_DEPTH_TYPES.MESH,
+            kpts2d_annot_type=OD3D_FRAME_KPTS2D_ANNOT_TYPES.META
+        )
+        frame2.item_id = item_id2
+        
+        frame2.read_mesh(OD3D_MESH_TYPES.META)
+        correspondences = torch.empty((0, 4))
+        return frame1, frame2, correspondences
 
+    # MATCHING PROPERTIES
+    def __getitem__(self, item):
+        item_id_shift = (item + self.index_shift) % len(self)
+        frame1, frame2, correspondences = self.get_item(item_id_shift)
+        frame1 = self.transform(frame1)
+        frame2 = self.transform(frame2)
+        frame1.item_id = item_id_shift
+        print(frame1)
+        return {"image0": frame1, "image1": frame2, "correspondences": correspondences}
+        
+    def _get_random_frame_of_category(self, category) -> Tuple[str, int]:
+        # compute frame index with same category
+        frames = self.dict_nested_frames[self.subset][category]
+        nb_frames = len(frames)
+        frame_idx = random.randint(0, nb_frames - 1)
+        name_unique = f"{self.subset}/{category}/{frames[frame_idx]}"
+        item_id = self.get_item_id_by_name_unique(name_unique)
+        return name_unique, item_id
+        
     @staticmethod
     def get_rpath_meshes():
         return Path("CAD")
 
     @staticmethod
     def get_path_meshes(path_raw: Path):
-        return path_raw.joinpath(Pascal3D.get_rpath_meshes())
+        return path_raw.joinpath(Pascal3D_Matching.get_rpath_meshes())
     
     @property
     def path_meshes(self):
-        return self.get_path_meshes(path_raw=self.path_raw)
+        return Pascal3D_Matching.get_path_meshes(path_raw=self.path_raw)
 

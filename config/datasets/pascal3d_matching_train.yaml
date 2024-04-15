@@ -1,0 +1,11 @@
+defaults:
+  - pascal3d
+
+name: pascal3d_matching_train
+class_name: Pascal3D_Matching
+
+dict_nested_frames:
+  train:
+
+subset_fraction: 1. # 0.05
+

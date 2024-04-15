@@ -1,0 +1,45 @@
+defaults:
+  - optimizer@train.optimizer: adam
+  - scheduler@train.scheduler: multistep
+  - loss@train.loss: nll
+  - model@features: extractor_nemo
+name: transformer_matching
+class_name: TransformerMatching
+
+categories: ${train_datasets.main.categories}
+fpaths_meshes: ${train_datasets.main.fpaths_cuboids}
+
+neural_mesh:
+  num_noise: 5
+  max_group: 512
+
+  
+
+lightglue:
+  descriptor_dim: 256
+  load_from_url: False
+  version: v0.1_arxiv
+  url: 'https://github.com/cvg/LightGlue/releases/download/{}/{}_lightglue.pth'
+  checkpoint: null
+  n_layers: 9
+  num_heads: 4
+  flash: True # enable FlashAttention if available.
+  mp: False # enable mixed precision
+  depth_confidence: -1 # early stopping, disable with -1 (0.95)
+  width_confidence: -1 # point pruning, disable with -1 (0.99)
+  filter_threshold: 0.1 # match threshold (0.1)
+  # Point pruning involves an overhead (gather).
+  # Therefore, we only activate it if there are enough keypoints.
+  pruning_keypoint_thresholds:
+    cpu: -1
+    mps: -1
+    cuda: 1024
+    flash: 1536
+
+train:
+  epochs: 20
+  batch_size: 16
+  profile: False
+
+test:
+  n: null
