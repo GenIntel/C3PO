@@ -200,6 +200,8 @@ class Pascal3D_Occ(OD3D_Dataset):
                 pascal3d_frame_meta = Pascal3DFrameMeta.load_from_raw(frame_name=frames_names[i], subset='val',
                                                                       category=frames_categories[i],
                                                                       path_raw=path_pascal3d_raw, rpath_meshes=rpath_meshes)
+                if pascal3d_frame_meta is None:
+                    continue
                 subset = frames_subsets[i]
                 category = frames_categories[i]
                 subset_lvl = int(subset[-1:])
@@ -236,7 +238,7 @@ class Pascal3D_Occ(OD3D_Dataset):
                                                    l_kpts3d=pascal3d_frame_meta.l_kpts3d,
                                                    l_kpts2d_annot=pascal3d_frame_meta.l_kpts2d_annot,
                                                    l_kpts2d_annot_vsbl=pascal3d_frame_meta.l_kpts2d_annot_vsbl,
-                                                   kpts_names=pascal3d_frame_meta.kpts_names,
+                                                   kpts_names=pascal3d_frame_meta.kpts_names, rfpath_mask=rfpath_mask,
                                                    l_bbox=l_bbox)
 
 
