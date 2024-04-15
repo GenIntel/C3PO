@@ -20,6 +20,11 @@ from od3d.cv.io import read_image, write_mask_image
 from od3d.cv.geometry.mesh import Mesh, Meshes
 import torchvision
 from od3d.datasets.frame_meta import OD3D_FrameMetaMaskMixin
+from od3d.datasets.pascal3d.enum import PASCAL3D_CATEGORIES, MAP_CATEGORIES_OD3D_TO_PASCAL3D
+from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES, OD3D_FRAME_DEPTH_TYPES, OD3D_FRAME_KPTS2D_ANNOT_TYPES
+from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES, OD3D_FRAME_MASK_TYPES, OD3D_MESH_TYPES, \
+            OD3D_MESH_FEATS_TYPES, OD3D_MESH_FEATS_DIST_REDUCE_TYPES, \
+            OD3D_TFROM_OBJ_TYPES
 
 @dataclass
 class OOD_CV_FrameMeta(Pascal3DFrameMeta):
@@ -79,8 +84,8 @@ class OOD_CV_FrameMeta(Pascal3DFrameMeta):
         img = torchvision.io.image.read_image(str(fpath_rgb))
         size = torch.LongTensor([*img.shape[1:]])
 
-
-        category, mesh_index, rfpath_mesh, bbox, kpts_names, kpts2d_annot, kpts2d_annot_vsbl, cam_tform4x4_obj, \
+        # category changing the name if abstracted from .mat file of ood cv ( e.g. 'diningtable' -> 'table')
+        category_, mesh_index, rfpath_mesh, bbox, kpts_names, kpts2d_annot, kpts2d_annot_vsbl, cam_tform4x4_obj, \
             cam_intr4x4 \
             = Pascal3DFrameMeta.load_category_mesh_bbox_kpts2d_cam_from_object_annotation_raw(object=object,
                                                                                               rpath_meshes=rpath_meshes)
@@ -99,6 +104,44 @@ class OOD_CV_FrameMeta(Pascal3DFrameMeta):
 
 
 class OOD_CV_Frame(Pascal3DFrame):
-    def __init__(self, path_raw: Path, path_preprocess: Path, path_meta: Path, path_meshes: Path, meta: Pascal3DFrameMeta, modalities: List[OD3D_FRAME_MODALITIES], categories: List[str]):
-        super().__init__(path_raw=path_raw, path_preprocess=path_preprocess, path_meta=path_meta, meta=meta, modalities=modalities, categories=categories, path_meshes=path_meshes)
+        #'name_unique', 'all_categories', 'depth_type', 'mask_type', 'cam_tform4x4_obj_type', 'kpts2d_annot_type', 'tform_obj_type', 'mesh_type', 'mesh_feats_type', and 'mesh_feats_dist_reduce_type' '''
+    MAP_OD3D_CATEGORIES = MAP_CATEGORIES_OD3D_TO_PASCAL3D
+    def __init__(self,path_raw: Path, path_preprocess: Path, modalities ,name_unique:str,path_meshes: Path,all_categories:List[str],depth_type:OD3D_FRAME_DEPTH_TYPES,mask_type:OD3D_FRAME_MASK_TYPES,cam_tform4x4_obj_type:OD3D_CAM_TFORM_OBJ_TYPES,kpts2d_annot_type:OD3D_FRAME_KPTS2D_ANNOT_TYPES,tform_obj_type:OD3D_TFROM_OBJ_TYPES,mesh_type:OD3D_MESH_TYPES,mesh_feats_type:OD3D_MESH_FEATS_TYPES,mesh_feats_dist_reduce_type:OD3D_MESH_FEATS_DIST_REDUCE_TYPES):
+        super().__init__(path_raw= path_raw,path_preprocess=path_preprocess,modalities=modalities,name_unique=name_unique,all_categories=all_categories,depth_type=depth_type,mask_type=mask_type,cam_tform4x4_obj_type=cam_tform4x4_obj_type,kpts2d_annot_type=kpts2d_annot_type,tform_obj_type=tform_obj_type,mesh_type=mesh_type,mesh_feats_type=mesh_feats_type,mesh_feats_dist_reduce_type=mesh_feats_dist_reduce_type)
         self.path_meshes = path_meshes
+    @staticmethod
+    def get_rfpath_pp_categorical_mesh(mesh_type: OD3D_MESH_TYPES, category: str):
+        return Path("mesh", f'{mesh_type}', f'{category}', 'mesh.ply')
+    
+    def get_fpath_mesh(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_type == OD3D_MESH_TYPES.META:
+            return self.path_meshes.joinpath(self.meta.rfpath_mesh)
+        else:
+           
+            return self.path_preprocess.joinpath(self.get_rfpath_pp_categorical_mesh(mesh_type=mesh_type, category=self.category))
+        
+    def read_mesh(self, mesh_type=None):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_type == OD3D_MESH_TYPES.META:
+            mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type), scale=PASCAL3D_SCALE_NORMALIZE_TO_REAL[self.category])
+        else:
+            # note: preprocessed meshes are in real scale
+            mesh = Mesh.load_from_file(fpath=self.get_fpath_mesh(mesh_type=mesh_type))
+
+        if mesh_type is None or mesh_type == self.mesh_type:
+            self.mesh = mesh
+        return mesh
+
+    def get_mesh(self, mesh_type=None, clone=False):
+        if (mesh_type is None or mesh_type == self.mesh_type) and self.mesh is not None:
+            mesh = self.mesh
+        else:
+            mesh = self.read_mesh(mesh_type=mesh_type)
+
+        if not clone:
+            return mesh
+        else:
+            return mesh.clone()

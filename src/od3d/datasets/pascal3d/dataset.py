@@ -72,7 +72,7 @@ class Pascal3D(OD3D_Dataset):
 
         path_raw = Pascal3D.get_path_raw(config=config)
         path_meta = Pascal3D.get_path_meta(config=config)
-        rpath_meshes = Pascal3D.get_rpath_meshes()
+        rpath_meshes = Path('CAD')
 
         if config.extract_meta.remove_previous:
             if path_meta.exists():
@@ -204,11 +204,22 @@ class Pascal3D(OD3D_Dataset):
     def get_rpath_meshes():
         return Path("CAD")
 
-    @staticmethod
-    def get_path_meshes(path_raw: Path):
-        return path_raw.joinpath(Pascal3D.get_rpath_meshes())
+
+    # def get_item(self, item):
+    #     frame_meta = Pascal3DFrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, name_unique=self.list_frames_unique[item])
+    #     return Pascal3DFrame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
+    #                          path_meshes=self.path_meshes, meta=frame_meta, modalities=self.modalities,
+    #                          categories=self.categories)
+
+    # @staticmethod
+    # def get_rpath_meshes():
+    #     return Path("CAD")
+    # @staticmethod
+    # def get_path_meshes(path_raw: Path):
+    #     return path_raw.joinpath(Pascal3D.get_rpath_meshes())
     
-    @property
-    def path_meshes(self):
-        return self.get_path_meshes(path_raw=self.path_raw)
+    # @property
+    # def path_meshes(self):
+    #     return Pascal3D.get_path_meshes(path_raw=self.path_raw)
+
 

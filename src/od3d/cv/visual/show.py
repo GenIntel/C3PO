@@ -14,6 +14,8 @@ from od3d.cv.visual.draw import get_colors
 from pathlib import Path
 from typing import List
 import torchvision
+import PIL
+
 import open3d as o3d
 import numpy as np
 from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
@@ -95,6 +97,8 @@ def show_scene2d(
         pts2d: Union[torch.Tensor, List[torch.Tensor]]=None,
         pts2d_names: List[str]=None,
         pts2d_colors: Union[torch.Tensor, List]=None,
+        pts2d_lengths: List[int]=None,
+        return_visualization=False
 ):
     """
 
@@ -103,24 +107,45 @@ def show_scene2d(
         pts2d_names (List[str]): (P,)
         pts2d_colors (Union[torch.Tensor, List]): Px2x3 or List(3)
     Returns:
+        img: torch.Tensor
 
     """
     import matplotlib.pyplot as plt
     import matplotlib
-    matplotlib.use("TkAgg")
-
+    import itertools
+    #matplotlib.use("TkAgg")
+    if pts2d_lengths is not None:
+        pts2d_lengths_sum =np.cumsum([0,*pts2d_lengths])
+    
     # scatter plot 2d with legend and colors
     fig, ax = plt.subplots(len(pts2d), 1)
+    # to make ax iterable
+    ax = [ax] if len(pts2d) == 1 else ax
     if pts2d is not None:
         for i, pts2d_i in enumerate(pts2d):
             if pts2d_colors is not None:
                 pts2d_colors_i = pts2d_colors[i]
             else:
                 pts2d_colors_i = get_colors(len(pts2d))[i]
-            ax[i].scatter(pts2d_i[:, 0].detach().cpu().numpy(), pts2d_i[:, 1].detach().cpu().numpy(), c=pts2d_colors_i.detach().cpu().numpy())
-
+            if isinstance(pts2d_colors_i, torch.Tensor):
+                c =pts2d_colors_i.detach().cpu().numpy()
+            else:
+                c = pts2d_colors_i
+            if pts2d_lengths is not None:
+                marker = itertools.cycle(('.', '+', 'v', 'o', '*')) 
+                for j in range(len(pts2d_lengths)):
+                    ax[i].scatter(pts2d_i[pts2d_lengths_sum[j]:pts2d_lengths_sum[j+1], 0].detach().cpu().numpy(), pts2d_i[pts2d_lengths_sum[j]:pts2d_lengths_sum[j+1], 1].detach().cpu().numpy(),marker =next(marker), c=c[pts2d_lengths_sum[j]:pts2d_lengths_sum[j+1]])
+            else:
+                ax[i].scatter(pts2d_i[:, 0].detach().cpu().numpy(), pts2d_i[:, 1].detach().cpu().numpy(), c=c)
             if pts2d_names is not None:
-                ax[i].legend(pts2d_names[i])
+                ax[i].set_title(pts2d_names[i])
+            ax[i].set_axis_off()
+    if return_visualization:
+        fig.canvas.draw()
+        img = PIL.Image.frombytes('RGB', fig.canvas.get_width_height(),fig.canvas.tostring_rgb())
+        img_tensor = torchvision.transforms.ToTensor()(img)
+        
+        return img_tensor 
     plt.show()
 
 def show_scene(cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None,
@@ -524,7 +549,7 @@ def get_o3d_geometries_for_cams(cams_tform4x4_world: Union[torch.Tensor, List[to
     return geometries
 
 
-def show_pcl_via_open3d(pts3d):
+def show_pcl_via_open3d(pts3d ,pts3d_colors=None):
     vis = o3d.visualization.VisualizerWithEditing()
     vis.create_window()
     # vis.add_geometry(pcd)
@@ -532,7 +557,8 @@ def show_pcl_via_open3d(pts3d):
     pcd = o3d.geometry.PointCloud()
     # from od3d.cv.geometry.transform import inv_tform4x4
     pcd.points = o3d.utility.Vector3dVector(pts3d.numpy())
-    # pcd.colors = o3d.utility.Vector3dVector(ncds.numpy())
+    if pts3d_colors is not None:
+        pcd.colors = o3d.utility.Vector3dVector(pts3d_colors)
     vis.add_geometry(pcd)
     vis.run()  # user picks points
     vis.destroy_window()

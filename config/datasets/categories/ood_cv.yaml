@@ -1,7 +1,7 @@
 - airplane
 - bicycle
 - boat
-- bottle
+#- bottle
 - bus
 - car
 - chair
@@ -9,6 +9,6 @@
 - motorcycle
 - couch
 - train
-- tv
+#- tv
 # these are the universal OD3D names
 

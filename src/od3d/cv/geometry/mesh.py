@@ -126,7 +126,9 @@ class Meshes(torch.nn.Module):
 
         self.meshes_count = len(verts)
         self.verts = torch.nn.Parameter(torch.cat([_verts for _verts in verts], dim=0), requires_grad=False)
+        self.register_parameter('verts', self.verts)
         self.faces = torch.nn.Parameter(torch.cat([_faces for _faces in faces], dim=0), requires_grad=False)
+        self.register_parameter('faces', self.faces)
         self.device = self.verts.device
 
         self.gaussian_splat_enabled = gaussian_splat_enabled
@@ -150,12 +152,15 @@ class Meshes(torch.nn.Module):
 
         if rgb is not None:
             self.rgb = torch.nn.Parameter(torch.cat([_rgb for _rgb in rgb], dim=0), requires_grad=False)
+            self.register_parameter('rgb', self.rgb)
         else:
             self.rgb = None
 
         if feats is not None:
-            self.feats = torch.nn.Parameter(torch.cat([_feats for _feats in feats], dim=0), requires_grad=True)
+            self.feats = torch.nn.Parameter(torch.cat([_feats for _feats in feats], dim=0), requires_grad=False) # handle for loss gradient
+            self.register_parameter('feats', self.feats)
             self.feats_from_faces = torch.nn.Parameter(torch.cat([self.get_feats_with_mesh_id(mesh_id)[self.get_faces_with_mesh_id(mesh_id)] for mesh_id in range(len(self))], dim=0))
+            self.register_parameter("feats_from_faces", self.feats_from_faces)
         else:
             self.feats = None
             self.feats_from_faces = None
@@ -545,6 +550,14 @@ class Meshes(torch.nn.Module):
         verts_ids = [torch.arange(self.verts_counts_acc_from_0[mesh_id], self.verts_counts_acc_from_0[mesh_id] + self.verts_counts_max, device=device) for mesh_id in mesh_ids]
         return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
 
+    def get_verts_and_noise_ids_stacked_without_acc(self, mesh_ids: list=None, count_noise_ids=5):
+        if mesh_ids == None:
+            mesh_ids = list(range(len(self)))
+        
+        device = self.verts.device
+        noise_ids = torch.ones(size=(count_noise_ids,), dtype=torch.long, device=device) * self.verts_counts_max
+        verts_ids = [torch.arange(0, self.verts_counts_max, device=device) for mesh_id in mesh_ids]
+        return torch.stack([torch.cat([verts_ids[i], noise_ids], dim=0) for i in range(len(mesh_ids))], dim=0)
     def normals3d(self, meshes_ids: Union[torch.LongTensor, List]=None):
         """
             Args:
