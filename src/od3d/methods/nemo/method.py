@@ -31,6 +31,7 @@ from tqdm import tqdm
 from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
 
 # note: math is actually used by config
+import math  # noqa
 from od3d.datasets.co3d import CO3D
 
 from od3d.cv.io import image_as_wandb_image, watch_model_in_wandb
