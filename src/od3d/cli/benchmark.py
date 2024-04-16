@@ -1287,8 +1287,10 @@ def restart_slurm(
 @app.command()
 def single_local(config_fpath: str = typer.Option(None, "-c", "--config")):
     logging.basicConfig(level=logging.INFO)
-    # method_cfg = OmegaConf.load(config_fpath)
-    method_cfg = od3d.io.load_hierarchical_config(benchmark=config_fpath)
+    # important: this should not load a hierarchical config, as the path that is passed is usually an absolute path
+    from omegaconf import OmegaConf
+
+    method_cfg = OmegaConf.load(config_fpath)
     bench_single_method_local(method_cfg)
 
 
