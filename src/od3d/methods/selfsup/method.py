@@ -323,7 +323,7 @@ class SelfSup(OD3D_Method):
                 #    results_val.log_with_prefix(prefix=f'val_selfsup/{dataset_val.name}')
 
             results_epoch = self.train_epoch_selfsup(
-                dataset=dataset_train_sub_unlabeled
+                dataset=dataset_train_sub_unlabeled,
             )
             results_epoch.log_with_prefix("train")
             self.write_checkpoint()
