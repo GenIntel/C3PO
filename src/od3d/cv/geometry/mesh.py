@@ -5,9 +5,9 @@ from typing import List
 
 import torch
 from od3d.cv.geometry.transform import proj3d2d_broadcast
-from od3d.cv.io import load_ply
-from od3d.cv.io import save_ply
 from pytorch3d.io import IO
+from pytorch3d.io import load_ply
+from pytorch3d.io import save_ply
 from pytorch3d.renderer import MeshRasterizer
 from pytorch3d.renderer import RasterizationSettings
 from pytorch3d.renderer.cameras import PerspectiveCameras
