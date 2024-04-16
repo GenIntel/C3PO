@@ -112,3 +112,4 @@ To stop a job running on slurm use
 
 ### Documentation
 - [Coordinate Frames](docs/coordinate_frames/README.md)
+- [Contributing](docs/contributing/README.md)

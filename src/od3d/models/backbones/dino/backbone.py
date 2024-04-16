@@ -38,12 +38,17 @@ class DINOv2(OD3D_Backbone):
             ],
         )
 
-        self.layers_returned = config.layers_returned  # choose from [1, 2, 3, 4]
+        self.layers_returned = (
+            config.layers_returned
+        )  # choose from [0, 1] start with deepest (1)
         self.layers_count = len(self.layers_returned)
 
         # dino_vits8, dino_vitb8, dino_vits16, dino_vitb16, dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14
         self.dinov2 = "dinov2" in self.config.hub_model
-        self.stride = self.config.get("stride", 14)
+        import re
+
+        self.patch_size = int(re.search(r"\d+$", self.config.hub_model).group())
+        self.stride = self.config.get("stride", self.patch_size)
         if self.dinov2:
             self.extractor = torch.hub.load(
                 self.config.hub_repo,
@@ -109,40 +114,51 @@ class DINOv2(OD3D_Backbone):
         x = resize(x, H_out=H_in, W_out=W_in)
 
         if self.dinov2:
-            if self.config.get("class_token", False):
-                x_ = self.extractor.forward_features(x)[
-                    "x_norm_patchtokens"
-                ]  # # 'x_norm_patchtokens', 'x_prenorm'
-                cls = self.extractor.forward_features(x)["x_norm_clstoken"]
-                cls = cls.unsqueeze(1)
-                cls_repeat = cls.expand(B, x_.shape[1], -1)
-                x = torch.cat([cls_repeat, x_], dim=2)
-            else:
-                x = self.extractor.forward_features(x)["x_norm_patchtokens"]
+            x_dict = self.extractor.forward_features(x)
+            x_feat_map = x_dict[
+                "x_norm_patchtokens"
+            ]  # 'x_norm_patchtokens', 'x_prenorm'
+            x_feat_cls = x_dict["x_norm_clstoken"]
         else:
             # x = self.extractor.get_intermediate_layers(x, n=12)[9]  # maximum 12 layers, zsp uses 9
             # x = x[:, 1:] # remove cls token
 
-            x = self.extractor.extract_descriptors(
+            x_feat_cat = self.extractor.extract_descriptors(
                 batch=x,
                 layer=9,
                 facet="key",
                 bin=False,
-                include_cls=False,
+                include_cls=True,
             )
+            x_feat_map = x_feat_cat[:, :, 1:]
+            x_feat_cls = x_feat_cat[:, :, 0]
             # note: key layer 9 outperforms layer 9
 
-        x = x.reshape(
+        x_feat_map = x_feat_map.reshape(
             -1,
             H_out_expected + offset_H,
             W_out_expected + offset_W,
             self.out_dims[-1],
         ).permute(0, 3, 1, 2)
-        x = x[:, :, :H_out, :W_out]
-        if self.config.get("head", True):
-            x_layers = [x]
-        else:
-            x_layers = x
+
+        x_feat_cls = x_feat_cls.reshape(
+            -1,
+            1,
+            1,
+            self.out_dims[-1],
+        ).permute(0, 3, 1, 2)
+        x_feat_map = x_feat_map[:, :, :H_out, :W_out]
+
+        x_layers = []
+
+        x_layers.append(x_feat_map)
+        x_layers.append(x_feat_cls)
+
+        x_layers = [x_layers[layer_id] for layer_id in self.layers_returned]
+
+        if not self.config.get("head", True):
+            x_layers = x_layers[0]
+
         return x_layers
 
     @staticmethod
