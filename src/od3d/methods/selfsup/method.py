@@ -178,9 +178,14 @@ class SelfSup(OD3D_Method):
         self.head_selfsup.load_state_dict(checkpoint['head_selfsup'])
         self.head_sup.load_state_dict(checkpoint['head_sup'])
 
-    def train_sup(self, dataset_train):
+    def train_sup(self, dataset_train, datasets_val: Dict[str, OD3D_Dataset]):
         self.init_sup()
         for epoch in range(self.config.train.sup.epochs):
+            if self.config.train.sup.val and self.config.train.sup.epochs_to_next_test > 0 and epoch % self.config.train.sup.epochs_to_next_test == 0:
+                for dataset_val_key, dataset_val in datasets_val.items():
+                    results_val = self.test(dataset_val, val=True)
+                    results_val.log_with_prefix(prefix=f'val_sup/{dataset_val.name}')
+
             results_epoch = self.train_epoch_sup(dataset=dataset_train)
             results_epoch.log_with_prefix('train_sup')
             self.write_checkpoint()
@@ -197,7 +202,7 @@ class SelfSup(OD3D_Method):
 
         results_epoch = OD3D_Results(logging_dir=self.logging_dir)
         accumulate_steps = 0
-        for i, batch in enumerate(iter(dataloader_train)):
+        for i, batch in tqdm(enumerate(iter(dataloader_train))):
             results_batch: OD3D_Results = self.train_batch_sup(batch=batch)
             results_batch.log_with_prefix('train_sup')
             accumulate_steps += 1
@@ -223,9 +228,9 @@ class SelfSup(OD3D_Method):
         batch.to(device=self.device)
         batch_pred = self.forward_sup(batch)
 
-        self.loss_sup(batch_pred, batch.labels)
-        self.loss_sup.backward()
-        logger.info(f'loss {self.loss_sup.item()}')
+        loss = self.loss_sup(batch_pred, batch.category_id)
+        loss.backward()
+        results_batch['loss'] = loss.item()
 
         return results_batch
 
@@ -237,8 +242,10 @@ class SelfSup(OD3D_Method):
 
             batch_pred = self.forward_sup(batch)
 
+            label_pred = batch_pred.argmax(dim=-1)
+
             results_batch['label_gt'] = batch.category_id
-            results_batch['label_pred'] = batch_pred
+            results_batch['label_pred'] = label_pred
             results_batch['label_names'] = self.config.categories
             results_batch['item_id'] = batch.item_id
             results_batch['name_unique'] = batch.name_unique
@@ -246,25 +253,28 @@ class SelfSup(OD3D_Method):
         return results_batch
 
     def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+        dataset_train_sub_unlabeled = datasets_train['unlabeled']
+
         if 'main' in datasets_val.keys():
-            dataset_train_sub = datasets_train['labeled']
+            dataset_train_sub_labeled = datasets_train['labeled']
         else:
-            dataset_train_sub, dataset_val_sub = datasets_train['labeled'].get_split(fraction1=1. - self.config.train.selfsup.val_fraction,
+            dataset_train_sub_labeled, dataset_val_sub = datasets_train['labeled'].get_split(fraction1=1. - self.config.train.selfsup.val_fraction,
                                                                                      fraction2=self.config.train.selfsup.val_fraction,
                                                                                      split=self.config.train.selfsup.split)
             datasets_val['main'] = dataset_val_sub
 
         for epoch in range(self.config.train.selfsup.epochs):
             if self.config.train.selfsup.val and self.config.train.selfsup.epochs_to_next_test > 0 and epoch % self.config.train.selfsup.epochs_to_next_test == 0:
-                self.train_sup(dataset_train_sub)
-                for dataset_val_key, dataset_val in datasets_val.items():
-                    results_val = self.test(dataset_val, val=True)
-                    results_val.log_with_prefix(prefix=f'val/{dataset_val.name}')
+                self.train_sup(dataset_train_sub_labeled, datasets_val=datasets_val)
+                #for dataset_val_key, dataset_val in datasets_val.items():
+                #    results_val = self.test(dataset_val, val=True)
+                #    results_val.log_with_prefix(prefix=f'val_selfsup/{dataset_val.name}')
 
-            results_epoch = self.train_epoch_selfsup(dataset=dataset_train_sub)
+            results_epoch = self.train_epoch_selfsup(dataset=dataset_train_sub_unlabeled)
             results_epoch.log_with_prefix('train')
             self.write_checkpoint()
 
+        self.train_sup(dataset_train_sub_labeled, datasets_val=datasets_val)
         self.read_checkpoint()
 
     def train_epoch_selfsup(self, dataset: OD3D_Dataset) -> OD3D_Results:
@@ -279,7 +289,7 @@ class SelfSup(OD3D_Method):
 
         results_epoch = OD3D_Results(logging_dir=self.logging_dir)
         accumulate_steps = 0
-        for i, batch in enumerate(iter(dataloader_train)):
+        for i, batch in tqdm(enumerate(iter(dataloader_train))):
             results_batch: OD3D_Results = self.train_batch_selfsup(batch=batch)
             results_batch.log_with_prefix('train')
             accumulate_steps += 1
@@ -312,7 +322,7 @@ class SelfSup(OD3D_Method):
         #loss = self.loss_selfsup(batch_pred, batch_vts_ids)
 
         loss.backward()
-        results_batch['loss'] = loss.item()
+        results_batch['loss'] = loss
 
         return results_batch
 
@@ -324,35 +334,16 @@ class SelfSup(OD3D_Method):
         logger.info(f'test dataset {dataset.name}')
         self.switch_mode_test()
         dataset.transform = self.transform_test
-        if not isinstance(dataset, CO3D):
-            dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
-                                                     shuffle=False,
-                                                     collate_fn=dataset.collate_fn,
-                                                     num_workers=self.config.test.dataloader.num_workers,
-                                                     pin_memory=self.config.test.dataloader.pin_memory)
-            logger.info(f"Dataset contains {len(dataset)} frames.")
-
-        else:
-            dict_category_sequences = {category: list(sequence_dict.keys()) for category, sequence_dict in dataset.dict_nested_frames.items()}
-            dataset_sub = dataset.get_subset_by_sequences(dict_category_sequences=dict_category_sequences,
-                                                          frames_count_max_per_sequence=self.config.multiview.batch_size)
-
-
-            dataloader = torch.utils.data.DataLoader(dataset=dataset_sub, batch_size=self.config.multiview.batch_size,
-                                                     shuffle=False,
-                                                     collate_fn=dataset_sub.collate_fn,
-                                                     num_workers=self.config.test.dataloader.num_workers,
-                                                     pin_memory=self.config.test.dataloader.pin_memory)
-            logger.info(f"Dataset contains {len(dataset_sub)} frames.")
+        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.config.test.dataloader.batch_size,
+                                                 shuffle=False,
+                                                 collate_fn=dataset.collate_fn,
+                                                 num_workers=self.config.test.dataloader.num_workers,
+                                                 pin_memory=self.config.test.dataloader.pin_memory)
+        logger.info(f"Dataset contains {len(dataset)} frames.")
 
         results_epoch = OD3D_Results(logging_dir=self.logging_dir)
         for i, batch in tqdm(enumerate(iter(dataloader))):
-            batch.to(device=self.device)
-
-            if not isinstance(dataset, CO3D):
-                results_batch = self.forward_sup(batch=batch)
-            else:
-                results_batch = self.forward_sup_multiview(batch=batch)
+            results_batch = self.test_batch_sup(batch=batch)
             results_epoch += results_batch
 
             if not val and self.config.test.save_results:
@@ -365,12 +356,8 @@ class SelfSup(OD3D_Method):
         if not val and self.config.test.save_results:
             results_epoch.save_with_dataset(prefix='test', dataset=dataset)
 
-        if not isinstance(dataset, CO3D):
-            results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
-                                                     config_visualize=self.config.test.visualize)
-        else:
-            results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset_sub,
-                                                     config_visualize=self.config.test.visualize)
+        results_visual = self.get_results_visual(results_epoch=results_epoch, dataset=dataset,
+                                                 config_visualize=self.config.test.visualize)
 
 
         results_epoch = results_epoch.mean()
@@ -386,6 +373,10 @@ class SelfSup(OD3D_Method):
 
     def get_results_visual(self, results_epoch, dataset, config_visualize):
         results_visual = OD3D_Results(logging_dir=self.logging_dir)
+        if config_visualize.get('skip', False):
+            logger.info('skipping visualization...')
+            return results_visual
+
         logger.info('create dataloader ...')
         dataloader = torch.utils.data.DataLoader(dataset=dataset,
                                                  batch_size=self.config.test.dataloader.batch_size,
