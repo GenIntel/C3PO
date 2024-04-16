@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 import numpy as np
 import warnings
 import logging
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 
 logger = logging.getLogger(__name__)
 import torch
@@ -144,7 +144,7 @@ class Matcher(nn.Module):
     def evaluation(self):
         return not self.training
 
-    def forward(self, data: Dict) -> Dict[str, torch.Tensor | int]:
+    def forward(self, data: Dict) -> Dict[str, Union[torch.Tensor,int]]:
         with torch.autocast(enabled=self.config.lightglue.mp, device_type="cuda"):
             return self._compute_matches(data)
 
