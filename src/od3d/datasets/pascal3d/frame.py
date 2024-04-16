@@ -52,11 +52,12 @@ class Pascal3DFrameMeta(
     def load_category_mesh_bbox_kpts2d_cam_from_object_annotation_raw(
         object,
         rpath_meshes,
+        category=None,
     ):
-        category = object["class"][0]
-        if category == "table":
-            category = "diningtable"
-            logger.info(f"Change table to diningtable")
+        
+        if category is None:
+            category = object["class"][0]
+       
 
         mesh_index = object["cad_index"][0][0] - 1
         # label = classes.index(meta.category)
