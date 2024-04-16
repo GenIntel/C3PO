@@ -144,7 +144,7 @@ class Matcher(nn.Module):
     def evaluation(self):
         return not self.training
 
-    def forward(self, data: Dict) -> Dict[str, Union[torch.Tensor,int]]:
+    def forward(self, data: Dict) -> Dict[str, Union[torch.Tensor, int]]:
         with torch.autocast(enabled=self.config.lightglue.mp, device_type="cuda"):
             return self._compute_matches(data)
 
