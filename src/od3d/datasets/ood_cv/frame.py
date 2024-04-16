@@ -118,7 +118,7 @@ class OOD_CV_FrameMeta(Pascal3DFrameMeta):
 
         # category changing the name if abstracted from .mat file of ood cv ( e.g. 'diningtable' -> 'table')
         (
-            category_,
+            category,
             mesh_index,
             rfpath_mesh,
             bbox,
@@ -130,6 +130,7 @@ class OOD_CV_FrameMeta(Pascal3DFrameMeta):
         ) = Pascal3DFrameMeta.load_category_mesh_bbox_kpts2d_cam_from_object_annotation_raw(
             object=object,
             rpath_meshes=rpath_meshes,
+            category=category,
         )
 
         # logger.info(cam_intr4x4)
