@@ -1028,7 +1028,7 @@ def get_run_name_without_ts_and_platform(run_name: str):
 
 
 @app.command()
-def multiple(
+def run(
     benchmark: str = typer.Option("co3d_nemo", "-b", "--benchmark"),
     ablation: str = typer.Option(None, "-a", "--ablation"),
     platform: str = typer.Option("local", "-p", "--platform"),

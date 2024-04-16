@@ -84,11 +84,11 @@ pip install git@github.com:Generative-Vision-Robust-Learning/od3d.git
 
 To evaluate one method use
 
-  - `od3d bench multiple -b co3d_nemo -p slurm`.
+  - `od3d bench run -b co3d_nemo -p slurm`.
 
 You can evaluate multiple methods, by specyfing an ablation directory, e.g. `nemo_old`
 
-  - `od3d bench multiple -b co3d_nemo -p slurm -a nemo_old`.
+  - `od3d bench run -b co3d_nemo -p slurm -a nemo_old`.
 
 To see the current status on slurm use
 
