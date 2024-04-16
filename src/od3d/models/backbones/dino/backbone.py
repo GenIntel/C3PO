@@ -55,10 +55,8 @@ class DINOv2(OD3D_Backbone):
                 self.config.hub_model,
                 pretrained=self.config.weights == "default",
             )
-            if self.config.get("class_token", False):
-                self.out_dims = [self.extractor.embed_dim * 2]
-            else:
-                self.out_dims = [self.extractor.embed_dim]
+
+            self.out_dims = [self.extractor.embed_dim]
             self.extractor = self.patch_vit_resolution(self.extractor, self.stride)
 
         else:  # using keys did not show any improvement
