@@ -12,4 +12,3 @@ method:
     categories: ${categories}
     aligned_name: 'latest'
     aligned_store_only_similar: True
-

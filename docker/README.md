@@ -1,4 +1,4 @@
-# Setup Docker without ROOT and with GPU 
+# Setup Docker without ROOT and with GPU
 
 ```
 sudo usermod -aG docker ${USER}

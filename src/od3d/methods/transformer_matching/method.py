@@ -1,12 +1,11 @@
 import logging
+
 logger = logging.getLogger(__name__)
 from od3d.methods.method import OD3D_Method
 from od3d.datasets.dataset import OD3D_Dataset
 from od3d.benchmark.results import OD3D_Results
-from od3d.models.model import OD3D_Model
 from od3d.io import get_obj_from_config
 from omegaconf import DictConfig
-import pandas as pd
 import numpy as np
 import warnings
 import logging
@@ -14,17 +13,27 @@ from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
 import torch
-torch.multiprocessing.set_sharing_strategy('file_system')
+
+torch.multiprocessing.set_sharing_strategy("file_system")
 from pathlib import Path
 
 # note: math is actually used by config
-import math
+
 # import sys
 # sys.path.append(str(Path(__file__).parents[4] / 'third_party/LightGlue'))
 from od3d.cv.geometry.mesh import Meshes
 from od3d.models.feature_extractors import Extractor, rbd
 from od3d.cv.utils.dnnlib import construct_class_by_name
-from .utils import filter_matches, pad_to_length, normalize_keypoints, TokenConfidence, MatchAssignment, LearnableFourierPositionalEncoding, TransformerLayer, matcher_metrics
+from .utils import (
+    filter_matches,
+    pad_to_length,
+    normalize_keypoints,
+    TokenConfidence,
+    MatchAssignment,
+    LearnableFourierPositionalEncoding,
+    TransformerLayer,
+    matcher_metrics,
+)
 import torch.nn.functional as F
 from torch import nn
 
@@ -40,13 +49,14 @@ else:
 
 torch.backends.cudnn.deterministic = True
 
+
 class FeatureExtractor(nn.Module):
     def __init__(self, config: DictConfig, device="cpu"):
-        super(FeatureExtractor, self).__init__()
+        super().__init__()
         self.config = config
         self.device = device
         self.net: Extractor = construct_class_by_name(self.config.features.backbone)
-        
+
     def to(self, device):
         super().to(device)
         self.net.to(device)
@@ -69,36 +79,59 @@ class FeatureExtractor(nn.Module):
 
     def load_checkpoint(self, path_checkpoint: Path = None):
         self.net.load_checkpoint(path_checkpoint)
-        
+
     def save_checkpoint(self, path_checkpoint: Path = None):
         pass
-    
+
     @property
     def evaluation(self):
         return not self.training
-    
-    
+
+
 class Matcher(nn.Module):
     def __init__(self, config: DictConfig, device="cpu"):
-        super(Matcher, self).__init__()
+        super().__init__()
         self.config = config
         self.device = device
-        h, n, d = self.config.lightglue.num_heads, self.config.lightglue.n_layers, self.config.lightglue.descriptor_dim
-        if self.config.features.backbone.output_dim != self.config.lightglue.descriptor_dim:
+        h, n, d = (
+            self.config.lightglue.num_heads,
+            self.config.lightglue.n_layers,
+            self.config.lightglue.descriptor_dim,
+        )
+        if (
+            self.config.features.backbone.output_dim
+            != self.config.lightglue.descriptor_dim
+        ):
             self.input_proj = nn.Linear(
                 self.config.features.backbone.output_dim,
                 d,
-                bias=True
+                bias=True,
             )
         else:
             self.input_proj = nn.Identity()
         head_dim = d // h
-        self.posenc = LearnableFourierPositionalEncoding(2 + 2 * self.config.features.backbone.add_scale_ori, head_dim, head_dim)
-        self.transformers = nn.ModuleList([TransformerLayer(d, h, self.config.lightglue.flash) for _ in range(n)])
+        self.posenc = LearnableFourierPositionalEncoding(
+            2 + 2 * self.config.features.backbone.add_scale_ori,
+            head_dim,
+            head_dim,
+        )
+        self.transformers = nn.ModuleList(
+            [TransformerLayer(d, h, self.config.lightglue.flash) for _ in range(n)],
+        )
         self.output_proj = nn.Linear(d, 1, bias=True)
         self.log_assignment = nn.ModuleList([MatchAssignment(d) for _ in range(n)])
-        self.token_confidence = nn.ModuleList([TokenConfidence(d) for _ in range(n - 1)])
-        self.register_buffer("confidence_thresholds", torch.Tensor([self.confidence_threshold(i) for i in range(self.config.lightglue.n_layers)]))
+        self.token_confidence = nn.ModuleList(
+            [TokenConfidence(d) for _ in range(n - 1)],
+        )
+        self.register_buffer(
+            "confidence_thresholds",
+            torch.Tensor(
+                [
+                    self.confidence_threshold(i)
+                    for i in range(self.config.lightglue.n_layers)
+                ],
+            ),
+        )
 
         # training
         self.loss_fn = construct_class_by_name(self.config.train.loss)
@@ -106,11 +139,11 @@ class Matcher(nn.Module):
         # static lengths LightGlue is compiled for (only used with torch.compile)
         self.static_lengths = None
         self.to(device)
-        
+
     @property
     def evaluation(self):
         return not self.training
-        
+
     def forward(self, data: Dict) -> Dict[str, torch.Tensor | int]:
         with torch.autocast(enabled=self.config.lightglue.mp, device_type="cuda"):
             return self._compute_matches(data)
@@ -121,14 +154,16 @@ class Matcher(nn.Module):
             state_dict = torch.load(path_checkpoint, map_location=self.device)
         elif self.config.get("features", None) and self.config.lightglue.load_from_url:
             fname = f"{self.config.features.backbone.weights}_{self.config.lightglue.version.replace('.', '-')}.pth"
-            print(f"Loading checkpoint from {self.config.lightglue.url.format(self.config.lightglue.version,self.config.features.backbone.name)}")
+            print(
+                f"Loading checkpoint from {self.config.lightglue.url.format(self.config.lightglue.version,self.config.features.backbone.name)}",
+            )
             state_dict = torch.hub.load_state_dict_from_url(
                 self.config.lightglue.url.format(
                     self.config.lightglue.version,
-                    self.config.features.backbone.name
+                    self.config.features.backbone.name,
                 ),
                 file_name=fname,
-                map_location=self.device
+                map_location=self.device,
             )
         if state_dict:
             # rename old state dict entries
@@ -144,7 +179,7 @@ class Matcher(nn.Module):
                 logger.warning(f"Unexpected keys: {incompatible_keys.unexpected_keys}")
         else:
             logger.warning("No checkpoint loaded for Matcher.")
-     
+
     def compile(self, static_lengths, mode="reduce-overhead"):
         if self.config.lightglue.width_confidence != -1:
             warnings.warn(
@@ -154,17 +189,24 @@ class Matcher(nn.Module):
 
         for i in range(self.config.lightglue.n_layers):
             self.transformers[i].masked_forward = torch.compile(
-                self.transformers[i].masked_forward, mode=mode, fullgraph=True
+                self.transformers[i].masked_forward,
+                mode=mode,
+                fullgraph=True,
             )
         self.static_lengths = static_lengths
 
     def confidence_threshold(self, layer_index: int) -> float:
         """scaled confidence threshold"""
-        threshold = 0.8 + 0.1 * np.exp(-4.0 * layer_index / self.config.lightglue.n_layers)
+        threshold = 0.8 + 0.1 * np.exp(
+            -4.0 * layer_index / self.config.lightglue.n_layers,
+        )
         return np.clip(threshold, 0, 1)
 
     def get_pruning_mask(
-        self, confidences: torch.Tensor, scores: torch.Tensor, layer_index: int
+        self,
+        confidences: torch.Tensor,
+        scores: torch.Tensor,
+        layer_index: int,
     ) -> torch.Tensor:
         """mask points which should be removed"""
         keep = scores > (1 - self.config.lightglue.width_confidence)
@@ -192,10 +234,16 @@ class Matcher(nn.Module):
             return self.config.lightglue.pruning_keypoint_thresholds[device.type]
 
     def _compute_matches(self, data: Dict[str, Dict[str, torch.Tensor]]):
-        assert "image0" in data and "image1" in data, "Missing image0 or image1 in data."
+        assert (
+            "image0" in data and "image1" in data
+        ), "Missing image0 or image1 in data."
         data0, data1 = data["image0"], data["image1"]
-        assert "keypoints" in data0 and "keypoints" in data1, "Missing keypoints in data."
-        assert "descriptors" in data0 and "descriptors" in data1, "Missing descriptors in data."
+        assert (
+            "keypoints" in data0 and "keypoints" in data1
+        ), "Missing keypoints in data."
+        assert (
+            "descriptors" in data0 and "descriptors" in data1
+        ), "Missing descriptors in data."
         kpts0, kpts1 = data0["keypoints"], data1["keypoints"]
         b, m, _ = kpts0.shape
         b, n, _ = kpts1.shape
@@ -206,10 +254,12 @@ class Matcher(nn.Module):
 
         if self.config.features.backbone.add_scale_ori:
             kpts0 = torch.cat(
-                [kpts0] + [data0[k].unsqueeze(-1) for k in ("scales", "oris")], -1
+                [kpts0] + [data0[k].unsqueeze(-1) for k in ("scales", "oris")],
+                -1,
             )
             kpts1 = torch.cat(
-                [kpts1] + [data1[k].unsqueeze(-1) for k in ("scales", "oris")], -1
+                [kpts1] + [data1[k].unsqueeze(-1) for k in ("scales", "oris")],
+                -1,
             )
         desc0 = data0["descriptors"].contiguous()
         desc1 = data1["descriptors"].contiguous()
@@ -236,7 +286,11 @@ class Matcher(nn.Module):
 
         # GNN + final_proj + assignment
         do_early_stop = self.config.lightglue.depth_confidence > 0 and self.evaluation
-        do_point_pruning = self.config.lightglue.width_confidence > 0 and not do_compile and self.evaluation
+        do_point_pruning = (
+            self.config.lightglue.width_confidence > 0
+            and not do_compile
+            and self.evaluation
+        )
         pruning_th = self.pruning_min_kpts(device)
         if do_point_pruning:
             ind0 = torch.arange(0, m, device=device)[None]
@@ -252,7 +306,12 @@ class Matcher(nn.Module):
                 assert self.evaluation, "Keypoints should not be empty when training."
                 break
             desc0, desc1 = self.transformers[i](
-                desc0, desc1, encoding0, encoding1, mask0=mask0, mask1=mask1
+                desc0,
+                desc1,
+                encoding0,
+                encoding1,
+                mask0=mask0,
+                mask1=mask1,
             )
             if self.training:
                 all_desc0.append(desc0)
@@ -308,8 +367,11 @@ class Matcher(nn.Module):
 
         desc0, desc1 = desc0[..., :m, :], desc1[..., :n, :]  # remove padding
         scores, _ = self.log_assignment[i](desc0, desc1)
-        m0, m1, mscores0, mscores1 = filter_matches(scores, self.config.lightglue.filter_threshold)
-        
+        m0, m1, mscores0, mscores1 = filter_matches(
+            scores,
+            self.config.lightglue.filter_threshold,
+        )
+
         if self.evaluation:
             matches, mscores = [], []
             for k in range(b):
@@ -321,7 +383,6 @@ class Matcher(nn.Module):
                     m_indices_1 = ind1[k, m_indices_1]
                 matches.append(torch.stack([m_indices_0, m_indices_1], -1))
                 mscores.append(mscores0[k][valid])
-
 
         # TODO: Remove when hloc switches to the compact format.
         if do_point_pruning:
@@ -338,30 +399,42 @@ class Matcher(nn.Module):
             prune0 = torch.ones_like(mscores0) * self.config.lightglue.n_layers
             prune1 = torch.ones_like(mscores1) * self.config.lightglue.n_layers
 
-        
-        eval_results = {
-            "stop": i + 1,
-            "matches": matches,
-            "scores": mscores,
-        } if self.evaluation else {}
-        train_results = {
-            "ref_descriptors0": torch.stack(all_desc0, 1),
-            "ref_descriptors1": torch.stack(all_desc1, 1),
-            "log_assignment": scores,
-        } if self.training else {}
-        return {
-            "matches0": m0,
-            "matches1": m1,
-            "matching_scores0": mscores0,
-            "matching_scores1": mscores1,
-            "prune0": prune0,
-            "prune1": prune1,
-        } | eval_results | train_results
-        
+        eval_results = (
+            {
+                "stop": i + 1,
+                "matches": matches,
+                "scores": mscores,
+            }
+            if self.evaluation
+            else {}
+        )
+        train_results = (
+            {
+                "ref_descriptors0": torch.stack(all_desc0, 1),
+                "ref_descriptors1": torch.stack(all_desc1, 1),
+                "log_assignment": scores,
+            }
+            if self.training
+            else {}
+        )
+        return (
+            {
+                "matches0": m0,
+                "matches1": m1,
+                "matching_scores0": mscores0,
+                "matching_scores1": mscores1,
+                "prune0": prune0,
+                "prune1": prune1,
+            }
+            | eval_results
+            | train_results
+        )
+
     def loss(self, pred, data):
         def loss_params(pred, i):
             la, _ = self.log_assignment[i](
-                pred["ref_descriptors0"][:, i], pred["ref_descriptors1"][:, i]
+                pred["ref_descriptors0"][:, i],
+                pred["ref_descriptors1"][:, i],
             )
             return {
                 "log_assignment": la,
@@ -405,72 +478,121 @@ class Matcher(nn.Module):
         metrics = matcher_metrics(pred, data) if self.evaluation else {}
         return losses, metrics
 
+
 class TransformerMatching(OD3D_Method):
     def __init__(
-            self,
-            config: DictConfig,
-            logging_dir,
-            device="cpu"
+        self,
+        config: DictConfig,
+        logging_dir,
+        device="cpu",
     ):
         super().__init__(config=config, logging_dir=logging_dir)
         self.extractor = FeatureExtractor(config, device)
         self.matcher = Matcher(config, device)
 
         # init neural meshes
-        self.total_params = sum(p.numel() for p in self.extractor.parameters()) + sum(p.numel() for p in self.matcher.parameters())
-        self.fpaths_meshes = [self.config.fpaths_meshes[cls] for cls in config.categories]
-        fpaths_meshes_tform_obj = self.config.get('fpaths_meshes_tform_obj', None)
+        self.total_params = sum(p.numel() for p in self.extractor.parameters()) + sum(
+            p.numel() for p in self.matcher.parameters()
+        )
+        self.fpaths_meshes = [
+            self.config.fpaths_meshes[cls] for cls in config.categories
+        ]
+        fpaths_meshes_tform_obj = self.config.get("fpaths_meshes_tform_obj", None)
         if fpaths_meshes_tform_obj is not None:
-            self.fpaths_meshes_tform_obj = [fpaths_meshes_tform_obj[cls] for cls in config.categories]
+            self.fpaths_meshes_tform_obj = [
+                fpaths_meshes_tform_obj[cls] for cls in config.categories
+            ]
         else:
             self.fpaths_meshes_tform_obj = [None for _ in config.categories]
 
-        self.meshes = Meshes.load_from_files(fpaths_meshes=self.fpaths_meshes, fpaths_meshes_tforms=self.fpaths_meshes_tform_obj)
+        self.meshes = Meshes.load_from_files(
+            fpaths_meshes=self.fpaths_meshes,
+            fpaths_meshes_tforms=self.fpaths_meshes_tform_obj,
+        )
         self.meshes_ranges = self.meshes.get_ranges().detach().cuda()
-        logger.info(f'loading meshes from following fpaths: {self.fpaths_meshes}...')
-        
+        logger.info(f"loading meshes from following fpaths: {self.fpaths_meshes}...")
+
         self.verts_count_max = self.meshes.verts_counts_max
         self.mem_verts_feats_count = len(config.categories) * self.verts_count_max
-        self.mem_clutter_feats_count = config.neural_mesh.num_noise * config.neural_mesh.max_group
+        self.mem_clutter_feats_count = (
+            config.neural_mesh.num_noise * config.neural_mesh.max_group
+        )
         self.mem_count = self.mem_verts_feats_count + self.mem_clutter_feats_count
 
         self.feats_bank_count = self.verts_count_max * len(self.meshes) + 1
-        self.clutter_feats = torch.nn.Parameter(torch.randn(size=(1, config.features.backbone.output_dim), device=device), requires_grad=True)
-        self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), config.features.backbone.output_dim), device=device), requires_grad=True))
+        self.clutter_feats = torch.nn.Parameter(
+            torch.randn(size=(1, config.features.backbone.output_dim), device=device),
+            requires_grad=True,
+        )
+        self.meshes.set_feats_cat_with_pad(
+            torch.nn.Parameter(
+                torch.randn(
+                    size=(
+                        self.verts_count_max * len(self.meshes),
+                        config.features.backbone.output_dim,
+                    ),
+                    device=device,
+                ),
+                requires_grad=True,
+            ),
+        )
 
         self.seq_obj_tform4x4_est_obj = {}
         self.seq_obj_tform4x4_est_obj_sim = {}
 
-
         crit_kwargs = {}
-        if config.train.loss.class_name == "od3d.cv.metric.cross_entropy_smooth.CrossEntropyLabelsSmoothed":
-            crit_kwargs["labels_smoothed"] = self.meshes.get_geodesic_prob_with_noise().to(device=device)
-        self.criterion = construct_class_by_name(self.config.train.loss, **crit_kwargs).cuda()
+        if (
+            config.train.loss.class_name
+            == "od3d.cv.metric.cross_entropy_smooth.CrossEntropyLabelsSmoothed"
+        ):
+            crit_kwargs[
+                "labels_smoothed"
+            ] = self.meshes.get_geodesic_prob_with_noise().to(device=device)
+        self.criterion = construct_class_by_name(
+            self.config.train.loss,
+            **crit_kwargs,
+        ).cuda()
 
         self.to(device)
 
-
     def setup_optimizers(self):
-        
-        params = [p for p in self.extractor.parameters() if p.requires_grad] + [p for p in self.matcher.parameters() if p.requires_grad] + [self.meshes.feats] + [self.clutter_feats]
-        self.optim = get_obj_from_config(config=self.config.train.optimizer, params=params)
-        self.scheduler = get_obj_from_config(self.optim, config=self.config.train.scheduler)
-        
+        params = (
+            [p for p in self.extractor.parameters() if p.requires_grad]
+            + [p for p in self.matcher.parameters() if p.requires_grad]
+            + [self.meshes.feats]
+            + [self.clutter_feats]
+        )
+        self.optim = get_obj_from_config(
+            config=self.config.train.optimizer,
+            params=params,
+        )
+        self.scheduler = get_obj_from_config(
+            self.optim,
+            config=self.config.train.scheduler,
+        )
+
     def set_requires_grad(self, extractor_grad=True, matcher_grad=True):
         for param in self.extractor.parameters():
             param.requires_grad = extractor_grad
         for param in self.matcher.parameters():
             param.requires_grad = matcher_grad
-    
+
     def save_checkpoint(self, path_checkpoint: Path):
         pass
 
-    def load_checkpoint(self, extractor_checkpoint: Path = None, matcher_checkpoint: Path = None, mesh_checkpoint: Path = None):
+    def load_checkpoint(
+        self,
+        extractor_checkpoint: Path = None,
+        matcher_checkpoint: Path = None,
+        mesh_checkpoint: Path = None,
+    ):
         self.extractor.load_checkpoint(extractor_checkpoint)
         self.matcher.load_checkpoint(matcher_checkpoint)
         if mesh_checkpoint is not None:
             raise NotImplementedError("Loading mesh checkpoint is not implemented yet.")
-            self.meshes.load_state_dict(torch.load(mesh_checkpoint, map_location=self.device))
+            self.meshes.load_state_dict(
+                torch.load(mesh_checkpoint, map_location=self.device),
+            )
 
     def to(self, device):
         self.extractor.to(device)
@@ -480,20 +602,28 @@ class TransformerMatching(OD3D_Method):
 
     def cuda(self):
         self.to("cuda")
-        
+
     @property
     def training(self):
         return self.matcher.training and self.matcher.training
-    
+
     @property
     def evaluation(self):
         return not self.training
 
-    def compile(self, mode="reduce-overhead", static_lengths=[256, 512, 768, 1024, 1280, 1536]):
+    def compile(
+        self,
+        mode="reduce-overhead",
+        static_lengths=[256, 512, 768, 1024, 1280, 1536],
+    ):
         self.extractor = torch.compile(self.extractor, mode=mode, fullgraph=True)
         self.matcher.compile(mode=mode, static_lengths=static_lengths)
 
-    def match_pair(self, image0: Dict[str, torch.Tensor], image1: Dict[str, torch.Tensor]):
+    def match_pair(
+        self,
+        image0: Dict[str, torch.Tensor],
+        image1: Dict[str, torch.Tensor],
+    ):
         """
         Match keypoints and descriptors between two images
 
@@ -529,42 +659,57 @@ class TransformerMatching(OD3D_Method):
         """
         feats0 = self.extractor(image0)
         feats1 = self.extractor(image1)
-        matches = self.matcher({'image0': feats0, 'image1': feats1})
+        matches = self.matcher({"image0": feats0, "image1": feats1})
         return feats0, feats1, matches
 
     @property
     def path_checkpoint(self):
-        return self.logging_dir.joinpath('nemo.ckpt')
+        return self.logging_dir.joinpath("nemo.ckpt")
 
-
-    def train(self, datasets_train: Dict[str, OD3D_Dataset], datasets_val: Dict[str, OD3D_Dataset]):
+    def train(
+        self,
+        datasets_train: Dict[str, OD3D_Dataset],
+        datasets_val: Dict[str, OD3D_Dataset],
+    ):
         if self.config.train.profile:
             prof = torch.profiler.profile(
                 schedule=torch.profiler.schedule(wait=1, warmup=1, active=1, repeat=1),
-                on_trace_ready=torch.profiler.tensorboard_trace_handler(str(self.logging_dir)),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                    str(self.logging_dir),
+                ),
                 record_shapes=True,
                 profile_memory=True,
                 with_stack=True,
             )
             prof.__enter__()
-        self.set_requires_grad(extractor_grad=self.config.features.backbone.freeze, matcher_grad=True)
+        self.set_requires_grad(
+            extractor_grad=self.config.features.backbone.freeze,
+            matcher_grad=True,
+        )
         self.extractor.train()
         self.matcher.train()
-        self.load_checkpoint(extractor_checkpoint=self.config.features.backbone.checkpoint, matcher_checkpoint=self.config.lightglue.checkpoint)
+        self.load_checkpoint(
+            extractor_checkpoint=self.config.features.backbone.checkpoint,
+            matcher_checkpoint=self.config.lightglue.checkpoint,
+        )
         train_dataset: OD3D_Dataset = datasets_train["main"]
         val = "main" in datasets_val
         if val:
             eval_dataset: OD3D_Dataset = datasets_val["main"]
 
         # setup optimizer and scheduler
-        params = self.matcher.parameters() if self.config.features.backbone.freeze else list(self.extractor.parameters()) + list(self.matcher.parameters())
+        params = (
+            self.matcher.parameters()
+            if self.config.features.backbone.freeze
+            else list(self.extractor.parameters()) + list(self.matcher.parameters())
+        )
         optimizer: torch.optim.Optimizer = construct_class_by_name(
             self.config.train.optimizer,
             params=params,
         )
         scheduler: torch.optim.lr_scheduler._LRScheduler = construct_class_by_name(
             self.config.train.scheduler,
-            optimizer=optimizer
+            optimizer=optimizer,
         )
 
         for epoch in range(self.config.train.epochs):
@@ -587,11 +732,9 @@ class TransformerMatching(OD3D_Method):
                 prof.step()
         self.save_checkpoint(self.path_checkpoint)
 
-
     def test(self, dataset: OD3D_Dataset):
         self.extractor.eval()
         self.matcher.eval()
-        pass
 
     def _train_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         data0 = {"image": batch["image0"]}
@@ -603,12 +746,14 @@ class TransformerMatching(OD3D_Method):
             data1["visibility"] = batch["visibility1"]
         feats0 = self.extractor(data0)
         feats1 = self.extractor(data1)
-        matches = self.matcher({'image0': feats0, 'image1': feats1})
+        matches = self.matcher({"image0": feats0, "image1": feats1})
         loss, _ = self.matcher.loss(matches, batch)
         return loss
 
-
-    def _test_step(self, batch: Dict[str, torch.Tensor]) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    def _test_step(
+        self,
+        batch: Dict[str, torch.Tensor],
+    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         data0 = {"image": batch["image0"]}
         data1 = {"image": batch["image1"]}
         if self.config.features.backbone.requires_kpts:
@@ -618,7 +763,7 @@ class TransformerMatching(OD3D_Method):
             data1["visibility"] = batch["visibility1"]
         feats0 = self.extractor(data0)
         feats1 = self.extractor(data1)
-        matches = self.matcher({'image0': feats0, 'image1': feats1})
+        matches = self.matcher({"image0": feats0, "image1": feats1})
         loss, metrics = self.matcher.loss(matches, batch)
         return loss, metrics
 
@@ -634,15 +779,23 @@ class TransformerMatching(OD3D_Method):
             points1 (torch.Tensor): coordinates in image #1, shape (K,2)
         """
         # extract local features
-        feats0 = self.extractor(image0)  # auto-resize the image, disable with resize=None
+        feats0 = self.extractor(
+            image0,
+        )  # auto-resize the image, disable with resize=None
         feats1 = self.extractor(image1)
 
         # match the features
-        matches01 = self.matcher({'image0': feats0, 'image1': feats1})
-        feats0, feats1, matches01 = [rbd(x) for x in [feats0, feats1, matches01]]  # remove batch dimension
-        matches = matches01['matches']  # indices with shape (K,2)
-        points0 = feats0['keypoints'][matches[..., 0]]  # coordinates in image #0, shape (K,2)
-        points1 = feats1['keypoints'][matches[..., 1]]  # coordinates in image #1, shape (K,2)
+        matches01 = self.matcher({"image0": feats0, "image1": feats1})
+        feats0, feats1, matches01 = (
+            rbd(x) for x in [feats0, feats1, matches01]
+        )  # remove batch dimension
+        matches = matches01["matches"]  # indices with shape (K,2)
+        points0 = feats0["keypoints"][
+            matches[..., 0]
+        ]  # coordinates in image #0, shape (K,2)
+        points1 = feats1["keypoints"][
+            matches[..., 1]
+        ]  # coordinates in image #1, shape (K,2)
         return points0, points1
 
     def train_batch(self, batch) -> OD3D_Results:

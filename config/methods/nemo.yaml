@@ -55,7 +55,7 @@ train:
       - class_name: RGB_Random
 
   epochs_to_next_test: 1
-  epochs: 5
+  epochs: 1
   val_fraction: 0.01
   batch_accumulate_to_next_step: 2
 
@@ -97,9 +97,11 @@ test:
       - 'net_feats_nearest_verts'
       - 'sim_pxl'
       - 'samples'
+      - 'tsne'
     samples_scores: True
     samples_sorted: True
     live: False
+
 
 inference:
     only_use_rendered_inliers: False
@@ -138,6 +140,3 @@ inference:
         beta1: 0.6
         lr: 2e-2 # 5e-3 5e-2
         epochs: 30 # 30
-
-
-

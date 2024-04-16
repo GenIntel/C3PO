@@ -1,18 +1,30 @@
 import logging
+
 logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 
 from od3d.datasets.co3d.frame import CO3D_Frame
-from od3d.datasets.sequence import OD3D_SequenceMeshMixin, OD3D_MESH_TYPES, OD3D_PCL_TYPES, OD3D_Sequence, \
-    OD3D_SequenceCategoryMixin, OD3D_SequenceSfMMixin, OD3D_SEQUENCE_SFM_TYPES
-from od3d.datasets.sequence_meta import OD3D_SequenceMeta, OD3D_SequenceMetaCategoryMixin
+from od3d.datasets.sequence import (
+    OD3D_SequenceMeshMixin,
+    OD3D_Sequence,
+    OD3D_SequenceCategoryMixin,
+)
+from od3d.datasets.sequence_meta import (
+    OD3D_SequenceMeta,
+    OD3D_SequenceMetaCategoryMixin,
+)
 
-from od3d.datasets.object import OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin, OD3D_DepthTypeMixin
+from od3d.datasets.object import (
+    OD3D_MaskTypeMixin,
+    OD3D_CamTform4x4ObjTypeMixin,
+    OD3D_DepthTypeMixin,
+)
 from od3d.datasets.co3d.enum import MAP_CATEGORIES_CO3D_TO_OD3D
 from pathlib import Path
 from co3d.dataset.data_types import (
-    load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
+    SequenceAnnotation,
 )
+
 
 @dataclass
 class CO3D_SequenceMeta(OD3D_SequenceMetaCategoryMixin, OD3D_SequenceMeta):
@@ -30,23 +42,34 @@ class CO3D_SequenceMeta(OD3D_SequenceMetaCategoryMixin, OD3D_SequenceMeta):
             pcl_pts_count = sequence_annotation.point_cloud.n_points
             pcl_quality_score = sequence_annotation.point_cloud.quality_score
         else:
-            rfpath_pcl = Path('None')
+            rfpath_pcl = Path("None")
             pcl_pts_count = 0
-            pcl_quality_score = float('nan')
+            pcl_quality_score = float("nan")
 
         viewpoint_quality_score = sequence_annotation.viewpoint_quality_score
 
-        return CO3D_SequenceMeta(category=category, name=name, pcl_pts_count=pcl_pts_count,
-                                 pcl_quality_score=pcl_quality_score, rfpath_pcl=rfpath_pcl,
-                                 viewpoint_quality_score=viewpoint_quality_score)
+        return CO3D_SequenceMeta(
+            category=category,
+            name=name,
+            pcl_pts_count=pcl_pts_count,
+            pcl_quality_score=pcl_quality_score,
+            rfpath_pcl=rfpath_pcl,
+            viewpoint_quality_score=viewpoint_quality_score,
+        )
+
 
 @dataclass
-class CO3D_Sequence(OD3D_SequenceMeshMixin, OD3D_SequenceCategoryMixin,
-                       OD3D_DepthTypeMixin, OD3D_MaskTypeMixin, OD3D_CamTform4x4ObjTypeMixin, OD3D_Sequence):
+class CO3D_Sequence(
+    OD3D_SequenceMeshMixin,
+    OD3D_SequenceCategoryMixin,
+    OD3D_DepthTypeMixin,
+    OD3D_MaskTypeMixin,
+    OD3D_CamTform4x4ObjTypeMixin,
+    OD3D_Sequence,
+):
     frame_type = CO3D_Frame
     map_categories_to_od3d = MAP_CATEGORIES_CO3D_TO_OD3D
     meta_type = CO3D_SequenceMeta
-
 
     #
     # @property

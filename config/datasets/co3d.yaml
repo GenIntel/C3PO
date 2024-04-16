@@ -17,7 +17,7 @@ modalities:
     - 'mask'
     - 'sequence_name_unique'
     - 'sequence'
-    # - 'mesh'
+    # - 'mesh's
 
 mesh_type: 'alpha500' # 'cuboid500' 'convex500', 'voxel500' 'poisson500', 'alpha500', 'cuboid1000'
 
@@ -55,13 +55,13 @@ preprocess:
     enabled: False
     override: False
   tform_obj:
-    enabled: False
+    enabled: True
     override: False
   mesh:
     enabled: False
     override: False
   mesh_feats:
-    enabled: False
+    enabled: True
     override: False
   mesh_feats_dist:
     enabled: False

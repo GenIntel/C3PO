@@ -76,5 +76,3 @@ ns-extract-mesh \
 
 #third_party/AutoRecon/
 outputs/neusfacto-wbg-reg_sep-plane-nerf_60k_plane-h-ratio-0.3_co3d-scan1_cvpr/neus-facto-wbg-reg_sep-plane-nerf/2023-09-20_211422/extracted_mesh_res-512_max-component.ply
-
-

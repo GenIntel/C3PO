@@ -6,6 +6,3 @@ method:
   nemo:
     geo_cyclic_weight_temp: 1.0
     app_cyclic_weight_temp: 1.0
-
-
-

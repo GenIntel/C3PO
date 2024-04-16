@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from omegaconf import DictConfig
-from od3d.models.unet import unet_res50
 from od3d.models.backbones.resnet_old.upsampling_layer import DoubleConv
 from od3d.models.backbones.resnet_old.upsampling_layer import Up
+from od3d.models.unet import unet_res50
+from omegaconf import DictConfig
 
 vgg_layers = {"pool4": 24, "pool5": 31}
 net_stride = {
@@ -166,7 +166,7 @@ def vgg16(layer="pool4"):
     model = nn.Sequential()
     features = nn.Sequential()
     for i in range(0, vgg_layers[layer]):
-        features.add_module("{}".format(i), net.features[i])
+        features.add_module(f"{i}", net.features[i])
     model.add_module("features", features)
     return model
 
@@ -260,7 +260,6 @@ class MergeReduce(nn.Module):
             )
 
     def forward(self, X):
-
         X = X.view(X.shape[0], -1, self.local_size, X.shape[2])
         if self.reduce_method == "mean":
             return torch.mean(X, dim=2)
@@ -289,7 +288,7 @@ class NetE2E(nn.Module):
         num_stacks=8,
         num_blocks=1,
         noise_on_mask=True,
-        **kwargs
+        **kwargs,
     ):
         # output_dimension = 128
         super().__init__()
@@ -328,7 +327,8 @@ class NetE2E(nn.Module):
             self.out_layer = None
         else:
             self.out_layer = nn.Linear(
-                net_out_dimension[net_type] * self.size_number, self.output_dimension
+                net_out_dimension[net_type] * self.size_number,
+                self.output_dimension,
             )
             # output_dimension , net_out_dimension[net_type] * size_number
 
@@ -348,7 +348,8 @@ class NetE2E(nn.Module):
             return F.normalize(X, p=2, dim=1)
         if self.size_number == 1:
             X = torch.nn.functional.conv2d(
-                X, self.out_layer.weight.unsqueeze(2).unsqueeze(3)
+                X,
+                self.out_layer.weight.unsqueeze(2).unsqueeze(3),
             )
         elif self.size_number > 1:
             X = torch.nn.functional.conv2d(
@@ -446,7 +447,8 @@ class NetE2E(nn.Module):
         if return_map:
             return X, F.normalize(
                 torch.nn.functional.conv2d(
-                    m, self.out_layer.weight.unsqueeze(2).unsqueeze(3)
+                    m,
+                    self.out_layer.weight.unsqueeze(2).unsqueeze(3),
                 ),
                 p=2,
                 dim=1,

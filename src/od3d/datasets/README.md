@@ -33,10 +33,10 @@ class EXAMPLE(OD3D_Dataset):
         index_shift=0,
     ):
         categories = categories if categories is not None else EXAMPLE_CATEGORIES.list()
-        super().__init__(categories=categories, name=name, 
-                         modalities=modalities, path_raw=path_raw, 
-                         path_preprocess=path_preprocess, transform=transform, 
-                         subset_fraction=subset_fraction, index_shift=index_shift, 
+        super().__init__(categories=categories, name=name,
+                         modalities=modalities, path_raw=path_raw,
+                         path_preprocess=path_preprocess, transform=transform,
+                         subset_fraction=subset_fraction, index_shift=index_shift,
                          dict_nested_frames=dict_nested_frames)
 
 
@@ -45,14 +45,14 @@ class EXAMPLE(OD3D_Dataset):
                        path_preprocess=self.path_preprocess, categories=self.categories,
                        dict_nested_frames=dict_nested_frames, transform=self.transform, index_shift=self.index_shift)
 
-    
+
     def get_item(self, item):
-        frame_meta = EXAMPLEFrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta, 
+        frame_meta = EXAMPLEFrameMeta.load_from_meta_with_name_unique(path_meta=self.path_meta,
                                                                       name_unique=self.list_frames_unique[item])
         return OD3D_Frame(path_raw=self.path_raw, path_preprocess=self.path_preprocess, path_meta=self.path_meta,
                           meta=frame_meta, modalities=self.modalities,
                           categories=self.categories)
-    
+
     @staticmethod
     def setup(config):
         path_raw = Path(config.path_raw)
@@ -65,18 +65,18 @@ class EXAMPLE(OD3D_Dataset):
             logger.info(f"Found EXAMPLE dataset at {path_raw}")
         else:
             ...
-            
-    
+
+
     @staticmethod
     def preprocess_meta(config: DictConfig):
         path_raw = OD3D_Dataset.get_path_raw(config=config)
         path_meta = OD3D_Dataset.get_path_meta(config=config)
-        
+
         if config.preprocess_meta_remove_previous:
             if path_meta.exists():
                 shutil.rmtree(path_meta)
-        
-    
+
+
     def preprocess(override: bool = False):
         ...
 ```
@@ -108,7 +108,7 @@ class EXAMPLEFrameMeta(OD3D_FrameMetaXXXMixin, OD3D_FrameMeta):
 
 
 
-## 3. add a new config 
+## 3. add a new config
 
 ```
 name: example
@@ -118,10 +118,10 @@ modalities:
     - 'rgb'
     - 'categories'
     ...
-    
-    
-path_raw: ${platform.path_datasets}/EXAMPLE
-path_preprocess: ${platform.path_datasets}/EXAMPLE_Preprocess
+
+
+path_raw: ${platform.path_datasets_raw}/EXAMPLE
+path_preprocess: ${platform.path_datasets_preprocess}/EXAMPLE_Preprocess
 
 setup_remove_previous: False
 setup_override: False

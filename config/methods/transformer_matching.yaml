@@ -13,7 +13,7 @@ neural_mesh:
   num_noise: 5
   max_group: 512
 
-  
+
 
 lightglue:
   descriptor_dim: 256

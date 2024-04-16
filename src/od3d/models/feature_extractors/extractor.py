@@ -1,13 +1,19 @@
 import collections.abc as collections
-from pathlib import Path
-from types import SimpleNamespace
-from typing import Callable, List, Optional, Tuple, Union, Dict
 from abc import abstractmethod
+from pathlib import Path
+from typing import Callable
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Tuple
+from typing import Union
+
 import cv2
 import kornia
 import numpy as np
 import torch
 from omegaconf import DictConfig
+
 
 class ImagePreprocessor:
     def __init__(self, config) -> None:
@@ -32,9 +38,9 @@ def map_tensor(input_, func: Callable):
     string_classes = (str, bytes)
     if isinstance(input_, string_classes):
         return input_
-    elif isinstance(input_, collections.Mapping):
+    elif isinstance(input_, collections.abc.Mapping):
         return {k: map_tensor(sample, func) for k, sample in input_.items()}
-    elif isinstance(input_, collections.Sequence):
+    elif isinstance(input_, collections.abc.Sequence):
         return [map_tensor(sample, func) for sample in input_]
     elif isinstance(input_, torch.Tensor):
         return func(input_)
@@ -66,7 +72,7 @@ def read_image(path: Path, grayscale: bool = False) -> np.ndarray:
     mode = cv2.IMREAD_GRAYSCALE if grayscale else cv2.IMREAD_COLOR
     image = cv2.imread(str(path), mode)
     if image is None:
-        raise IOError(f"Could not read image at {path}.")
+        raise OSError(f"Could not read image at {path}.")
     if not grayscale:
         image = image[..., ::-1]
     return image
@@ -128,13 +134,17 @@ class Extractor(torch.nn.Module):
         super().to(device)
         self.device = device
         return self
-        
+
     @abstractmethod
     def load_checkpoint(self, checkpoint_path: str = None):
         pass
 
     @torch.no_grad()
-    def extract(self, data: Dict[str, torch.Tensor], preprocess_conf: DictConfig) -> dict:
+    def extract(
+        self,
+        data: Dict[str, torch.Tensor],
+        preprocess_conf: DictConfig,
+    ) -> dict:
         """Perform extraction with online resizing"""
         img = data["image"]
         if img.dim() == 3:

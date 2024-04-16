@@ -4,4 +4,3 @@ defaults:
 
 ablation_name_nemo3d_align_aligned_meshs: filtered_mesh
 aligned_name_suffix: '_mesh_filtered'
-

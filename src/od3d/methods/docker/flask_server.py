@@ -1,24 +1,28 @@
 # pip install Flask
 # FLASK_ENV=development FLASK_APP=flask_server.py flask run
-
-from flask import Flask, jsonify, request
 import pickle
+
+from flask import Flask
+from flask import jsonify
+from flask import request
+
 app = Flask(__name__)
 import io
 import torch
 
-@app.route('/predict', methods=['POST'])
+
+@app.route("/predict", methods=["POST"])
 def predict():
-    if request.method == 'POST':
-        if 'file' not in request.files:
+    if request.method == "POST":
+        if "file" not in request.files:
             return "No file part"
 
-        file = request.files['file']
+        file = request.files["file"]
 
         if not file:
             return "No selected file"
 
-        file_bytes = request.files['file'].read()
+        file_bytes = request.files["file"].read()
         bytes_io = io.BytesIO(file_bytes)
         data = pickle.load(bytes_io)
         print(data)
@@ -28,10 +32,10 @@ def predict():
                 data_return[key] = value.tolist()
             else:
                 data_return[key] = value
-        #data_return['status_code'] = 200
-        #data_return['message'] = 'OK'
+        # data_return['status_code'] = 200
+        # data_return['message'] = 'OK'
         return jsonify(data_return)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()

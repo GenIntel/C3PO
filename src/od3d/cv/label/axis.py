@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger(__name__)
 import open3d
 import torch
@@ -6,11 +7,16 @@ from typing import Union, List
 from od3d.cv.visual.show import get_o3d_geometries_for_cams
 from od3d.cv.geometry.downsample import random_sampling
 
-def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
-                      cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]]=None,
-                      cams_intr4x4: Union[torch.Tensor, List[torch.Tensor]]=None,
-                      cams_imgs: Union[torch.Tensor, List[torch.Tensor]]=None,
-                      cams_names: List[str]=None, ):
+
+def label_axis_in_pcl(
+    pts3d,
+    pts3d_colors=None,
+    prev_labeled_pcl_tform_pcl=None,
+    cams_tform4x4_world: Union[torch.Tensor, List[torch.Tensor]] = None,
+    cams_intr4x4: Union[torch.Tensor, List[torch.Tensor]] = None,
+    cams_imgs: Union[torch.Tensor, List[torch.Tensor]] = None,
+    cams_names: List[str] = None,
+):
     """
     Args:
         pts3d (torch.Tensor): Nx3
@@ -26,7 +32,7 @@ def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
 
     logger.info("")
     logger.info(
-        "1) Please pick left, right, back, front, top, bottom [shift + left click]"
+        "1) Please pick left, right, back, front, top, bottom [shift + left click]",
     )
     logger.info("   Press [shift + right click] to undo point picking")
     logger.info("2) Afther picking points, press q for close the window")
@@ -46,7 +52,10 @@ def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
         pcd.colors = open3d.utility.Vector3dVector(pts3d_colors.detach().cpu().numpy())
 
     if prev_labeled_pcl_tform_pcl is not None:
-        from od3d.cv.geometry.transform import transf3d_broadcast, inv_tform4x4, tform4x4
+        from od3d.cv.geometry.transform import (
+            transf3d_broadcast,
+            inv_tform4x4,
+        )
 
         # DEBUG START ADD ROTATION
         # left_rot = torch.Tensor([
@@ -66,26 +75,47 @@ def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
         pts3d_prev_axis[0, :, 0] = pts3d_prev_axis_single
         pts3d_prev_axis[1, :, 1] = pts3d_prev_axis_single
         pts3d_prev_axis[2, :, 2] = pts3d_prev_axis_single
-        pts3d_prev_axis = transf3d_broadcast(pts3d=pts3d_prev_axis, transf4x4=inv_tform4x4(prev_labeled_pcl_tform_pcl))
-        pts3d_prev_axis_colors[0, :, :] = torch.Tensor([1., 0., 0.])[None,].expand(num_pts_axis, 3)
-        pts3d_prev_axis_colors[1, :, :] = torch.Tensor([0., 1., 0.])[None,].expand(num_pts_axis, 3)
-        pts3d_prev_axis_colors[2, :, :] = torch.Tensor([0., 0., 1.])[None,].expand(num_pts_axis, 3)
+        pts3d_prev_axis = transf3d_broadcast(
+            pts3d=pts3d_prev_axis,
+            transf4x4=inv_tform4x4(prev_labeled_pcl_tform_pcl),
+        )
+        pts3d_prev_axis_colors[0, :, :] = torch.Tensor([1.0, 0.0, 0.0])[None,].expand(
+            num_pts_axis,
+            3,
+        )
+        pts3d_prev_axis_colors[1, :, :] = torch.Tensor([0.0, 1.0, 0.0])[None,].expand(
+            num_pts_axis,
+            3,
+        )
+        pts3d_prev_axis_colors[2, :, :] = torch.Tensor([0.0, 0.0, 1.0])[None,].expand(
+            num_pts_axis,
+            3,
+        )
 
         pcd_prev_axis = open3d.geometry.PointCloud()
-        pcd_prev_axis.points = open3d.utility.Vector3dVector(pts3d_prev_axis.reshape(-1, 3).detach().cpu().numpy())
-        pcd_prev_axis.colors = open3d.utility.Vector3dVector(pts3d_prev_axis_colors.reshape(-1, 3).detach().cpu().numpy())
-        #prev_axis_colors = torch.Tensor([[[1., 0., 0.], [1., 0., 0.]], [[0., 1., 0.], [0., 1., 0.]], [[0., 0., 1.], [0., 0., 1.]]])
+        pcd_prev_axis.points = open3d.utility.Vector3dVector(
+            pts3d_prev_axis.reshape(-1, 3).detach().cpu().numpy(),
+        )
+        pcd_prev_axis.colors = open3d.utility.Vector3dVector(
+            pts3d_prev_axis_colors.reshape(-1, 3).detach().cpu().numpy(),
+        )
+        # prev_axis_colors = torch.Tensor([[[1., 0., 0.], [1., 0., 0.]], [[0., 1., 0.], [0., 1., 0.]], [[0., 0., 1.], [0., 0., 1.]]])
         pcd = pcd + pcd_prev_axis
-        pts3d_selectable = torch.cat([pts3d.reshape(-1, 3), pts3d_prev_axis.reshape(-1, 3)], dim=0)
+        pts3d_selectable = torch.cat(
+            [pts3d.reshape(-1, 3), pts3d_prev_axis.reshape(-1, 3)],
+            dim=0,
+        )
     else:
         pts3d_selectable = pts3d
 
-    for geometry_dict in get_o3d_geometries_for_cams(cams_tform4x4_world=cams_tform4x4_world,
-                                                     cams_intr4x4=cams_intr4x4,
-                                                     cams_imgs=cams_imgs,
-                                                     cams_names=cams_names):
-        if isinstance(geometry_dict['geometry'], open3d.geometry.PointCloud):
-            pcd += geometry_dict['geometry']
+    for geometry_dict in get_o3d_geometries_for_cams(
+        cams_tform4x4_world=cams_tform4x4_world,
+        cams_intr4x4=cams_intr4x4,
+        cams_imgs=cams_imgs,
+        cams_names=cams_names,
+    ):
+        if isinstance(geometry_dict["geometry"], open3d.geometry.PointCloud):
+            pcd += geometry_dict["geometry"]
 
     vis.add_geometry(pcd)
     vis.run()  # user picks points
@@ -100,10 +130,8 @@ def label_axis_in_pcl(pts3d, pts3d_colors=None, prev_labeled_pcl_tform_pcl=None,
         #     logger.warning("Return prev axis, because not exactly 6 points were selected")
         #     return prev_axis_pts3d
         # else:
-           logger.warning("Return none, because not exactly 6 points were selected")
-           return None
-
-
+        logger.warning("Return none, because not exactly 6 points were selected")
+        return None
 
     else:
         pts3d_picked = pts3d_selectable[pts3d_picked_ids]

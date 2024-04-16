@@ -1,9 +1,11 @@
 from od3d.data.ext_enum import ExtEnum
 
+
 class OBJECTNET3D_SUBSETS(str, ExtEnum):
     train = "train"
     val = "val"
     test = "test"
+
 
 class OBJECTNET3D_CATEOGORIES(str, ExtEnum):
     AEROPLANE = "aeroplane"

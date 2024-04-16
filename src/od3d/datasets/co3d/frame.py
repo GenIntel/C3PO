@@ -1,51 +1,104 @@
 import logging
+
 logger = logging.getLogger(__name__)
-from typing import List
 import torch
 from pathlib import Path
 
-from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES
-from od3d.datasets.frame_meta import OD3D_FrameMeta, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaDepthMixin,  \
-    OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaSizeMixin, OD3D_FrameMetaSequenceMixin, \
-    OD3D_FrameMetaDepthMaskMixin, OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaCamTform4x4ObjMixin
+from od3d.datasets.frame_meta import (
+    OD3D_FrameMeta,
+    OD3D_FrameMetaRGBMixin,
+    OD3D_FrameMetaDepthMixin,
+    OD3D_FrameMetaCategoryMixin,
+    OD3D_FrameMetaMaskMixin,
+    OD3D_FrameMetaSizeMixin,
+    OD3D_FrameMetaSequenceMixin,
+    OD3D_FrameMetaDepthMaskMixin,
+    OD3D_FrameMetaCamIntr4x4Mixin,
+    OD3D_FrameMetaCamTform4x4ObjMixin,
+)
 
-from od3d.datasets.frame import OD3D_Frame, OD3D_FrameSizeMixin, OD3D_FrameRGBMixin, OD3D_FrameMaskMixin, \
-    OD3D_FrameRGBMaskMixin, OD3D_FrameRaysCenter3dMixin, OD3D_FrameMeshMixin, OD3D_FrameTformObjMixin, \
-    OD3D_FrameSequenceMixin, OD3D_FrameCategoryMixin, OD3D_FrameCamIntr4x4Mixin, OD3D_FrameCamTform4x4ObjMixin, \
-    OD3D_CamProj4x4ObjMixin, OD3D_FRAME_MASK_TYPES, OD3D_FrameDepthMixin, OD3D_FrameDepthMaskMixin
+from od3d.datasets.frame import (
+    OD3D_Frame,
+    OD3D_FrameSizeMixin,
+    OD3D_FrameRGBMixin,
+    OD3D_FrameMaskMixin,
+    OD3D_FrameRGBMaskMixin,
+    OD3D_FrameRaysCenter3dMixin,
+    OD3D_FrameMeshMixin,
+    OD3D_FrameTformObjMixin,
+    OD3D_FrameSequenceMixin,
+    OD3D_FrameCategoryMixin,
+    OD3D_CamProj4x4ObjMixin,
+    OD3D_FrameDepthMixin,
+    OD3D_FrameDepthMaskMixin,
+)
 from dataclasses import dataclass
-import numpy as np
-from od3d.datasets.object import OD3D_PCLTypeMixin, OD3D_MeshTypeMixin, OD3D_SequenceSfMTypeMixin
+from od3d.datasets.object import (
+    OD3D_PCLTypeMixin,
+    OD3D_MeshTypeMixin,
+    OD3D_SequenceSfMTypeMixin,
+)
 from od3d.datasets.co3d.enum import MAP_CATEGORIES_CO3D_TO_OD3D
 from od3d.datasets.co3d.enum import CO3D_FRAME_TYPES
-from od3d.cv.io import read_image, read_co3d_depth_image
-from co3d.dataset.data_types import load_dataclass_jgzip, FrameAnnotation, SequenceAnnotation
+from od3d.cv.io import read_co3d_depth_image
+from co3d.dataset.data_types import (
+    FrameAnnotation,
+)
 from od3d.cv.geometry.transform import transf4x4_from_rot3x3_and_transl3
 
+
 @dataclass
-class CO3D_FrameMeta(OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaCamTform4x4ObjMixin, OD3D_FrameMetaDepthMaskMixin,
-                     OD3D_FrameMetaDepthMixin, OD3D_FrameMetaMaskMixin, OD3D_FrameMetaRGBMixin, OD3D_FrameMetaSizeMixin,
-                     OD3D_FrameMetaCategoryMixin, OD3D_FrameMetaSequenceMixin, OD3D_FrameMeta):
+class CO3D_FrameMeta(
+    OD3D_FrameMetaCamIntr4x4Mixin,
+    OD3D_FrameMetaCamTform4x4ObjMixin,
+    OD3D_FrameMetaDepthMaskMixin,
+    OD3D_FrameMetaDepthMixin,
+    OD3D_FrameMetaMaskMixin,
+    OD3D_FrameMetaRGBMixin,
+    OD3D_FrameMetaSizeMixin,
+    OD3D_FrameMetaCategoryMixin,
+    OD3D_FrameMetaSequenceMixin,
+    OD3D_FrameMeta,
+):
     depth_scale: float
     co3d_frame_type: CO3D_FRAME_TYPES
 
     @staticmethod
-    def get_rfpath_frame_meta_with_category_sequence_and_frame_name(category: str, sequence_name: str, name: str):
-        return CO3D_FrameMeta.get_rfpath_metas().joinpath(category, sequence_name, name + '.yaml')
+    def get_rfpath_frame_meta_with_category_sequence_and_frame_name(
+        category: str,
+        sequence_name: str,
+        name: str,
+    ):
+        return CO3D_FrameMeta.get_rfpath_metas().joinpath(
+            category,
+            sequence_name,
+            name + ".yaml",
+        )
 
     @staticmethod
-    def get_fpath_frame_meta_with_category_sequence_and_frame_name(path_meta: Path, category: str, sequence_name: str, name: str):
-        return path_meta.joinpath(CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(category=category, sequence_name=sequence_name, name=name))
+    def get_fpath_frame_meta_with_category_sequence_and_frame_name(
+        path_meta: Path,
+        category: str,
+        sequence_name: str,
+        name: str,
+    ):
+        return path_meta.joinpath(
+            CO3D_FrameMeta.get_rfpath_frame_meta_with_category_sequence_and_frame_name(
+                category=category,
+                sequence_name=sequence_name,
+                name=name,
+            ),
+        )
 
     @staticmethod
     def load_from_raw(frame_annotation: FrameAnnotation):
-        category = frame_annotation.image.path.split('/')[0]
+        category = frame_annotation.image.path.split("/")[0]
         sequence_name = frame_annotation.sequence_name
         if frame_annotation.meta is not None:
-            co3d_frame_type = CO3D_FRAME_TYPES(frame_annotation.meta['frame_type'])
+            co3d_frame_type = CO3D_FRAME_TYPES(frame_annotation.meta["frame_type"])
         else:
             co3d_frame_type = CO3D_FRAME_TYPES.CO3DV1
-        name = f'{frame_annotation.frame_number}'
+        name = f"{frame_annotation.frame_number}"
 
         rfpath_mask = Path(frame_annotation.mask.path)
 
@@ -56,59 +109,107 @@ class CO3D_FrameMeta(OD3D_FrameMetaCamIntr4x4Mixin, OD3D_FrameMetaCamTform4x4Obj
 
         rfpath_depth_mask = Path(frame_annotation.depth.mask_path)
 
-        cam_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(rot3x3=torch.Tensor(frame_annotation.viewpoint.R).T, transl3=torch.Tensor(frame_annotation.viewpoint.T))
-        default_tform_t3d = torch.Tensor([[-1., 0., 0., 0.],
-                                         [0., -1., 0., 0.],
-                                         [0., 0., 1., 0.],
-                                         [0., 0., 0., 1.]])
-        cam_tform4x4_obj = torch.bmm(default_tform_t3d[None,], cam_tform4x4_obj[None,])[0]
+        cam_tform4x4_obj = transf4x4_from_rot3x3_and_transl3(
+            rot3x3=torch.Tensor(frame_annotation.viewpoint.R).T,
+            transl3=torch.Tensor(frame_annotation.viewpoint.T),
+        )
+        default_tform_t3d = torch.Tensor(
+            [
+                [-1.0, 0.0, 0.0, 0.0],
+                [0.0, -1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        )
+        cam_tform4x4_obj = torch.bmm(default_tform_t3d[None,], cam_tform4x4_obj[None,])[
+            0
+        ]
 
         H, W = frame_annotation.image.size
         size = torch.Tensor([H, W])
 
-        if frame_annotation.viewpoint.intrinsics_format == 'ndc_isotropic':
+        if frame_annotation.viewpoint.intrinsics_format == "ndc_isotropic":
             # see https://pytorch3d.org/docs/cameras
             s = min(H, W)
-            focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length) * s / 2.
-            principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2. + size.flip(
-                dims=(0,)) / 2.
+            focal_length = (
+                torch.Tensor(frame_annotation.viewpoint.focal_length) * s / 2.0
+            )
+            principal_point = (
+                -torch.Tensor(frame_annotation.viewpoint.principal_point) * s / 2.0
+                + size.flip(
+                    dims=(0,),
+                )
+                / 2.0
+            )
 
-        elif frame_annotation.viewpoint.intrinsics_format == 'ndc_norm_image_bounds':
+        elif frame_annotation.viewpoint.intrinsics_format == "ndc_norm_image_bounds":
             focal_length = torch.Tensor(frame_annotation.viewpoint.focal_length)
-            focal_length[0] *= W / 2.
-            focal_length[1] *= H / 2.
+            focal_length[0] *= W / 2.0
+            focal_length[1] *= H / 2.0
             principal_point = -torch.Tensor(frame_annotation.viewpoint.principal_point)
-            principal_point[0] *= W / 2.
-            principal_point[1] *= H / 2.
-            principal_point += size.flip(dims=(0,)) / 2.
+            principal_point[0] *= W / 2.0
+            principal_point[1] *= H / 2.0
+            principal_point += size.flip(dims=(0,)) / 2.0
         else:
-            logger.warning(f'Unknown viewpoint intrinsics format {frame_annotation.viewpoint.intrinsics_format}.')
+            logger.warning(
+                f"Unknown viewpoint intrinsics format {frame_annotation.viewpoint.intrinsics_format}.",
+            )
             raise NotImplementedError
 
-        cam_intr4x4 = torch.Tensor([[focal_length[0], 0., principal_point[0], 0.],
-                           [0., focal_length[1], principal_point[1], 0.],
-                           [0., 0., 1., 0.],
-                           [0., 0., 0., 1.]])
+        cam_intr4x4 = torch.Tensor(
+            [
+                [focal_length[0], 0.0, principal_point[0], 0.0],
+                [0.0, focal_length[1], principal_point[1], 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        )
 
         l_size = size.tolist()
         l_cam_intr4x4 = cam_intr4x4.tolist()
         l_cam_tform4x4_obj = cam_tform4x4_obj.tolist()
-        return CO3D_FrameMeta(rfpath_rgb=rfpath_rgb, category=category, sequence_name=sequence_name, l_size=l_size,
-                              name=name, rfpath_mask=rfpath_mask, rfpath_depth=rfpath_depth,
-                              rfpath_depth_mask=rfpath_depth_mask, l_cam_intr4x4=l_cam_intr4x4,
-                              l_cam_tform4x4_obj=l_cam_tform4x4_obj, depth_scale=depth_scale, co3d_frame_type=co3d_frame_type)
+        return CO3D_FrameMeta(
+            rfpath_rgb=rfpath_rgb,
+            category=category,
+            sequence_name=sequence_name,
+            l_size=l_size,
+            name=name,
+            rfpath_mask=rfpath_mask,
+            rfpath_depth=rfpath_depth,
+            rfpath_depth_mask=rfpath_depth_mask,
+            l_cam_intr4x4=l_cam_intr4x4,
+            l_cam_tform4x4_obj=l_cam_tform4x4_obj,
+            depth_scale=depth_scale,
+            co3d_frame_type=co3d_frame_type,
+        )
+
 
 @dataclass
-class CO3D_Frame(OD3D_FrameMeshMixin, OD3D_FrameRaysCenter3dMixin, OD3D_FrameTformObjMixin, OD3D_CamProj4x4ObjMixin,
-                 OD3D_FrameRGBMaskMixin, OD3D_FrameMaskMixin, OD3D_FrameRGBMixin, OD3D_FrameDepthMixin,
-                 OD3D_FrameDepthMaskMixin, OD3D_FrameCategoryMixin, OD3D_FrameSequenceMixin, OD3D_FrameSizeMixin,
-                 OD3D_MeshTypeMixin, OD3D_PCLTypeMixin, OD3D_SequenceSfMTypeMixin, OD3D_Frame):
+class CO3D_Frame(
+    OD3D_FrameMeshMixin,
+    OD3D_FrameRaysCenter3dMixin,
+    OD3D_FrameTformObjMixin,
+    OD3D_CamProj4x4ObjMixin,
+    OD3D_FrameRGBMaskMixin,
+    OD3D_FrameMaskMixin,
+    OD3D_FrameRGBMixin,
+    OD3D_FrameDepthMixin,
+    OD3D_FrameDepthMaskMixin,
+    OD3D_FrameCategoryMixin,
+    OD3D_FrameSequenceMixin,
+    OD3D_FrameSizeMixin,
+    OD3D_MeshTypeMixin,
+    OD3D_PCLTypeMixin,
+    OD3D_SequenceSfMTypeMixin,
+    OD3D_Frame,
+):
     meta_type = CO3D_FrameMeta
     map_categories_to_od3d = MAP_CATEGORIES_CO3D_TO_OD3D
 
     def __post_init__(self):
         # hack: prevents circular import
         from od3d.datasets.co3d.sequence import CO3D_Sequence
+
         self.sequence_type = CO3D_Sequence
 
     def get_depth(self):

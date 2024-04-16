@@ -46,7 +46,8 @@ class Bridge(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.bridge = nn.Sequential(
-            ConvBlock(in_channels, out_channels), ConvBlock(out_channels, out_channels)
+            ConvBlock(in_channels, out_channels),
+            ConvBlock(out_channels, out_channels),
         )
 
     def forward(self, x):
@@ -75,7 +76,10 @@ class UpBlockForUNetWithResNet50(nn.Module):
 
         if upsampling_method == "conv_transpose":
             self.upsample = nn.ConvTranspose2d(
-                up_conv_in_channels, up_conv_out_channels, kernel_size=2, stride=2
+                up_conv_in_channels,
+                up_conv_out_channels,
+                kernel_size=2,
+                stride=2,
             )
         elif upsampling_method == "bilinear":
             self.upsample = nn.Sequential(
@@ -124,7 +128,7 @@ class UNetRes50(nn.Module):
                 out_channels=128,
                 up_conv_in_channels=256,
                 up_conv_out_channels=128,
-            )
+            ),
         )
         up_blocks.append(
             UpBlockForUNetWithResNet50(
@@ -132,7 +136,7 @@ class UNetRes50(nn.Module):
                 out_channels=64,
                 up_conv_in_channels=128,
                 up_conv_out_channels=64,
-            )
+            ),
         )
         self.up_blocks = nn.ModuleList(up_blocks)
 

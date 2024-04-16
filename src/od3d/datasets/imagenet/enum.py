@@ -1,10 +1,10 @@
 from od3d.data.ext_enum import ExtEnum
 
+
 class IMAGENET_SUBSETS(str, ExtEnum):
     train = "train"
     val = "val"
     test = "test"
-
 
 
 class IMAGENET_CATEOGORIES(str, ExtEnum):
@@ -22,7 +22,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     GOLDFINCH_CARDUELIS_CARDUELIS = "goldfinch_carduelis_carduelis"
     HOUSE_FINCH_LINNET_CARPODACUS_MEXICANUS = "house_finch_linnet_carpodacus_mexicanus"
     JUNCO_SNOWBIRD = "junco_snowbird"
-    INDIGO_BUNTING_INDIGO_FINCH_INDIGO_BIRD_PASSERINA_CYANEA = "indigo_bunting_indigo_finch_indigo_bird_passerina_cyanea"
+    INDIGO_BUNTING_INDIGO_FINCH_INDIGO_BIRD_PASSERINA_CYANEA = (
+        "indigo_bunting_indigo_finch_indigo_bird_passerina_cyanea"
+    )
     ROBIN_AMERICAN_ROBIN_TURDUS_MIGRATORIUS = "robin_american_robin_turdus_migratorius"
     BULBUL = "bulbul"
     JAY = "jay"
@@ -30,25 +32,39 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     CHICKADEE = "chickadee"
     WATER_OUZEL_DIPPER = "water_ouzel_dipper"
     KITE = "kite"
-    BALD_EAGLE_AMERICAN_EAGLE_HALIAEETUS_LEUCOCEPHALUS = "bald_eagle_american_eagle_haliaeetus_leucocephalus"
+    BALD_EAGLE_AMERICAN_EAGLE_HALIAEETUS_LEUCOCEPHALUS = (
+        "bald_eagle_american_eagle_haliaeetus_leucocephalus"
+    )
     VULTURE = "vulture"
-    GREAT_GREY_OWL_GREAT_GRAY_OWL_STRIX_NEBULOSA = "great_grey_owl_great_gray_owl_strix_nebulosa"
-    EUROPEAN_FIRE_SALAMANDER_SALAMANDRA_SALAMANDRA = "european_fire_salamander_salamandra_salamandra"
+    GREAT_GREY_OWL_GREAT_GRAY_OWL_STRIX_NEBULOSA = (
+        "great_grey_owl_great_gray_owl_strix_nebulosa"
+    )
+    EUROPEAN_FIRE_SALAMANDER_SALAMANDRA_SALAMANDRA = (
+        "european_fire_salamander_salamandra_salamandra"
+    )
     COMMON_NEWT_TRITURUS_VULGARIS = "common_newt_triturus_vulgaris"
     EFT = "eft"
     SPOTTED_SALAMANDER_AMBYSTOMA_MACULATUM = "spotted_salamander_ambystoma_maculatum"
     AXOLOTL_MUD_PUPPY_AMBYSTOMA_MEXICANUM = "axolotl_mud_puppy_ambystoma_mexicanum"
     BULLFROG_RANA_CATESBEIANA = "bullfrog_rana_catesbeiana"
     TREE_FROG_TREE_FROG = "tree_frog_tree_frog"
-    TAILED_FROG_BELL_TOAD_RIBBED_TOAD_TAILED_TOAD_ASCAPHUS_TRUI = "tailed_frog_bell_toad_ribbed_toad_tailed_toad_ascaphus_trui"
-    LOGGERHEAD_LOGGERHEAD_TURTLE_CARETTA_CARETTA = "loggerhead_loggerhead_turtle_caretta_caretta"
-    LEATHERBACK_TURTLE_LEATHERBACK_LEATHERY_TURTLE_DERMOCHELYS_CORIACEA = "leatherback_turtle_leatherback_leathery_turtle_dermochelys_coriacea"
+    TAILED_FROG_BELL_TOAD_RIBBED_TOAD_TAILED_TOAD_ASCAPHUS_TRUI = (
+        "tailed_frog_bell_toad_ribbed_toad_tailed_toad_ascaphus_trui"
+    )
+    LOGGERHEAD_LOGGERHEAD_TURTLE_CARETTA_CARETTA = (
+        "loggerhead_loggerhead_turtle_caretta_caretta"
+    )
+    LEATHERBACK_TURTLE_LEATHERBACK_LEATHERY_TURTLE_DERMOCHELYS_CORIACEA = (
+        "leatherback_turtle_leatherback_leathery_turtle_dermochelys_coriacea"
+    )
     MUD_TURTLE = "mud_turtle"
     TERRAPIN = "terrapin"
     BOX_TURTLE_BOX_TORTOISE = "box_turtle_box_tortoise"
     BANDED_GECKO = "banded_gecko"
     COMMON_IGUANA_IGUANA_IGUANA_IGUANA = "common_iguana_iguana_iguana_iguana"
-    AMERICAN_CHAMELEON_ANOLE_ANOLIS_CAROLINENSIS = "american_chameleon_anole_anolis_carolinensis"
+    AMERICAN_CHAMELEON_ANOLE_ANOLIS_CAROLINENSIS = (
+        "american_chameleon_anole_anolis_carolinensis"
+    )
     WHIPTAIL_WHIPTAIL_LIZARD = "whiptail_whiptail_lizard"
     AGAMA = "agama"
     FRILLED_LIZARD_CHLAMYDOSAURUS_KINGI = "frilled_lizard_chlamydosaurus_kingi"
@@ -56,12 +72,22 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     GILA_MONSTER_HELODERMA_SUSPECTUM = "gila_monster_heloderma_suspectum"
     GREEN_LIZARD_LACERTA_VIRIDIS = "green_lizard_lacerta_viridis"
     AFRICAN_CHAMELEON_CHAMAELEO_CHAMAELEON = "african_chameleon_chamaeleo_chamaeleon"
-    KOMODO_DRAGON_KOMODO_LIZARD_DRAGON_LIZARD_GIANT_LIZARD_VARANUS_KOMODOENSIS = "komodo_dragon_komodo_lizard_dragon_lizard_giant_lizard_varanus_komodoensis"
-    AFRICAN_CROCODILE_NILE_CROCODILE_CROCODYLUS_NILOTICUS = "african_crocodile_nile_crocodile_crocodylus_niloticus"
-    AMERICAN_ALLIGATOR_ALLIGATOR_MISSISSIPIENSIS = "american_alligator_alligator_mississipiensis"
+    KOMODO_DRAGON_KOMODO_LIZARD_DRAGON_LIZARD_GIANT_LIZARD_VARANUS_KOMODOENSIS = (
+        "komodo_dragon_komodo_lizard_dragon_lizard_giant_lizard_varanus_komodoensis"
+    )
+    AFRICAN_CROCODILE_NILE_CROCODILE_CROCODYLUS_NILOTICUS = (
+        "african_crocodile_nile_crocodile_crocodylus_niloticus"
+    )
+    AMERICAN_ALLIGATOR_ALLIGATOR_MISSISSIPIENSIS = (
+        "american_alligator_alligator_mississipiensis"
+    )
     TRICERATOPS = "triceratops"
-    THUNDER_SNAKE_WORM_SNAKE_CARPHOPHIS_AMOENUS = "thunder_snake_worm_snake_carphophis_amoenus"
-    RINGNECK_SNAKE_RING_NECKED_SNAKE_RING_SNAKE = "ringneck_snake_ring_necked_snake_ring_snake"
+    THUNDER_SNAKE_WORM_SNAKE_CARPHOPHIS_AMOENUS = (
+        "thunder_snake_worm_snake_carphophis_amoenus"
+    )
+    RINGNECK_SNAKE_RING_NECKED_SNAKE_RING_SNAKE = (
+        "ringneck_snake_ring_necked_snake_ring_snake"
+    )
     HOGNOSE_SNAKE_PUFF_ADDER_SAND_VIPER = "hognose_snake_puff_adder_sand_viper"
     GREEN_SNAKE_GRASS_SNAKE = "green_snake_grass_snake"
     KING_SNAKE_KINGSNAKE = "king_snake_kingsnake"
@@ -74,13 +100,23 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     INDIAN_COBRA_NAJA_NAJA = "indian_cobra_naja_naja"
     GREEN_MAMBA = "green_mamba"
     SEA_SNAKE = "sea_snake"
-    HORNED_VIPER_CERASTES_SAND_VIPER_HORNED_ASP_CERASTES_CORNUTUS = "horned_viper_cerastes_sand_viper_horned_asp_cerastes_cornutus"
-    DIAMONDBACK_DIAMONDBACK_RATTLESNAKE_CROTALUS_ADAMANTEUS = "diamondback_diamondback_rattlesnake_crotalus_adamanteus"
-    SIDEWINDER_HORNED_RATTLESNAKE_CROTALUS_CERASTES = "sidewinder_horned_rattlesnake_crotalus_cerastes"
+    HORNED_VIPER_CERASTES_SAND_VIPER_HORNED_ASP_CERASTES_CORNUTUS = (
+        "horned_viper_cerastes_sand_viper_horned_asp_cerastes_cornutus"
+    )
+    DIAMONDBACK_DIAMONDBACK_RATTLESNAKE_CROTALUS_ADAMANTEUS = (
+        "diamondback_diamondback_rattlesnake_crotalus_adamanteus"
+    )
+    SIDEWINDER_HORNED_RATTLESNAKE_CROTALUS_CERASTES = (
+        "sidewinder_horned_rattlesnake_crotalus_cerastes"
+    )
     TRILOBITE = "trilobite"
-    HARVESTMAN_DADDY_LONGLEGS_PHALANGIUM_OPILIO = "harvestman_daddy_longlegs_phalangium_opilio"
+    HARVESTMAN_DADDY_LONGLEGS_PHALANGIUM_OPILIO = (
+        "harvestman_daddy_longlegs_phalangium_opilio"
+    )
     SCORPION = "scorpion"
-    BLACK_AND_GOLD_GARDEN_SPIDER_ARGIOPE_AURANTIA = "black_and_gold_garden_spider_argiope_aurantia"
+    BLACK_AND_GOLD_GARDEN_SPIDER_ARGIOPE_AURANTIA = (
+        "black_and_gold_garden_spider_argiope_aurantia"
+    )
     BARN_SPIDER_ARANEUS_CAVATICUS = "barn_spider_araneus_cavaticus"
     GARDEN_SPIDER_ARANEA_DIADEMATA = "garden_spider_aranea_diademata"
     BLACK_WIDOW_LATRODECTUS_MACTANS = "black_widow_latrodectus_mactans"
@@ -91,13 +127,19 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     BLACK_GROUSE = "black_grouse"
     PTARMIGAN = "ptarmigan"
     RUFFED_GROUSE_PARTRIDGE_BONASA_UMBELLUS = "ruffed_grouse_partridge_bonasa_umbellus"
-    PRAIRIE_CHICKEN_PRAIRIE_GROUSE_PRAIRIE_FOWL = "prairie_chicken_prairie_grouse_prairie_fowl"
+    PRAIRIE_CHICKEN_PRAIRIE_GROUSE_PRAIRIE_FOWL = (
+        "prairie_chicken_prairie_grouse_prairie_fowl"
+    )
     PEACOCK = "peacock"
     QUAIL = "quail"
     PARTRIDGE = "partridge"
-    AFRICAN_GREY_AFRICAN_GRAY_PSITTACUS_ERITHACUS = "african_grey_african_gray_psittacus_erithacus"
+    AFRICAN_GREY_AFRICAN_GRAY_PSITTACUS_ERITHACUS = (
+        "african_grey_african_gray_psittacus_erithacus"
+    )
     MACAW = "macaw"
-    SULPHUR_CRESTED_COCKATOO_KAKATOE_GALERITA_CACATUA_GALERITA = "sulphur_crested_cockatoo_kakatoe_galerita_cacatua_galerita"
+    SULPHUR_CRESTED_COCKATOO_KAKATOE_GALERITA_CACATUA_GALERITA = (
+        "sulphur_crested_cockatoo_kakatoe_galerita_cacatua_galerita"
+    )
     LORIKEET = "lorikeet"
     COUCAL = "coucal"
     BEE_EATER = "bee_eater"
@@ -113,7 +155,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     ECHIDNA_SPINY_ANTEATER_ANTEATER = "echidna_spiny_anteater_anteater"
     PLATYPUS_DUCKBILL_DUCKBILLED_PLATYPUS_DUCK_BILLED_PLATYPUS_ORNITHORHYNCHUS_ANATINUS = "platypus_duckbill_duckbilled_platypus_duck_billed_platypus_ornithorhynchus_anatinus"
     WALLABY_BRUSH_KANGAROO = "wallaby_brush_kangaroo"
-    KOALA_KOALA_BEAR_KANGAROO_BEAR_NATIVE_BEAR_PHASCOLARCTOS_CINEREUS = "koala_koala_bear_kangaroo_bear_native_bear_phascolarctos_cinereus"
+    KOALA_KOALA_BEAR_KANGAROO_BEAR_NATIVE_BEAR_PHASCOLARCTOS_CINEREUS = (
+        "koala_koala_bear_kangaroo_bear_native_bear_phascolarctos_cinereus"
+    )
     WOMBAT = "wombat"
     JELLYFISH = "jellyfish"
     SEA_ANEMONE_ANEMONE = "sea_anemone_anemone"
@@ -124,14 +168,22 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     SNAIL = "snail"
     SLUG = "slug"
     SEA_SLUG_NUDIBRANCH = "sea_slug_nudibranch"
-    CHITON_COAT_OF_MAIL_SHELL_SEA_CRADLE_POLYPLACOPHORE = "chiton_coat_of_mail_shell_sea_cradle_polyplacophore"
-    CHAMBERED_NAUTILUS_PEARLY_NAUTILUS_NAUTILUS = "chambered_nautilus_pearly_nautilus_nautilus"
+    CHITON_COAT_OF_MAIL_SHELL_SEA_CRADLE_POLYPLACOPHORE = (
+        "chiton_coat_of_mail_shell_sea_cradle_polyplacophore"
+    )
+    CHAMBERED_NAUTILUS_PEARLY_NAUTILUS_NAUTILUS = (
+        "chambered_nautilus_pearly_nautilus_nautilus"
+    )
     DUNGENESS_CRAB_CANCER_MAGISTER = "dungeness_crab_cancer_magister"
     ROCK_CRAB_CANCER_IRRORATUS = "rock_crab_cancer_irroratus"
     FIDDLER_CRAB = "fiddler_crab"
     KING_CRAB_ALASKA_CRAB_ALASKAN_KING_CRAB_ALASKA_KING_CRAB_PARALITHODES_CAMTSCHATICA = "king_crab_alaska_crab_alaskan_king_crab_alaska_king_crab_paralithodes_camtschatica"
-    AMERICAN_LOBSTER_NORTHERN_LOBSTER_MAINE_LOBSTER_HOMARUS_AMERICANUS = "american_lobster_northern_lobster_maine_lobster_homarus_americanus"
-    SPINY_LOBSTER_LANGOUSTE_ROCK_LOBSTER_CRAWFISH_CRAYFISH_SEA_CRAWFISH = "spiny_lobster_langouste_rock_lobster_crawfish_crayfish_sea_crawfish"
+    AMERICAN_LOBSTER_NORTHERN_LOBSTER_MAINE_LOBSTER_HOMARUS_AMERICANUS = (
+        "american_lobster_northern_lobster_maine_lobster_homarus_americanus"
+    )
+    SPINY_LOBSTER_LANGOUSTE_ROCK_LOBSTER_CRAWFISH_CRAYFISH_SEA_CRAWFISH = (
+        "spiny_lobster_langouste_rock_lobster_crawfish_crayfish_sea_crawfish"
+    )
     CRAYFISH_CRAWFISH_CRAWDAD_CRAWDADDY = "crayfish_crawfish_crawdad_crawdaddy"
     HERMIT_CRAB = "hermit_crab"
     ISOPOD = "isopod"
@@ -140,23 +192,33 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     SPOONBILL = "spoonbill"
     FLAMINGO = "flamingo"
     LITTLE_BLUE_HERON_EGRETTA_CAERULEA = "little_blue_heron_egretta_caerulea"
-    AMERICAN_EGRET_GREAT_WHITE_HERON_EGRETTA_ALBUS = "american_egret_great_white_heron_egretta_albus"
+    AMERICAN_EGRET_GREAT_WHITE_HERON_EGRETTA_ALBUS = (
+        "american_egret_great_white_heron_egretta_albus"
+    )
     BITTERN = "bittern"
     CRANE = "crane"
     LIMPKIN_ARAMUS_PICTUS = "limpkin_aramus_pictus"
     EUROPEAN_GALLINULE_PORPHYRIO_PORPHYRIO = "european_gallinule_porphyrio_porphyrio"
-    AMERICAN_COOT_MARSH_HEN_MUD_HEN_WATER_HEN_FULICA_AMERICANA = "american_coot_marsh_hen_mud_hen_water_hen_fulica_americana"
+    AMERICAN_COOT_MARSH_HEN_MUD_HEN_WATER_HEN_FULICA_AMERICANA = (
+        "american_coot_marsh_hen_mud_hen_water_hen_fulica_americana"
+    )
     BUSTARD = "bustard"
     RUDDY_TURNSTONE_ARENARIA_INTERPRES = "ruddy_turnstone_arenaria_interpres"
-    RED_BACKED_SANDPIPER_DUNLIN_EROLIA_ALPINA = "red_backed_sandpiper_dunlin_erolia_alpina"
+    RED_BACKED_SANDPIPER_DUNLIN_EROLIA_ALPINA = (
+        "red_backed_sandpiper_dunlin_erolia_alpina"
+    )
     REDSHANK_TRINGA_TOTANUS = "redshank_tringa_totanus"
     DOWITCHER = "dowitcher"
     OYSTERCATCHER_OYSTER_CATCHER = "oystercatcher_oyster_catcher"
     PELICAN = "pelican"
     KING_PENGUIN_APTENODYTES_PATAGONICA = "king_penguin_aptenodytes_patagonica"
     ALBATROSS_MOLLYMAWK = "albatross_mollymawk"
-    GREY_WHALE_GRAY_WHALE_DEVILFISH_ESCHRICHTIUS_GIBBOSUS_ESCHRICHTIUS_ROBUSTUS = "grey_whale_gray_whale_devilfish_eschrichtius_gibbosus_eschrichtius_robustus"
-    KILLER_WHALE_KILLER_ORCA_GRAMPUS_SEA_WOLF_ORCINUS_ORCA = "killer_whale_killer_orca_grampus_sea_wolf_orcinus_orca"
+    GREY_WHALE_GRAY_WHALE_DEVILFISH_ESCHRICHTIUS_GIBBOSUS_ESCHRICHTIUS_ROBUSTUS = (
+        "grey_whale_gray_whale_devilfish_eschrichtius_gibbosus_eschrichtius_robustus"
+    )
+    KILLER_WHALE_KILLER_ORCA_GRAMPUS_SEA_WOLF_ORCINUS_ORCA = (
+        "killer_whale_killer_orca_grampus_sea_wolf_orcinus_orca"
+    )
     DUGONG_DUGONG_DUGON = "dugong_dugong_dugon"
     SEA_LION = "sea_lion"
     CHIHUAHUA = "chihuahua"
@@ -187,7 +249,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     SALUKI_GAZELLE_HOUND = "saluki_gazelle_hound"
     SCOTTISH_DEERHOUND_DEERHOUND = "scottish_deerhound_deerhound"
     WEIMARANER = "weimaraner"
-    STAFFORDSHIRE_BULLTERRIER_STAFFORDSHIRE_BULL_TERRIER = "staffordshire_bullterrier_staffordshire_bull_terrier"
+    STAFFORDSHIRE_BULLTERRIER_STAFFORDSHIRE_BULL_TERRIER = (
+        "staffordshire_bullterrier_staffordshire_bull_terrier"
+    )
     AMERICAN_STAFFORDSHIRE_TERRIER_STAFFORDSHIRE_TERRIER_AMERICAN_PIT_BULL_TERRIER_PIT_BULL_TERRIER = "american_staffordshire_terrier_staffordshire_terrier_american_pit_bull_terrier_pit_bull_terrier"
     BEDLINGTON_TERRIER = "bedlington_terrier"
     BORDER_TERRIER = "border_terrier"
@@ -225,9 +289,13 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     GORDON_SETTER = "gordon_setter"
     BRITTANY_SPANIEL = "brittany_spaniel"
     CLUMBER_CLUMBER_SPANIEL = "clumber_clumber_spaniel"
-    ENGLISH_SPRINGER_ENGLISH_SPRINGER_SPANIEL = "english_springer_english_springer_spaniel"
+    ENGLISH_SPRINGER_ENGLISH_SPRINGER_SPANIEL = (
+        "english_springer_english_springer_spaniel"
+    )
     WELSH_SPRINGER_SPANIEL = "welsh_springer_spaniel"
-    COCKER_SPANIEL_ENGLISH_COCKER_SPANIEL_COCKER = "cocker_spaniel_english_cocker_spaniel_cocker"
+    COCKER_SPANIEL_ENGLISH_COCKER_SPANIEL_COCKER = (
+        "cocker_spaniel_english_cocker_spaniel_cocker"
+    )
     SUSSEX_SPANIEL = "sussex_spaniel"
     IRISH_WATER_SPANIEL = "irish_water_spaniel"
     KUVASZ = "kuvasz"
@@ -238,12 +306,18 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     KELPIE = "kelpie"
     KOMONDOR = "komondor"
     OLD_ENGLISH_SHEEPDOG_BOBTAIL = "old_english_sheepdog_bobtail"
-    SHETLAND_SHEEPDOG_SHETLAND_SHEEP_DOG_SHETLAND = "shetland_sheepdog_shetland_sheep_dog_shetland"
+    SHETLAND_SHEEPDOG_SHETLAND_SHEEP_DOG_SHETLAND = (
+        "shetland_sheepdog_shetland_sheep_dog_shetland"
+    )
     COLLIE = "collie"
     BORDER_COLLIE = "border_collie"
-    BOUVIER_DES_FLANDRES_BOUVIERS_DES_FLANDRES = "bouvier_des_flandres_bouviers_des_flandres"
+    BOUVIER_DES_FLANDRES_BOUVIERS_DES_FLANDRES = (
+        "bouvier_des_flandres_bouviers_des_flandres"
+    )
     ROTTWEILER = "rottweiler"
-    GERMAN_SHEPHERD_GERMAN_SHEPHERD_DOG_GERMAN_POLICE_DOG_ALSATIAN = "german_shepherd_german_shepherd_dog_german_police_dog_alsatian"
+    GERMAN_SHEPHERD_GERMAN_SHEPHERD_DOG_GERMAN_POLICE_DOG_ALSATIAN = (
+        "german_shepherd_german_shepherd_dog_german_police_dog_alsatian"
+    )
     DOBERMAN_DOBERMAN_PINSCHER = "doberman_doberman_pinscher"
     MINIATURE_PINSCHER = "miniature_pinscher"
     GREATER_SWISS_MOUNTAIN_DOG = "greater_swiss_mountain_dog"
@@ -260,7 +334,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     MALAMUTE_MALEMUTE_ALASKAN_MALAMUTE = "malamute_malemute_alaskan_malamute"
     SIBERIAN_HUSKY = "siberian_husky"
     DALMATIAN_COACH_DOG_CARRIAGE_DOG = "dalmatian_coach_dog_carriage_dog"
-    AFFENPINSCHER_MONKEY_PINSCHER_MONKEY_DOG = "affenpinscher_monkey_pinscher_monkey_dog"
+    AFFENPINSCHER_MONKEY_PINSCHER_MONKEY_DOG = (
+        "affenpinscher_monkey_pinscher_monkey_dog"
+    )
     BASENJI = "basenji"
     PUG_PUG_DOG = "pug_pug_dog"
     LEONBERG = "leonberg"
@@ -277,24 +353,38 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     MINIATURE_POODLE = "miniature_poodle"
     STANDARD_POODLE = "standard_poodle"
     MEXICAN_HAIRLESS = "mexican_hairless"
-    TIMBER_WOLF_GREY_WOLF_GRAY_WOLF_CANIS_LUPUS = "timber_wolf_grey_wolf_gray_wolf_canis_lupus"
-    WHITE_WOLF_ARCTIC_WOLF_CANIS_LUPUS_TUNDRARUM = "white_wolf_arctic_wolf_canis_lupus_tundrarum"
-    RED_WOLF_MANED_WOLF_CANIS_RUFUS_CANIS_NIGER = "red_wolf_maned_wolf_canis_rufus_canis_niger"
-    COYOTE_PRAIRIE_WOLF_BRUSH_WOLF_CANIS_LATRANS = "coyote_prairie_wolf_brush_wolf_canis_latrans"
+    TIMBER_WOLF_GREY_WOLF_GRAY_WOLF_CANIS_LUPUS = (
+        "timber_wolf_grey_wolf_gray_wolf_canis_lupus"
+    )
+    WHITE_WOLF_ARCTIC_WOLF_CANIS_LUPUS_TUNDRARUM = (
+        "white_wolf_arctic_wolf_canis_lupus_tundrarum"
+    )
+    RED_WOLF_MANED_WOLF_CANIS_RUFUS_CANIS_NIGER = (
+        "red_wolf_maned_wolf_canis_rufus_canis_niger"
+    )
+    COYOTE_PRAIRIE_WOLF_BRUSH_WOLF_CANIS_LATRANS = (
+        "coyote_prairie_wolf_brush_wolf_canis_latrans"
+    )
     DINGO_WARRIGAL_WARRAGAL_CANIS_DINGO = "dingo_warrigal_warragal_canis_dingo"
     DHOLE_CUON_ALPINUS = "dhole_cuon_alpinus"
-    AFRICAN_HUNTING_DOG_HYENA_DOG_CAPE_HUNTING_DOG_LYCAON_PICTUS = "african_hunting_dog_hyena_dog_cape_hunting_dog_lycaon_pictus"
+    AFRICAN_HUNTING_DOG_HYENA_DOG_CAPE_HUNTING_DOG_LYCAON_PICTUS = (
+        "african_hunting_dog_hyena_dog_cape_hunting_dog_lycaon_pictus"
+    )
     HYENA_HYAENA = "hyena_hyaena"
     RED_FOX_VULPES_VULPES = "red_fox_vulpes_vulpes"
     KIT_FOX_VULPES_MACROTIS = "kit_fox_vulpes_macrotis"
     ARCTIC_FOX_WHITE_FOX_ALOPEX_LAGOPUS = "arctic_fox_white_fox_alopex_lagopus"
-    GREY_FOX_GRAY_FOX_UROCYON_CINEREOARGENTEUS = "grey_fox_gray_fox_urocyon_cinereoargenteus"
+    GREY_FOX_GRAY_FOX_UROCYON_CINEREOARGENTEUS = (
+        "grey_fox_gray_fox_urocyon_cinereoargenteus"
+    )
     TABBY_TABBY_CAT = "tabby_tabby_cat"
     TIGER_CAT = "tiger_cat"
     PERSIAN_CAT = "persian_cat"
     SIAMESE_CAT_SIAMESE = "siamese_cat_siamese"
     EGYPTIAN_CAT = "egyptian_cat"
-    COUGAR_PUMA_CATAMOUNT_MOUNTAIN_LION_PAINTER_PANTHER_FELIS_CONCOLOR = "cougar_puma_catamount_mountain_lion_painter_panther_felis_concolor"
+    COUGAR_PUMA_CATAMOUNT_MOUNTAIN_LION_PAINTER_PANTHER_FELIS_CONCOLOR = (
+        "cougar_puma_catamount_mountain_lion_painter_panther_felis_concolor"
+    )
     LYNX_CATAMOUNT = "lynx_catamount"
     LEOPARD_PANTHERA_PARDUS = "leopard_panthera_pardus"
     SNOW_LEOPARD_OUNCE_PANTHERA_UNCIA = "snow_leopard_ounce_panthera_uncia"
@@ -303,15 +393,25 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     TIGER_PANTHERA_TIGRIS = "tiger_panthera_tigris"
     CHEETAH_CHETAH_ACINONYX_JUBATUS = "cheetah_chetah_acinonyx_jubatus"
     BROWN_BEAR_BRUIN_URSUS_ARCTOS = "brown_bear_bruin_ursus_arctos"
-    AMERICAN_BLACK_BEAR_BLACK_BEAR_URSUS_AMERICANUS_EUARCTOS_AMERICANUS = "american_black_bear_black_bear_ursus_americanus_euarctos_americanus"
-    ICE_BEAR_POLAR_BEAR_URSUS_MARITIMUS_THALARCTOS_MARITIMUS = "ice_bear_polar_bear_ursus_maritimus_thalarctos_maritimus"
-    SLOTH_BEAR_MELURSUS_URSINUS_URSUS_URSINUS = "sloth_bear_melursus_ursinus_ursus_ursinus"
+    AMERICAN_BLACK_BEAR_BLACK_BEAR_URSUS_AMERICANUS_EUARCTOS_AMERICANUS = (
+        "american_black_bear_black_bear_ursus_americanus_euarctos_americanus"
+    )
+    ICE_BEAR_POLAR_BEAR_URSUS_MARITIMUS_THALARCTOS_MARITIMUS = (
+        "ice_bear_polar_bear_ursus_maritimus_thalarctos_maritimus"
+    )
+    SLOTH_BEAR_MELURSUS_URSINUS_URSUS_URSINUS = (
+        "sloth_bear_melursus_ursinus_ursus_ursinus"
+    )
     MONGOOSE = "mongoose"
     MEERKAT_MIERKAT = "meerkat_mierkat"
     TIGER_BEETLE = "tiger_beetle"
-    LADYBUG_LADYBEETLE_LADY_BEETLE_LADYBIRD_LADYBIRD_BEETLE = "ladybug_ladybeetle_lady_beetle_ladybird_ladybird_beetle"
+    LADYBUG_LADYBEETLE_LADY_BEETLE_LADYBIRD_LADYBIRD_BEETLE = (
+        "ladybug_ladybeetle_lady_beetle_ladybird_ladybird_beetle"
+    )
     GROUND_BEETLE_CARABID_BEETLE = "ground_beetle_carabid_beetle"
-    LONG_HORNED_BEETLE_LONGICORN_LONGICORN_BEETLE = "long_horned_beetle_longicorn_longicorn_beetle"
+    LONG_HORNED_BEETLE_LONGICORN_LONGICORN_BEETLE = (
+        "long_horned_beetle_longicorn_longicorn_beetle"
+    )
     LEAF_BEETLE_CHRYSOMELID = "leaf_beetle_chrysomelid"
     DUNG_BEETLE = "dung_beetle"
     RHINOCEROS_BEETLE = "rhinoceros_beetle"
@@ -331,19 +431,25 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     DAMSELFLY = "damselfly"
     ADMIRAL = "admiral"
     RINGLET_RINGLET_BUTTERFLY = "ringlet_ringlet_butterfly"
-    MONARCH_MONARCH_BUTTERFLY_MILKWEED_BUTTERFLY_DANAUS_PLEXIPPUS = "monarch_monarch_butterfly_milkweed_butterfly_danaus_plexippus"
+    MONARCH_MONARCH_BUTTERFLY_MILKWEED_BUTTERFLY_DANAUS_PLEXIPPUS = (
+        "monarch_monarch_butterfly_milkweed_butterfly_danaus_plexippus"
+    )
     CABBAGE_BUTTERFLY = "cabbage_butterfly"
     SULPHUR_BUTTERFLY_SULFUR_BUTTERFLY = "sulphur_butterfly_sulfur_butterfly"
     LYCAENID_LYCAENID_BUTTERFLY = "lycaenid_lycaenid_butterfly"
     STARFISH_SEA_STAR = "starfish_sea_star"
     SEA_URCHIN = "sea_urchin"
     SEA_CUCUMBER_HOLOTHURIAN = "sea_cucumber_holothurian"
-    WOOD_RABBIT_COTTONTAIL_COTTONTAIL_RABBIT = "wood_rabbit_cottontail_cottontail_rabbit"
+    WOOD_RABBIT_COTTONTAIL_COTTONTAIL_RABBIT = (
+        "wood_rabbit_cottontail_cottontail_rabbit"
+    )
     HARE = "hare"
     ANGORA_ANGORA_RABBIT = "angora_angora_rabbit"
     HAMSTER = "hamster"
     PORCUPINE_HEDGEHOG = "porcupine_hedgehog"
-    FOX_SQUIRREL_EASTERN_FOX_SQUIRREL_SCIURUS_NIGER = "fox_squirrel_eastern_fox_squirrel_sciurus_niger"
+    FOX_SQUIRREL_EASTERN_FOX_SQUIRREL_SCIURUS_NIGER = (
+        "fox_squirrel_eastern_fox_squirrel_sciurus_niger"
+    )
     MARMOT = "marmot"
     BEAVER = "beaver"
     GUINEA_PIG_CAVIA_COBAYA = "guinea_pig_cavia_cobaya"
@@ -352,9 +458,13 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     HOG_PIG_GRUNTER_SQUEALER_SUS_SCROFA = "hog_pig_grunter_squealer_sus_scrofa"
     WILD_BOAR_BOAR_SUS_SCROFA = "wild_boar_boar_sus_scrofa"
     WARTHOG = "warthog"
-    HIPPOPOTAMUS_HIPPO_RIVER_HORSE_HIPPOPOTAMUS_AMPHIBIUS = "hippopotamus_hippo_river_horse_hippopotamus_amphibius"
+    HIPPOPOTAMUS_HIPPO_RIVER_HORSE_HIPPOPOTAMUS_AMPHIBIUS = (
+        "hippopotamus_hippo_river_horse_hippopotamus_amphibius"
+    )
     OX = "ox"
-    WATER_BUFFALO_WATER_OX_ASIATIC_BUFFALO_BUBALUS_BUBALIS = "water_buffalo_water_ox_asiatic_buffalo_bubalus_bubalis"
+    WATER_BUFFALO_WATER_OX_ASIATIC_BUFFALO_BUBALUS_BUBALIS = (
+        "water_buffalo_water_ox_asiatic_buffalo_bubalus_bubalis"
+    )
     BISON = "bison"
     RAM_TUP = "ram_tup"
     BIGHORN_BIGHORN_SHEEP_CIMARRON_ROCKY_MOUNTAIN_BIGHORN_ROCKY_MOUNTAIN_SHEEP_OVIS_CANADENSIS = "bighorn_bighorn_sheep_cimarron_rocky_mountain_bighorn_rocky_mountain_sheep_ovis_canadensis"
@@ -362,22 +472,34 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     HARTEBEEST = "hartebeest"
     IMPALA_AEPYCEROS_MELAMPUS = "impala_aepyceros_melampus"
     GAZELLE = "gazelle"
-    ARABIAN_CAMEL_DROMEDARY_CAMELUS_DROMEDARIUS = "arabian_camel_dromedary_camelus_dromedarius"
+    ARABIAN_CAMEL_DROMEDARY_CAMELUS_DROMEDARIUS = (
+        "arabian_camel_dromedary_camelus_dromedarius"
+    )
     LLAMA = "llama"
     WEASEL = "weasel"
     MINK = "mink"
-    POLECAT_FITCH_FOULMART_FOUMART_MUSTELA_PUTORIUS = "polecat_fitch_foulmart_foumart_mustela_putorius"
-    BLACK_FOOTED_FERRET_FERRET_MUSTELA_NIGRIPES = "black_footed_ferret_ferret_mustela_nigripes"
+    POLECAT_FITCH_FOULMART_FOUMART_MUSTELA_PUTORIUS = (
+        "polecat_fitch_foulmart_foumart_mustela_putorius"
+    )
+    BLACK_FOOTED_FERRET_FERRET_MUSTELA_NIGRIPES = (
+        "black_footed_ferret_ferret_mustela_nigripes"
+    )
     OTTER = "otter"
     SKUNK_POLECAT_WOOD_PUSSY = "skunk_polecat_wood_pussy"
     BADGER = "badger"
     ARMADILLO = "armadillo"
-    THREE_TOED_SLOTH_AI_BRADYPUS_TRIDACTYLUS = "three_toed_sloth_ai_bradypus_tridactylus"
-    ORANGUTAN_ORANG_ORANGUTANG_PONGO_PYGMAEUS = "orangutan_orang_orangutang_pongo_pygmaeus"
+    THREE_TOED_SLOTH_AI_BRADYPUS_TRIDACTYLUS = (
+        "three_toed_sloth_ai_bradypus_tridactylus"
+    )
+    ORANGUTAN_ORANG_ORANGUTANG_PONGO_PYGMAEUS = (
+        "orangutan_orang_orangutang_pongo_pygmaeus"
+    )
     GORILLA_GORILLA_GORILLA = "gorilla_gorilla_gorilla"
     CHIMPANZEE_CHIMP_PAN_TROGLODYTES = "chimpanzee_chimp_pan_troglodytes"
     GIBBON_HYLOBATES_LAR = "gibbon_hylobates_lar"
-    SIAMANG_HYLOBATES_SYNDACTYLUS_SYMPHALANGUS_SYNDACTYLUS = "siamang_hylobates_syndactylus_symphalangus_syndactylus"
+    SIAMANG_HYLOBATES_SYNDACTYLUS_SYMPHALANGUS_SYNDACTYLUS = (
+        "siamang_hylobates_syndactylus_symphalangus_syndactylus"
+    )
     GUENON_GUENON_MONKEY = "guenon_guenon_monkey"
     PATAS_HUSSAR_MONKEY_ERYTHROCEBUS_PATAS = "patas_hussar_monkey_erythrocebus_patas"
     BABOON = "baboon"
@@ -391,19 +513,31 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     TITI_TITI_MONKEY = "titi_titi_monkey"
     SPIDER_MONKEY_ATELES_GEOFFROYI = "spider_monkey_ateles_geoffroyi"
     SQUIRREL_MONKEY_SAIMIRI_SCIUREUS = "squirrel_monkey_saimiri_sciureus"
-    MADAGASCAR_CAT_RING_TAILED_LEMUR_LEMUR_CATTA = "madagascar_cat_ring_tailed_lemur_lemur_catta"
-    INDRI_INDRIS_INDRI_INDRI_INDRI_BREVICAUDATUS = "indri_indris_indri_indri_indri_brevicaudatus"
+    MADAGASCAR_CAT_RING_TAILED_LEMUR_LEMUR_CATTA = (
+        "madagascar_cat_ring_tailed_lemur_lemur_catta"
+    )
+    INDRI_INDRIS_INDRI_INDRI_INDRI_BREVICAUDATUS = (
+        "indri_indris_indri_indri_indri_brevicaudatus"
+    )
     INDIAN_ELEPHANT_ELEPHAS_MAXIMUS = "indian_elephant_elephas_maximus"
     AFRICAN_ELEPHANT_LOXODONTA_AFRICANA = "african_elephant_loxodonta_africana"
-    LESSER_PANDA_RED_PANDA_PANDA_BEAR_CAT_CAT_BEAR_AILURUS_FULGENS = "lesser_panda_red_panda_panda_bear_cat_cat_bear_ailurus_fulgens"
-    GIANT_PANDA_PANDA_PANDA_BEAR_COON_BEAR_AILUROPODA_MELANOLEUCA = "giant_panda_panda_panda_bear_coon_bear_ailuropoda_melanoleuca"
+    LESSER_PANDA_RED_PANDA_PANDA_BEAR_CAT_CAT_BEAR_AILURUS_FULGENS = (
+        "lesser_panda_red_panda_panda_bear_cat_cat_bear_ailurus_fulgens"
+    )
+    GIANT_PANDA_PANDA_PANDA_BEAR_COON_BEAR_AILUROPODA_MELANOLEUCA = (
+        "giant_panda_panda_panda_bear_coon_bear_ailuropoda_melanoleuca"
+    )
     BARRACOUTA_SNOEK = "barracouta_snoek"
     EEL = "eel"
-    COHO_COHOE_COHO_SALMON_BLUE_JACK_SILVER_SALMON_ONCORHYNCHUS_KISUTCH = "coho_cohoe_coho_salmon_blue_jack_silver_salmon_oncorhynchus_kisutch"
+    COHO_COHOE_COHO_SALMON_BLUE_JACK_SILVER_SALMON_ONCORHYNCHUS_KISUTCH = (
+        "coho_cohoe_coho_salmon_blue_jack_silver_salmon_oncorhynchus_kisutch"
+    )
     ROCK_BEAUTY_HOLOCANTHUS_TRICOLOR = "rock_beauty_holocanthus_tricolor"
     ANEMONE_FISH = "anemone_fish"
     STURGEON = "sturgeon"
-    GAR_GARFISH_GARPIKE_BILLFISH_LEPISOSTEUS_OSSEUS = "gar_garfish_garpike_billfish_lepisosteus_osseus"
+    GAR_GARFISH_GARPIKE_BILLFISH_LEPISOSTEUS_OSSEUS = (
+        "gar_garfish_garpike_billfish_lepisosteus_osseus"
+    )
     LIONFISH = "lionfish"
     PUFFER_PUFFERFISH_BLOWFISH_GLOBEFISH = "puffer_pufferfish_blowfish_globefish"
     ABACUS = "abacus"
@@ -411,7 +545,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     ACADEMIC_GOWN_ACADEMIC_ROBE_JUDGES_ROBE = "academic_gown_academic_robe_judges_robe"
     ACCORDION_PIANO_ACCORDION_SQUEEZE_BOX = "accordion_piano_accordion_squeeze_box"
     ACOUSTIC_GUITAR = "acoustic_guitar"
-    AIRCRAFT_CARRIER_CARRIER_FLATTOP_ATTACK_AIRCRAFT_CARRIER = "aircraft_carrier_carrier_flattop_attack_aircraft_carrier"
+    AIRCRAFT_CARRIER_CARRIER_FLATTOP_ATTACK_AIRCRAFT_CARRIER = (
+        "aircraft_carrier_carrier_flattop_attack_aircraft_carrier"
+    )
     AIRLINER = "airliner"
     AIRSHIP_DIRIGIBLE = "airship_dirigible"
     ALTAR = "altar"
@@ -422,21 +558,27 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     APRON = "apron"
     ASHCAN_TRASH_CAN_GARBAGE_CAN_WASTEBIN_ASH_BIN_ASH_BIN_ASHBIN_DUSTBIN_TRASH_BARREL_TRASH_BIN = "ashcan_trash_can_garbage_can_wastebin_ash_bin_ash_bin_ashbin_dustbin_trash_barrel_trash_bin"
     ASSAULT_RIFLE_ASSAULT_GUN = "assault_rifle_assault_gun"
-    BACKPACK_BACK_PACK_KNAPSACK_PACKSACK_RUCKSACK_HAVERSACK = "backpack_back_pack_knapsack_packsack_rucksack_haversack"
+    BACKPACK_BACK_PACK_KNAPSACK_PACKSACK_RUCKSACK_HAVERSACK = (
+        "backpack_back_pack_knapsack_packsack_rucksack_haversack"
+    )
     BAKERY_BAKESHOP_BAKEHOUSE = "bakery_bakeshop_bakehouse"
     BALANCE_BEAM_BEAM = "balance_beam_beam"
     BALLOON = "balloon"
     BALLPOINT_BALLPOINT_PEN_BALLPEN_BIRO = "ballpoint_ballpoint_pen_ballpen_biro"
     BAND_AID = "band_aid"
     BANJO = "banjo"
-    BANNISTER_BANISTER_BALUSTRADE_BALUSTERS_HANDRAIL = "bannister_banister_balustrade_balusters_handrail"
+    BANNISTER_BANISTER_BALUSTRADE_BALUSTERS_HANDRAIL = (
+        "bannister_banister_balustrade_balusters_handrail"
+    )
     BARBELL = "barbell"
     BARBER_CHAIR = "barber_chair"
     BARBERSHOP = "barbershop"
     BARN = "barn"
     BAROMETER = "barometer"
     BARREL_CASK = "barrel_cask"
-    BARROW_GARDEN_CART_LAWN_CART_WHEELBARROW = "barrow_garden_cart_lawn_cart_wheelbarrow"
+    BARROW_GARDEN_CART_LAWN_CART_WHEELBARROW = (
+        "barrow_garden_cart_lawn_cart_wheelbarrow"
+    )
     BASEBALL = "baseball"
     BASKETBALL = "basketball"
     BASSINET = "bassinet"
@@ -444,7 +586,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     BATHING_CAP_SWIMMING_CAP = "bathing_cap_swimming_cap"
     BATH_TOWEL = "bath_towel"
     BATHTUB_BATHING_TUB_BATH_TUB = "bathtub_bathing_tub_bath_tub"
-    BEACH_WAGON_STATION_WAGON_WAGON_ESTATE_CAR_BEACH_WAGGON_STATION_WAGGON_WAGGON = "beach_wagon_station_wagon_wagon_estate_car_beach_waggon_station_waggon_waggon"
+    BEACH_WAGON_STATION_WAGON_WAGON_ESTATE_CAR_BEACH_WAGGON_STATION_WAGGON_WAGGON = (
+        "beach_wagon_station_wagon_wagon_estate_car_beach_waggon_station_waggon_waggon"
+    )
     BEACON_LIGHTHOUSE_BEACON_LIGHT_PHAROS = "beacon_lighthouse_beacon_light_pharos"
     BEAKER = "beaker"
     BEARSKIN_BUSBY_SHAKO = "bearskin_busby_shako"
@@ -452,7 +596,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     BEER_GLASS = "beer_glass"
     BELL_COTE_BELL_COT = "bell_cote_bell_cot"
     BIB = "bib"
-    BICYCLE_BUILT_FOR_TWO_TANDEM_BICYCLE_TANDEM = "bicycle_built_for_two_tandem_bicycle_tandem"
+    BICYCLE_BUILT_FOR_TWO_TANDEM_BICYCLE_TANDEM = (
+        "bicycle_built_for_two_tandem_bicycle_tandem"
+    )
     BIKINI_TWO_PIECE = "bikini_two_piece"
     BINDER_RING_BINDER = "binder_ring_binder"
     BINOCULARS_FIELD_GLASSES_OPERA_GLASSES = "binoculars_field_glasses_opera_glasses"
@@ -468,7 +614,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     BOW_TIE_BOW_TIE_BOWTIE = "bow_tie_bow_tie_bowtie"
     BRASS_MEMORIAL_TABLET_PLAQUE = "brass_memorial_tablet_plaque"
     BRASSIERE_BRA_BANDEAU = "brassiere_bra_bandeau"
-    BREAKWATER_GROIN_GROYNE_MOLE_BULWARK_SEAWALL_JETTY = "breakwater_groin_groyne_mole_bulwark_seawall_jetty"
+    BREAKWATER_GROIN_GROYNE_MOLE_BULWARK_SEAWALL_JETTY = (
+        "breakwater_groin_groyne_mole_bulwark_seawall_jetty"
+    )
     BREASTPLATE_AEGIS_EGIS = "breastplate_aegis_egis"
     BROOM = "broom"
     BUCKET_PAIL = "bucket_pail"
@@ -484,7 +632,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     CAN_OPENER_TIN_OPENER = "can_opener_tin_opener"
     CARDIGAN = "cardigan"
     CAR_MIRROR = "car_mirror"
-    CAROUSEL_CARROUSEL_MERRY_GO_ROUND_ROUNDABOUT_WHIRLIGIG = "carousel_carrousel_merry_go_round_roundabout_whirligig"
+    CAROUSEL_CARROUSEL_MERRY_GO_ROUND_ROUNDABOUT_WHIRLIGIG = (
+        "carousel_carrousel_merry_go_round_roundabout_whirligig"
+    )
     CARPENTERS_KIT_TOOL_KIT = "carpenters_kit_tool_kit"
     CARTON = "carton"
     CAR_WHEEL = "car_wheel"
@@ -495,10 +645,14 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     CATAMARAN = "catamaran"
     CD_PLAYER = "cd_player"
     CELLO_VIOLONCELLO = "cello_violoncello"
-    CELLULAR_TELEPHONE_CELLULAR_PHONE_CELLPHONE_CELL_MOBILE_PHONE = "cellular_telephone_cellular_phone_cellphone_cell_mobile_phone"
+    CELLULAR_TELEPHONE_CELLULAR_PHONE_CELLPHONE_CELL_MOBILE_PHONE = (
+        "cellular_telephone_cellular_phone_cellphone_cell_mobile_phone"
+    )
     CHAIN = "chain"
     CHAINLINK_FENCE = "chainlink_fence"
-    CHAIN_MAIL_RING_MAIL_MAIL_CHAIN_ARMOR_CHAIN_ARMOUR_RING_ARMOR_RING_ARMOUR = "chain_mail_ring_mail_mail_chain_armor_chain_armour_ring_armor_ring_armour"
+    CHAIN_MAIL_RING_MAIL_MAIL_CHAIN_ARMOR_CHAIN_ARMOUR_RING_ARMOR_RING_ARMOUR = (
+        "chain_mail_ring_mail_mail_chain_armor_chain_armour_ring_armor_ring_armour"
+    )
     CHAIN_SAW_CHAINSAW = "chain_saw_chainsaw"
     CHEST = "chest"
     CHIFFONIER_COMMODE = "chiffonier_commode"
@@ -506,7 +660,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     CHINA_CABINET_CHINA_CLOSET = "china_cabinet_china_closet"
     CHRISTMAS_STOCKING = "christmas_stocking"
     CHURCH_CHURCH_BUILDING = "church_church_building"
-    CINEMA_MOVIE_THEATER_MOVIE_THEATRE_MOVIE_HOUSE_PICTURE_PALACE = "cinema_movie_theater_movie_theatre_movie_house_picture_palace"
+    CINEMA_MOVIE_THEATER_MOVIE_THEATRE_MOVIE_HOUSE_PICTURE_PALACE = (
+        "cinema_movie_theater_movie_theatre_movie_house_picture_palace"
+    )
     CLEAVER_MEAT_CLEAVER_CHOPPER = "cleaver_meat_cleaver_chopper"
     CLIFF_DWELLING = "cliff_dwelling"
     CLOAK = "cloak"
@@ -518,7 +674,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     COMBINATION_LOCK = "combination_lock"
     COMPUTER_KEYBOARD_KEYPAD = "computer_keyboard_keypad"
     CONFECTIONERY_CONFECTIONARY_CANDY_STORE = "confectionery_confectionary_candy_store"
-    CONTAINER_SHIP_CONTAINERSHIP_CONTAINER_VESSEL = "container_ship_containership_container_vessel"
+    CONTAINER_SHIP_CONTAINERSHIP_CONTAINER_VESSEL = (
+        "container_ship_containership_container_vessel"
+    )
     CONVERTIBLE = "convertible"
     CORKSCREW_BOTTLE_SCREW = "corkscrew_bottle_screw"
     CORNET_HORN_TRUMPET_TRUMP = "cornet_horn_trumpet_trump"
@@ -542,7 +700,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     DIGITAL_WATCH = "digital_watch"
     DINING_TABLE_BOARD = "dining_table_board"
     DISHRAG_DISHCLOTH = "dishrag_dishcloth"
-    DISHWASHER_DISH_WASHER_DISHWASHING_MACHINE = "dishwasher_dish_washer_dishwashing_machine"
+    DISHWASHER_DISH_WASHER_DISHWASHING_MACHINE = (
+        "dishwasher_dish_washer_dishwashing_machine"
+    )
     DISK_BRAKE_DISC_BRAKE = "disk_brake_disc_brake"
     DOCK_DOCKAGE_DOCKING_FACILITY = "dock_dockage_docking_facility"
     DOGSLED_DOG_SLED_DOG_SLEIGH = "dogsled_dog_sled_dog_sleigh"
@@ -579,7 +739,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     FUR_COAT = "fur_coat"
     GARBAGE_TRUCK_DUSTCART = "garbage_truck_dustcart"
     GASMASK_RESPIRATOR_GAS_HELMET = "gasmask_respirator_gas_helmet"
-    GAS_PUMP_GASOLINE_PUMP_PETROL_PUMP_ISLAND_DISPENSER = "gas_pump_gasoline_pump_petrol_pump_island_dispenser"
+    GAS_PUMP_GASOLINE_PUMP_PETROL_PUMP_ISLAND_DISPENSER = (
+        "gas_pump_gasoline_pump_petrol_pump_island_dispenser"
+    )
     GOBLET = "goblet"
     GO_KART = "go_kart"
     GOLF_BALL = "golf_ball"
@@ -590,15 +752,21 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     GRAND_PIANO_GRAND = "grand_piano_grand"
     GREENHOUSE_NURSERY_GLASSHOUSE = "greenhouse_nursery_glasshouse"
     GRILLE_RADIATOR_GRILLE = "grille_radiator_grille"
-    GROCERY_STORE_GROCERY_FOOD_MARKET_MARKET = "grocery_store_grocery_food_market_market"
+    GROCERY_STORE_GROCERY_FOOD_MARKET_MARKET = (
+        "grocery_store_grocery_food_market_market"
+    )
     GUILLOTINE = "guillotine"
     HAIR_SLIDE = "hair_slide"
     HAIR_SPRAY = "hair_spray"
     HALF_TRACK = "half_track"
     HAMMER = "hammer"
     HAMPER = "hamper"
-    HAND_BLOWER_BLOW_DRYER_BLOW_DRIER_HAIR_DRYER_HAIR_DRIER = "hand_blower_blow_dryer_blow_drier_hair_dryer_hair_drier"
-    HAND_HELD_COMPUTER_HAND_HELD_MICROCOMPUTER = "hand_held_computer_hand_held_microcomputer"
+    HAND_BLOWER_BLOW_DRYER_BLOW_DRIER_HAIR_DRYER_HAIR_DRIER = (
+        "hand_blower_blow_dryer_blow_drier_hair_dryer_hair_drier"
+    )
+    HAND_HELD_COMPUTER_HAND_HELD_MICROCOMPUTER = (
+        "hand_held_computer_hand_held_microcomputer"
+    )
     HANDKERCHIEF_HANKIE_HANKY_HANKEY = "handkerchief_hankie_hanky_hankey"
     HARD_DISC_HARD_DISK_FIXED_DISK = "hard_disc_hard_disk_fixed_disk"
     HARMONICA_MOUTH_ORGAN_HARP_MOUTH_HARP = "harmonica_mouth_organ_harp_mouth_harp"
@@ -640,7 +808,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     LIPSTICK_LIP_ROUGE = "lipstick_lip_rouge"
     LOAFER = "loafer"
     LOTION = "lotion"
-    LOUDSPEAKER_SPEAKER_SPEAKER_UNIT_LOUDSPEAKER_SYSTEM_SPEAKER_SYSTEM = "loudspeaker_speaker_speaker_unit_loudspeaker_system_speaker_system"
+    LOUDSPEAKER_SPEAKER_SPEAKER_UNIT_LOUDSPEAKER_SYSTEM_SPEAKER_SYSTEM = (
+        "loudspeaker_speaker_speaker_unit_loudspeaker_system_speaker_system"
+    )
     LOUPE_JEWELERS_LOUPE = "loupe_jewelers_loupe"
     LUMBERMILL_SAWMILL = "lumbermill_sawmill"
     MAGNETIC_COMPASS = "magnetic_compass"
@@ -679,7 +849,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     MOSQUE = "mosque"
     MOSQUITO_NET = "mosquito_net"
     MOTOR_SCOOTER_SCOOTER = "motor_scooter_scooter"
-    MOUNTAIN_BIKE_ALL_TERRAIN_BIKE_OFF_ROADER = "mountain_bike_all_terrain_bike_off_roader"
+    MOUNTAIN_BIKE_ALL_TERRAIN_BIKE_OFF_ROADER = (
+        "mountain_bike_all_terrain_bike_off_roader"
+    )
     MOUNTAIN_TENT = "mountain_tent"
     MOUSE_COMPUTER_MOUSE = "mouse_computer_mouse"
     MOUSETRAP = "mousetrap"
@@ -696,7 +868,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     ODOMETER_HODOMETER_MILEOMETER_MILOMETER = "odometer_hodometer_mileometer_milometer"
     OIL_FILTER = "oil_filter"
     ORGAN_PIPE_ORGAN = "organ_pipe_organ"
-    OSCILLOSCOPE_SCOPE_CATHODE_RAY_OSCILLOSCOPE_CRO = "oscilloscope_scope_cathode_ray_oscilloscope_cro"
+    OSCILLOSCOPE_SCOPE_CATHODE_RAY_OSCILLOSCOPE_CRO = (
+        "oscilloscope_scope_cathode_ray_oscilloscope_cro"
+    )
     OVERSKIRT = "overskirt"
     OXCART = "oxcart"
     OXYGEN_MASK = "oxygen_mask"
@@ -734,7 +908,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     PINWHEEL = "pinwheel"
     PIRATE_PIRATE_SHIP = "pirate_pirate_ship"
     PITCHER_EWER = "pitcher_ewer"
-    PLANE_CARPENTERS_PLANE_WOODWORKING_PLANE = "plane_carpenters_plane_woodworking_plane"
+    PLANE_CARPENTERS_PLANE_WOODWORKING_PLANE = (
+        "plane_carpenters_plane_woodworking_plane"
+    )
     PLANETARIUM = "planetarium"
     PLASTIC_BAG = "plastic_bag"
     PLATE_RACK = "plate_rack"
@@ -742,7 +918,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     PLUNGER_PLUMBERS_HELPER = "plunger_plumbers_helper"
     POLAROID_CAMERA_POLAROID_LAND_CAMERA = "polaroid_camera_polaroid_land_camera"
     POLE = "pole"
-    POLICE_VAN_POLICE_WAGON_PADDY_WAGON_PATROL_WAGON_WAGON_BLACK_MARIA = "police_van_police_wagon_paddy_wagon_patrol_wagon_wagon_black_maria"
+    POLICE_VAN_POLICE_WAGON_PADDY_WAGON_PATROL_WAGON_WAGON_BLACK_MARIA = (
+        "police_van_police_wagon_paddy_wagon_patrol_wagon_wagon_black_maria"
+    )
     PONCHO = "poncho"
     POOL_TABLE_BILLIARD_TABLE_SNOOKER_TABLE = "pool_table_billiard_table_snooker_table"
     POP_BOTTLE_SODA_BOTTLE = "pop_bottle_soda_bottle"
@@ -755,7 +933,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     PROJECTILE_MISSILE = "projectile_missile"
     PROJECTOR = "projector"
     PUCK_HOCKEY_PUCK = "puck_hockey_puck"
-    PUNCHING_BAG_PUNCH_BAG_PUNCHING_BALL_PUNCHBALL = "punching_bag_punch_bag_punching_ball_punchball"
+    PUNCHING_BAG_PUNCH_BAG_PUNCHING_BALL_PUNCHBALL = (
+        "punching_bag_punch_bag_punching_ball_punchball"
+    )
     PURSE = "purse"
     QUILL_QUILL_PEN = "quill_quill_pen"
     QUILT_COMFORTER_COMFORT_PUFF = "quilt_comforter_comfort_puff"
@@ -770,7 +950,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     REFLEX_CAMERA = "reflex_camera"
     REFRIGERATOR_ICEBOX = "refrigerator_icebox"
     REMOTE_CONTROL_REMOTE = "remote_control_remote"
-    RESTAURANT_EATING_HOUSE_EATING_PLACE_EATERY = "restaurant_eating_house_eating_place_eatery"
+    RESTAURANT_EATING_HOUSE_EATING_PLACE_EATERY = (
+        "restaurant_eating_house_eating_place_eatery"
+    )
     REVOLVER_SIX_GUN_SIX_SHOOTER = "revolver_six_gun_six_shooter"
     RIFLE = "rifle"
     ROCKING_CHAIR_ROCKER = "rocking_chair_rocker"
@@ -815,7 +997,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     SOAP_DISPENSER = "soap_dispenser"
     SOCCER_BALL = "soccer_ball"
     SOCK = "sock"
-    SOLAR_DISH_SOLAR_COLLECTOR_SOLAR_FURNACE = "solar_dish_solar_collector_solar_furnace"
+    SOLAR_DISH_SOLAR_COLLECTOR_SOLAR_FURNACE = (
+        "solar_dish_solar_collector_solar_furnace"
+    )
     SOMBRERO = "sombrero"
     SOUP_BOWL = "soup_bowl"
     SPACE_BAR = "space_bar"
@@ -837,7 +1021,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     STOPWATCH_STOP_WATCH = "stopwatch_stop_watch"
     STOVE = "stove"
     STRAINER = "strainer"
-    STREETCAR_TRAM_TRAMCAR_TROLLEY_TROLLEY_CAR = "streetcar_tram_tramcar_trolley_trolley_car"
+    STREETCAR_TRAM_TRAMCAR_TROLLEY_TROLLEY_CAR = (
+        "streetcar_tram_tramcar_trolley_trolley_car"
+    )
     STRETCHER = "stretcher"
     STUDIO_COUCH_DAY_BED = "studio_couch_day_bed"
     STUPA_TOPE = "stupa_tope"
@@ -852,10 +1038,14 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     SWEATSHIRT = "sweatshirt"
     SWIMMING_TRUNKS_BATHING_TRUNKS = "swimming_trunks_bathing_trunks"
     SWING = "swing"
-    SWITCH_ELECTRIC_SWITCH_ELECTRICAL_SWITCH = "switch_electric_switch_electrical_switch"
+    SWITCH_ELECTRIC_SWITCH_ELECTRICAL_SWITCH = (
+        "switch_electric_switch_electrical_switch"
+    )
     SYRINGE = "syringe"
     TABLE_LAMP = "table_lamp"
-    TANK_ARMY_TANK_ARMORED_COMBAT_VEHICLE_ARMOURED_COMBAT_VEHICLE = "tank_army_tank_armored_combat_vehicle_armoured_combat_vehicle"
+    TANK_ARMY_TANK_ARMORED_COMBAT_VEHICLE_ARMOURED_COMBAT_VEHICLE = (
+        "tank_army_tank_armored_combat_vehicle_armoured_combat_vehicle"
+    )
     TAPE_PLAYER = "tape_player"
     TEAPOT = "teapot"
     TEDDY_TEDDY_BEAR = "teddy_teddy_bear"
@@ -868,21 +1058,27 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     THRONE = "throne"
     TILE_ROOF = "tile_roof"
     TOASTER = "toaster"
-    TOBACCO_SHOP_TOBACCONIST_SHOP_TOBACCONIST = "tobacco_shop_tobacconist_shop_tobacconist"
+    TOBACCO_SHOP_TOBACCONIST_SHOP_TOBACCONIST = (
+        "tobacco_shop_tobacconist_shop_tobacconist"
+    )
     TOILET_SEAT = "toilet_seat"
     TORCH = "torch"
     TOTEM_POLE = "totem_pole"
     TOW_TRUCK_TOW_CAR_WRECKER = "tow_truck_tow_car_wrecker"
     TOYSHOP = "toyshop"
     TRACTOR = "tractor"
-    TRAILER_TRUCK_TRACTOR_TRAILER_TRUCKING_RIG_RIG_ARTICULATED_LORRY_SEMI = "trailer_truck_tractor_trailer_trucking_rig_rig_articulated_lorry_semi"
+    TRAILER_TRUCK_TRACTOR_TRAILER_TRUCKING_RIG_RIG_ARTICULATED_LORRY_SEMI = (
+        "trailer_truck_tractor_trailer_trucking_rig_rig_articulated_lorry_semi"
+    )
     TRAY = "tray"
     TRENCH_COAT = "trench_coat"
     TRICYCLE_TRIKE_VELOCIPEDE = "tricycle_trike_velocipede"
     TRIMARAN = "trimaran"
     TRIPOD = "tripod"
     TRIUMPHAL_ARCH = "triumphal_arch"
-    TROLLEYBUS_TROLLEY_COACH_TRACKLESS_TROLLEY = "trolleybus_trolley_coach_trackless_trolley"
+    TROLLEYBUS_TROLLEY_COACH_TRACKLESS_TROLLEY = (
+        "trolleybus_trolley_coach_trackless_trolley"
+    )
     TROMBONE = "trombone"
     TUB_VAT = "tub_vat"
     TURNSTILE = "turnstile"
@@ -904,7 +1100,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     WALLET_BILLFOLD_NOTECASE_POCKETBOOK = "wallet_billfold_notecase_pocketbook"
     WARDROBE_CLOSET_PRESS = "wardrobe_closet_press"
     WARPLANE_MILITARY_PLANE = "warplane_military_plane"
-    WASHBASIN_HANDBASIN_WASHBOWL_LAVABO_WASH_HAND_BASIN = "washbasin_handbasin_washbowl_lavabo_wash_hand_basin"
+    WASHBASIN_HANDBASIN_WASHBOWL_LAVABO_WASH_HAND_BASIN = (
+        "washbasin_handbasin_washbowl_lavabo_wash_hand_basin"
+    )
     WASHER_AUTOMATIC_WASHER_WASHING_MACHINE = "washer_automatic_washer_washing_machine"
     WATER_BOTTLE = "water_bottle"
     WATER_JUG = "water_jug"
@@ -920,7 +1118,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     WOK = "wok"
     WOODEN_SPOON = "wooden_spoon"
     WOOL_WOOLEN_WOOLLEN = "wool_woolen_woollen"
-    WORM_FENCE_SNAKE_FENCE_SNAKE_RAIL_FENCE_VIRGINIA_FENCE = "worm_fence_snake_fence_snake_rail_fence_virginia_fence"
+    WORM_FENCE_SNAKE_FENCE_SNAKE_RAIL_FENCE_VIRGINIA_FENCE = (
+        "worm_fence_snake_fence_snake_rail_fence_virginia_fence"
+    )
     WRECK = "wreck"
     YAWL = "yawl"
     YURT = "yurt"
@@ -929,7 +1129,9 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     CROSSWORD_PUZZLE_CROSSWORD = "crossword_puzzle_crossword"
     STREET_SIGN = "street_sign"
     TRAFFIC_LIGHT_TRAFFIC_SIGNAL_STOPLIGHT = "traffic_light_traffic_signal_stoplight"
-    BOOK_JACKET_DUST_COVER_DUST_JACKET_DUST_WRAPPER = "book_jacket_dust_cover_dust_jacket_dust_wrapper"
+    BOOK_JACKET_DUST_COVER_DUST_JACKET_DUST_WRAPPER = (
+        "book_jacket_dust_cover_dust_jacket_dust_wrapper"
+    )
     MENU = "menu"
     PLATE = "plate"
     GUACAMOLE = "guacamole"
@@ -1004,10 +1206,14 @@ class IMAGENET_CATEOGORIES(str, ExtEnum):
     GYROMITRA = "gyromitra"
     STINKHORN_CARRION_FUNGUS = "stinkhorn_carrion_fungus"
     EARTHSTAR = "earthstar"
-    HEN_OF_THE_WOODS_HEN_OF_THE_WOODS_POLYPORUS_FRONDOSUS_GRIFOLA_FRONDOSA = "hen_of_the_woods_hen_of_the_woods_polyporus_frondosus_grifola_frondosa"
+    HEN_OF_THE_WOODS_HEN_OF_THE_WOODS_POLYPORUS_FRONDOSUS_GRIFOLA_FRONDOSA = (
+        "hen_of_the_woods_hen_of_the_woods_polyporus_frondosus_grifola_frondosa"
+    )
     BOLETE = "bolete"
     EAR_SPIKE_CAPITULUM = "ear_spike_capitulum"
-    TOILET_TISSUE_TOILET_PAPER_BATHROOM_TISSUE = "toilet_tissue_toilet_paper_bathroom_tissue"
+    TOILET_TISSUE_TOILET_PAPER_BATHROOM_TISSUE = (
+        "toilet_tissue_toilet_paper_bathroom_tissue"
+    )
 
 
 class IMAGENET_CATEGORIES_CRYPTED(str, ExtEnum):
@@ -2011,4 +2217,3 @@ class IMAGENET_CATEGORIES_CRYPTED(str, ExtEnum):
     N13054560 = "n13054560"
     N13133613 = "n13133613"
     N15075141 = "n15075141"
-

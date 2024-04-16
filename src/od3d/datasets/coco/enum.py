@@ -6,6 +6,7 @@ class COCO_SUBSETS(str, ExtEnum):
     VAL2017 = "val2017"
     TEST2017 = "test2017"
 
+
 class COCO_CATEGORIES(str, ExtEnum):
     PERSON = "person"
     BICYCLE = "bicycle"

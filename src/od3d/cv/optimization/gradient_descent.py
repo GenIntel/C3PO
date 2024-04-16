@@ -1,9 +1,25 @@
 import torch
 from od3d.cv.geometry.transform import se3_exp_map
-from od3d.cv.geometry.transform import tform4x4, tform4x4_broadcast
-from od3d.cv.visual.show import show_scene
+from od3d.cv.geometry.transform import tform4x4
+from od3d.cv.geometry.transform import tform4x4_broadcast
 
-def gradient_descent_se3(pts, models, score_func, pts_dist=None, steps=10, beta0=0.4, beta1=0.6, lr=2e-5, reg_weight=1., pts_weight=0.5, arap_weight=0.05, arap_geo_std=0.02, dims_detached=[], return_pts_offset=False):
+
+def gradient_descent_se3(
+    pts,
+    models,
+    score_func,
+    pts_dist=None,
+    steps=10,
+    beta0=0.4,
+    beta1=0.6,
+    lr=2e-5,
+    reg_weight=1.0,
+    pts_weight=0.5,
+    arap_weight=0.05,
+    arap_geo_std=0.02,
+    dims_detached=[],
+    return_pts_offset=False,
+):
     """
     Args:
         pts (torch.Tensor): ...xNxF
@@ -20,8 +36,14 @@ def gradient_descent_se3(pts, models, score_func, pts_dist=None, steps=10, beta0
     batch_dims = pts.shape[:-2]
     batch_dims_count = len(batch_dims)
 
-    pts_offset = torch.nn.Parameter(torch.zeros(size=pts.shape).to(device=device), requires_grad=True)
-    obj_tform6_tmp = torch.nn.Parameter(torch.zeros(size=models.shape[:-2] + (6, )).to(device=device), requires_grad=True)
+    pts_offset = torch.nn.Parameter(
+        torch.zeros(size=pts.shape).to(device=device),
+        requires_grad=True,
+    )
+    obj_tform6_tmp = torch.nn.Parameter(
+        torch.zeros(size=models.shape[:-2] + (6,)).to(device=device),
+        requires_grad=True,
+    )
 
     optim_inference = torch.optim.Adam(
         params=[obj_tform6_tmp, pts_offset],
@@ -34,19 +56,45 @@ def gradient_descent_se3(pts, models, score_func, pts_dist=None, steps=10, beta0
     # ...xP
     for s in range(steps):
         # none is required for proposals which are not
-        scores = score_func(pts + pts_weight * pts_offset, models[..., None, :, :])[..., 0]
+        scores = score_func(pts + pts_weight * pts_offset, models[..., None, :, :])[
+            ...,
+            0,
+        ]
         pairwise_dist = torch.cdist(pts, pts, p=2).detach()
-        weights_arap = torch.exp(- (pairwise_dist / pairwise_dist.max()) ** 2 / (arap_geo_std**2) )
-        weights_arap.fill_diagonal_(0.) # remove self-connections
+        weights_arap = torch.exp(
+            -((pairwise_dist / pairwise_dist.max()) ** 2) / (arap_geo_std**2),
+        )
+        weights_arap.fill_diagonal_(0.0)  # remove self-connections
         weights_arap = weights_arap / weights_arap.mean()
-        weights_arap = weights_arap.nan_to_num(1.)
-        pairwise_dist_with_offset = torch.cdist(pts + pts_weight * pts_offset, pts + pts_weight * pts_offset, p=2)
-        scores_arap = -(weights_arap * ((pairwise_dist - pairwise_dist_with_offset).abs() / pairwise_dist.max())).flatten(-2).mean()
-        obj_tform6_tmp.data[..., dims_detached] = 0.
-        models = tform4x4_broadcast(models.detach(), se3_exp_map(obj_tform6_tmp.detach()))
-        obj_tform6_tmp.data[..., :] = 0.
+        weights_arap = weights_arap.nan_to_num(1.0)
+        pairwise_dist_with_offset = torch.cdist(
+            pts + pts_weight * pts_offset,
+            pts + pts_weight * pts_offset,
+            p=2,
+        )
+        scores_arap = (
+            -(
+                weights_arap
+                * (
+                    (pairwise_dist - pairwise_dist_with_offset).abs()
+                    / pairwise_dist.max()
+                )
+            )
+            .flatten(-2)
+            .mean()
+        )
+        obj_tform6_tmp.data[..., dims_detached] = 0.0
+        models = tform4x4_broadcast(
+            models.detach(),
+            se3_exp_map(obj_tform6_tmp.detach()),
+        )
+        obj_tform6_tmp.data[..., :] = 0.0
         models = tform4x4(models.detach(), se3_exp_map(obj_tform6_tmp))
-        loss = (-scores).sum() + arap_weight * (-scores_arap) + reg_weight * (pts_offset * pts_weight).norm(dim=-1).mean()
+        loss = (
+            (-scores).sum()
+            + arap_weight * (-scores_arap)
+            + reg_weight * (pts_offset * pts_weight).norm(dim=-1).mean()
+        )
         loss.backward()
         optim_inference.step()
         optim_inference.zero_grad()

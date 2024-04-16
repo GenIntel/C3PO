@@ -1,37 +1,53 @@
-import numpy as np
-import scipy as sp
-import heapq
 import copy
-from tqdm import tqdm
-from sklearn.preprocessing import normalize
+import heapq
+
+import numpy as np
 import open3d
+import scipy as sp
+from sklearn.preprocessing import normalize
+from tqdm import tqdm
 
 OPTIM_VALENCE = 6
 VALENCE_WEIGHT = 1
 
-def simplify_mesh(mesh_o3d: open3d.geometry.TriangleMesh, mesh_vertices_count=500, isotropic=True, valence_aware=True):
-    mesh_astakape = AstakaPeMesh(vs=np.asarray(mesh_o3d.vertices), faces=np.asarray(mesh_o3d.triangles))
+
+def simplify_mesh(
+    mesh_o3d: open3d.geometry.TriangleMesh,
+    mesh_vertices_count=500,
+    isotropic=True,
+    valence_aware=True,
+):
+    mesh_astakape = AstakaPeMesh(
+        vs=np.asarray(mesh_o3d.vertices),
+        faces=np.asarray(mesh_o3d.triangles),
+    )
 
     if isotropic:
-        mesh_astakape = mesh_astakape.edge_based_simplification(target_v=mesh_vertices_count,
-                                                                valence_aware=valence_aware)
+        mesh_astakape = mesh_astakape.edge_based_simplification(
+            target_v=mesh_vertices_count,
+            valence_aware=valence_aware,
+        )
     else:
-        mesh_astakape = mesh_astakape.simplification(target_v=mesh_vertices_count, valence_aware=valence_aware)
+        mesh_astakape = mesh_astakape.simplification(
+            target_v=mesh_vertices_count,
+            valence_aware=valence_aware,
+        )
     vertices = open3d.utility.Vector3dVector(mesh_astakape.vs)
     faces = open3d.utility.Vector3iVector(mesh_astakape.faces)
     o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
     return o3d_obj_mesh
+
 
 class AstakaPeMesh:
     # https://github.com/astaka-pe/mesh_simplification
     def __init__(self, vs, faces, facebuild_code=False, build_mat=False, manifold=True):
         self.vs = vs
         self.faces = faces
-        #self.path = path
+        # self.path = path
         # self.vs, self.faces = # self.fill_from_file(path)
         self.compute_face_normals()
         self.compute_face_center()
-        self.device = 'cpu'
+        self.device = "cpu"
         self.simp = False
 
         if manifold:
@@ -49,12 +65,15 @@ class AstakaPeMesh:
             splitted_line = line.split()
             if not splitted_line:
                 continue
-            elif splitted_line[0] == 'v':
+            elif splitted_line[0] == "v":
                 vs.append([float(v) for v in splitted_line[1:4]])
-            elif splitted_line[0] == 'f':
-                face_vertex_ids = [int(c.split('/')[0]) for c in splitted_line[1:]]
+            elif splitted_line[0] == "f":
+                face_vertex_ids = [int(c.split("/")[0]) for c in splitted_line[1:]]
                 assert len(face_vertex_ids) == 3
-                face_vertex_ids = [(ind - 1) if (ind >= 0) else (len(vs) + ind) for ind in face_vertex_ids]
+                face_vertex_ids = [
+                    (ind - 1) if (ind >= 0) else (len(vs) + ind)
+                    for ind in face_vertex_ids
+                ]
                 faces.append(face_vertex_ids)
         f.close()
         vs = np.asarray(vs)
@@ -93,23 +112,33 @@ class AstakaPeMesh:
                     edges_count += 1
             for idx, edge in enumerate(faces_edges):
                 edge_key = edge2key[edge]
-                edge_nb[edge_key][nb_count[edge_key]] = edge2key[faces_edges[(idx + 1) % 3]]
-                edge_nb[edge_key][nb_count[edge_key] + 1] = edge2key[faces_edges[(idx + 2) % 3]]
+                edge_nb[edge_key][nb_count[edge_key]] = edge2key[
+                    faces_edges[(idx + 1) % 3]
+                ]
+                edge_nb[edge_key][nb_count[edge_key] + 1] = edge2key[
+                    faces_edges[(idx + 2) % 3]
+                ]
                 nb_count[edge_key] += 2
             for idx, edge in enumerate(faces_edges):
                 edge_key = edge2key[edge]
-                sides[edge_key][nb_count[edge_key] - 2] = nb_count[edge2key[faces_edges[(idx + 1) % 3]]] - 1
-                sides[edge_key][nb_count[edge_key] - 1] = nb_count[edge2key[faces_edges[(idx + 2) % 3]]] - 2
+                sides[edge_key][nb_count[edge_key] - 2] = (
+                    nb_count[edge2key[faces_edges[(idx + 1) % 3]]] - 1
+                )
+                sides[edge_key][nb_count[edge_key] - 1] = (
+                    nb_count[edge2key[faces_edges[(idx + 2) % 3]]] - 2
+                )
         self.edges = np.array(edges, dtype=np.int32)
         self.gemm_edges = np.array(edge_nb, dtype=np.int64)
         self.sides = np.array(sides, dtype=np.int64)
         self.edges_count = edges_count
 
     def compute_face_normals(self):
-        face_normals = np.cross(self.vs[self.faces[:, 1]] - self.vs[self.faces[:, 0]],
-                                self.vs[self.faces[:, 2]] - self.vs[self.faces[:, 0]])
+        face_normals = np.cross(
+            self.vs[self.faces[:, 1]] - self.vs[self.faces[:, 0]],
+            self.vs[self.faces[:, 2]] - self.vs[self.faces[:, 0]],
+        )
         norm = np.linalg.norm(face_normals, axis=1, keepdims=True) + 1e-24
-        face_areas = 0.5 * np.sqrt((face_normals ** 2).sum(axis=1))
+        face_areas = 0.5 * np.sqrt((face_normals**2).sum(axis=1))
         face_normals /= norm
         self.fn, self.fa = face_normals, face_areas
 
@@ -125,7 +154,7 @@ class AstakaPeMesh:
         mat_vals = np.ones(len(mat_rows))
         f2v_mat = sp.sparse.csr_matrix((mat_vals, (mat_rows, mat_cols)), shape=(nv, nf))
         vert_normals = sp.sparse.csr_matrix.dot(f2v_mat, face_normals)
-        vert_normals = normalize(vert_normals, norm='l2', axis=1)
+        vert_normals = normalize(vert_normals, norm="l2", axis=1)
         self.vn = vert_normals
 
     def compute_face_center(self):
@@ -139,16 +168,26 @@ class AstakaPeMesh:
         ve = self.ve
 
         sub_mesh_vv = [edges[v_e, :].reshape(-1) for v_e in ve]
-        sub_mesh_vv = [set(vv.tolist()).difference(set([i])) for i, vv in enumerate(sub_mesh_vv)]
+        sub_mesh_vv = [
+            set(vv.tolist()).difference({i}) for i, vv in enumerate(sub_mesh_vv)
+        ]
 
         num_verts = self.vs.shape[0]
-        mat_rows = [np.array([i] * len(vv), dtype=np.int64) for i, vv in enumerate(sub_mesh_vv)]
+        mat_rows = [
+            np.array([i] * len(vv), dtype=np.int64) for i, vv in enumerate(sub_mesh_vv)
+        ]
         mat_rows = np.concatenate(mat_rows)
         mat_cols = [np.array(list(vv), dtype=np.int64) for vv in sub_mesh_vv]
         mat_cols = np.concatenate(mat_cols)
         mat_vals = np.ones_like(mat_rows, dtype=np.float32) * -1.0
-        neig_mat = sp.sparse.csr_matrix((mat_vals, (mat_rows, mat_cols)), shape=(num_verts, num_verts))
-        sum_count = sp.sparse.csr_matrix.dot(neig_mat, np.ones((num_verts, 1), dtype=np.float32))
+        neig_mat = sp.sparse.csr_matrix(
+            (mat_vals, (mat_rows, mat_cols)),
+            shape=(num_verts, num_verts),
+        )
+        sum_count = sp.sparse.csr_matrix.dot(
+            neig_mat,
+            np.ones((num_verts, 1), dtype=np.float32),
+        )
 
         mat_rows_ident = np.array([i for i in range(num_verts)])
         mat_cols_ident = np.array([i for i in range(num_verts)])
@@ -158,7 +197,10 @@ class AstakaPeMesh:
         mat_cols = np.concatenate([mat_cols, mat_cols_ident], axis=0)
         mat_vals = np.concatenate([mat_vals, mat_ident], axis=0)
 
-        self.lapmat = sp.sparse.csr_matrix((mat_vals, (mat_rows, mat_cols)), shape=(num_verts, num_verts))
+        self.lapmat = sp.sparse.csr_matrix(
+            (mat_vals, (mat_rows, mat_cols)),
+            shape=(num_verts, num_verts),
+        )
 
     def build_vf(self):
         vf = [set() for _ in range(len(self.vs))]
@@ -180,7 +222,10 @@ class AstakaPeMesh:
         v2v_inds = edges.T
         v2v_inds = np.concatenate([v2v_inds, v2v_inds[[1, 0]]], axis=1).astype(np.int64)
         v2v_vals = np.ones(v2v_inds.shape[1], dtype=np.float32)
-        self.v2v_mat = sp.sparse.csr_matrix((v2v_vals, v2v_inds), shape=(len(self.vs), len(self.vs)))
+        self.v2v_mat = sp.sparse.csr_matrix(
+            (v2v_vals, v2v_inds),
+            shape=(len(self.vs), len(self.vs)),
+        )
         self.v_dims = np.sum(self.v2v_mat.toarray(), axis=1)
 
     def simplification(self, target_v, valence_aware=True, midpoint=False):
@@ -193,7 +238,7 @@ class AstakaPeMesh:
             f_s = np.array(list(vf[i]))
             fc_s = fc[f_s]
             fn_s = fn[f_s]
-            d_s = - 1.0 * np.sum(fn_s * fc_s, axis=1, keepdims=True)
+            d_s = -1.0 * np.sum(fn_s * fc_s, axis=1, keepdims=True)
             abcd_s = np.concatenate([fn_s, d_s], axis=1)
             Q_s[i] = np.matmul(abcd_s.T, abcd_s)
             v4 = np.concatenate([v, np.array([1])])
@@ -214,7 +259,10 @@ class AstakaPeMesh:
                 Q_lp[:3] = Q_new[:3]
                 try:
                     Q_lp_inv = np.linalg.inv(Q_lp)
-                    v4_new = np.matmul(Q_lp_inv, np.array([[0, 0, 0, 1]]).reshape(-1, 1)).reshape(-1)
+                    v4_new = np.matmul(
+                        Q_lp_inv,
+                        np.array([[0, 0, 0, 1]]).reshape(-1, 1),
+                    ).reshape(-1)
                 except:
                     v_new = 0.5 * (v_0 + v_1)
                     v4_new = np.concatenate([v_new, np.array([1])])
@@ -243,28 +291,50 @@ class AstakaPeMesh:
 
             E_0, (vi_0, vi_1) = heapq.heappop(E_heap)
 
-            if (vi_mask[vi_0] == False) or (vi_mask[vi_1] == False):
+            if (not vi_mask[vi_0]) or (not vi_mask[vi_1]):
                 continue
 
             """ edge collapse """
-            shared_vv = list(set(simp_mesh.v2v[vi_0]).intersection(set(simp_mesh.v2v[vi_1])))
+            shared_vv = list(
+                set(simp_mesh.v2v[vi_0]).intersection(set(simp_mesh.v2v[vi_1])),
+            )
             merged_faces = simp_mesh.vf[vi_0].intersection(simp_mesh.vf[vi_1])
 
             if len(shared_vv) != 2:
-                """ non-manifold! """
+                """non-manifold!"""
                 # print("non-manifold can be occured!!" , len(shared_vv))
-                self.remove_tri_valance(simp_mesh, vi_0, vi_1, shared_vv, merged_faces, vi_mask, fi_mask, vert_map, Q_s,
-                                        E_heap)
+                self.remove_tri_valance(
+                    simp_mesh,
+                    vi_0,
+                    vi_1,
+                    shared_vv,
+                    merged_faces,
+                    vi_mask,
+                    fi_mask,
+                    vert_map,
+                    Q_s,
+                    E_heap,
+                )
                 continue
 
             elif len(merged_faces) != 2:
-                """ boundary """
+                """boundary"""
                 # print("boundary edge cannot be collapsed!")
                 continue
 
             else:
-                self.edge_collapse(simp_mesh, vi_0, vi_1, merged_faces, vi_mask, fi_mask, vert_map, Q_s, E_heap,
-                                   valence_aware=valence_aware)
+                self.edge_collapse(
+                    simp_mesh,
+                    vi_0,
+                    vi_1,
+                    merged_faces,
+                    vi_mask,
+                    fi_mask,
+                    vert_map,
+                    Q_s,
+                    E_heap,
+                    valence_aware=valence_aware,
+                )
                 pbar.update(1)
                 # print(np.sum(vi_mask), np.sum(fi_mask))
 
@@ -284,7 +354,6 @@ class AstakaPeMesh:
         """ 2. compute E for every possible pairs and create heapq """
         E_heap = []
         for i, e in enumerate(edges):
-            v_0, v_1 = vs[e[0]], vs[e[1]]
             heapq.heappush(E_heap, (edge_len[i], (e[0], e[1])))
 
         """ 3. collapse minimum-error vertex """
@@ -302,26 +371,37 @@ class AstakaPeMesh:
 
             E_0, (vi_0, vi_1) = heapq.heappop(E_heap)
 
-            if (vi_mask[vi_0] == False) or (vi_mask[vi_1] == False):
+            if (not vi_mask[vi_0]) or (not vi_mask[vi_1]):
                 continue
 
             """ edge collapse """
-            shared_vv = list(set(simp_mesh.v2v[vi_0]).intersection(set(simp_mesh.v2v[vi_1])))
+            shared_vv = list(
+                set(simp_mesh.v2v[vi_0]).intersection(set(simp_mesh.v2v[vi_1])),
+            )
             merged_faces = simp_mesh.vf[vi_0].intersection(simp_mesh.vf[vi_1])
 
             if len(shared_vv) != 2:
-                """ non-manifold! """
+                """non-manifold!"""
                 # print("non-manifold can be occured!!" , len(shared_vv))
                 continue
 
             elif len(merged_faces) != 2:
-                """ boundary """
+                """boundary"""
                 # print("boundary edge cannot be collapsed!")
                 continue
 
             else:
-                self.edge_based_collapse(simp_mesh, vi_0, vi_1, merged_faces, vi_mask, fi_mask, vert_map, E_heap,
-                                         valence_aware=valence_aware)
+                self.edge_based_collapse(
+                    simp_mesh,
+                    vi_0,
+                    vi_1,
+                    merged_faces,
+                    vi_mask,
+                    fi_mask,
+                    vert_map,
+                    E_heap,
+                    valence_aware=valence_aware,
+                )
                 pbar.update(1)
                 # print(np.sum(vi_mask), np.sum(fi_mask))
 
@@ -332,15 +412,45 @@ class AstakaPeMesh:
         return simp_mesh
 
     @staticmethod
-    def remove_tri_valance(simp_mesh, vi_0, vi_1, shared_vv, merged_faces, vi_mask, fi_mask, vert_map, Q_s, E_heap):
+    def remove_tri_valance(
+        simp_mesh,
+        vi_0,
+        vi_1,
+        shared_vv,
+        merged_faces,
+        vi_mask,
+        fi_mask,
+        vert_map,
+        Q_s,
+        E_heap,
+    ):
         # import pdb;pdb.set_trace()
         pass
 
-    def edge_collapse(self, simp_mesh, vi_0, vi_1, merged_faces, vi_mask, fi_mask, vert_map, Q_s, E_heap,
-                      valence_aware):
-        shared_vv = list(set(simp_mesh.v2v[vi_0]).intersection(set(simp_mesh.v2v[vi_1])))
-        new_vi_0 = set(simp_mesh.v2v[vi_0]).union(set(simp_mesh.v2v[vi_1])).difference({vi_0, vi_1})
-        simp_mesh.vf[vi_0] = simp_mesh.vf[vi_0].union(simp_mesh.vf[vi_1]).difference(merged_faces)
+    def edge_collapse(
+        self,
+        simp_mesh,
+        vi_0,
+        vi_1,
+        merged_faces,
+        vi_mask,
+        fi_mask,
+        vert_map,
+        Q_s,
+        E_heap,
+        valence_aware,
+    ):
+        shared_vv = list(
+            set(simp_mesh.v2v[vi_0]).intersection(set(simp_mesh.v2v[vi_1])),
+        )
+        new_vi_0 = (
+            set(simp_mesh.v2v[vi_0])
+            .union(set(simp_mesh.v2v[vi_1]))
+            .difference({vi_0, vi_1})
+        )
+        simp_mesh.vf[vi_0] = (
+            simp_mesh.vf[vi_0].union(simp_mesh.vf[vi_1]).difference(merged_faces)
+        )
         simp_mesh.vf[vi_1] = set()
         simp_mesh.vf[shared_vv[0]] = simp_mesh.vf[shared_vv[0]].difference(merged_faces)
         simp_mesh.vf[shared_vv[1]] = simp_mesh.vf[shared_vv[1]].difference(merged_faces)
@@ -348,7 +458,9 @@ class AstakaPeMesh:
         simp_mesh.v2v[vi_0] = list(new_vi_0)
         for v in simp_mesh.v2v[vi_1]:
             if v != vi_0:
-                simp_mesh.v2v[v] = list(set(simp_mesh.v2v[v]).difference({vi_1}).union({vi_0}))
+                simp_mesh.v2v[v] = list(
+                    set(simp_mesh.v2v[v]).difference({vi_1}).union({vi_0}),
+                )
         simp_mesh.v2v[vi_1] = []
         vi_mask[vi_1] = False
 
@@ -371,17 +483,39 @@ class AstakaPeMesh:
             valence_penalty = 1
             if valence_aware:
                 merged_faces = simp_mesh.vf[vi_0].intersection(simp_mesh.vf[vv_i])
-                valence_new = len(simp_mesh.vf[vi_0].union(simp_mesh.vf[vv_i]).difference(merged_faces))
+                valence_new = len(
+                    simp_mesh.vf[vi_0]
+                    .union(simp_mesh.vf[vv_i])
+                    .difference(merged_faces),
+                )
                 valence_penalty = self.valence_weight(valence_new)
 
             E_new = np.matmul(v4_mid, np.matmul(Q_new, v4_mid.T)) * valence_penalty
             heapq.heappush(E_heap, (E_new, (vi_0, vv_i)))
 
-    def edge_based_collapse(self, simp_mesh, vi_0, vi_1, merged_faces, vi_mask, fi_mask, vert_map, E_heap,
-                            valence_aware):
-        shared_vv = list(set(simp_mesh.v2v[vi_0]).intersection(set(simp_mesh.v2v[vi_1])))
-        new_vi_0 = set(simp_mesh.v2v[vi_0]).union(set(simp_mesh.v2v[vi_1])).difference({vi_0, vi_1})
-        simp_mesh.vf[vi_0] = simp_mesh.vf[vi_0].union(simp_mesh.vf[vi_1]).difference(merged_faces)
+    def edge_based_collapse(
+        self,
+        simp_mesh,
+        vi_0,
+        vi_1,
+        merged_faces,
+        vi_mask,
+        fi_mask,
+        vert_map,
+        E_heap,
+        valence_aware,
+    ):
+        shared_vv = list(
+            set(simp_mesh.v2v[vi_0]).intersection(set(simp_mesh.v2v[vi_1])),
+        )
+        new_vi_0 = (
+            set(simp_mesh.v2v[vi_0])
+            .union(set(simp_mesh.v2v[vi_1]))
+            .difference({vi_0, vi_1})
+        )
+        simp_mesh.vf[vi_0] = (
+            simp_mesh.vf[vi_0].union(simp_mesh.vf[vi_1]).difference(merged_faces)
+        )
         simp_mesh.vf[vi_1] = set()
         simp_mesh.vf[shared_vv[0]] = simp_mesh.vf[shared_vv[0]].difference(merged_faces)
         simp_mesh.vf[shared_vv[1]] = simp_mesh.vf[shared_vv[1]].difference(merged_faces)
@@ -389,7 +523,9 @@ class AstakaPeMesh:
         simp_mesh.v2v[vi_0] = list(new_vi_0)
         for v in simp_mesh.v2v[vi_1]:
             if v != vi_0:
-                simp_mesh.v2v[v] = list(set(simp_mesh.v2v[v]).difference({vi_1}).union({vi_0}))
+                simp_mesh.v2v[v] = list(
+                    set(simp_mesh.v2v[v]).difference({vi_1}).union({vi_0}),
+                )
         simp_mesh.v2v[vi_1] = []
         vi_mask[vi_1] = False
 
@@ -403,12 +539,15 @@ class AstakaPeMesh:
 
         """ recompute E """
         for vv_i in simp_mesh.v2v[vi_0]:
-            v_mid = 0.5 * (simp_mesh.vs[vi_0] + simp_mesh.vs[vv_i])
             edge_len = np.linalg.norm(simp_mesh.vs[vi_0] - simp_mesh.vs[vv_i])
             valence_penalty = 1
             if valence_aware:
                 merged_faces = simp_mesh.vf[vi_0].intersection(simp_mesh.vf[vv_i])
-                valence_new = len(simp_mesh.vf[vi_0].union(simp_mesh.vf[vv_i]).difference(merged_faces))
+                valence_new = len(
+                    simp_mesh.vf[vi_0]
+                    .union(simp_mesh.vf[vv_i])
+                    .difference(merged_faces),
+                )
                 valence_penalty = self.valence_weight(valence_new)
                 edge_len *= valence_penalty
 
@@ -478,20 +617,20 @@ class AstakaPeMesh:
         vertices = np.array(self.vs, dtype=np.float32).flatten()
         indices = np.array(self.faces, dtype=np.uint32).flatten()
 
-        with open(filename, 'w') as fp:
+        with open(filename, "w") as fp:
             # Write positions
             for i in range(0, vertices.size, 3):
                 x = vertices[i + 0]
                 y = vertices[i + 1]
                 z = vertices[i + 2]
-                fp.write('v {0:.8f} {1:.8f} {2:.8f}\n'.format(x, y, z))
+                fp.write(f"v {x:.8f} {y:.8f} {z:.8f}\n")
 
             # Write indices
             for i in range(0, len(indices), 3):
                 i0 = indices[i + 0] + 1
                 i1 = indices[i + 1] + 1
                 i2 = indices[i + 2] + 1
-                fp.write('f {0} {1} {2}\n'.format(i0, i1, i2))
+                fp.write(f"f {i0} {i1} {i2}\n")
 
     def save_as_ply(self, filename, fn):
         assert len(self.vs) > 0
@@ -499,19 +638,21 @@ class AstakaPeMesh:
         indices = np.array(self.faces, dtype=np.uint32).flatten()
         fnormals = np.array(fn, dtype=np.float32).flatten()
 
-        with open(filename, 'w') as fp:
+        with open(filename, "w") as fp:
             # Write Header
-            fp.write("ply\nformat ascii 1.0\nelement vertex {}\n".format(len(self.vs)))
+            fp.write(f"ply\nformat ascii 1.0\nelement vertex {len(self.vs)}\n")
             fp.write("property float x\nproperty float y\nproperty float z\n")
-            fp.write("element face {}\n".format(len(self.faces)))
+            fp.write(f"element face {len(self.faces)}\n")
             fp.write("property list uchar int vertex_indices\n")
-            fp.write("property uchar red\nproperty uchar green\nproperty uchar blue\nproperty uchar alpha\n")
+            fp.write(
+                "property uchar red\nproperty uchar green\nproperty uchar blue\nproperty uchar alpha\n",
+            )
             fp.write("end_header\n")
             for i in range(0, vertices.size, 3):
                 x = vertices[i + 0]
                 y = vertices[i + 1]
                 z = vertices[i + 2]
-                fp.write("{0:.6f} {1:.6f} {2:.6f}\n".format(x, y, z))
+                fp.write(f"{x:.6f} {y:.6f} {z:.6f}\n")
 
             for i in range(0, len(indices), 3):
                 i0 = indices[i + 0]
@@ -524,7 +665,7 @@ class AstakaPeMesh:
                 c1 = np.clip(int(255 * c1), 0, 255)
                 c2 = np.clip(int(255 * c2), 0, 255)
                 c3 = 255
-                fp.write("3 {0} {1} {2} {3} {4} {5} {6}\n".format(i0, i1, i2, c0, c1, c2, c3))
+                fp.write(f"3 {i0} {i1} {i2} {c0} {c1} {c2} {c3}\n")
 
     """ ---------- we don't use functions below ---------- """
 
@@ -538,7 +679,7 @@ class AstakaPeMesh:
             f_s = np.array(list(vf[i]))
             fc_s = fc[f_s]
             fn_s = fn[f_s]
-            d_s = - 1.0 * np.sum(fn_s * fc_s, axis=1, keepdims=True)
+            d_s = -1.0 * np.sum(fn_s * fc_s, axis=1, keepdims=True)
             abcd_s = np.concatenate([fn_s, d_s], axis=1)
             Q_s[i] = np.matmul(abcd_s.T, abcd_s)
 
@@ -564,8 +705,6 @@ class AstakaPeMesh:
         while np.sum(self.v_mask) > target_v:
             E_0, edge_id = heapq.heappop(E_heap)
             edge = self.edges[edge_id]
-            v_a = self.vs[edge[0]]
-            v_b = self.vs[edge[1]]
 
             if mask[edge_id]:
                 pool = self.pool_edge(edge_id, mask)
