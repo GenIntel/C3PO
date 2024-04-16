@@ -13,6 +13,10 @@ class_name: SelfSup
 categories: ${train_datasets.labeled.categories}
 
 model:
+  backbone:
+    freeze: False
+    downsample_rate: 1 # 8, 14, 16,
+    weights: 'none' # 'default' 'none'
   head:
     selfsup:
       class_name: ViT
@@ -46,10 +50,16 @@ train:
 
     epochs_to_next_test: 1
     epochs: 5
+    dataloader:
+      num_workers: 4
+      batch_size: 10
+      pin_memory: True
+
     val_fraction: 0.01
     batch_accumulate_to_next_step: 2
 
     visualize:
+      skip: True
       down_sample_rate: 4.
       count_best: 3
       count_worst: 3
@@ -71,19 +81,25 @@ train:
 
     epochs_to_next_test: 1
     epochs: 5
+    dataloader:
+      num_workers: 4
+      batch_size: 10
+      pin_memory: True
+
     val_fraction: 0.01
     batch_accumulate_to_next_step: 2
 
     visualize:
-        down_sample_rate: 4.
-        count_best: 3
-        count_worst: 3
-        count_rand: 1
-        modalities:
-          - 'gt_verts_ncds_in_rgb'
-        samples_scores: True
-        samples_sorted: True
-        live: False
+      skip: True
+      down_sample_rate: 4.
+      count_best: 3
+      count_worst: 3
+      count_rand: 1
+      modalities:
+        - 'gt_verts_ncds_in_rgb'
+      samples_scores: True
+      samples_sorted: True
+      live: False
 
 
 test:
@@ -92,8 +108,8 @@ test:
       class_name: Identity
 
   dataloader:
-      num_workers: 0
-      batch_size: 1
+      num_workers: 4
+      batch_size: 100
       pin_memory: True
 
   visualize:

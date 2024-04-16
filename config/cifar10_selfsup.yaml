@@ -1,7 +1,8 @@
 defaults:
   - logger: wandb
   - methods@method.selfsup: selfsup
-  - datasets@train_datasets.labeled: cifar10_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
+  - datasets@train_datasets.labeled: cifar10_train
+  - datasets@train_datasets.unlabeled: cifar10_train #  co3d_50s_train # co3d_50s_train, co3d_train, pascal3d_train
   - datasets@val_datasets.main: cifar10_test
   - datasets@test_datasets.cifar10: cifar10_test
   - datasets@texture_dataset: dtd
@@ -18,8 +19,12 @@ train: True
 test: True
 
 train_datasets:
+  unlabeled:
+    subset_fraction: 0.1
+    categories: ${categories}
+
   labeled:
-    #subset_fraction: 0.1
+    subset_fraction: 0.1
     categories: ${categories}
 
 val_datasets:
