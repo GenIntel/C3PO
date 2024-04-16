@@ -1156,10 +1156,6 @@ def multiple(
                     )
 
             method_cfg.run_name = run_name
-            if ablation_name is not None:
-                method_cfg.run_name = f"{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{ablation_name}_{method_cfg.platform.link}"
-            else:
-                method_cfg.run_name = f"{get_timestamp_as_string()}_{method_cfg.train_datasets.labeled.class_name}_{method_cfg.method.class_name}_{method_cfg.platform.link}"
 
         if method_cfg.platform.link == "local":
             bench_single_method_local(method_cfg)
