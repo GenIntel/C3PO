@@ -54,10 +54,8 @@ class Pascal3DFrameMeta(
         rpath_meshes,
         category=None,
     ):
-        
         if category is None:
             category = object["class"][0]
-       
 
         mesh_index = object["cad_index"][0][0] - 1
         # label = classes.index(meta.category)
