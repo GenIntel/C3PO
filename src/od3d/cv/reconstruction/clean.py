@@ -50,7 +50,7 @@ def get_pcl_clean_with_masks(
         )
     ).sum(dim=0)
     pts3d_prob = pts3d_prob / len(masks)
-    mask_pcl[mask_pcl] *= pts3d_prob[..., 0] > pts3d_prob_thresh
+    mask_pcl[mask_pcl.clone()] *= pts3d_prob[..., 0] > pts3d_prob_thresh
     pcl_clean = pcl[mask_pcl]
 
     if len(pcl_clean) < pts3d_count_min:
