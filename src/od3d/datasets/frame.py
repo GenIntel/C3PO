@@ -197,9 +197,12 @@ class OD3D_FrameMaskMixin(OD3D_MaskTypeMixin):
         torchvision.io.write_png(input=value_write, filename=str(self.fpath_mask))
         self.mask = value
 
+    def read_mask(self):
+        return read_image(self.fpath_mask) / 255.0
+
     def get_mask(self):
         if self.mask is None:
-            self.mask = read_image(self.fpath_mask) / 255.0
+            self.mask = self.read_mask()
         return self.mask
 
 
