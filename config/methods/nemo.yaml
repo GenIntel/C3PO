@@ -98,12 +98,14 @@ test:
       - 'sim_pxl'
       - 'samples'
       - 'tsne'
+      - 'tsne_per_image'
     samples_scores: True
     samples_sorted: True
     live: False
 
 
 inference:
+    render_classify: False
     only_use_rendered_inliers: False
     allow_clutter: True
     use_sigmoid: False

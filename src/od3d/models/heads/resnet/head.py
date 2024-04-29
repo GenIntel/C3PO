@@ -76,7 +76,8 @@ class ResNet(OD3D_Head):
         self.block_type: RESNET_CONV_BLOCK_TYPES = config.block_type
         self.pad_zero = config.get("pad_zero", False)
         self.pad_width = 1
-
+        #self.pca = config.pca.get("enabled", False)
+       # self.pca_dim = config.pca.get("dim", 32)
         self.in_upsampled_dim = config.get("in_upsampled_dim", self.in_dims[-1])
         assert len(self.in_upsample_scales) == len(self.in_dims) - 1
 
@@ -216,5 +217,11 @@ class ResNet(OD3D_Head):
 
         if self.normalize:
             x_res = torch.nn.functional.normalize(x_res, p=2, dim=1)
+        B, C, H, W = x_res.shape
+        # if self.pca:
+        #     x_res = x_res.permute(0, 2, 3, 1).reshape(B , H * W, C)
+        #     x_res = pca(x_res, self.pca_dim)
+        #     x_res = x_res.reshape(B, H, W, self.pca_dim).permute(0, 3, 1, 2)
+
 
         return x_res

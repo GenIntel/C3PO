@@ -35,6 +35,7 @@ def error_choices(
     )
 
     import torch
+    import tkinter as tk
 
     list_names_unique = results["name_unique"]
     list_filter = torch.ones(len(list_names_unique), dtype=torch.bool)
@@ -69,9 +70,7 @@ def error_choices(
     # dataset = OD3D_Dataset.subclasses[config_dataset.class_name].create_from_config(config=config_dataset)
 
 
-import tkinter as tk
-from tkinter import ttk
-from PIL import ImageTk, Image
+
 from typing import List
 
 
@@ -94,8 +93,11 @@ class SurveyApp:
 
         self.load_image()
         self.create_widgets()
+        
 
     def load_image(self):
+        
+        from PIL import ImageTk, Image
         image_path = self.images_root_path.joinpath(
             self.images_rfpaths[self.current_image_index],
         )
@@ -105,6 +107,8 @@ class SurveyApp:
         self.photo = ImageTk.PhotoImage(self.image)
 
     def create_widgets(self):
+        import tkinter as tk
+        from tkinter import ttk
         self.image_label = tk.Label(self.master, image=self.photo)
         self.image_label.grid(row=0, column=0, columnspan=2, padx=10, pady=10)
 
