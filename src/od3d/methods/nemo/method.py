@@ -914,35 +914,41 @@ class NeMo(OD3D_Method):
                 out_shape = (
                     feats2d_net.shape[:1] + torch.Size([1]) + feats2d_net.shape[2:]
                 )
-                
-            
+
                 if self.config.inference.get("render_classify", False):
-                    sim = self.get_sim_feats2d_net_with_cams(feats2d_net=feats2d_net,
-                                                                  feats2d_net_mask=feats2d_net_mask,
-                                                                  cam_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                                  cam_intr4x4=batch.cam_intr4x4,
-                                                                  categories_ids=torch.LongTensor([mesh_id,]*B).to(device=batch.cam_tform4x4_obj.device),
-                                                                  return_sim_pxl=False,
-                                                                  broadcast_batch_and_cams=False,
-                                                                  pre_rendered=False,
-                                                                  only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                                                                  allow_clutter=self.config.inference.allow_clutter,
-                                                                  use_sigmoid=self.config.inference.use_sigmoid)
+                    sim = self.get_sim_feats2d_net_with_cams(
+                        feats2d_net=feats2d_net,
+                        feats2d_net_mask=feats2d_net_mask,
+                        cam_tform4x4_obj=batch.cam_tform4x4_obj,
+                        cam_intr4x4=batch.cam_intr4x4,
+                        categories_ids=torch.LongTensor([mesh_id] * B).to(
+                            device=batch.cam_tform4x4_obj.device
+                        ),
+                        return_sim_pxl=False,
+                        broadcast_batch_and_cams=False,
+                        pre_rendered=False,
+                        only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
+                        allow_clutter=self.config.inference.allow_clutter,
+                        use_sigmoid=self.config.inference.use_sigmoid,
+                    )
                     mesh_score = sim.squeeze(1)
                 else:
                     inner_feats2d_net_bank_vts_max_vals = (
-                    self.calc_sim("bchw,kc->bkhw", feats2d_net, bank_feats)
-                    .max(
-                        dim=1,
-                        keepdim=True,
+                        self.calc_sim("bchw,kc->bkhw", feats2d_net, bank_feats)
+                        .max(
+                            dim=1,
+                            keepdim=True,
+                        )
+                        .values
                     )
-                    .values)
-                    mesh_score = inner_feats2d_net_bank_vts_max_vals.flatten(1).mean(dim=1)
-                    
+                    mesh_score = inner_feats2d_net_bank_vts_max_vals.flatten(1).mean(
+                        dim=1
+                    )
+
                 # inner_feats2d_net_bank_vts_max_vals, inner_feats2d_net_bank_vts_max_ids = inner_feats2d.max(dim=1)
                 # show_img(self.meshes.get_verts_with_mesh_id[mesh_id][inner_feats2d_net_bank_vts_max_ids[0, 0]].permute(2, 0, 1), normalize=True)
                 # show_img(inner_feats2d_net_bank_vts_max_vals[0])
-                
+
                 # clutter_score = inner_feats2d[:, -clutter_feats.shape[0]:].mean(dim=1).flatten(1).mean(dim=1)
                 # mesh_score -= clutter_score
                 meshes_scores.append(mesh_score)
@@ -1437,15 +1443,22 @@ class NeMo(OD3D_Method):
             # feats2d_net = resize(feats2d_net,
             #                     scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
             feats2d_net_mask = torch.ones(
-                size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3]),
+                size=(
+                    feats2d_net.shape[0],
+                    1,
+                    feats2d_net.shape[2],
+                    feats2d_net.shape[3],
+                ),
             ).to(device=self.device)
-            feats2d_net = (feats2d_net.detach() / feats2d_net.detach().norm(dim=1, keepdim=True))
-            
+            feats2d_net = feats2d_net.detach() / feats2d_net.detach().norm(
+                dim=1, keepdim=True
+            )
+
             feats2d_net_mask = 1.0 * resize(
-                    batch.rgb_mask,
-                    H_out=feats2d_net.shape[2],
-                    W_out=feats2d_net.shape[3],
-                )
+                batch.rgb_mask,
+                H_out=feats2d_net.shape[2],
+                W_out=feats2d_net.shape[3],
+            )
             feats2d_net_mask = feats2d_net_mask * self.meshes.render_feats(
                 cams_intr4x4=batch.cam_intr4x4,
                 cams_tform4x4_obj=batch.cam_tform4x4_obj,
@@ -1454,7 +1467,7 @@ class NeMo(OD3D_Method):
                 down_sample_rate=self.down_sample_rate,
                 modality=MESH_RENDER_MODALITIES.MASK,
             )
-            
+
             H, W = feats2d_net.shape[-2:]
             xy = torch.stack(
                 torch.meshgrid(
@@ -1479,12 +1492,12 @@ class NeMo(OD3D_Method):
             #     prob_noise_pxls[b] = draw_pixels(prob_noise_pxls[b], noise2d[b])
             # show_imgs(prob_noise_pxls)
             vts2d, vts2d_mask = self.meshes.verts2d(
-            cams_intr4x4=batch.cam_intr4x4,
-            cams_tform4x4_obj=batch.cam_tform4x4_obj,
-            imgs_sizes=batch.size,
-            mesh_ids=batch.category_id,
-            down_sample_rate=self.down_sample_rate,
-        )
+                cams_intr4x4=batch.cam_intr4x4,
+                cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                imgs_sizes=batch.size,
+                mesh_ids=batch.category_id,
+                down_sample_rate=self.down_sample_rate,
+            )
             N = vts2d.shape[1]
             vts2d_feats2d_net_mask = sample_pxl2d_pts(
                 feats2d_net_mask,
@@ -1769,26 +1782,35 @@ class NeMo(OD3D_Method):
             if VISUAL_MODALITIES.TSNE_PER_IMAGE in modalities:
                 logger.info("create tsne plots for the mesh and image features...")
                 from od3d.cv.cluster.embed import tsne
-                #normalize feats2d_net
-                
-                #fg_feats = torch.masked_select(feats2d_net, feats2d_net_mask >= 0.5).view(feats2d_net.shape[0],feats2d_net.shape[1],-1).permute(0,2,1)
+
+                # normalize feats2d_net
+
+                # fg_feats = torch.masked_select(feats2d_net, feats2d_net_mask >= 0.5).view(feats2d_net.shape[0],feats2d_net.shape[1],-1).permute(0,2,1)
                 color_ = plt.get_cmap("tab20", len(self.meshes))
-                
-                #bg_feats = torch.masked_select(feats2d_net, feats2d_net_mask < 0.5).view(feats2d_net.shape[0],feats2d_net.shape[1],-1).permute(0,2,1)
-                
+
+                # bg_feats = torch.masked_select(feats2d_net, feats2d_net_mask < 0.5).view(feats2d_net.shape[0],feats2d_net.shape[1],-1).permute(0,2,1)
+
                 for b in range(len(batch)):
                     mesh_and_image_feats_colors = self.feats_all_colors.copy()
                     mesh_and_image_feats_length = [self.meshes.feats.shape[0]]
                     fg_feats = net_feats[b, :N][vts2d_mask[b]]
                     bg_feats = net_feats[b, N:].reshape(-1, C)
                     print(fg_feats.shape, bg_feats.shape)
-                    mesh_and_image_feats_colors.extend([color_(batch.category_id[b].cpu().numpy())]* fg_feats.shape[0])
-                    mesh_and_image_feats_colors.extend([(0,0,0,1)]* bg_feats.shape[0])
-                    mesh_and_image_feats_length.extend([fg_feats.shape[0], bg_feats.shape[0]])
-                    feats_tsne_all = tsne(torch.cat([self.meshes.feats, fg_feats,bg_feats], dim=0), C=2)
+                    mesh_and_image_feats_colors.extend(
+                        [color_(batch.category_id[b].cpu().numpy())] * fg_feats.shape[0]
+                    )
+                    mesh_and_image_feats_colors.extend(
+                        [(0, 0, 0, 1)] * bg_feats.shape[0]
+                    )
+                    mesh_and_image_feats_length.extend(
+                        [fg_feats.shape[0], bg_feats.shape[0]]
+                    )
+                    feats_tsne_all = tsne(
+                        torch.cat([self.meshes.feats, fg_feats, bg_feats], dim=0), C=2
+                    )
                     print(len(mesh_and_image_feats_colors))
                     print(mesh_and_image_feats_length)
-                    
+
                     img = show_scene2d(
                         [feats_tsne_all],
                         pts2d_colors=[mesh_and_image_feats_colors],
@@ -1796,7 +1818,9 @@ class NeMo(OD3D_Method):
                         return_visualization=True,
                     )
 
-                    results_batch_visual[f"visual/{VISUAL_MODALITIES.TSNE_PER_IMAGE}/{batch_sel_names[b]}"] = image_as_wandb_image(
+                    results_batch_visual[
+                        f"visual/{VISUAL_MODALITIES.TSNE_PER_IMAGE}/{batch_sel_names[b]}"
+                    ] = image_as_wandb_image(
                         img,
                         caption=f"{batch_sel_names[b]}, {batch_names[b]}, {batch_sel_scores[b]}",
                     )

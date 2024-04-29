@@ -18,4 +18,3 @@ head:
   fully_connected:
     out_dim: # None means that there is no linear layer
   normalize: True
- 

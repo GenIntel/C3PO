@@ -179,7 +179,14 @@ def draw_pixels(img, pxls, colors=None, radius_in=3, radius_out=5):
     return img
 
 
-def get_colors(K, device=None, last_white=False, last_white_grey=False, K_rel=None, color_map = cv2.COLORMAP_JET):
+def get_colors(
+    K,
+    device=None,
+    last_white=False,
+    last_white_grey=False,
+    K_rel=None,
+    color_map=cv2.COLORMAP_JET,
+):
     if last_white_grey:
         K = K - 2
         color_grey = 0.7 * torch.ones(size=(1, 3))
