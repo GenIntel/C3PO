@@ -22,6 +22,10 @@ import PIL
 import open3d as o3d
 import numpy as np
 from od3d.cv.geometry.transform import tform4x4
+from od3d.cv.geometry.transform import (
+    get_cam_tform4x4_obj_for_viewpoints_count,
+)
+from od3d.io import is_fpath_video
 
 DEFAULT_CAM_TFORM_OBJ = torch.Tensor(
     [
@@ -524,6 +528,7 @@ def show_scene(
                 and pts3d_colors[i] is not None
             ):
                 pts3d_i_color = pts3d_colors[i]
+                print('if pts3d_i_color ', pts3d_i_color.size())
             else:
                 pts3d_i_color = get_colors(len(pts3d))[i]
 
@@ -694,7 +699,7 @@ def show_scene(
         if renderer == OD3D_RENDERER.OPEN3D and os.environ.get("DISPLAY"):
             cams_new_tform4x4_obj[:, 2, 3] /= viewpoint_init_dist
             vis = o3d.visualization.Visualizer()
-            vis.create_window(visible=False, height=H, width=W)
+            vis.create_window(height=H, width=W)
             opt = vis.get_render_option()
             opt.point_size = pts3d_size
             opt.mesh_show_back_face = False
@@ -730,6 +735,7 @@ def show_scene(
             vis.poll_events()
             vis.update_renderer()
             # view_control = vis.get_view_control()
+
 
             # open3d version 0.17.0 bug, view control does not work
             # camera_orig = view_control.convert_to_pinhole_camera_parameters()
@@ -793,6 +799,7 @@ def show_scene(
 
             vis.update_renderer()
             vis.destroy_window()
+
 
         elif renderer == OD3D_RENDERER.PYTORCH3D:
             from od3d.cv.geometry.fit.depth_from_mesh_and_box import (
@@ -882,10 +889,177 @@ def show_scene(
             logger.warning(
                 "could not visualize with open3d, most likely env DISPLAY not set, try `export DISPLAY=:0.0;` (maybe without ;)",
             )
+            from od3d.cv.render.gaussians_splats_v2 import render_gaussians_without_mask
 
-            return [
-                torch.zeros(size=(3, 480, 640)).to(device=device),
-            ] * viewpoints_count
+            geometries_vertices_orig = []
+            color_vertices = []
+            for geometry in geometries:
+                #vis.add_geometry(geometry["geometry"])
+                if isinstance(geometry["geometry"], open3d.geometry.PointCloud):
+                    print('It is point cloud')
+                    geometries_vertices_orig.append(
+                        torch.from_numpy(np.asarray(geometry["geometry"].points))
+                        .clone()
+                        .to(device=device, dtype=dtype),
+                    )
+                    color_vertices.append(   
+                        torch.from_numpy(np.asarray(geometry["geometry"].colors))
+                        .clone()
+                        .to(device=device, dtype=dtype),
+                    )
+                elif isinstance(geometry["geometry"], open3d.geometry.TriangleMesh):
+                    print('It is triangle mesh')
+                    geometries_vertices_orig.append(
+                        torch.from_numpy(np.asarray(geometry["geometry"].vertices))
+                        .clone()
+                        .to(device=device, dtype=dtype),
+                    )
+                    color_vertices.append(   
+                        torch.from_numpy(np.asarray(geometry["geometry"].vertex_colors))
+                        .clone()
+                        .to(device=device, dtype=dtype),
+                    )
+                elif isinstance(geometry["geometry"], open3d.geometry.LineSet):
+                    print('It is line set')
+                    geometries_vertices_orig.append(
+                        torch.from_numpy(np.asarray(geometry["geometry"].points))
+                        .clone()
+                        .to(device=device, dtype=dtype),
+                    )
+                    color_vertices.append(   
+                        torch.from_numpy(np.asarray(geometry["geometry"].colors))
+                        .clone()
+                        .to(device=device, dtype=dtype),
+                    )
+                else:
+                    geometries_vertices_orig.append(None)
+                    
+                # vis.update_geometry(geometry['geometry'])
+ 
+            if return_visualization or fpath is not None:
+                imgs = []
+                cams_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(
+                    viewpoints_count=viewpoints_count,
+                    dist=0.0,
+                    # spiral=is_fpath_video(fpath),
+                    spiral= False,
+                ).to(dtype=dtype, device=device)
+                # open3d version 0.17.0 bug, view control does not work
+                # camera_orig = view_control.convert_to_pinhole_camera_parameters()
+                # cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
+                from tqdm import tqdm
+
+                for v in tqdm(range(viewpoints_count)):
+                    # camera_orig.extrinsic = tform4x4_broadcast(cam_tform4x4_obj,
+                    #                                           objs_new_tform4x4_obj[v]).detach().cpu().numpy()
+                    # view_control.convert_from_pinhole_camera_parameters(camera_orig)
+
+                    # for g, geometry in enumerate(geometries):
+                    #     if geometries_vertices_orig[g] is not None:
+                    #         vertices = geometries_vertices_orig[
+                    #             g
+                    #         ]  # .to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
+                    #         vertices = transf3d_broadcast(
+                    #             pts3d=vertices,
+                    #             transf4x4=tform4x4(
+                    #                 OBJ_TFORM_OPEN3D_DEFAULT_CAM.to(
+                    #                     dtype=dtype,
+                    #                     device=device,
+                    #                 ),
+                    #                 cams_new_tform4x4_obj[v],
+                    #             ),
+                    #         )
+
+                    #         if isinstance(
+                    #             geometry["geometry"],
+                    #             open3d.geometry.PointCloud,
+                    #         ):
+                    #             geometry[
+                    #                 "geometry"
+                    #             ].points = open3d.utility.Vector3dVector(
+                    #                 vertices.detach().cpu().numpy(),
+                    #             )
+                    #         elif isinstance(
+                    #             geometry["geometry"],
+                    #             open3d.geometry.TriangleMesh,
+                    #         ):
+                    #             geometry[
+                    #                 "geometry"
+                    #             ].vertices = open3d.utility.Vector3dVector(
+                    #                 vertices.detach().cpu().numpy(),
+                    #             )
+                    #         elif isinstance(
+                    #             geometry["geometry"],
+                    #             open3d.geometry.LineSet,
+                    #         ):
+                    #             geometry[
+                    #                 "geometry"
+                    #             ].points = open3d.utility.Vector3dVector(
+                    #                 vertices.detach().cpu().numpy(),
+                    #             )
+                    #         vis.update_geometry(geometry["geometry"])
+
+                    
+                    imgs = render_gaussians_without_mask(torch.stack(cams_tform4x4_world, axis = 0), 
+                                                  torch.stack(cams_intr4x4, axis = 0), 
+                                                  (H,W),  
+                                                  torch.stack(geometries_vertices_orig[:5], dim = 0),
+                                                  torch.stack(color_vertices[:5], dim=0)
+                                                  )
+                    
+                    
+                    # vis.update_renderer()
+                    # img = vis.capture_screen_float_buffer(do_render=True)
+                    # img = torch.from_numpy(np.array(img)).permute(2, 0, 1)
+                    # if crop_white_border:
+                    #     from od3d.cv.visual.crop import crop_white_border_from_img
+
+                    #     img = crop_white_border_from_img(img, resize_to_orig=True)
+                    # imgs.append(img)
+
+                # if viewpoints_count == 1:
+                #     imgs = imgs[0]
+                # else:
+                #     if viewpoints_count > 4 and not is_fpath_video(fpath):
+                #         viewpoints_count_sqrt = math.ceil(math.sqrt(viewpoints_count))
+                #         imgs_placeholder = torch.zeros(
+                #             size=(viewpoints_count_sqrt**2, 3, H, W),
+                #             dtype=dtype,
+                #             device=device,
+                #         )
+                #         imgs_placeholder[:viewpoints_count] = torch.stack(imgs, dim=0)
+                #         imgs = imgs_placeholder
+                #         imgs = imgs.reshape(
+                #             viewpoints_count_sqrt,
+                #             viewpoints_count_sqrt,
+                #             3,
+                #             H,
+                #             W,
+                #         )
+
+                #         logger.info(imgs.shape)
+                #     else:
+                #         imgs = torch.stack(imgs, dim=0)
+                print('fpath is ', fpath)
+                print('return visualization ', return_visualization)
+                if fpath is not None:
+                    if is_fpath_video(fpath):
+                        from od3d.cv.visual.video import save_video
+
+                        save_video(imgs=imgs, fpath=fpath, fps=fps)
+                    else:
+                        show_imgs(rgbs=imgs, fpath=fpath, pad=0)
+
+                if return_visualization:
+                    return imgs
+                else:
+                    return 0
+
+            
+            # print('render_gaussians_without_mask size ', render_gaussians_without_mask.size())
+            # return [
+            #     torch.zeros(size=(3, 480, 640)).to(device=device),
+            # ] * viewpoints_count
 
         if viewpoints_count == 1:
             imgs = imgs[0]
