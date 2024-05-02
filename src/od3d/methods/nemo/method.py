@@ -922,7 +922,7 @@ class NeMo(OD3D_Method):
                         cam_tform4x4_obj=batch.cam_tform4x4_obj,
                         cam_intr4x4=batch.cam_intr4x4,
                         categories_ids=torch.LongTensor([mesh_id] * B).to(
-                            device=batch.cam_tform4x4_obj.device
+                            device=batch.cam_tform4x4_obj.device,
                         ),
                         return_sim_pxl=False,
                         broadcast_batch_and_cams=False,
@@ -942,7 +942,7 @@ class NeMo(OD3D_Method):
                         .values
                     )
                     mesh_score = inner_feats2d_net_bank_vts_max_vals.flatten(1).mean(
-                        dim=1
+                        dim=1,
                     )
 
                 # inner_feats2d_net_bank_vts_max_vals, inner_feats2d_net_bank_vts_max_ids = inner_feats2d.max(dim=1)
@@ -1451,7 +1451,8 @@ class NeMo(OD3D_Method):
                 ),
             ).to(device=self.device)
             feats2d_net = feats2d_net.detach() / feats2d_net.detach().norm(
-                dim=1, keepdim=True
+                dim=1,
+                keepdim=True,
             )
 
             feats2d_net_mask = 1.0 * resize(
@@ -1797,16 +1798,18 @@ class NeMo(OD3D_Method):
                     bg_feats = net_feats[b, N:].reshape(-1, C)
                     print(fg_feats.shape, bg_feats.shape)
                     mesh_and_image_feats_colors.extend(
-                        [color_(batch.category_id[b].cpu().numpy())] * fg_feats.shape[0]
+                        [color_(batch.category_id[b].cpu().numpy())]
+                        * fg_feats.shape[0],
                     )
                     mesh_and_image_feats_colors.extend(
-                        [(0, 0, 0, 1)] * bg_feats.shape[0]
+                        [(0, 0, 0, 1)] * bg_feats.shape[0],
                     )
                     mesh_and_image_feats_length.extend(
-                        [fg_feats.shape[0], bg_feats.shape[0]]
+                        [fg_feats.shape[0], bg_feats.shape[0]],
                     )
                     feats_tsne_all = tsne(
-                        torch.cat([self.meshes.feats, fg_feats, bg_feats], dim=0), C=2
+                        torch.cat([self.meshes.feats, fg_feats, bg_feats], dim=0),
+                        C=2,
                     )
                     print(len(mesh_and_image_feats_colors))
                     print(mesh_and_image_feats_length)
