@@ -21,6 +21,8 @@ import importlib
 
 
 def is_fpath_video(fpath: Path):
+    if fpath is None:
+        return False
     return fpath.suffix in [".mp4", ".avi", ".mov", ".mkv", ".webm"]
 
 
