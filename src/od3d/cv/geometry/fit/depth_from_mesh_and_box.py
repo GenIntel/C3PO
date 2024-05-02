@@ -3,6 +3,119 @@ import logging
 logger = logging.getLogger(__name__)
 import torch
 from od3d.cv.geometry.grid import get_pxl2d
+from od3d.cv.geometry.transform import proj3d2d_broadcast, tform4x4_broadcast
+
+def get_scale_bbox_pts3d_to_image(cam_intr4x4, cam_tform4x4_obj, pts3d, img_width, img_height, pts3d_mask=None):
+    """
+    Args:
+        cam_intr4x4 (torch.Tensor): ...x4x4
+        cam_tform4x4_obj (torch.Tensor): ...x4x4
+        pts3d (torch.Tensor): ...xNx3
+        pts3d_mask (torch.Tensor): ...xN
+        img_width (int)
+        img_height (int)
+        cx (float)
+        cy (float)
+    Returns:
+        scale (torch.Tensor): ...x4, [scale_x_min, scale_y_min, scale_x_max, scale_y_max]
+    """
+
+    pts3d_bbox = get_bbox_from_mask_pts3d(cam_intr4x4, cam_tform4x4_obj, pts3d, pts3d_mask)
+    img_bbox = get_bbox_from_width_and_height(width=img_width, height=img_height, device=pts3d.device,
+                                              dtype=pts3d.dtype)
+    cx = cam_intr4x4[..., 0, 2]
+    cy = cam_intr4x4[..., 1, 2]
+
+    scale = get_scale_bbox_A_relative_to_B(bboxA=pts3d_bbox, bboxB=img_bbox, cx=cx, cy=cy)
+    return scale
+
+def get_bbox_from_mask_pts3d(cam_intr4x4, cam_tform4x4_obj, pts3d, pts3d_mask=None):
+    """
+    Args:
+        cam_intr4x4 (torch.Tensor): ...x4x4
+        cam_tform4x4_obj (torch.Tensor): ...x4x4
+        pts3d (torch.Tensor): ...xNx3
+        pts3d_mask (torch.Tensor): ...xN
+    Returns:
+        bbox (torch.Tensor): ...x4, [x0, y0, x1, y1]
+    """
+
+    cam_proj4x4 = tform4x4_broadcast(cam_intr4x4, cam_tform4x4_obj)
+    pxl2d = proj3d2d_broadcast(proj4x4=cam_proj4x4, pts3d=pts3d)
+
+    bbox = get_bbox_from_pxl2d(pxl2d_mask=pts3d_mask, pxl2d=pxl2d)
+    return bbox
+
+def get_bbox_from_width_and_height(width, height, device=None, dtype=None):
+    """
+    Args:
+        width (int): ...
+        height (int): ...
+    Returns:
+        bbox (torch.Tensor): ...x4, [x0, y0, x1, y1]
+    """
+    x0 = torch.Tensor([0.])
+    x1 = torch.Tensor([width])
+    y0 = torch.Tensor([0.])
+    y1 = torch.Tensor([height])
+    bbox = torch.stack([x0, y0, x1, y1], dim=-1)
+    if device is not None:
+        bbox = bbox.to(device=device)
+    if dtype is not None:
+        bbox = bbox.to(dtype=dtype)
+    return bbox
+def get_bbox_from_pxl2d(pxl2d_mask=None, pxl2d=None):
+    """
+        Args:
+            pxl2d (torch.Tensor): ...x2
+            pxl2d_mask (torch.Tensor): BxCxV, BxCxHxW
+        Returns:
+            bbox (torch.Tensor): BxCx4, [x0, y0, x1, y1]
+    """
+    if pxl2d is None:
+        device = pxl2d_mask.device
+        dtype = pxl2d_mask.dtype
+        H, W = pxl2d_mask.shape[-2:]
+        pxl2d = get_pxl2d(H=H, W=W, device=device, dtype=dtype) # HxWx2
+        pxl2d = pxl2d[(None,)* (pxl2d_mask.dim() - 2)].expand(pxl2d_mask.shape[:-2] + pxl2d.shape[-2:]) # ...xHxWx2
+    else:
+        pxl2d = pxl2d.clone()
+
+    if pxl2d_mask is None:
+        pxl2d_mask = torch.full_like(pxl2d[..., 0], True, dtype=torch.bool)
+
+    # get maximum
+    pxl2d[~pxl2d_mask] = float("-inf")
+    x_max = pxl2d[..., 0].max(dim=-1).values
+    y_max = pxl2d[..., 1].max(dim=-1).values
+
+    # get minimum
+    pxl2d[~pxl2d_mask] = float("+inf")
+    x_min = pxl2d[..., 0].min(dim=-1).values
+    y_min = pxl2d[..., 1].min(dim=-1).values
+
+    bbox = torch.stack([x_min, y_min, x_max, y_max], dim=-1)
+
+    return bbox
+
+def get_scale_bbox_A_relative_to_B(bboxA, bboxB, cx, cy, eps=1e-8):
+    """
+    Args:
+        bboxA (torch.Tensor): ...x4, [x0, y0, x1, y1]
+        bboxB (torch.Tensor): ...x4, [x0, y0, x1, y1]
+        cx (torch.Tensor): ...
+        cy (torch.Tensor): ...
+    Returns:
+        scale (torch.Tensor): ...x4, [scale_x_min, scale_y_min, scale_x_max, scale_y_max]
+    """
+    device = bboxA.device
+    scale_x_min = (bboxA[..., 0] - cx) / (bboxB[..., 0] - cx) if (bboxB[..., 0] - cx).abs() > eps else torch.full_like(bboxA[..., 0], float("+inf")).to(device=device)
+    scale_x_max = (bboxA[..., 2] - cx) / (bboxB[..., 2] - cx) if (bboxB[..., 2] - cx).abs() > eps else torch.full_like(bboxA[..., 2], float("+inf")).to(device=device)
+    scale_y_min = (bboxA[..., 1] - cy) / (bboxB[..., 1] - cy) if (bboxB[..., 1] - cy).abs() > eps else torch.full_like(bboxA[..., 1], float("+inf")).to(device=device)
+    scale_y_max = (bboxA[..., 3] - cy) / (bboxB[..., 3] - cy) if (bboxB[..., 3] - cy).abs() > eps else torch.full_like(bboxA[..., 3], float("+inf")).to(device=device)
+
+    scale = torch.stack([scale_x_min, scale_y_min, scale_x_max, scale_y_max], dim=-1)
+    return scale
 
 
 def depth_from_mesh_and_box(

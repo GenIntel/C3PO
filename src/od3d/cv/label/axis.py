@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 import open3d
 import torch
 from typing import Union, List
-from od3d.cv.visual.show import get_o3d_geometries_for_cams
+from od3d.cv.visual.show import get_engine_geometries_for_cams
 from od3d.cv.geometry.downsample import random_sampling
 
 
@@ -108,7 +108,7 @@ def label_axis_in_pcl(
     else:
         pts3d_selectable = pts3d
 
-    for geometry_dict in get_o3d_geometries_for_cams(
+    for geometry_dict in get_engine_geometries_for_cams(
         cams_tform4x4_world=cams_tform4x4_world,
         cams_intr4x4=cams_intr4x4,
         cams_imgs=cams_imgs,

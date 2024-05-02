@@ -9,3 +9,4 @@ path_datasets_preprocess: /misc/lmbraid19/sommerl/datasets # for student: /misc/
 path_exps: /misc/lmbraid19/sommerl/exps
 path_cudas: /scratch/sommerl/cudas # # should be cuda-11.7
 url_od3d: git@github.com:Generative-Vision-Robust-Learning/od3d.git
+renderer: open3d

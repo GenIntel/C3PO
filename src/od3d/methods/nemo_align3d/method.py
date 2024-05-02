@@ -799,6 +799,7 @@ class NeMo_Align3D(OD3D_Method):
                     device=self.device,
                     meshes_add_translation=True,
                     pts3d_add_translation=True,
+                    renderer=self.config.renderer,
                 )
 
                 from od3d.cv.visual.draw import add_boolean_table

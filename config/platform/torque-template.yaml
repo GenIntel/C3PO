@@ -19,3 +19,4 @@ cpu_count: 8
 ram: "20gb"
 walltime: "24:00:00"
 hostlist: #  "^shuri" "^chip+chap+trixi", note: gpu_mem_in_gb should be None in this case
+renderer: pytorch3d
