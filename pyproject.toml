@@ -53,6 +53,7 @@ dependencies = [
     "segment-anything@git+https://github.com/facebookresearch/segment-anything.git",
     "pytorch3d@git+https://github.com/facebookresearch/pytorch3d@stable",
     "CGAL",
+    "kaleido",
 ]
 
 [project.optional-dependencies]
