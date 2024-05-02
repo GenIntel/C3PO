@@ -7,7 +7,12 @@ from od3d.cv.geometry.transform import proj3d2d_broadcast, tform4x4_broadcast
 
 
 def get_scale_bbox_pts3d_to_image(
-    cam_intr4x4, cam_tform4x4_obj, pts3d, img_width, img_height, pts3d_mask=None
+    cam_intr4x4,
+    cam_tform4x4_obj,
+    pts3d,
+    img_width,
+    img_height,
+    pts3d_mask=None,
 ):
     """
     Args:
@@ -24,7 +29,10 @@ def get_scale_bbox_pts3d_to_image(
     """
 
     pts3d_bbox = get_bbox_from_mask_pts3d(
-        cam_intr4x4, cam_tform4x4_obj, pts3d, pts3d_mask
+        cam_intr4x4,
+        cam_tform4x4_obj,
+        pts3d,
+        pts3d_mask,
     )
     img_bbox = get_bbox_from_width_and_height(
         width=img_width,
@@ -36,7 +44,10 @@ def get_scale_bbox_pts3d_to_image(
     cy = cam_intr4x4[..., 1, 2]
 
     scale = get_scale_bbox_A_relative_to_B(
-        bboxA=pts3d_bbox, bboxB=img_bbox, cx=cx, cy=cy
+        bboxA=pts3d_bbox,
+        bboxB=img_bbox,
+        cx=cx,
+        cy=cy,
     )
     return scale
 
@@ -93,7 +104,7 @@ def get_bbox_from_pxl2d(pxl2d_mask=None, pxl2d=None):
         H, W = pxl2d_mask.shape[-2:]
         pxl2d = get_pxl2d(H=H, W=W, device=device, dtype=dtype)  # HxWx2
         pxl2d = pxl2d[(None,) * (pxl2d_mask.dim() - 2)].expand(
-            pxl2d_mask.shape[:-2] + pxl2d.shape[-2:]
+            pxl2d_mask.shape[:-2] + pxl2d.shape[-2:],
         )  # ...xHxWx2
     else:
         pxl2d = pxl2d.clone()

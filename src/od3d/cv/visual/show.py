@@ -363,10 +363,10 @@ def show_scene(
             if renderer == OD3D_RENDERER.OPEN3D:
                 mesh_engine = open3d.geometry.TriangleMesh(
                     vertices=open3d.utility.Vector3dVector(
-                        vertices.detach().cpu().numpy()
+                        vertices.detach().cpu().numpy(),
                     ),
                     triangles=open3d.utility.Vector3iVector(
-                        faces.detach().cpu().numpy()
+                        faces.detach().cpu().numpy(),
                     ),
                 )
 
@@ -384,20 +384,20 @@ def show_scene(
                 # mat_box.absorption_distance = 10
                 # mat_box.absorption_color = [0.5, 0.5, 0.5]
                 vertex_colors = open3d.utility.Vector3dVector(
-                    mesh_rgb.detach().cpu().numpy()
+                    mesh_rgb.detach().cpu().numpy(),
                 )
                 mesh_engine.vertex_colors = vertex_colors
                 # mesh_engine.paint_uniform_color([0., 0., 0.])
                 if meshes_as_wireframe:
                     mesh_engine = o3d.geometry.LineSet.create_from_triangle_mesh(
-                        mesh_engine
+                        mesh_engine,
                     )
 
             elif renderer == OD3D_RENDERER.PYTORCH3D:
                 from pytorch3d.renderer import TexturesVertex as PT3D_TexturesVertex
 
                 textures = PT3D_TexturesVertex(
-                    verts_features=mesh_rgb.to(device)[None,]
+                    verts_features=mesh_rgb.to(device)[None,],
                 )
                 mesh_engine = PT3D_Meshes(
                     verts=[vertices.to(device=device)],
@@ -539,7 +539,9 @@ def show_scene(
                     [pts3d_normals[i]] if pts3d_normals is not None else None
                 )
                 pts3d_engine = PT3D_Pointclouds(
-                    points=[_pts3d_i], normals=_pts3d_i_normals, features=[_pts3d_i_rgb]
+                    points=[_pts3d_i],
+                    normals=_pts3d_i_normals,
+                    features=[_pts3d_i_rgb],
                 )
             else:
                 raise NotImplementedError
@@ -576,10 +578,14 @@ def show_scene(
                 # open3d.visualization.draw_geometries( [geometry['geometry'] for geometry in geometries])
             elif renderer == OD3D_RENDERER.PYTORCH3D:
                 cam_tform4x4_obj = DEFAULT_CAM_TFORM_OBJ.clone().to(
-                    dtype=dtype, device=device
+                    dtype=dtype,
+                    device=device,
                 )
                 cam_intr4x4 = get_default_camera_intrinsics_from_img_size(
-                    H=H, W=W, dtype=dtype, device=device
+                    H=H,
+                    W=W,
+                    dtype=dtype,
+                    device=device,
                 )
                 img_size = torch.Tensor([H, W]).to(dtype=dtype, device=device)
 
@@ -752,7 +758,10 @@ def show_scene(
                     logger.info(f'geometry not supported {type(geometry["geometry"])}')
             pts3d = torch.cat(pts3d, dim=0)
             cam_intr4x4 = get_default_camera_intrinsics_from_img_size(
-                H=H, W=W, dtype=dtype, device=device
+                H=H,
+                W=W,
+                dtype=dtype,
+                device=device,
             )
 
             scale = get_scale_bbox_pts3d_to_image(
@@ -808,7 +817,7 @@ def show_scene(
 
                 for a in range(len(fig.layout.annotations)):
                     fig.layout.annotations[a].update(
-                        text=""
+                        text="",
                     )  # a=1, remove text from subplot
                 img = plotly_fig_2_tensor(fig, width=W, height=H)
                 if crop_white_border:
@@ -956,7 +965,12 @@ def get_engine_geometries_for_cams(
                     )
 
                     intrinsic = open3d.camera.PinholeCameraIntrinsic(
-                        w, h, fx, fy, cx, cy
+                        w,
+                        h,
+                        fx,
+                        fy,
+                        cx,
+                        cy,
                     )
                     intrinsic.intrinsic_matrix = [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
                     cam = open3d.camera.PinholeCameraParameters()
@@ -995,7 +1009,8 @@ def get_engine_geometries_for_cams(
                     )
                     pts3d_i = (
                         depth2pts3d_grid(
-                            depth, cam_intr4x4_res.to(device=device, dtype=dtype)
+                            depth,
+                            cam_intr4x4_res.to(device=device, dtype=dtype),
                         )
                         .flatten(1)
                         .permute(1, 0)
@@ -1003,7 +1018,7 @@ def get_engine_geometries_for_cams(
                     pts3d_i = transf3d_broadcast(
                         pts3d_i,
                         inv_tform4x4(
-                            cams_tform4x4_world[i].to(device=device, dtype=dtype)
+                            cams_tform4x4_world[i].to(device=device, dtype=dtype),
                         ),
                     )
                     pts3d_i_rgb = (
@@ -1014,7 +1029,8 @@ def get_engine_geometries_for_cams(
                     # pts3d_i =  torch.from_numpy(np.asarray(pts3d_engine.points)).to(device=device, dtype=dtype)
                     # pts3d_i_rgb = torch.from_numpy(np.asarray(pts3d_engine.colors)).to(device=device, dtype=dtype)
                     pts3d_engine = PT3D_Pointclouds(
-                        points=[pts3d_i], features=[pts3d_i_rgb]
+                        points=[pts3d_i],
+                        features=[pts3d_i_rgb],
                     )
 
                     if cams_show_wireframe:
@@ -1032,7 +1048,7 @@ def get_engine_geometries_for_cams(
 
                 if cams_show_wireframe:
                     geometries.append(
-                        {"name": cam_name, "geometry": cam_wireframe_engine}
+                        {"name": cam_name, "geometry": cam_wireframe_engine},
                     )
 
                 geometries.append(
