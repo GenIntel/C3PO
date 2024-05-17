@@ -1144,6 +1144,8 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         H=1080,
         W=1980,
         ref_count=1,
+        show_mesh=True,
+        show_encoder=False,
     ):
         sequences = self.get_sequences()
         from od3d.cv.visual.resize import resize
@@ -1189,12 +1191,13 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                 cams_tform4x4_world=category_cams_tform4x4_world,
                 cams_intr4x4=category_cams_intr4x4,
                 cams_imgs=category_cams_imgs,
-                meshes=[category_mesh],
+                meshes=[category_mesh] if show_mesh else None,
                 viewpoints_count=viewpoints_count,
                 fpath=Path(f"{category}_frames.webm"),
                 H=H,
                 W=W,
                 pts3d_size=1.0,
+                cams_show_image_encoder=show_encoder,
             )
 
             # show_scene(cams_tform4x4_world=category_cams_tform4x4_world, cams_intr4x4=category_cams_intr4x4,

@@ -2,6 +2,8 @@ import logging
 import time
 
 import numpy as np
+import wandb
+
 import od3d.io
 import pandas as pd
 from od3d.benchmark.results import OD3D_Results
@@ -16,7 +18,7 @@ import torch
 torch.multiprocessing.set_sharing_strategy("file_system")
 from od3d.cv.geometry.transform import se3_exp_map
 from od3d.cv.visual.show import imgs_to_img, show_scene2d
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.objects3d.meshes import Meshes
 from pathlib import Path
 from od3d.cv.geometry.transform import (
     transf4x4_from_spherical,
@@ -29,7 +31,7 @@ from od3d.cv.visual.show import show_bar_chart
 from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
-from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+from od3d.cv.geometry.objects3d.objects3d import PROJECT_MODALITIES
 
 # note: math is actually used by config
 import math  # noqa
@@ -141,19 +143,20 @@ class NeMo(OD3D_Method):
         else:
             self.fpaths_meshes_tform_obj = [None for _ in config.categories]
 
-        self.meshes = Meshes.load_from_files(
+        self.meshes = Meshes.read_from_ply_files(
             fpaths_meshes=self.fpaths_meshes,
             fpaths_meshes_tforms=self.fpaths_meshes_tform_obj,
+            gaussian_splat_enabled=self.config.meshes_gaussian_splat_enabled,
+            gaussian_splat_opacity=self.config.meshes_gaussian_splat_opacity,
+            geodesic_prob_sigma=self.config.train.geodesic_prob_sigma,
+            pt3d_raster_perspective_correct=self.config.meshes_pt3d_raster_perspective_correct,
+            gaussian_splat_pts3d_size_rel_to_neighbor_dist = self.config.meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist,
+            feats_objects=True,
+            feat_clutter=True,
+            feat_dim=self.net.out_dim,
+            feats_requires_grad=self.config.train.bank_feats_update != "moving_average" and self.config.train.bank_feats_update != "average"
         )
-        self.meshes.gaussian_splat_enabled = self.config.meshes_gaussian_splat_enabled
-        self.meshes.gaussian_splat_opacity = self.config.meshes_gaussian_splat_opacity
-        self.meshes.geodesic_prob_sigma = self.config.train.geodesic_prob_sigma
-        self.meshes.pt3d_raster_perspective_correct = (
-            self.config.meshes_pt3d_raster_perspective_correct
-        )
-        self.meshes.gaussian_splat_pts3d_size_rel_to_neighbor_dist = (
-            self.config.meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist
-        )
+
         self.meshes_ranges = self.meshes.get_ranges().detach().cuda()
         self.refine_update_max = (
             torch.Tensor(self.config.inference.refine.dims_grad_max)
@@ -178,53 +181,21 @@ class NeMo(OD3D_Method):
 
         self.feats_bank_count = self.verts_count_max * len(self.meshes) + 1
 
-        self.clutter_feats = torch.nn.Parameter(
-            torch.randn(size=(1, self.net.out_dim), device=self.device),
-            requires_grad=True,
-        )
-        self.meshes.set_feats_cat_with_pad(
-            torch.nn.Parameter(
-                torch.randn(
-                    size=(self.verts_count_max * len(self.meshes), self.net.out_dim),
-                    device=self.device,
-                ),
-                requires_grad=True,
-            ),
-        )
-
         # self.meshes.set_feats_cat_with_pad(torch.nn.Parameter(torch.randn(size=(self.verts_count_max * len(self.meshes), self.net.feat_dim), device=self.device), requires_grad=True))
 
         # dict to save estimated tforms, sequence : tform,
         self.seq_obj_tform4x4_est_obj = {}
         self.seq_obj_tform4x4_est_obj_sim = {}
-        if (
-            self.config.train.bank_feats_update == "moving_average"
-            or self.config.train.bank_feats_update == "average"
-        ):
-            for p in self.meshes.parameters():
-                p.requires_grad = False
-            self.clutter_feats.requires_grad = False
+
         self.total_params_mesh_clutter = (
             sum(p.numel() for p in self.meshes.parameters())
-            + self.clutter_feats.numel()
         )
         self.trainable_params_mesh_clutter = (
             sum(p.numel() for p in self.meshes.parameters() if p.requires_grad)
-            + self.clutter_feats.numel()
-            if self.clutter_feats.requires_grad
-            else 0
         )
-        self.normalize_feats()
 
-        if self.config.train.loss == "cross_entropy":
+        if self.config.train.loss == "cross_entropy" or self.config.train.loss == "cross_entropy_smooth":
             self.criterion = torch.nn.CrossEntropyLoss().cuda()
-        elif self.config.train.loss == "cross_entropy_smooth_geo":
-            from od3d.cv.metric.cross_entropy_smooth import CrossEntropyLabelsSmoothed
-
-            labels_smoothed = self.meshes.get_geodesic_prob_with_noise().to(
-                device=self.device,
-            )
-            self.criterion = CrossEntropyLabelsSmoothed(labels_smoothed=labels_smoothed)
         elif self.config.train.loss == "nll_softmax":
             self.softmax = torch.nn.LogSoftmax(dim=1)
             self.criterion = torch.nn.NLLLoss().cuda()
@@ -237,18 +208,13 @@ class NeMo(OD3D_Method):
         elif self.config.train.loss == "l2_squared":
             self.criterion = torch.nn.MSELoss().cuda()
 
-        # for averaging
-        self.mesh_update_count = torch.ones(
-            size=(self.meshes.feats.shape[0] + self.clutter_feats.shape[0],),
-            device=self.device,
-        )
-        self.mesh_feats_total = None
-
         # self.net = torch.nn.DataParallel(self.net).cuda()
         self.net.cuda()
         self.meshes.cuda()
         self.net.eval()
+        self.meshes.eval()
         self.back_propagate = True
+
         logger.info(
             f"total params: {self.total_params}, trainable params: {self.trainable_params}",
         )
@@ -276,13 +242,12 @@ class NeMo(OD3D_Method):
             if self.trainable_params == 0:
                 self.optim = od3d.io.get_obj_from_config(
                     config=self.config.train.optimizer,
-                    params=[self.meshes.feats] + [self.clutter_feats],
+                    params=list(self.meshes.parameters()),
                 )
             else:
                 self.optim = od3d.io.get_obj_from_config(
                     config=self.config.train.optimizer,
-                    params=[self.meshes.feats]
-                    + [self.clutter_feats]
+                    params=list(self.meshes.parameters())
                     + list(self.net.parameters()),
                 )
 
@@ -309,21 +274,11 @@ class NeMo(OD3D_Method):
         self.feats_all_colors = []
         for i, cat in enumerate(config.categories):
             self.feats_all_colors.extend([color_(i)] * self.meshes.verts_counts[i])
-        watch_model_in_wandb((self.meshes), log="all")
 
-    def normalize_feats(self):
-        if self.config.bank_feats_normalize:
-            self.clutter_feats.data = (
-                self.clutter_feats.detach()
-                / self.clutter_feats.detach().norm(dim=-1, keepdim=True)
-            )
-            self.meshes.feats.data = (
-                self.meshes.feats.detach()
-                / self.meshes.feats.detach().norm(dim=-1, keepdim=True)
-            )
-            # self.meshes.set_feats_cat(self.meshes.feats.detach() / self.meshes.feats.detach().norm(dim=-1, keepdim=True))
-            # logger.info(self.clutter_feats[:1])
-            # logger.info(self.meshes.feats[:1])
+        # wandb.watch(self.meshes, log="all", log_freq=1)
+        # wandb.watch(self.net, log="all", log_freq=1)
+
+
 
     def calc_sim(self, comb, featsA, featsB):
         """
@@ -386,8 +341,7 @@ class NeMo(OD3D_Method):
                 "net_state_dict": self.net.state_dict(),
                 "optimizer_state_dict": self.optim.state_dict(),
                 "scheduler_state_dict": self.scheduler.state_dict(),
-                "meshes_feats": self.meshes.feats,
-                "clutter_feats": self.clutter_feats,
+                "meshes_feats": self.meshes.state_dict(),
             },
             path_checkpoint,
         )
@@ -397,8 +351,7 @@ class NeMo(OD3D_Method):
         self.net.load_state_dict(checkpoint["net_state_dict"])
         self.optim.load_state_dict(checkpoint["optimizer_state_dict"])
         self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-        self.meshes.set_feats_cat(checkpoint["meshes_feats"])
-        self.clutter_feats = checkpoint["clutter_feats"]
+        self.meshes.load_state_dict(checkpoint["meshes_feats"])
 
     @property
     def fpath_checkpoint(self):
@@ -419,94 +372,35 @@ class NeMo(OD3D_Method):
             num_workers=self.config.train.dataloader.num_workers,
             pin_memory=self.config.train.dataloader.pin_memory,
         )
+
+        net_feats_all = []
         for i, batch in tqdm(enumerate(iter(dataloader_train))):
-            B = len(batch)
-
             batch.to(device=self.device)
-
             batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
-            # B x x N x 2
-            vts2d, vts2d_mask = self.meshes.verts2d(
-                cams_intr4x4=batch.cam_intr4x4,
-                cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                imgs_sizes=batch.size,
-                mesh_ids=batch.category_id,
-                down_sample_rate=self.down_sample_rate,
-            )
-
-            N = vts2d.shape[1]
             # B x F+N x C
-
             feats2d_net = self.net(batch.rgb)
-
-            feats2d_net_mask = torch.ones(
-                size=(
-                    feats2d_net.shape[0],
-                    1,
-                    feats2d_net.shape[2],
-                    feats2d_net.shape[3],
-                ),
-            ).to(device=self.device)
-
-            if self.config.train.use_mask_rgb:
-                feats2d_net_mask = 1.0 * resize(
-                    batch.rgb_mask,
-                    H_out=feats2d_net.shape[2],
-                    W_out=feats2d_net.shape[3],
-                )
-
-            if self.config.train.use_mask_object:
-                feats2d_net_mask = (
-                    feats2d_net_mask
-                    * 1.0
-                    * resize(
-                        batch.mask,
-                        H_out=feats2d_net.shape[2],
-                        W_out=feats2d_net.shape[3],
-                    )
-                )
-            if self.config.train.use_mask_rendered_object:
-                # logger.info(f"batch.size {batch.size}")
-                feats2d_net_mask = feats2d_net_mask * self.meshes.render_feats(
-                    cams_intr4x4=batch.cam_intr4x4,
-                    cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                    imgs_sizes=batch.size,
-                    meshes_ids=batch.category_id,
-                    down_sample_rate=self.down_sample_rate,
-                    modality=MESH_RENDER_MODALITIES.MASK,
-                )
-
-            H, W = feats2d_net.shape[-2:]
-            xy = torch.stack(
-                torch.meshgrid(
-                    torch.arange(W, device=self.device),
-                    torch.arange(H, device=self.device),
-                    indexing="xy",
-                ),
-                dim=0,
-            )  # HxW
-            prob_noise = (1.0 - 1.0 * feats2d_net_mask).clamp(0, 1).flatten(1)
-            prob_noise[prob_noise.sum(dim=-1) <= 0.0] = 1.0
-            noise2d = xy.flatten(1)[
-                :,
-                torch.multinomial(prob_noise, self.config.num_noise, replacement=True),
-            ].permute(1, 2, 0)
-
-            vts2d_feats2d_net_mask = sample_pxl2d_pts(
-                feats2d_net_mask,
-                pxl2d=torch.cat([vts2d], dim=1),
+            feats2d_net_mask = 1.0 * resize(
+                batch.rgb_mask,
+                H_out=feats2d_net.shape[2],
+                W_out=feats2d_net.shape[3],
             )
-            vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
-            net_feats = sample_pxl2d_pts(
-                feats2d_net,
-                pxl2d=torch.cat([vts2d, noise2d], dim=1),
-            )
-            net_feats = net_feats.reshape(1, -1, net_feats.shape[-1])
-            if i == 0:
-                net_feats_all = net_feats
-            else:
-                net_feats_all = torch.cat((net_feats_all, net_feats), dim=1)
+
+            mods1d_sampled = self.meshes.sample_with_img2d(
+                img2d=feats2d_net, img2d_mask=feats2d_net_mask, modalities=[PROJECT_MODALITIES.IMG, PROJECT_MODALITIES.MASK],
+                cams_tform4x4_obj=batch.cam_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4,
+                                                            imgs_sizes=batch.size,
+                                                            objects_ids=batch.category_id,
+                                                    broadcast_batch_and_cams=False,
+                                                    down_sample_rate=self.down_sample_rate,
+                                                    sample_clutter_count=self.config.num_noise,
+                                                    dtype=feats2d_net.dtype, device=feats2d_net.device)
+
+            feats1d_sampled = mods1d_sampled[PROJECT_MODALITIES.IMG]
+            feats1d_sampled_mask = mods1d_sampled[PROJECT_MODALITIES.MASK]
+            net_feats_all.append(feats1d_sampled[feats1d_sampled_mask])
+
+        net_feats_all = torch.cat(net_feats_all, dim=0)
 
         return net_feats_all
 
@@ -529,26 +423,26 @@ class NeMo(OD3D_Method):
                 split=self.config.train.split,
             )
             datasets_val["main"] = dataset_val_sub
-        if self.config.model.head.pca.get("enable", False):
+        if self.config.model.head.get("pca", None) is not None and self.config.model.head.pca.get("enable", False):
+            logger.info('calc pca ...')
             from od3d.cv.cluster.embed import pca
-
+            from od3d.datasets.dataset import OD3D_DATASET_SPLITS
             dataset_pca, _ = dataset_train_sub.get_split(
                 fraction1=self.config.model.head.pca.get("subset_fraction", 1.0),
                 fraction2=1.0 - self.config.model.head.pca.get("subset_fraction", 1.0),
-                split="random",
+                split=OD3D_DATASET_SPLITS.RANDOM,
             )
             batch_feature_vectors = self.extract_features(dataset=dataset_pca)
-            feature_vector_mean = batch_feature_vectors.mean(dim=1)
+            feature_vector_mean = batch_feature_vectors.mean(dim=0)
             logger.info(f"shape of mean feature vectors:{feature_vector_mean.shape}")
             self.net.head.mean_features = feature_vector_mean
             logger.info(
                 f"shape of accumulated feature vectors:{batch_feature_vectors.shape}"
             )
-            pca_dim = self.config.model.head.pca.get("out_dim")
+            pca_dim = self.config.model.head.pca.out_dim
             pca_V = pca(batch_feature_vectors, C=pca_dim, return_V=True)
 
-            pca_parameters = torch.nn.Parameter(pca_V.squeeze(0), requires_grad=False)
-            self.net.head.pca_layer.state_dict()["weight"] = pca_parameters.T
+            self.net.head.pca_layer.weight.copy_(pca_V.T)
             self.net.head.pca_enabled = True
             del batch_feature_vectors
 
@@ -593,8 +487,7 @@ class NeMo(OD3D_Method):
 
         logger.info(f"test dataset {dataset.name}")
         self.net.eval()
-        self.meshes.feats.requires_grad = False
-        clutter_feats = self.clutter_feats.detach()
+        self.meshes.eval()
         dataset.transform = self.transform_test
         if not isinstance(dataset, CO3D):
             dataloader = torch.utils.data.DataLoader(
@@ -673,7 +566,7 @@ class NeMo(OD3D_Method):
     def train_epoch(self, dataset: OD3D_Dataset) -> OD3D_Results:
         self.net.train()
         self.meshes.del_pre_rendered()
-        self.meshes.feats.requires_grad = True
+        self.meshes.train()
         dataset.transform = self.transform_train
         dataloader_train = torch.utils.data.DataLoader(
             dataset=dataset,
@@ -693,7 +586,7 @@ class NeMo(OD3D_Method):
             if accumulate_steps % self.config.train.batch_accumulate_to_next_step == 0:
                 if self.back_propagate:
                     self.optim.step()
-                    self.normalize_feats()
+                    self.meshes.normalize_feats()
                     self.optim.zero_grad()
 
             results_epoch += results_batch
@@ -720,285 +613,200 @@ class NeMo(OD3D_Method):
 
         batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
-        logger.info(f"batch.category_id {batch.category_id}")
-        logger.info(f"batch.size {batch.size}")
+        #logger.info(f"batch.category_id {batch.category_id}")
+        #logger.info(f"batch.size {batch.size}")
 
-        # B x x N x 2
-        vts2d, vts2d_mask = self.meshes.verts2d(
-            cams_intr4x4=batch.cam_intr4x4,
-            cams_tform4x4_obj=batch.cam_tform4x4_obj,
-            imgs_sizes=batch.size,
-            mesh_ids=batch.category_id,
-            down_sample_rate=self.down_sample_rate,
-        )
 
-        N = vts2d.shape[1]
         # B x F+N x C
-        logger.info(f"batch.size {batch.size}")
-        feats2d_net = self.net(batch.rgb)
+        #logger.info(f"batch.size {batch.size}")
+        feats2d_img = self.net(batch.rgb)
 
-        logger.info(f"batch.size {batch.size}")
-        feats2d_net_mask = torch.ones(
-            size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3]),
+        #logger.info(f"batch.size {batch.size}")
+        feats2d_img_mask = torch.ones(
+            size=(feats2d_img.shape[0], 1, feats2d_img.shape[2], feats2d_img.shape[3]),
         ).to(device=self.device)
 
         if self.config.train.use_mask_rgb:
-            feats2d_net_mask = 1.0 * resize(
+            feats2d_img_mask = 1.0 * resize(
                 batch.rgb_mask,
-                H_out=feats2d_net.shape[2],
-                W_out=feats2d_net.shape[3],
+                H_out=feats2d_img.shape[2],
+                W_out=feats2d_img.shape[3],
             )
 
-        if self.config.train.use_mask_object:
-            feats2d_net_mask = (
-                feats2d_net_mask
-                * 1.0
-                * resize(
-                    batch.mask,
-                    H_out=feats2d_net.shape[2],
-                    W_out=feats2d_net.shape[3],
-                )
-            )
-        if self.config.train.use_mask_rendered_object:
-            logger.info(f"batch.size {batch.size}")
-            feats2d_net_mask = feats2d_net_mask * self.meshes.render_feats(
-                cams_intr4x4=batch.cam_intr4x4,
-                cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                imgs_sizes=batch.size,
-                meshes_ids=batch.category_id,
-                down_sample_rate=self.down_sample_rate,
-                modality=MESH_RENDER_MODALITIES.MASK,
-            )
+        add_other_objects = self.config.train.get("inter_class_loss", True)
+        add_clutter = True
+        labels, labels_mask, noise_pxl2d, sim, feats = self.meshes.get_label_and_sim_feats2d_img_to_all(
+            feats2d_img=feats2d_img, imgs_sizes=batch.size, cams_tform4x4_obj=batch.cam_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4,
+            objects_ids=batch.category_id, broadcast_batch_and_cams=False, feats2d_img_mask=feats2d_img_mask,
+            down_sample_rate=self.down_sample_rate, add_clutter=add_clutter,
+            add_other_objects=add_other_objects,
+            sample_clutter_count=self.config.num_noise, dense=self.config.train.dense_loss,
+            smooth_labels='smooth' in self.config.train.loss, sim_temp=self.config.train.T, return_feats=True)
 
-        H, W = feats2d_net.shape[-2:]
-        xy = torch.stack(
-            torch.meshgrid(
-                torch.arange(W, device=self.device),
-                torch.arange(H, device=self.device),
-                indexing="xy",
-            ),
-            dim=0,
-        )  # HxW
-        prob_noise = (1.0 - 1.0 * feats2d_net_mask).clamp(0, 1).flatten(1)
-        prob_noise[prob_noise.sum(dim=-1) <= 0.0] = 1.0
-        noise2d = xy.flatten(1)[
-            :,
-            torch.multinomial(prob_noise, self.config.num_noise, replacement=True),
-        ].permute(1, 2, 0)
+        if labels.isnan().any():
+            logger.error("labels contains nan")
+        if labels_mask is not None and labels_mask.isnan().any():
+            logger.error("labels_mask contains nan")
+        if noise_pxl2d is not None and noise_pxl2d.isnan().any():
+            logger.error("noise_pxl2d contains nan")
+        if sim.isnan().any():
+            logger.error("sim contains nan")
+        if feats.isnan().any():
+            logger.error("feats contains nan")
 
-        # note: visual for debug
-        # from od3d.cv.visual.show import show_imgs
-        # from od3d.cv.visual.draw import draw_pixels
-        # prob_noise_pxls = prob_noise.reshape(-1, 1, H, W).clone().repeat(1, 3, 1, 1)
-        # for b in range(len(prob_noise_pxls)):
-        #     prob_noise_pxls[b] = draw_pixels(prob_noise_pxls[b], noise2d[b])
-        # show_imgs(prob_noise_pxls)
+        if self.config.train.bank_feats_update == "moving_average":
+            assert not self.config.train.dense_loss and not 'smooth' in self.config.train.loss
+            self.meshes.update_feats_moving_average(labels=labels, labels_mask=labels_mask, feats=feats,
+                                                    objects_ids=batch.category_id,
+                                                    alpha=self.config.train.alpha, add_clutter=add_clutter,
+                                                    add_other_objects=add_other_objects)
 
-        vts2d_feats2d_net_mask = sample_pxl2d_pts(
-            feats2d_net_mask,
-            pxl2d=torch.cat([vts2d], dim=1),
-        )
-        vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
-        net_feats = sample_pxl2d_pts(
-            feats2d_net,
-            pxl2d=torch.cat([vts2d, noise2d], dim=1),
-        )
+        if self.config.train.bank_feats_update == "average":
+            assert not self.config.train.dense_loss and not 'smooth' in self.config.train.loss
+            self.meshes.update_feats_total_average(labels=labels, labels_mask=labels_mask, feats=feats,
+                                                   objects_ids=batch.category_id,
+                                                   add_clutter=add_clutter, add_other_objects=add_other_objects)
 
-        C = net_feats.shape[2]
-        # args: X: Bx3xHxW, keypoint_positions: BxNx2, obj_mask: BxHxW ensures that noise is sampled outside of object mask
-        # returns: BxF+NxC
+        if labels.dim() == 2:
+            labels = labels[labels_mask]
+        elif labels.dim() == 3:
+            labels = labels.permute(0, 2, 1)
+            if labels_mask is not None:
+                labels = labels[labels_mask]
 
-        # net_feats = net_feats[:, :].reshape(-1, net_feats.shape[-1])
-        logger.info(batch.category_id)
-
-        # weighting with similarity score
-        # net_feats = net_feats * (batch.cam_tform4x4_obj_sim[:, None, None] ** 4)
-
-        # sim_weight = batch.cam_tform4x4_obj_sim[:, None].expand(*net_feats.shape[:2])
-        # sim_weight = torch.cat([sim_weight[:, :N][mask_vts2d_vsbl], sim_weight[:, N:].reshape(-1)], dim=0)
-
-        # batch_vts_ids = self.meshes.get_feats_ids_stacked(batch.category_id.tolist())
-        if not self.config.train.get("inter_class_loss", True):
-            einsum_str = "bnc,bvc->bnv"
-            bank_feats = torch.cat(
-                [
-                    self.meshes.get_feats_stacked_with_mesh_ids(batch.category_id),
-                    self.clutter_feats[None, :].expand((B, -1, -1)),
-                ],
-                dim=1,
-            )
-            # clutter feats are added to each batch
-            batch_vts_ids_stacked_without_acc = (
-                self.meshes.get_verts_and_noise_ids_stacked_without_acc(
-                    batch.category_id.tolist(),
-                    count_noise_ids=self.config.num_noise,
-                )
-            )
-            batch_vts_ids_without_acc = torch.cat(
-                [
-                    batch_vts_ids_stacked_without_acc[:, :N][vts2d_mask],
-                    batch_vts_ids_stacked_without_acc[:, N:].reshape(-1),
-                ],
-                dim=0,
-            )
+        if sim.dim() == 3:
+            sim_batchwise = (sim.max(dim=1).values * labels_mask).flatten(1).sum(dim=-1) / (labels_mask.flatten(1).sum(dim=-1) + 1e-6).detach()
+            sim = sim.permute(0, 2, 1)[labels_mask]
         else:
-            einsum_str = "nc,vc->nv"
-            net_feats = torch.cat(
-                [net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)],
-                dim=0,
-            )
-            bank_feats = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
+            sim_batchwise = sim.max(dim=1).values.flatten(1).mean(dim=-1)
+        loss = self.criterion(sim, labels)
 
-        batch_vts_ids_stacked_with_acc = self.meshes.get_verts_and_noise_ids_stacked(
-            batch.category_id.tolist(),
-            count_noise_ids=self.config.num_noise,
-        )
-        batch_vts_ids_with_acc = torch.cat(
-            [
-                batch_vts_ids_stacked_with_acc[:, :N][vts2d_mask],
-                batch_vts_ids_stacked_with_acc[:, N:].reshape(-1),
-            ],
-            dim=0,
-        )
+        # if self.mesh_feats_total is None:
+        #     self.mesh_feats_total = torch.zeros_like(bank_feats)
+        # if self.config.train.bank_feats_update == "loss_gradient":
+        #     sim = self.calc_sim(einsum_str, net_feats, bank_feats)
+        # elif self.config.train.bank_feats_update == "normalize_loss_gradient":
+        #     sim = self.calc_sim(
+        #         einsum_str,
+        #         net_feats,
+        #         torch.nn.functional.normalize(bank_feats, dim=1),
+        #     )
+        # elif self.config.train.bank_feats_update == "moving_average":
+        #     sim = self.calc_sim(einsum_str, net_feats, bank_feats.clone())
+        #     bank_feats_all = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
+        #     if not self.config.train.get("inter_class_loss", True):
+        #         net_feats_to_update = torch.cat(
+        #             [net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)],
+        #             dim=0,
+        #         )
+        #     else:
+        #         net_feats_to_update = net_feats
+        #     bank_feats_new = (
+        #         self.config.train.alpha
+        #         * bank_feats_all[batch_vts_ids_with_acc].detach()
+        #         + (1.0 - self.config.train.alpha) * net_feats_to_update.detach()
+        #     )
+        #     (
+        #         batch_vts_ids_unique,
+        #         batch_vts_ids_unique_inverse,
+        #         batch_vts_ids_unique_counts,
+        #     ) = batch_vts_ids_with_acc.unique(return_inverse=True, return_counts=True)
+        #     bank_feats_new = (
+        #         torch.einsum(
+        #             "nk,nc->kc",
+        #             torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(
+        #                 dtype=bank_feats_new.dtype,
+        #                 device=bank_feats_new.device,
+        #             ),
+        #             bank_feats_new,
+        #         )
+        #         / batch_vts_ids_unique_counts[:, None]
+        #     )
+        #     bank_feats_all[batch_vts_ids_unique] = bank_feats_new
+        #     self.meshes.feats.data = bank_feats_all[: self.meshes.feats.shape[0]]
+        #     self.clutter_feats.data = bank_feats_all[self.meshes.feats.shape[0] :]
+        #     self.normalize_feats()
+        # elif self.config.train.bank_feats_update == "average":
+        #     # needs to be fixed
+        #     (
+        #         batch_vts_ids_unique,
+        #         batch_vts_ids_unique_inverse,
+        #         batch_vts_ids_unique_counts,
+        #     ) = batch_vts_ids_with_acc.unique(return_inverse=True, return_counts=True)
+        #     sim = self.calc_sim("nc,vc->nv", net_feats, bank_feats.detach())
+        #     bank_feats_new = self.mesh_feats_total[batch_vts_ids_with_acc] + net_feats
+        #     bank_feats_new = (
+        #         torch.einsum(
+        #             "nk,nc->kc",
+        #             torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(
+        #                 dtype=bank_feats_new.dtype,
+        #                 device=bank_feats_new.device,
+        #             ),
+        #             bank_feats_new,
+        #         )
+        #         / batch_vts_ids_unique_counts[:, None]
+        #     )
+        #     self.mesh_update_count[batch_vts_ids_unique] += 1
+        #     self.mesh_feats_total[batch_vts_ids_unique] = bank_feats_new
+        #     bank_feats[batch_vts_ids_unique] = (
+        #         self.mesh_feats_total[batch_vts_ids_unique]
+        #         / self.mesh_update_count[batch_vts_ids_unique, None]
+        #     )
+        #     self.meshes.feats.data = bank_feats[: self.meshes.feats.shape[0]]
+        #     self.clutter_feats.data = bank_feats[self.meshes.feats.shape[0] :]
+        #     self.normalize_feats()
+        # else:
+        #     logger.error(
+        #         f"unknown bank_feats_update: {self.config.train.bank_feats_update}",
+        #     )
+        #     sim = None
+        # if not self.config.train.get("inter_class_loss", True):
+        #     sim = torch.cat(
+        #         [sim[:, :N][vts2d_mask], sim[:, N:].reshape((-1, sim.shape[-1]))],
+        #         dim=0,
+        #     )
+        #
+        # sim_batchwise_borders = torch.cat(
+        #     [
+        #         torch.LongTensor([0]).to(device=vts2d_mask.device),
+        #         vts2d_mask.sum(dim=1).cumsum(dim=0),
+        #     ],
+        #     dim=0,
+        # )
+        # sim_batchwise = torch.stack(
+        #     [
+        #         sim[sim_batchwise_borders[b] : sim_batchwise_borders[b + 1]]
+        #         .max(dim=-1)[0]
+        #         .mean()
+        #         for b in range(len(sim_batchwise_borders) - 1)
+        #     ],
+        #     dim=0,
+        # )
+        # # in case there are 0 vertices inside one image
+        # sim_batchwise[sim_batchwise.isnan()] = 0.0
+        # results_batch["sim"] = sim_batchwise
+        #
+        # # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
+        # # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, average
+        # if not self.config.train.get("inter_class_loss", True):
+        #     loss = self.criterion(sim / self.config.train.T, batch_vts_ids_without_acc)
+        # else:
+        #     loss = self.criterion(sim / self.config.train.T, batch_vts_ids_with_acc)
 
-        if self.mesh_feats_total is None:
-            self.mesh_feats_total = bank_feats.clone()
-        if self.config.train.bank_feats_update == "loss_gradient":
-            sim = self.calc_sim(einsum_str, net_feats, bank_feats)
-        elif self.config.train.bank_feats_update == "normalize_loss_gradient":
-            sim = self.calc_sim(
-                einsum_str,
-                net_feats,
-                torch.nn.functional.normalize(bank_feats, dim=1),
-            )
-        elif self.config.train.bank_feats_update == "moving_average":
-            sim = self.calc_sim(einsum_str, net_feats, bank_feats.clone())
-            bank_feats_all = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
-            if not self.config.train.get("inter_class_loss", True):
-                net_feats_to_update = torch.cat(
-                    [net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)],
-                    dim=0,
-                )
-            else:
-                net_feats_to_update = net_feats
-            bank_feats_new = (
-                self.config.train.alpha
-                * bank_feats_all[batch_vts_ids_with_acc].detach()
-                + (1.0 - self.config.train.alpha) * net_feats_to_update.detach()
-            )
-            (
-                batch_vts_ids_unique,
-                batch_vts_ids_unique_inverse,
-                batch_vts_ids_unique_counts,
-            ) = batch_vts_ids_with_acc.unique(return_inverse=True, return_counts=True)
-            bank_feats_new = (
-                torch.einsum(
-                    "nk,nc->kc",
-                    torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(
-                        dtype=bank_feats_new.dtype,
-                        device=bank_feats_new.device,
-                    ),
-                    bank_feats_new,
-                )
-                / batch_vts_ids_unique_counts[:, None]
-            )
-            bank_feats_all[batch_vts_ids_unique] = bank_feats_new
-            self.meshes.feats.data = bank_feats_all[: self.meshes.feats.shape[0]]
-            self.clutter_feats.data = bank_feats_all[self.meshes.feats.shape[0] :]
-            self.normalize_feats()
-        elif self.config.train.bank_feats_update == "average":
-            (
-                batch_vts_ids_unique,
-                batch_vts_ids_unique_inverse,
-                batch_vts_ids_unique_counts,
-            ) = batch_vts_ids_with_acc.unique(return_inverse=True, return_counts=True)
-            bank_feats_all = torch.cat([self.meshes.feats, self.clutter_feats], dim=0)
-            if not self.config.train.get("inter_class_loss", True):
-                net_feats_to_update = torch.cat(
-                    [net_feats[:, :N][vts2d_mask], net_feats[:, N:].reshape(-1, C)],
-                    dim=0,
-                )
-            else:
-                net_feats_to_update = net_feats
-            sim = self.calc_sim(einsum_str, net_feats, bank_feats.detach())
-            bank_feats_new = (
-                self.mesh_feats_total[batch_vts_ids_with_acc] + net_feats_to_update
-            )
-            bank_feats_new = (
-                torch.einsum(
-                    "nk,nc->kc",
-                    torch.nn.functional.one_hot(batch_vts_ids_unique_inverse).to(
-                        dtype=bank_feats_new.dtype,
-                        device=bank_feats_new.device,
-                    ),
-                    bank_feats_new,
-                )
-                / batch_vts_ids_unique_counts[:, None]
-            )
-            self.mesh_update_count[batch_vts_ids_unique] += 1
-            self.mesh_feats_total[batch_vts_ids_unique] = bank_feats_new
-            bank_feats_all[batch_vts_ids_unique] = (
-                self.mesh_feats_total[batch_vts_ids_unique]
-                / self.mesh_update_count[batch_vts_ids_unique, None]
-            )
-            self.meshes.feats.data = bank_feats_all[: self.meshes.feats.shape[0]]
-            self.clutter_feats.data = bank_feats_all[self.meshes.feats.shape[0] :]
-            self.normalize_feats()
-        else:
-            logger.error(
-                f"unknown bank_feats_update: {self.config.train.bank_feats_update}",
-            )
-            sim = None
-        if not self.config.train.get("inter_class_loss", True):
-            sim = torch.cat(
-                [sim[:, :N][vts2d_mask], sim[:, N:].reshape((-1, sim.shape[-1]))],
-                dim=0,
-            )
-        sim_batchwise_borders = torch.cat(
-            [
-                torch.LongTensor([0]).to(device=vts2d_mask.device),
-                vts2d_mask.sum(dim=1).cumsum(dim=0),
-            ],
-            dim=0,
-        )
-        sim_batchwise = torch.stack(
-            [
-                sim[sim_batchwise_borders[b] : sim_batchwise_borders[b + 1]]
-                .max(dim=-1)[0]
-                .mean()
-                for b in range(len(sim_batchwise_borders) - 1)
-            ],
-            dim=0,
-        )
-        # in case there are 0 vertices inside one image
-        sim_batchwise[sim_batchwise.isnan()] = 0.0
-        results_batch["sim"] = sim_batchwise
-
-        # loss: cross_entropy  # cross_entropy, nll_softmax, nll_clip, nll_affine_to_prob
-        # bank_feats_update: loss_gradient  # loss_gradient, normalize_loss_gradient, moving_average, average
-        if not self.config.train.get("inter_class_loss", True):
-            loss = self.criterion(sim / self.config.train.T, batch_vts_ids_without_acc)
-        else:
-            loss = self.criterion(sim / self.config.train.T, batch_vts_ids_with_acc)
         if self.back_propagate:
             loss.backward()
+
         logger.info(f"loss {loss.item()}")
-        results_batch["noise2d"] = noise2d
+        results_batch["sim"] = sim_batchwise
+        results_batch["noise2d"] = noise_pxl2d
         results_batch["loss"] = loss[None,]
         results_batch["item_id"] = batch.item_id
         results_batch["name_unique"] = batch.name_unique
         results_batch["gt_cam_tform4x4_obj"] = batch.cam_tform4x4_obj
         if self.config.train.bank_feats_update == "average":
             result_visual = OD3D_Results(logging_dir=self.logging_dir)
-            bar_image = show_bar_chart(
-                int(self.meshes.feats.shape[0]),
-                self.mesh_update_count[: self.meshes.feats.shape[0]],
-                pts2d_colors=self.feats_all_colors,
-                return_visualization=True,
-            )
-            bar_image_wandb = image_as_wandb_image(
-                bar_image, caption=f"number of vertices seen in epoch"
-            )
+            bar_image = show_bar_chart(int(self.meshes.feats_objects.shape[0]), self.meshes.feats_total_count[:self.meshes.feats_objects.shape[0]], pts2d_colors=self.feats_all_colors,return_visualization=True)
+            bar_image_wandb = image_as_wandb_image(bar_image,caption=f"number of vertices seen in epoch")
             result_visual["vertices_count"] = bar_image_wandb
             result_visual.log_with_prefix(prefix=f"train/visual")
 
@@ -1061,56 +869,27 @@ class NeMo(OD3D_Method):
 
             meshes_scores = []
             for mesh_id in range(len(self.meshes)):
-                # logger.info(f'calc score for mesh {self.config.categories[mesh_id]}')
-                bank_feats = torch.cat(
-                    [
-                        self.meshes.get_feats_with_mesh_id(mesh_id),
-                        self.clutter_feats.detach(),
-                    ],
-                    dim=0,
-                )
-                # inner_feats2d_net_bank_vts_max_vals = torch.sum(net_feats2d[:, None] * bank_feats[None, :, :, None, None], dim=2, keepdim=True).max(dim=1).values
-                out_shape = (
-                    feats2d_net.shape[:1] + torch.Size([1]) + feats2d_net.shape[2:]
-                )
 
                 if self.config.inference.get("render_classify", False):
-                    sim = self.get_sim_feats2d_net_with_cams(
-                        feats2d_net=feats2d_net,
-                        feats2d_net_mask=feats2d_net_mask,
-                        cam_tform4x4_obj=batch.cam_tform4x4_obj,
-                        cam_intr4x4=batch.cam_intr4x4,
-                        categories_ids=torch.LongTensor([mesh_id] * B).to(
-                            device=batch.cam_tform4x4_obj.device,
-                        ),
-                        return_sim_pxl=False,
-                        broadcast_batch_and_cams=False,
-                        pre_rendered=False,
-                        only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                        allow_clutter=self.config.inference.allow_clutter,
-                        use_sigmoid=self.config.inference.use_sigmoid,
-                    )
-                    mesh_score = sim.squeeze(1)
+                    sim = self.meshes.get_sim_render(feats2d_img=feats2d_net, cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                                                     cams_intr4x4=batch.cam_intr4x4,
+                                                     objects_ids=torch.LongTensor([mesh_id] * B).
+                                                     to(device=batch.cam_tform4x4_obj.device,),
+                                                     broadcast_batch_and_cams=False,
+                                                     down_sample_rate=self.down_sample_rate,
+                       feats2d_img_mask=feats2d_net_mask, allow_clutter=self.config.inference.allow_clutter, return_sim_pxl=False,
+                       add_clutter=self.config.inference.allow_clutter, temp=self.config.T)
+                    sim = sim.squeeze(1)
                 else:
-                    inner_feats2d_net_bank_vts_max_vals = (
-                        self.calc_sim("bchw,kc->bkhw", feats2d_net, bank_feats)
-                        .max(
-                            dim=1,
-                            keepdim=True,
-                        )
-                        .values
-                    )
-                    mesh_score = inner_feats2d_net_bank_vts_max_vals.flatten(1).mean(
-                        dim=1,
-                    )
+                    # logger.info(f'calc score for mesh {self.config.categories[mesh_id]}')
+                    sim_feats2d = self.meshes.get_sim_feats2d_img_to_all(
+                        feats2d_img=feats2d_net, imgs_sizes=batch.size, cams_tform4x4_obj=None, cams_intr4x4=None,
+                        objects_ids=mesh_id, broadcast_batch_and_cams=False, down_sample_rate=self.down_sample_rate,
+                        add_clutter=True, add_other_objects=False, dense=True,
+                        sim_temp=self.config.train.T)
+                    sim = sim_feats2d.max(dim=1).values.flatten(1).mean(dim=-1)
 
-                # inner_feats2d_net_bank_vts_max_vals, inner_feats2d_net_bank_vts_max_ids = inner_feats2d.max(dim=1)
-                # show_img(self.meshes.get_verts_with_mesh_id[mesh_id][inner_feats2d_net_bank_vts_max_ids[0, 0]].permute(2, 0, 1), normalize=True)
-                # show_img(inner_feats2d_net_bank_vts_max_vals[0])
-
-                # clutter_score = inner_feats2d[:, -clutter_feats.shape[0]:].mean(dim=1).flatten(1).mean(dim=1)
-                # mesh_score -= clutter_score
-                meshes_scores.append(mesh_score)
+                meshes_scores.append(sim)
             meshes_scores = torch.stack(meshes_scores, dim=-1)
             pred_class_scores, pred_class_ids = meshes_scores.max(dim=1)
 
@@ -1139,20 +918,28 @@ class NeMo(OD3D_Method):
             #                                                           imgs_sizes=batch.size,
             #                                                           meshes_ids=batch.category_id[:1],
             #                                                           modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
-            #                                                           broadcast_batch_and_cams=True)[0]).to(dtype=batch.rgb.dtype)), duration=-1)
+            #                                                           brocacadcast_batch_and_cams=True)[0]).to(dtype=batch.rgb.dtype)), duration=-1)
 
             #  OPTION A: Use 2d gradient of rendered features
-            sim = self.get_sim_feats2d_net_with_cams(
-                feats2d_net=feats2d_net,
-                feats2d_net_mask=feats2d_net_mask,
-                cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
-                cam_intr4x4=b_cams_multiview_intr4x4,
-                categories_ids=batch.category_id,
-                broadcast_batch_and_cams=True,
-                only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                allow_clutter=self.config.inference.allow_clutter,
-                use_sigmoid=self.config.inference.use_sigmoid,
-            )
+            sim = self.meshes.get_sim_render(feats2d_img=feats2d_net, cams_tform4x4_obj=b_cams_multiview_tform4x4_obj,
+                                             cams_intr4x4=b_cams_multiview_intr4x4,
+                                             objects_ids=batch.category_id,
+                                             broadcast_batch_and_cams=True,
+                                             down_sample_rate=self.down_sample_rate,
+                                             feats2d_img_mask=feats2d_net_mask,
+                                             allow_clutter=self.config.inference.allow_clutter, return_sim_pxl=False,
+                                             add_clutter=self.config.inference.allow_clutter, temp=self.config.train.T)
+            # sim = self.get_sim_feats2d_net_with_cams(
+            #     feats2d_net=feats2d_net,
+            #     feats2d_net_mask=feats2d_net_mask,
+            #     cam_tform4x4_obj=b_cams_multiview_tform4x4_obj,
+            #     cam_intr4x4=b_cams_multiview_intr4x4,
+            #     categories_ids=batch.category_id,
+            #     broadcast_batch_and_cams=True,
+            #     only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
+            #     allow_clutter=self.config.inference.allow_clutter,
+            #     use_sigmoid=self.config.inference.use_sigmoid,
+            # )
 
             if return_samples_with_sim:
                 results["samples_cam_tform4x4_obj"] = b_cams_multiview_tform4x4_obj
@@ -1208,19 +995,31 @@ class NeMo(OD3D_Method):
                     se3_exp_map(obj_tform6_tmp),
                 )
 
-                sim, sim_pxl = self.get_sim_feats2d_net_with_cams(
-                    feats2d_net=feats2d_net,
-                    feats2d_net_mask=feats2d_net_mask,
-                    cam_tform4x4_obj=cam_tform4x4_obj,
-                    cam_intr4x4=batch.cam_intr4x4,
-                    categories_ids=batch.category_id,
-                    return_sim_pxl=True,
-                    broadcast_batch_and_cams=False,
-                    pre_rendered=False,
-                    only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
-                    allow_clutter=self.config.inference.allow_clutter,
-                    use_sigmoid=self.config.inference.use_sigmoid,
-                )
+                sim, sim_pxl = self.meshes.get_sim_render(feats2d_img=feats2d_net,
+                                                 cams_tform4x4_obj=cam_tform4x4_obj,
+                                                 cams_intr4x4=batch.cam_intr4x4,
+                                                 objects_ids=batch.category_id,
+                                                 broadcast_batch_and_cams=False,
+                                                 down_sample_rate=self.down_sample_rate,
+                                                 feats2d_img_mask=feats2d_net_mask,
+                                                 allow_clutter=self.config.inference.allow_clutter,
+                                                 return_sim_pxl=True,
+                                                 add_clutter=self.config.inference.allow_clutter,
+                                                 temp=self.config.train.T)
+
+                # sim, sim_pxl = self.get_sim_feats2d_net_with_cams(
+                #     feats2d_net=feats2d_net,
+                #     feats2d_net_mask=feats2d_net_mask,
+                #     cam_tform4x4_obj=cam_tform4x4_obj,
+                #     cam_intr4x4=batch.cam_intr4x4,
+                #     categories_ids=batch.category_id,
+                #     return_sim_pxl=True,
+                #     broadcast_batch_and_cams=False,
+                #     pre_rendered=False,
+                #     only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
+                #     allow_clutter=self.config.inference.allow_clutter,
+                #     use_sigmoid=self.config.inference.use_sigmoid,
+                # )
                 mesh_cam_loss = -sim
 
                 if self.config.inference.live:
@@ -1228,12 +1027,12 @@ class NeMo(OD3D_Method):
                         blend_rgb(
                             batch.rgb[0],
                             (
-                                self.meshes.render_feats(
+                                self.meshes.render(
                                     cams_tform4x4_obj=cam_tform4x4_obj[0 : 0 + 1],
                                     cams_intr4x4=batch.cam_intr4x4[0 : 0 + 1],
                                     imgs_sizes=batch.size,
                                     meshes_ids=batch.category_id[0 : 0 + 1],
-                                    modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
+                                    modality=PROJECT_MODALITIES.PT3D_NCDS,
                                 )[0]
                             ).to(dtype=batch.rgb.dtype),
                         ),
@@ -1472,7 +1271,7 @@ class NeMo(OD3D_Method):
                         blend_rgb(
                             batch.rgb[0],
                             (
-                                self.meshes.render_feats(
+                                self.meshes.render(
                                     cams_tform4x4_obj=tform4x4_broadcast(
                                         batch.cam_tform4x4_obj,
                                         obj_tform4x4_cuboid_front,
@@ -1480,7 +1279,7 @@ class NeMo(OD3D_Method):
                                     cams_intr4x4=batch.cam_intr4x4[0 : 0 + 1],
                                     imgs_sizes=batch.size,
                                     meshes_ids=batch.category_id[0 : 0 + 1],
-                                    modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
+                                    modality=PROJECT_MODALITIES.VERTS_NCDS,
                                 )[0]
                             ).to(dtype=batch.rgb.dtype),
                         ),
@@ -1573,7 +1372,7 @@ class NeMo(OD3D_Method):
                 batch.cam_tform4x4_obj = results_batch["gt_cam_tform4x4_obj"].to(
                     device=self.device,
                 )[batch_result_ids]
-            if "noise2d" in results_batch.keys():
+            if "noise2d" in results_batch.keys() and results_batch["noise2d"] is not None:
                 batch.noise2d = results_batch["noise2d"].to(device=self.device)[
                     batch_result_ids
                 ]
@@ -1599,92 +1398,57 @@ class NeMo(OD3D_Method):
                 )
 
             feats2d_net = self.net(batch.rgb)
-            # feats2d_net = resize(feats2d_net,
-            #                     scale_factor=self.down_sample_rate / config_visualize.down_sample_rate)
-            feats2d_net_mask = torch.ones(
-                size=(
-                    feats2d_net.shape[0],
-                    1,
-                    feats2d_net.shape[2],
-                    feats2d_net.shape[3],
-                ),
-            ).to(device=self.device)
-            feats2d_net = feats2d_net.detach() / feats2d_net.detach().norm(
-                dim=1,
-                keepdim=True,
-            )
-
             feats2d_net_mask = 1.0 * resize(
                 batch.rgb_mask,
                 H_out=feats2d_net.shape[2],
                 W_out=feats2d_net.shape[3],
             )
-            feats2d_net_mask = feats2d_net_mask * self.meshes.render_feats(
+            sample1d_mods = self.meshes.sample_with_img2d(
+                img2d=feats2d_net,
+                img2d_mask=feats2d_net_mask,
                 cams_intr4x4=batch.cam_intr4x4,
                 cams_tform4x4_obj=batch.cam_tform4x4_obj,
                 imgs_sizes=batch.size,
-                meshes_ids=batch.category_id,
+                objects_ids=batch.category_id,
                 down_sample_rate=self.down_sample_rate,
-                modality=MESH_RENDER_MODALITIES.MASK,
-            )
-
-            H, W = feats2d_net.shape[-2:]
-            xy = torch.stack(
-                torch.meshgrid(
-                    torch.arange(W, device=self.device),
-                    torch.arange(H, device=self.device),
-                    indexing="xy",
-                ),
-                dim=0,
-            )  # HxW
-            prob_noise = (1.0 - 1.0 * feats2d_net_mask).clamp(0, 1).flatten(1)
-            prob_noise[prob_noise.sum(dim=-1) <= 0.0] = 1.0
-            noise2d = xy.flatten(1)[
-                :,
-                torch.multinomial(prob_noise, self.config.num_noise, replacement=True),
-            ].permute(1, 2, 0)
-
-            # note: visual for debug
-            # from od3d.cv.visual.show import show_imgs
-            # from od3d.cv.visual.draw import draw_pixels
-            # prob_noise_pxls = prob_noise.reshape(-1, 1, H, W).clone().repeat(1, 3, 1, 1)
-            # for b in range(len(prob_noise_pxls)):
-            #     prob_noise_pxls[b] = draw_pixels(prob_noise_pxls[b], noise2d[b])
-            # show_imgs(prob_noise_pxls)
-            vts2d, vts2d_mask = self.meshes.verts2d(
-                cams_intr4x4=batch.cam_intr4x4,
-                cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                imgs_sizes=batch.size,
-                mesh_ids=batch.category_id,
-                down_sample_rate=self.down_sample_rate,
-            )
+                modalities=[PROJECT_MODALITIES.PXL2D, PROJECT_MODALITIES.MASK, PROJECT_MODALITIES.IMG])
+            vts2d, vts2d_mask = sample1d_mods[PROJECT_MODALITIES.PXL2D], sample1d_mods[PROJECT_MODALITIES.MASK]
+            net_feats = sample1d_mods[PROJECT_MODALITIES.IMG]
             N = vts2d.shape[1]
-            vts2d_feats2d_net_mask = sample_pxl2d_pts(
-                feats2d_net_mask,
-                pxl2d=torch.cat([vts2d], dim=1),
-            )
-            vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
-            net_feats = sample_pxl2d_pts(
-                feats2d_net,
-                pxl2d=torch.cat([vts2d, noise2d], dim=1),
-            )
             C = net_feats.shape[2]
+
+            #
+            # vts2d_feats2d_net_mask = sample_pxl2d_pts(
+            #     feats2d_net_mask,
+            #     pxl2d=torch.cat([vts2d], dim=1),
+            # )
+            # vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
+            # net_feats = sample_pxl2d_pts(
+            #     feats2d_net,
+            #     pxl2d=torch.cat([vts2d, noise2d], dim=1),
+            # )
+            #
 
             if VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS in modalities:
                 logger.info("create net_feats_nearest_verts ...")
-                verts3d = self.get_nearest_verts3d_to_feats2d_net(
-                    feats2d_net=feats2d_net,
-                    categories_ids=batch.category_id,
-                    zero_if_sim_clutter_larger=True,
-                )
-                verts3d = resize(
-                    verts3d,
+                nearest_pt3d_ncds = self.meshes.sample_nearest_to_feats2d_img(feats2d_img=feats2d_net,
+                                                                    objects_ids=batch.category_id,
+                                                                    modalities=PROJECT_MODALITIES.PT3D_NCDS,
+                                                                    add_clutter=True)
+
+                #verts3d = self.get_nearest_verts3d_to_feats2d_net(
+                #    feats2d_net=feats2d_net,
+                #    categories_ids=batch.category_id,
+                #    zero_if_sim_clutter_larger=True,
+                #)
+                nearest_pt3d_ncds = resize(
+                    nearest_pt3d_ncds,
                     scale_factor=self.down_sample_rate / down_sample_rate,
                 )
                 for b in range(len(batch)):
                     img = blend_rgb(
                         resize(batch.rgb[b], scale_factor=1.0 / down_sample_rate),
-                        verts3d[b],
+                        nearest_pt3d_ncds[b],
                     )
                     results_batch_visual[
                         f"visual/{VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS}/{batch_sel_names[b]}"
@@ -1720,15 +1484,10 @@ class NeMo(OD3D_Method):
                                                          broadcast_batch_and_cams=True)
                 """
 
-                ncds = self.get_ncds_with_cam(
-                    cam_tform4x4_obj=s_cam_tform4x4_obj,
-                    cam_intr4x4=s_cam_intr4x4,
-                    size=batch.size,
-                    categories_ids=batch.category_id,
-                    down_sample_rate=down_sample_rate,
-                    broadcast_batch_and_cams=True,
-                    pre_rendered=False,
-                )
+                ncds = self.meshes.render(cams_tform4x4_obj=s_cam_tform4x4_obj, cams_intr4x4=s_cam_intr4x4,
+                                          imgs_sizes=batch.size, objects_ids=batch.category_id,
+                                          down_sample_rate=down_sample_rate, broadcast_batch_and_cams=True,
+                                          modalities=PROJECT_MODALITIES.PT3D_NCDS)
 
                 for b in range(len(batch)):
                     imgs = ncds[b]
@@ -1815,18 +1574,16 @@ class NeMo(OD3D_Method):
                 batch_pred_cam_tform4x4 = results_batch["cam_tform4x4_obj"].to(
                     device=self.device,
                 )[batch_result_ids]
-                sim, sim_pxl = self.get_sim_feats2d_net_with_cams(
-                    feats2d_net=feats2d_net,
-                    cam_intr4x4=batch.cam_intr4x4,
-                    cam_tform4x4_obj=batch_pred_cam_tform4x4,
-                    categories_ids=batch.category_id,
+
+                sim, sim_pxl = self.meshes.get_sim_render(
+                    feats2d_img=feats2d_net,
+                    cams_intr4x4=batch.cam_intr4x4,
+                    cams_tform4x4_obj=batch_pred_cam_tform4x4,
+                    objects_ids=batch.category_id,
                     return_sim_pxl=True,
                     broadcast_batch_and_cams=False,
-                    sim_feats_mesh_with_image=SIM_FEATS_MESH_WITH_IMAGE.RENDERED,
-                    pre_rendered=False,
-                    only_use_rendered_inliers=self.config.inference.only_use_rendered_inliers,
                     allow_clutter=self.config.inference.allow_clutter,
-                    use_sigmoid=self.config.inference.use_sigmoid,
+                    add_clutter=self.config.inference.allow_clutter,
                 )
 
                 sim_pxl = resize(
@@ -1858,14 +1615,12 @@ class NeMo(OD3D_Method):
                 batch_pred_cam_tform4x4 = results_batch["cam_tform4x4_obj"].to(
                     device=self.device,
                 )[batch_result_ids]
-                pred_verts_ncds = self.get_ncds_with_cam(
-                    cam_intr4x4=batch.cam_intr4x4,
-                    cam_tform4x4_obj=batch_pred_cam_tform4x4,
-                    categories_ids=batch.category_id,
-                    size=batch.size,
-                    down_sample_rate=down_sample_rate,
-                    pre_rendered=False,
-                )
+
+                pred_verts_ncds = self.meshes.render(cams_tform4x4_obj=batch_pred_cam_tform4x4, cams_intr4x4=batch.cam_intr4x4,
+                                          imgs_sizes=batch.size, objects_ids=batch.category_id,
+                                          down_sample_rate=down_sample_rate, broadcast_batch_and_cams=False,
+                                          modalities=PROJECT_MODALITIES.PT3D_NCDS)
+
                 if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities:
                     for b in range(len(batch)):
                         img = blend_rgb(
@@ -1886,21 +1641,19 @@ class NeMo(OD3D_Method):
                 or VISUAL_MODALITIES.PRED_VS_GT_VERTS_NCDS_IN_RGB in modalities
             ):
                 logger.info("create gt verts ncds...")
-                gt_verts_ncds = self.get_ncds_with_cam(
-                    cam_intr4x4=batch.cam_intr4x4,
-                    cam_tform4x4_obj=batch.cam_tform4x4_obj,
-                    categories_ids=batch.category_id,
-                    size=batch.size,
-                    down_sample_rate=down_sample_rate,
-                    pre_rendered=False,
-                )
+
+                gt_verts_ncds = self.meshes.render(
+                    cams_tform4x4_obj=batch.cam_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4,
+                    imgs_sizes=batch.size, objects_ids=batch.category_id, down_sample_rate=down_sample_rate,
+                    broadcast_batch_and_cams=False, modalities=PROJECT_MODALITIES.PT3D_NCDS)
+
                 if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities:
                     for b in range(len(batch)):
                         img = blend_rgb(
                             resize(batch.rgb[b], scale_factor=1.0 / down_sample_rate),
                             gt_verts_ncds[b],
                         )
-                        if "noise2d" in results_batch.keys():
+                        if "noise2d" in results_batch.keys() and results_batch["noise2d"] is not None:
                             from od3d.cv.visual.draw import draw_pixels
 
                             img = draw_pixels(
@@ -1952,7 +1705,7 @@ class NeMo(OD3D_Method):
 
                 for b in range(len(batch)):
                     mesh_and_image_feats_colors = self.feats_all_colors.copy()
-                    mesh_and_image_feats_length = [self.meshes.feats.shape[0]]
+                    mesh_and_image_feats_length = [self.meshes.feats_objects.shape[0]]
                     fg_feats = net_feats[b, :N][vts2d_mask[b]]
                     bg_feats = net_feats[b, N:].reshape(-1, C)
                     print(fg_feats.shape, bg_feats.shape)
@@ -1967,7 +1720,7 @@ class NeMo(OD3D_Method):
                         [fg_feats.shape[0], bg_feats.shape[0]],
                     )
                     feats_tsne_all = tsne(
-                        torch.cat([self.meshes.feats, fg_feats, bg_feats], dim=0),
+                        torch.cat([self.meshes.feats_objects, fg_feats, bg_feats], dim=0),
                         C=2,
                     )
                     print(len(mesh_and_image_feats_colors))
@@ -2098,7 +1851,7 @@ class NeMo(OD3D_Method):
             logger.info("create tsne plots for the mesh...")
             from od3d.cv.cluster.embed import tsne
 
-            feats_tsne = tsne(self.meshes.feats, C=2)
+            feats_tsne = tsne(self.meshes.feats_objects, C=2)
 
             img = show_scene2d(
                 [feats_tsne],
@@ -2115,7 +1868,7 @@ class NeMo(OD3D_Method):
             logger.info("create pca plots for the mesh...")
             from od3d.cv.cluster.embed import pca
 
-            feats_pca = pca(self.meshes.feats, C=2)
+            feats_pca = pca(self.meshes.feats_objects, C=2)
 
             img = show_scene2d(
                 [feats_pca],
@@ -2138,156 +1891,6 @@ class NeMo(OD3D_Method):
             )
 
         return results
-
-    def get_nearest_verts3d_to_feats2d_net(
-        self,
-        feats2d_net,
-        categories_ids,
-        zero_if_sim_clutter_larger=False,
-        return_sim_texture_and_clutter=False,
-    ):
-        B = len(feats2d_net)
-        sim_nearest_texture_vals, sim_nearest_texture_ids = self.calc_sim(
-            "bchw,bvc->bvhw",
-            feats2d_net,
-            self.meshes.get_feats_stacked_with_mesh_ids(categories_ids).detach(),
-        ).max(dim=1, keepdim=True)
-
-        sim_nearest_texture_verts3d = torch.stack(
-            [
-                self.meshes.get_verts_stacked_with_mesh_ids(
-                    categories_ids[b : b + 1],
-                )[0, sim_nearest_texture_ids[b, 0]]
-                for b in range(B)
-            ],
-            dim=0,
-        )
-
-        if zero_if_sim_clutter_larger or return_sim_texture_and_clutter:
-            sim_clutter = self.calc_sim(
-                "bchw,nc->bnhw",
-                feats2d_net,
-                self.clutter_feats.detach(),
-            ).max(dim=1, keepdim=True)[0]
-            # sim_clutter = self.calc_sim('bchw,nc->bnhw', net_feats2d, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
-            if zero_if_sim_clutter_larger:
-                sim_nearest_texture_verts3d[
-                    sim_clutter[:, 0] > sim_nearest_texture_vals[:, 0]
-                ] = 0.0
-
-        sim_nearest_texture_verts3d = sim_nearest_texture_verts3d.permute(0, 3, 1, 2)
-        if return_sim_texture_and_clutter:
-            return sim_nearest_texture_verts3d, sim_nearest_texture_vals, sim_clutter
-
-        return sim_nearest_texture_verts3d
-
-    def get_ncds_with_cam(
-        self,
-        cam_intr4x4: torch.Tensor,
-        cam_tform4x4_obj: torch.Tensor,
-        size: torch.Tensor,
-        categories_ids: torch.Tensor,
-        down_sample_rate=1.0,
-        broadcast_batch_and_cams=False,
-        pre_rendered: bool = None,
-    ):
-        if pre_rendered is None:
-            pre_rendered = self.config.inference.pre_rendered
-
-        if pre_rendered:
-            return self.meshes.get_pre_rendered_feats(
-                cams_tform4x4_obj=cam_tform4x4_obj,
-                cams_intr4x4=cam_intr4x4,
-                imgs_sizes=size,
-                meshes_ids=categories_ids,
-                modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
-                down_sample_rate=down_sample_rate,
-                broadcast_batch_and_cams=broadcast_batch_and_cams,
-            )
-        else:
-            return self.meshes.render_feats(
-                cams_tform4x4_obj=cam_tform4x4_obj,
-                cams_intr4x4=cam_intr4x4,
-                imgs_sizes=size,
-                meshes_ids=categories_ids,
-                modality=MESH_RENDER_MODALITIES.VERTS_NCDS,
-                down_sample_rate=down_sample_rate,
-                broadcast_batch_and_cams=broadcast_batch_and_cams,
-            )
-
-    def get_sim_feats2d_net_with_cams(
-        self,
-        feats2d_net,
-        cam_tform4x4_obj,
-        cam_intr4x4,
-        categories_ids,
-        return_sim_pxl=False,
-        broadcast_batch_and_cams=False,
-        feats2d_net_mask=None,
-        sim_feats_mesh_with_image: SIM_FEATS_MESH_WITH_IMAGE = None,
-        pre_rendered: bool = None,
-        only_use_rendered_inliers=False,
-        allow_clutter=True,
-        use_sigmoid=False,
-    ):
-        if sim_feats_mesh_with_image is None:
-            sim_feats_mesh_with_image = self.config.inference.sim_feats_mesh_with_image
-        if pre_rendered is None:
-            pre_rendered = self.config.inference.pre_rendered
-        size = torch.Tensor(
-            [
-                feats2d_net.shape[2] * self.down_sample_rate,
-                feats2d_net.shape[3] * self.down_sample_rate,
-            ],
-        ).to(device=feats2d_net.device)
-        if sim_feats_mesh_with_image == SIM_FEATS_MESH_WITH_IMAGE.RENDERED:
-            if pre_rendered:
-                mesh_feats2d_rendered = self.meshes.get_pre_rendered_feats(
-                    cams_tform4x4_obj=cam_tform4x4_obj,
-                    cams_intr4x4=cam_intr4x4,
-                    imgs_sizes=size,
-                    meshes_ids=categories_ids,
-                    modality=MESH_RENDER_MODALITIES.FEATS,
-                    down_sample_rate=self.down_sample_rate,
-                    broadcast_batch_and_cams=broadcast_batch_and_cams,
-                )
-            else:
-                mesh_feats2d_rendered = self.meshes.render_feats(
-                    cams_tform4x4_obj=cam_tform4x4_obj,
-                    cams_intr4x4=cam_intr4x4,
-                    imgs_sizes=size,
-                    meshes_ids=categories_ids,
-                    down_sample_rate=self.down_sample_rate,
-                    broadcast_batch_and_cams=broadcast_batch_and_cams,
-                )
-
-            return self.get_sim_feats2d_net_and_rendered(
-                feats2d_net=feats2d_net,
-                feats2d_rendered=mesh_feats2d_rendered,
-                return_sim_pxl=return_sim_pxl,
-                feats2d_net_mask=feats2d_net_mask,
-                only_use_rendered_inliers=only_use_rendered_inliers,
-                allow_clutter=allow_clutter,
-                use_sigmoid=use_sigmoid,
-            )
-
-        elif sim_feats_mesh_with_image == SIM_FEATS_MESH_WITH_IMAGE.VERTS2D:
-            verts2d_mesh, verts2d_mesh_mask = self.meshes.verts2d(
-                cams_intr4x4=cam_intr4x4,
-                cams_tform4x4_obj=cam_tform4x4_obj,
-                imgs_sizes=size,
-                mesh_ids=categories_ids,
-                down_sample_rate=self.down_sample_rate,
-                broadcast_batch_and_cams=broadcast_batch_and_cams,
-            )
-            return self.get_sim_feats2d_net_and_verts(
-                categories_ids=categories_ids,
-                feats2d_net=feats2d_net,
-                verts2d_mesh=verts2d_mesh,
-                verts2d_mesh_mask=verts2d_mesh_mask,
-                return_sim_pxl=return_sim_pxl,
-                feats2d_net_mask=feats2d_net_mask,
-            )
 
     def get_nearest_corresp2d3d(
         self,
@@ -2319,262 +1922,6 @@ class NeMo(OD3D_Method):
         prob_corresp2d3d *= feats2d_net_mask
 
         return nearest_verts3d, nearest_verts2d, prob_corresp2d3d
-
-    def get_sim_feats2d_net_and_verts(
-        self,
-        categories_ids,
-        feats2d_net,
-        verts2d_mesh,
-        verts2d_mesh_mask,
-        return_sim_pxl=False,
-        feats2d_net_mask=None,
-    ):
-        """
-        Args:
-            categories_ids (torch.Tensor): B, ids of categories=meshes to which the similarty should be calculated
-            feats2d_net (torch.Tensor): BxCxHxW
-            verts2d_mesh (torch.Tensor): Bx(T)xVx2
-            verts2d_mesh_mask (torch.Tensor): Bx(T)xV
-            return_sim_pxl (bool): Indicates whether pixelwise similarity should be returned or not.
-            feats2d_net_mask (torch.Tensor): BxCxHxW
-
-        Returns:
-            sim (torch.Tensor): BxV, or Bx1 if rendered features is 4-dimensional.
-            sim_pxl (torch.Tensor, optional): BxTxHxW, or Bx1xHxW if rendered features is 4-dimensional.
-
-        """
-        B, C, H, W = feats2d_net.shape
-        V = verts2d_mesh.shape[-2]
-
-        verts2d_mesh_ids = self.meshes.get_verts_and_noise_ids_stacked(
-            categories_ids,
-            count_noise_ids=0,
-        )  # B x V
-        feats2d_mesh = self.meshes.feats[verts2d_mesh_ids]  # B x V x C
-
-        if verts2d_mesh.dim() == 4:
-            T = verts2d_mesh.shape[1]
-            feats2d_net_sampled = sample_pxl2d_pts(
-                feats2d_net,
-                pxl2d=verts2d_mesh.reshape(B, -1, 2),
-            ).reshape(B, -1, V, C)
-            if feats2d_net_mask is not None:
-                feats2d_net_mask_sampled = sample_pxl2d_pts(
-                    feats2d_net_mask,
-                    pxl2d=verts2d_mesh.reshape(B, -1, 2),
-                ).reshape(B, -1, V)
-        elif verts2d_mesh.dim() == 3:
-            # B x T x V x C
-            T = 1
-            feats2d_net_sampled = sample_pxl2d_pts(feats2d_net, pxl2d=verts2d_mesh)[
-                :,
-                None,
-            ]
-            if feats2d_net_mask is not None:
-                # B x T x V
-                feats2d_net_mask_sampled = sample_pxl2d_pts(
-                    feats2d_net_mask,
-                    pxl2d=verts2d_mesh,
-                ).reshape(B, -1, V)
-
-        else:
-            T = 1
-            feats2d_net_mask_sampled = None
-            feats2d_net_sampled = None
-            logger.error(f"Unexpected dimension of verts2d_mesh {verts2d_mesh.shape}")
-        # [verts2d_mesh_mask]
-        sim_clutter = self.calc_sim(
-            "btvc,nc->bntv",
-            feats2d_net_sampled,
-            self.clutter_feats.detach(),
-        ).max(dim=1, keepdim=False)[0]
-        sim_texture_multiple_cams = self.calc_sim(
-            "btvc,bvc->btv",
-            feats2d_net_sampled,
-            feats2d_mesh,
-        )
-        sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
-
-        if verts2d_mesh_mask.dim() == 3:
-            sim_pxl_mask = verts2d_mesh_mask
-        elif verts2d_mesh_mask.dim() == 2:
-            sim_pxl_mask = verts2d_mesh_mask[:, None]
-        else:
-            sim_pxl_mask = None
-            logger.error(
-                f"Unexpected dimension of verts2d_mesh_mask {verts2d_mesh_mask.shape}",
-            )
-
-        if feats2d_net_mask is not None:
-            sim_pxl_mask = sim_pxl_mask * feats2d_net_mask_sampled
-
-        sim_pxl *= sim_pxl_mask
-        sim = sim_pxl.flatten(2).sum(dim=-1) / (
-            sim_pxl_mask.flatten(2).sum(dim=-1) + 1e-10
-        )
-
-        sim_pxl2d = torch.zeros(
-            size=(B, T, H, W),
-            dtype=feats2d_net.dtype,
-            device=feats2d_net.device,
-        )
-        # torch.gather(input=sim_pxl2d, dim=-1, index=verts2d_mesh[:, :, :, 0][..., None, :].long())
-        # sim_pxl2d_x =
-        # sim_pxl2d_y = verts2d_mesh.reshape(-1, V, 2)[:, :, 1].long()
-
-        # sim_pxl2d[]
-        # sim_pxl2d_sampled = sample_pxl2d_pts(sim_pxl2d.reshape(-1, 1, H, W), pxl2d=verts2d_mesh.reshape(-1, V, 2)).reshape(B, T, V)
-        # sim_pxl2d_sampled[:, :] = sim_pxl
-        sim_pxl = sim_pxl2d
-
-        if return_sim_pxl:
-            return sim, sim_pxl
-        else:
-            return sim
-
-    @staticmethod
-    def batched_index_select(input, dim, index):
-        for ii in range(1, len(input.shape)):
-            if ii != dim:
-                index = index.unsqueeze(ii)
-        expanse = list(input.shape)
-        expanse[0] = -1
-        expanse[dim] = -1
-        index = index.expand(expanse)
-        return torch.gather(input, dim, index)
-
-    def get_sim_feats2d_net_and_rendered(
-        self,
-        feats2d_net,
-        feats2d_rendered,
-        return_sim_pxl=False,
-        feats2d_net_mask=None,
-        only_use_rendered_inliers=False,
-        allow_clutter=True,
-        use_sigmoid=False,
-    ):
-        """
-
-        Args:
-            feats2d_net (torch.Tensor): BxCxHxW
-            feats2d_rendered (torch.Tensor): Bx(T)xCxHxW
-            return_sim_pxl (bool): Indicates whether pixelwise similarity should be returned or not.
-            feats2d_net_mask (torch.Tensor): Bx1xHxW
-
-        Returns:
-            sim (torch.Tensor): BxT, or Bx1 if rendered features is 4-dimensional.
-            sim_pxl (torch.Tensor, optional): BxTxHxW, or Bx1xHxW if rendered features is 4-dimensional.
-        """
-
-        sim_clutter = self.calc_sim(
-            "bchw,nc->bnhw",
-            feats2d_net,
-            self.clutter_feats.detach(),
-        ).max(dim=1, keepdim=True)[0]
-
-        # sim_clutter = torch.einsum('bchw,nc->bnhw', feats2d_net, self.clutter_feats.detach()).mean(dim=1, keepdim=True)
-
-        if feats2d_rendered.dim() == 5:
-            feats2d_rendered_clutter_mask = feats2d_rendered.norm(dim=2) == 0.0
-            sim_texture_multiple_cams = self.calc_sim(
-                "bchw,bvchw->bvhw",
-                feats2d_net,
-                feats2d_rendered,
-            )
-        else:
-            feats2d_rendered_clutter_mask = (feats2d_rendered.norm(dim=1) == 0.0)[
-                :,
-                None,
-            ]
-            sim_texture_multiple_cams = self.calc_sim(
-                "bchw,bchw->bhw",
-                feats2d_net,
-                feats2d_rendered,
-            )[:, None]
-
-        # note only for occlusions: either
-        # given feats2d_net_mask:
-        #   a) only use feats2d_net_mask inliers,
-        #   b) use feats2d_net_mask inliers plus clutter for outliers
-        # given non mask: use either
-        #   a) only inliers of rendered mask with maximum clutter/texture
-        #   b) inliers and outliers of rendered mask, both with maximum clutter/texture
-
-        # depcrecated?
-        #       sim_pxl = torch.max(sim_texture_multiple_cams, sim_clutter)
-        sim_pxl = sim_texture_multiple_cams
-
-        if feats2d_net_mask is not None:
-            feats2d_net_mask_clutter_bin = (feats2d_net_mask < 0.5).expand(
-                *sim_pxl.shape,
-            )
-            sim_pxl[feats2d_net_mask_clutter_bin] = sim_clutter.expand(*sim_pxl.shape)[
-                feats2d_net_mask_clutter_bin
-            ]
-            sim_pxl[
-                (~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask
-            ] = sim_clutter.expand(*sim_pxl.shape)[
-                (~feats2d_net_mask_clutter_bin) * feats2d_rendered_clutter_mask
-            ]
-            if allow_clutter:
-                sim_pxl[
-                    (~feats2d_net_mask_clutter_bin) * (~feats2d_rendered_clutter_mask)
-                ] = torch.max(
-                    sim_texture_multiple_cams[
-                        (~feats2d_net_mask_clutter_bin)
-                        * (~feats2d_rendered_clutter_mask)
-                    ],
-                    sim_clutter.expand(*sim_pxl.shape)[
-                        (~feats2d_net_mask_clutter_bin)
-                        * (~feats2d_rendered_clutter_mask)
-                    ],
-                )
-            else:
-                sim_pxl[
-                    (~feats2d_net_mask_clutter_bin) * (~feats2d_rendered_clutter_mask)
-                ] = sim_texture_multiple_cams[
-                    (~feats2d_net_mask_clutter_bin) * (~feats2d_rendered_clutter_mask)
-                ]
-        else:
-            sim_pxl[feats2d_rendered_clutter_mask] = sim_clutter.expand(*sim_pxl.shape)[
-                feats2d_rendered_clutter_mask
-            ]
-            if allow_clutter:
-                sim_pxl[~feats2d_rendered_clutter_mask] = torch.max(
-                    sim_texture_multiple_cams[~feats2d_rendered_clutter_mask],
-                    sim_clutter.expand(*sim_pxl.shape)[~feats2d_rendered_clutter_mask],
-                )
-            else:
-                sim_pxl[~feats2d_rendered_clutter_mask] = sim_texture_multiple_cams[
-                    ~feats2d_rendered_clutter_mask
-                ]
-
-        # depcrecated?
-        # if feats2d_net_mask is None:
-        #     sim = sim_pxl.flatten(2).mean(dim=-1)
-        # else:
-        #     sim_pxl *= feats2d_net_mask
-        #     sim = sim_pxl.flatten(2).sum(dim=-1) / (feats2d_net_mask.flatten(2).sum(dim=-1) + 1e-10)
-
-        # use sigmoid
-        # sim_pxl = torch.nn.functional.softmax(sim_pxl, dim=1)
-
-        if use_sigmoid:
-            sim_pxl = torch.sigmoid(sim_pxl)
-
-        # only use rendered map inliers
-        if only_use_rendered_inliers:
-            sim = (sim_pxl * (~feats2d_rendered_clutter_mask)).sum(dim=(2, 3)) / (
-                ~feats2d_rendered_clutter_mask
-            ).sum(dim=(2, 3)).clamp(min=1e-10)
-        # use also outliers
-        else:
-            sim = sim_pxl.flatten(2).mean(dim=-1)
-
-        if return_sim_pxl:
-            return sim, sim_pxl
-        else:
-            return sim
 
     def get_samples(
         self,
@@ -2667,11 +2014,8 @@ class NeMo(OD3D_Method):
                 dist_shape = dist.shape
                 in_shape = azim_shape + elev_shape + theta_shape + dist_shape
                 azim = azim[:, None, None, None].expand(in_shape).reshape(-1)
-
                 elev = elev[None, :, None, None].expand(in_shape).reshape(-1)
-
                 theta = theta[None, None, :, None].expand(in_shape).reshape(-1)
-
                 dist = dist[None, None, None, :].expand(in_shape).reshape(-1)
                 cams_multiview_tform4x4_cuboid = transf4x4_from_spherical(
                     azim=azim,
@@ -2776,74 +2120,6 @@ class NeMo(OD3D_Method):
                 multiview=multiview,
             )
         return b_cams_multiview_tform4x4_obj, b_cams_multiview_intr4x4
-
-    """
-
-            if self.config.train.visualize.verts_ncds_in_rgb:
-                for b in range(len(batch)):
-                    if batch.name_unique[b] in visual_names_unique:
-                        verts_ncds_in_rgb = blend_rgb(batch.rgb[b], (
-                            self.meshes.render_feats(cams_tform4x4_obj=batch.cam_tform4x4_obj[b:b + 1],
-                                                     cams_intr4x4=batch.cam_intr4x4[b:b + 1],
-                                                     imgs_sizes=batch.size, meshes_ids=batch.category_id[b:b + 1],
-                                                     modality=MESH_RENDER_MODALITIES.VERTS_NCDS)[0]).to(
-                            dtype=batch.rgb.dtype))
-                        from od3d.cv.geometry.transform import proj3d2d_origin
-                        verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb, pxls=proj3d2d_origin(
-                            torch.bmm(batch.cam_intr4x4, batch.cam_tform4x4_obj)[b:b + 1]), colors=[1., 0., 0.])
-                        verts_ncds_in_rgb = draw_pixels(verts_ncds_in_rgb,
-                                                        pxls=proj3d2d_origin(batch.cam_proj4x4_obj[b:b + 1]),
-                                                        colors=[1., 0., 0.])
-                        img = draw_pixels(verts_ncds_in_rgb, self.down_sample_rate * vts2d[b, mask_vts2d_vsbl[b]],
-                                          colors=self.meshes.get_verts_ncds_with_mesh_id(batch.category_id[b])[
-                                              mask_vts2d_vsbl[b]])
-                        results_train['verts_ncds_in_rgb'] = image_as_wandb_image(img,
-                                                                                  caption=f'Frame Name {batch.name_unique[b]}')
-                        if self.config.train.visualize.live:
-                            show_img(img)
-
-            if self.config.train.visualize.net_feats_nearest_verts:
-                for b in range(len(batch)):
-                    if batch.name_unique[b] in visual_names_unique:
-                        clutter_sim, clutter_sim_ids = self.calc_sim('bcn,vc->bnv', net_feats2d[b:b + 1].flatten(-2),
-                                                                    self.clutter_feats).max(dim=-1)
-                        net_mesh_nearest_feats_sim, net_mesh_nearest_feats_ids = self.calc_sim('bcn,vc->bnv',
-                                                                                              net_feats2d[
-                                                                                              b:b + 1].flatten(-2),
-                                                                                              self.meshes.get_feats_with_mesh_id(
-                                                                                                  batch.category_id[
-                                                                                                      b])).max(
-                            dim=-1)
-                        net_mesh_nearest_feats_verts_ncds = self.meshes.get_verts_ncds_with_mesh_id(batch.category_id[b])[
-                            net_mesh_nearest_feats_ids]
-                        net_mesh_nearest_feats_verts_ncds[clutter_sim > net_mesh_nearest_feats_sim] = 0.
-                        net_mesh_nearest_feats_verts_ncds = net_mesh_nearest_feats_verts_ncds.reshape(-1,
-                                                                                                      *net_feats2d.shape[
-                                                                                                       -2:],
-                                                                                                      3).permute(0,
-                                                                                                                 3,
-                                                                                                                 1,
-                                                                                                                 2)
-                        img = blend_rgb(resize(batch.rgb[b], scale_factor=1. / self.down_sample_rate),
-                                        net_mesh_nearest_feats_verts_ncds[0])
-                        results_train['net_feats_nearest_verts'] = image_as_wandb_image(img,
-                                                                                        caption=f'Frame Name {batch.name[b]}')
-                        if self.config.train.visualize.live:
-                            show_img(img)
-    """
-
-    # inference()
-
-    # train()
-    # 1. net_feats2d = get_net_feats2d()
-    # 1. net_feats2d = get_net_feats2d()
-    # 2. corresp2d3d = get_corresp2d3d()
-    #   -> visualize NET_FEATS_NEAREST_VERTS
-    # 2. samples = get_samples(corresp2d3d, method)
-    #   -> visualize SAMPLES
-    # 3. sample = select_sample()
-    # 4. sample = pose_iterative(sample)
-    #   -> visualize SIM_PXL, VERTS_NCDS_IN_RGB
 
     def visualize_test(self):
         pass

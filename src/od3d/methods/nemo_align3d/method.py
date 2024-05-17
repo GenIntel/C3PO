@@ -12,7 +12,7 @@ import math
 import torch
 
 torch.multiprocessing.set_sharing_strategy("file_system")
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.objects3d.meshes import Meshes
 from pathlib import Path
 from od3d.cv.geometry.transform import tform4x4
 from od3d.cv.metric.pose import get_pose_diff_in_rad

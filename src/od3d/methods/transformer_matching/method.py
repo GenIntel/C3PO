@@ -21,7 +21,7 @@ from pathlib import Path
 
 # import sys
 # sys.path.append(str(Path(__file__).parents[4] / 'third_party/LightGlue'))
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.objects3d.meshes import Meshes
 from od3d.models.feature_extractors import Extractor, rbd
 from od3d.cv.utils.dnnlib import construct_class_by_name
 from .utils import (

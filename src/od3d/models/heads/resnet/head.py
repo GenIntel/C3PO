@@ -181,7 +181,7 @@ class ResNet(OD3D_Head):
 
             self.downsample_rate = reduce(mul, [1] + self.conv_block_scaling, 1)
             self.fc_enabled = False
-        if config.pca.get("enable", False):
+        if config.get("pca", None) is not None and config.pca.get("enable", False):
             self.pca_enabled = False
             pca_dim = config.pca.get("out_dim", 32)
             self.pca_layer = nn.Linear(self.out_dim, pca_dim, bias=False)
@@ -237,5 +237,8 @@ class ResNet(OD3D_Head):
             x_res = self.pca_layer(x_res)
             x_res = x_res.permute(0, 2, 1)
             x_res = x_res.view(B, self.out_dim, H, W)
+
+            if self.normalize:
+                x_res = torch.nn.functional.normalize(x_res, p=2, dim=1)
 
         return x_res

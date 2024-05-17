@@ -18,7 +18,7 @@ from od3d.datasets.pascal3d.frame import Pascal3DFrameMeta, Pascal3DFrame
 from od3d.datasets.object import OD3D_MESH_TYPES
 from od3d.datasets.pascal3d.frame import Pascal3DFrameMeta
 from od3d.datasets.pascal3d_occ.frame import Pascal3D_OccFrameMeta, Pascal3D_OccFrame
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.objects3d.meshes import Meshes
 from tqdm import tqdm
 from od3d.datasets.pascal3d.enum import (
     PASCAL3D_SCALE_NORMALIZE_TO_REAL,

@@ -11,7 +11,7 @@ from od3d.datasets.pascal3d.enum import (
     PASCAL3D_SCALE_NORMALIZE_TO_REAL,
 )
 from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
-from od3d.cv.geometry.mesh import Mesh
+from od3d.cv.geometry.objects3d.meshes import Mesh
 import torchvision
 from od3d.datasets.pascal3d.enum import (
     MAP_CATEGORIES_OD3D_TO_PASCAL3D,

@@ -186,6 +186,7 @@ def get_colors(
     last_white_grey=False,
     K_rel=None,
     color_map=cv2.COLORMAP_JET,
+    randperm=False,
 ):
     if last_white_grey:
         K = K - 2
@@ -234,6 +235,9 @@ def get_colors(
 
     if device is not None:
         torch_colors = torch_colors.to(device)
+
+    if randperm:
+        torch_colors = torch_colors[torch.randperm(len(torch_colors))]
     # K x 3
     return torch_colors
 

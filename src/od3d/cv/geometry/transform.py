@@ -11,7 +11,6 @@ from pytorch3d.transforms import (
 )
 import pytorch3d.transforms
 
-
 def transf4x4_to_rot4x4_without_scale(transf4x4):
     # note: note alignment of droid slam may include scale, therefore remove this scale.
     # note: projection does not change as we scale the depth z to the object as well

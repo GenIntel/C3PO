@@ -20,7 +20,7 @@ from od3d.cv.visual.resize import resize
 from od3d.cv.visual.show import show_img
 from od3d.cv.visual.blend import blend_rgb
 from od3d.cv.visual.sample import sample_pxl2d_pts
-from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+from od3d.cv.geometry.objects3d.meshes import MESH_RENDER_MODALITIES
 
 
 @dataclass

@@ -20,7 +20,7 @@ from od3d.datasets.objectnet3d.frame import (
     ObjectNet3D_Frame,
 )  # , OD3D_Frame
 from tqdm import tqdm
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.objects3d.meshes import Meshes
 from od3d.datasets.object import OD3D_MESH_TYPES
 
 

@@ -16,7 +16,7 @@ from od3d.cv.geometry.transform import (
     transf3d_broadcast,
 )
 from od3d.datasets.co3d.enum import PCL_SOURCES, CUBOID_SOURCES, CAM_TFORM_OBJ_SOURCES
-from od3d.cv.geometry.mesh import Meshes, Mesh
+from od3d.cv.geometry.objects3d.meshes import Meshes, Mesh
 
 from od3d.cv.visual.show import get_img_from_plot, show_img
 from od3d.cv.visual.crop import crop_white_border_from_img

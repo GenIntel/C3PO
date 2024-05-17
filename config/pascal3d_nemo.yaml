@@ -21,12 +21,12 @@ test: True
 train_datasets:
   labeled:
     # path_cuboids: '${.path_preprocess}/mesh/cuboid1000' # 250 500 1000
-    #subset_fraction: 0.1
+    subset_fraction: 1.
     categories: ${categories}
 
 val_datasets:
   main:
-    #subset_fraction: 0.001
+    subset_fraction: 0.1
     categories: ${categories}
 
 test_datasets:
@@ -44,7 +44,7 @@ method:
 #      pre_rendered: False
 #      sample:
 #        method: epnp3d2d # epnp3d2d uniform
-#        depth_from_box: False
+#        depth_from_box: Falsez
 #      refine:
 #        enabled: True
 #        dims_detached: [ ] # 0-5, transl: 0, 1, 2, rot: 3, 4, 5
@@ -53,14 +53,15 @@ method:
     # checkpoint: ${platform.path_exps}/12-08_10-37-47_Pascal3D_NeMo_epochs50_slurm/nemo.ckpt
     # checkpoint: ${platform.path_exps}/11-20_19-29-23_Pascal3D_NeMo_local/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
     train:
+      # dense_loss: True
       val: True
       epochs: 50 # artur: 200  wufei: 800
-#      dataloader:
-#        num_workers: 4
+      dataloader:
+        num_workers: 4
 #        batch_size: 12 # artur: 24/32 wufei: 108
 #        pin_memory: True
-#    test:
-#      dataloader:
-#        num_workers: 4
+    test:
+      dataloader:
+        num_workers: 4
 #        batch_size: 4
 #        pin_memory: True

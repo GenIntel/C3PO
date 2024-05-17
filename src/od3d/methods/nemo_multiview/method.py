@@ -25,7 +25,7 @@ from tqdm import tqdm
 from od3d.cv.visual.show import show_img
 from od3d.cv.visual.blend import blend_rgb
 from tqdm import tqdm
-from od3d.cv.geometry.mesh import MESH_RENDER_MODALITIES
+from od3d.cv.geometry.objects3d.meshes import MESH_RENDER_MODALITIES
 from od3d.data.ext_enum import ExtEnum
 
 

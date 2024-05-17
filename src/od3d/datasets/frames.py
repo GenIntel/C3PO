@@ -12,7 +12,7 @@ from od3d.datasets.frame import (
 )
 from od3d.datasets.sequence import OD3D_Sequence
 from typing import List
-from od3d.cv.geometry.mesh import Meshes, MESH_RENDER_MODALITIES
+from od3d.cv.geometry.objects3d.meshes import Meshes, MESH_RENDER_MODALITIES
 from dataclasses import dataclass
 
 

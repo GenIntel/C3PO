@@ -20,7 +20,7 @@ import scipy.io
 import numpy as np
 import torch
 import math
-from od3d.cv.geometry.mesh import Mesh
+from od3d.cv.geometry.objects3d.meshes import Mesh
 
 from od3d.datasets.objectnet3d.enum import OBJECTNET3D_SCALE_NORMALIZE_TO_REAL
 

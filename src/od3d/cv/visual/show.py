@@ -143,7 +143,7 @@ def show_mesh():
 
 
 from typing import Union
-from od3d.cv.geometry.mesh import Meshes, Mesh
+from od3d.cv.geometry.objects3d.meshes import Meshes, Mesh
 from od3d.cv.visual.draw import get_colors
 import open3d
 
@@ -279,8 +279,9 @@ def show_scene(
     cams_imgs: Union[torch.Tensor, List[torch.Tensor]] = None,
     cams_names: List[str] = None,
     cams_imgs_resize: bool = True,
-    cams_imgs_depth_scale: float = 0.2,
+    cams_imgs_depth_scale: float = 0.30,
     cams_show_wireframe: bool = True,
+    cams_show_image_encoder: bool = False,
     pts3d: Union[torch.Tensor, List[torch.Tensor]] = None,
     pts3d_names: List[str] = None,
     pts3d_colors: Union[torch.Tensor, List] = None,
@@ -307,6 +308,7 @@ def show_scene(
     meshes_as_wireframe=False,
     crop_white_border=False,
     renderer=OD3D_RENDERER.OPEN3D,
+    show_coordinate_frame=False,
 ):
     """
     Args:
@@ -334,7 +336,7 @@ def show_scene(
     meshes_y_offset = 0.0
     if meshes is not None:
         if isinstance(meshes, List):
-            meshes = Meshes.load_from_meshes(meshes)
+            meshes = Meshes.read_from_meshes(meshes)
 
         x_offset = 0.0
         for i in range(len(meshes)):
@@ -578,6 +580,20 @@ def show_scene(
 
             geometries.append({"name": pts3d_name, "geometry": pts3d_engine})
 
+    if show_coordinate_frame:
+        if renderer == OD3D_RENDERER.OPEN3D:
+            if meshes is not None:
+                min = meshes.verts.min(dim=0).values
+                max = meshes.verts.max(dim=0).values
+                size = (max - min).min().item()
+                origin = min - size / 4.
+                origin = origin.detach().cpu().numpy()
+            else:
+                size = 1.
+                origin = np.array([0., 0., 0.])
+            coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=size, origin=origin)
+            geometries.append({"name": "coordinate_frame", "geometry": coordinate_frame})
+
     engine_geometries_for_cams = get_engine_geometries_for_cams(
         cams_tform4x4_world=cams_tform4x4_world,
         cams_intr4x4=cams_intr4x4,
@@ -586,6 +602,7 @@ def show_scene(
         cams_imgs_resize=cams_imgs_resize,
         cams_imgs_depth_scale=cams_imgs_depth_scale,
         cams_show_wireframe=cams_show_wireframe,
+        cams_show_image_encoder=cams_show_image_encoder,
         renderer=renderer,
         device=device,
     )
@@ -676,6 +693,7 @@ def show_scene(
             opt = vis.get_render_option()
             opt.point_size = pts3d_size
             opt.mesh_show_back_face = False
+            opt.show_coordinate_frame = show_coordinate_frame
             opt.background_color = np.asarray(background_color)
             # opt.background_color = np.asarray([0, 0, 0])
             # opt.mesh_show_wireframe = mesh_show_wireframe
@@ -910,6 +928,7 @@ def get_engine_geometries_for_cams(
     cams_imgs_resize: bool = True,
     cams_imgs_depth_scale: float = 0.2,
     cams_show_wireframe: bool = True,
+    cams_show_image_encoder: bool = False,
     renderer=OD3D_RENDERER.OPEN3D,
     device="cpu",
 ):
@@ -1024,6 +1043,48 @@ def get_engine_geometries_for_cams(
                             )
                         )
 
+                    if cams_show_image_encoder:
+                        from od3d.cv.geometry.primitives import ImageEncoder
+                        image_encoder_downsample_rate= 1.5
+                        cam_wireframe_engine = ImageEncoder.init_with_cam(cam_intr4x4=cam_intr4x4,
+                                                                          cam_tform4x4_obj=cams_tform4x4_world[i].detach(),
+                                                                          img_size=cams_imgs[i].shape[1:], # H, W
+                                                                          depth_min=depth_scale * 1.05,
+                                                                          depth_max=depth_scale * 1.3,
+                                                                          downscale_factor=image_encoder_downsample_rate)
+                        cam_wireframe_engine = cam_wireframe_engine.to_o3d()
+                        # H, W, 3
+                        cam_img = get_colors(cam_img.shape[1:].numel(), randperm=True).reshape(*cam_img.shape[1:], 3)
+                        cam_img *= 255.
+                        img = open3d.geometry.Image(
+                            (
+                                cam_img.contiguous().cpu().detach().numpy()
+                            ).astype(np.uint8),
+                        )
+
+                        feats_scale = 1. / 1.35
+                        depth_scale /= feats_scale
+                        intrinsic.intrinsic_matrix = [[fx / (feats_scale / image_encoder_downsample_rate), 0, cx],
+                                                      [0, fy / (feats_scale / image_encoder_downsample_rate), cy ], [0, 0, 1]]
+                        cam = open3d.camera.PinholeCameraParameters()
+                        cam.intrinsic = intrinsic
+                        cam.extrinsic = cam_tform4x4_obj  # cams_tform4x4_world[i].detach().cpu().numpy()
+
+                        rgbd = open3d.geometry.RGBDImage.create_from_color_and_depth(
+                            color=img,
+                            depth=depth,
+                            depth_scale=1 / depth_scale,
+                            depth_trunc=3 * depth_scale,
+                            convert_rgb_to_intensity=False,
+                        )
+
+                        pts3d_feats = open3d.geometry.PointCloud.create_from_rgbd_image(
+                            rgbd,
+                            cam.intrinsic,
+                            cam.extrinsic,
+                        )
+                        pts3d_engine += pts3d_feats
+
                 elif renderer == OD3D_RENDERER.PYTORCH3D:
                     dtype = cams_tform4x4_world[i].dtype
 
@@ -1076,7 +1137,7 @@ def get_engine_geometries_for_cams(
                 else:
                     raise NotImplementedError
 
-                if cams_show_wireframe:
+                if cams_show_wireframe or cams_show_image_encoder:
                     geometries.append(
                         {"name": cam_name, "geometry": cam_wireframe_engine},
                     )

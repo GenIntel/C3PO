@@ -9,7 +9,7 @@ import torchvision
 from dataclasses import dataclass
 from typing import List, Union
 from enum import Enum
-from od3d.cv.geometry.mesh import Mesh
+from od3d.cv.geometry.objects3d.meshes import Mesh
 from od3d.datasets.object import (
     OD3D_Object,
     OD3D_CamTform4x4ObjTypeMixin,

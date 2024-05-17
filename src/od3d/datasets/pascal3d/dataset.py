@@ -10,7 +10,7 @@ from pathlib import Path
 import od3d.io
 import shutil
 from tqdm import tqdm
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.objects3d.meshes import Meshes
 from od3d.datasets.pascal3d.frame import Pascal3DFrame, Pascal3DFrameMeta
 from od3d.datasets.pascal3d.enum import (
     PASCAL3D_CATEGORIES,

@@ -42,6 +42,7 @@ def resize_nearest_v2(x, H_out, W_out, align_corners=False):
                     device=device,
                 ),
             ],
+            indexing='ij',
         )
     else:
         step_x = (W_in - 1) / (W_out - 1)
@@ -65,6 +66,7 @@ def resize_nearest_v2(x, H_out, W_out, align_corners=False):
                     device=device,
                 ),
             ],
+            indexing='ij',
         )
 
     grid_x = (grid_x - (W_in - 1) / 2.0) / (W_in - 1) * 2.0

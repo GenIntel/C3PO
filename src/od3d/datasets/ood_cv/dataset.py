@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 from od3d.datasets.dataset import OD3D_Dataset
 from omegaconf import DictConfig
 from pathlib import Path
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.objects3d.meshes import Meshes
 
 from od3d.datasets.pascal3d.enum import (
     PASCAL3D_CATEGORIES,

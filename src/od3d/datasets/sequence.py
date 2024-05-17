@@ -35,7 +35,7 @@ from torch.utils.data import Dataset
 import re
 from od3d.cv.io import read_pts3d_with_colors_and_normals
 import open3d
-from od3d.cv.geometry.mesh import Mesh
+from od3d.cv.geometry.objects3d.meshes import Mesh
 from od3d.cv.geometry.downsample import random_sampling, voxel_downsampling
 
 from od3d.cv.io import get_default_device
@@ -863,7 +863,7 @@ class OD3D_SequencePCLMixin(
         #     logger.info(f'not storing labeled axis.')
 
 
-from od3d.cv.geometry.mesh import Meshes
+from od3d.cv.geometry.objects3d.meshes import Meshes
 
 
 @dataclass
@@ -1558,7 +1558,7 @@ class OD3D_SequenceMeshMixin(
         from od3d.cv.geometry.transform import inv_tform4x4
         from tqdm import tqdm
         import re
-        from od3d.cv.geometry.mesh import Meshes
+        from od3d.cv.geometry.objects3d.meshes import Meshes
         from od3d.cv.visual.sample import sample_pxl2d_pts
 
         if (
@@ -1606,7 +1606,7 @@ class OD3D_SequenceMeshMixin(
         down_sample_rate = model.downsample_rate
         feature_dim = model.out_dim
         mesh = self.get_mesh()
-        meshes = Meshes.load_from_meshes([mesh], device=device)
+        meshes = Meshes.read_from_meshes([mesh], device=device)
 
         ## DEBUG BLOCK START
         # cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(CAM_TFORM_OBJ_SOURCES.PCL)

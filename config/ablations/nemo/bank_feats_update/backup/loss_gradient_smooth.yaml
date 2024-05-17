@@ -1,0 +1,7 @@
+# @package _global_
+
+method:
+  nemo:
+    train:
+      bank_feats_update: loss_gradient # loss_gradient, normalize_loss_gradient, moving_average, loss
+      smooth_loss: True

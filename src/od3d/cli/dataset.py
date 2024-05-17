@@ -18,15 +18,119 @@ app = typer.Typer()
 def classes():
     print(list(OD3D_Dataset.subclasses.keys()))
 
+@app.command()
+def visualize_selfsup(
+        dataset: str = typer.Option("pascal3d", "-d", "--dataset"),
+        model_name: str = typer.Option("dinov2_frozen_base", "-m", "--model"),
+        platform: str = typer.Option("local", "-p", "--platform"),
+        transform_name: str = typer.Option("centerzoom512", "-t", "--transform"),
+):
+        import torch.utils.data
+
+        logging.basicConfig(level=logging.INFO)
+        config = od3d.io.load_hierarchical_config(
+            platform=platform,
+            overrides=["+datasets@dataset=" + dataset, "+datasets@dtd=dtd"],
+        )
+        dataset = OD3D_Dataset.subclasses[config.dataset.class_name].create_from_config(
+            config=config.dataset,
+        )
+
+        from od3d.cv.transforms.transform import OD3D_Transform
+        from od3d.models.model import OD3D_Model
+        from od3d.cv.io import get_default_device
+        from od3d.cv.visual.show import show_img
+        from od3d.cv.visual.blend import blend_rgb
+        from od3d.cv.visual.resize import resize
+        pca_dim = 10
+        model = OD3D_Model.create_by_name(model_name)
+        device = get_default_device()
+        model.eval()
+        model.to(device=device)
+        res_high = 512
+        res_low = 32
+        if transform_name != "None": # centerzoom512
+            transform  = OD3D_Transform.create_by_name(transform_name)
+            transform.W = res_high
+            transform.H = res_high
+            dataset.transform = SequentialTransform(
+                [
+                    transform,
+                    model.transform,
+                ],
+            )
+        else:
+            dataset.transform = model.transform
+
+        dataloader = torch.utils.data.DataLoader(
+            dataset=dataset,
+            batch_size=1,
+            shuffle=False,
+            collate_fn=dataset.collate_fn,
+        )
+        logging.info(f"Dataset contains {len(dataset)} frames.")
+        imgs = []
+        all_feats = []
+        for batch in iter(dataloader):
+            logger.info(f"{batch.name_unique[0]}")  # sequence_name[0]}')
+            batch.to(device=device)
+
+            mask = resize(batch.mask, H_out=res_low, W_out=res_low )
+            #mask = resize(batch.rgb_mask, H_out=res_low, W_out=res_low )
+            #mask[:] = 1.
+            feats = model(batch.rgb).permute(0, 2, 3, 1).reshape(-1, model.out_dim)[mask.flatten() > 0.5]
+
+            all_feats.append(feats)
+
+        all_feats = torch.cat(all_feats, dim=0)
+        #_, _, pca_V = torch.pca_lowrank(all_feats.flatten(2).permute(0, 2, 1).reshape(-1, model.out_dim), center=True, q=10)
+
+        _, _, pca_V = torch.pca_lowrank(all_feats, center=True, q=pca_dim)
+        all_feats_mean = all_feats.mean(dim=0)
+
+        for batch in iter(dataloader):
+            logger.info(f"{batch.name_unique[0]}")  # sequence_name[0]}')
+            batch.to(device=device)
+
+            feats = model(batch.rgb)
+            #feats = feats - all_feats_mean[:, None, None,]
+            feats_pca = torch.mm(feats.permute(0, 2, 3, 1).reshape(-1, model.out_dim), pca_V[:, 0:pca_dim]).reshape(feats.shape[0], feats.shape[2], feats.shape[3], pca_dim).permute(0, 3, 1, 2)
+
+            #mask = resize(batch.mask, H_out=32, W_out=32 )
+            mask = resize(batch.rgb_mask, H_out=res_low, W_out=res_low )
+            #feats_pca = feats_pca * (mask > 0.01)
+
+            feats_pca = resize(feats_pca, H_out=res_high, W_out=res_high, mode="nearest_v2")
+            rgb = batch.rgb[0].clone()
+            rgb = (rgb - rgb.min()) / (rgb.max() - rgb.min())
+            feats_rgb = feats_pca[0, 0:3]
+
+            feats_rgb = (feats_rgb - feats_rgb.min()) / (feats_rgb.max() - feats_rgb.min())
+
+            #feats_pca_mask = (feats_pca[:, 0:1] < 0.02).expand(*feats_pca.shape)
+            #feats_rgb *= feats_pca_mask[0, 0:3]
+
+            show_img(feats_rgb, fpath=f'{batch.name_unique[0]}.png')
+
+            feats_rgb *= batch.mask[0]
+
+            show_img(feats_rgb, fpath=f'{batch.name_unique[0]}_mask.png')
+
+            # logger.info(feats_pca.min().item(), feats_pca.max().item())
+
+            #show_img(blend_rgb(rgb, feats_rgb, alpha1=0.2, alpha2=0.8))
+            #show_img(feats_rgb)
 
 @app.command()
 def visualize_category_frames(
     dataset: str = typer.Option("co3d_no_zsp_1s_labeled_ref", "-d", "--dataset"),
     imgs_count: int = typer.Option(5, "-i", "--imgs-count"),
     viewpoints_count: int = typer.Option(16, "-v", "--viewpoints-count"),  # 16
-    height: int = typer.Option(1080, "-h", "--height"),
-    width: int = typer.Option(1080, "-h", "--height"),
+    height: int = typer.Option(1980, "-h", "--height"),
+    width: int = typer.Option(1980, "-w", "--width"),
     platform: str = typer.Option("local", "-p", "--platform"),
+    show_mesh: bool = typer.Option(False, "-m", "--mesh"),
+    show_encoder: bool = typer.Option(False, "-e", "--encoder"),
 ):
     logging.basicConfig(level=logging.INFO)
     config = od3d.io.load_hierarchical_config(
@@ -41,6 +145,8 @@ def visualize_category_frames(
         viewpoints_count=viewpoints_count,
         H=height,
         W=width,
+        show_mesh=show_mesh,
+        show_encoder=show_encoder,
     )
 
 
@@ -493,6 +599,8 @@ def visualize(
 
     if transform_name != "None":
         dataset.transform = OD3D_Transform.create_by_name(transform_name)
+        dataset.transform.H = 128
+        dataset.transform.W = 128
 
     # dataset.transform = OD3D_Transform.create_by_name('scale_mask_separate_centerzoom512')
     # dataset.transform = OD3D_Transform.create_by_name('scale_mask_shorter_1_centerzoom512')
