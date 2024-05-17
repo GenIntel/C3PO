@@ -407,7 +407,7 @@ class NeMo(OD3D_Method):
     @property
     def rfpath_checkpoint(self):
         return Path("nemo.ckpt")
-    
+
     def extract_features(self, dataset: OD3D_Dataset) -> torch.Tensor:
         self.net.eval()
         dataset.transform = self.transform_train
@@ -420,97 +420,95 @@ class NeMo(OD3D_Method):
             pin_memory=self.config.train.dataloader.pin_memory,
         )
         for i, batch in tqdm(enumerate(iter(dataloader_train))):
-                
-                B = len(batch)
+            B = len(batch)
 
-                batch.to(device=self.device)
+            batch.to(device=self.device)
 
-                batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
+            batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
+            # B x x N x 2
+            vts2d, vts2d_mask = self.meshes.verts2d(
+                cams_intr4x4=batch.cam_intr4x4,
+                cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                imgs_sizes=batch.size,
+                mesh_ids=batch.category_id,
+                down_sample_rate=self.down_sample_rate,
+            )
 
-                # B x x N x 2
-                vts2d, vts2d_mask = self.meshes.verts2d(
-                    cams_intr4x4=batch.cam_intr4x4,
-                    cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                    imgs_sizes=batch.size,
-                    mesh_ids=batch.category_id,
-                    down_sample_rate=self.down_sample_rate,
+            N = vts2d.shape[1]
+            # B x F+N x C
+
+            feats2d_net = self.net(batch.rgb)
+
+            feats2d_net_mask = torch.ones(
+                size=(
+                    feats2d_net.shape[0],
+                    1,
+                    feats2d_net.shape[2],
+                    feats2d_net.shape[3],
+                ),
+            ).to(device=self.device)
+
+            if self.config.train.use_mask_rgb:
+                feats2d_net_mask = 1.0 * resize(
+                    batch.rgb_mask,
+                    H_out=feats2d_net.shape[2],
+                    W_out=feats2d_net.shape[3],
                 )
 
-                N = vts2d.shape[1]
-                # B x F+N x C
-                
-                feats2d_net = self.net(batch.rgb)
-
-
-                feats2d_net_mask = torch.ones(
-                    size=(feats2d_net.shape[0], 1, feats2d_net.shape[2], feats2d_net.shape[3]),
-                ).to(device=self.device)
-
-                if self.config.train.use_mask_rgb:
-                    feats2d_net_mask = 1.0 * resize(
-                        batch.rgb_mask,
+            if self.config.train.use_mask_object:
+                feats2d_net_mask = (
+                    feats2d_net_mask
+                    * 1.0
+                    * resize(
+                        batch.mask,
                         H_out=feats2d_net.shape[2],
                         W_out=feats2d_net.shape[3],
                     )
-
-                if self.config.train.use_mask_object:
-                    feats2d_net_mask = (
-                        feats2d_net_mask
-                        * 1.0
-                        * resize(
-                            batch.mask,
-                            H_out=feats2d_net.shape[2],
-                            W_out=feats2d_net.shape[3],
-                        )
-                    )
-                if self.config.train.use_mask_rendered_object:
-                    #logger.info(f"batch.size {batch.size}")
-                    feats2d_net_mask = feats2d_net_mask * self.meshes.render_feats(
-                        cams_intr4x4=batch.cam_intr4x4,
-                        cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                        imgs_sizes=batch.size,
-                        meshes_ids=batch.category_id,
-                        down_sample_rate=self.down_sample_rate,
-                        modality=MESH_RENDER_MODALITIES.MASK,
-                    )
-
-                H, W = feats2d_net.shape[-2:]
-                xy = torch.stack(
-                    torch.meshgrid(
-                        torch.arange(W, device=self.device),
-                        torch.arange(H, device=self.device),
-                        indexing="xy",
-                    ),
-                    dim=0,
-                )  # HxW
-                prob_noise = (1.0 - 1.0 * feats2d_net_mask).clamp(0, 1).flatten(1)
-                prob_noise[prob_noise.sum(dim=-1) <= 0.0] = 1.0
-                noise2d = xy.flatten(1)[
-                    :,
-                    torch.multinomial(prob_noise, self.config.num_noise, replacement=True),
-                ].permute(1, 2, 0)
-
-                vts2d_feats2d_net_mask = sample_pxl2d_pts(
-                    feats2d_net_mask,
-                    pxl2d=torch.cat([vts2d], dim=1),
                 )
-                vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
-                net_feats = sample_pxl2d_pts(
-                    feats2d_net,
-                    pxl2d=torch.cat([vts2d, noise2d], dim=1),
+            if self.config.train.use_mask_rendered_object:
+                # logger.info(f"batch.size {batch.size}")
+                feats2d_net_mask = feats2d_net_mask * self.meshes.render_feats(
+                    cams_intr4x4=batch.cam_intr4x4,
+                    cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                    imgs_sizes=batch.size,
+                    meshes_ids=batch.category_id,
+                    down_sample_rate=self.down_sample_rate,
+                    modality=MESH_RENDER_MODALITIES.MASK,
                 )
-                net_feats = net_feats.reshape(1,-1,net_feats.shape[-1])
-                if i == 0:
-                    net_feats_all = net_feats
-                else:
-                    net_feats_all = torch.cat((net_feats_all,net_feats), dim = 1)
+
+            H, W = feats2d_net.shape[-2:]
+            xy = torch.stack(
+                torch.meshgrid(
+                    torch.arange(W, device=self.device),
+                    torch.arange(H, device=self.device),
+                    indexing="xy",
+                ),
+                dim=0,
+            )  # HxW
+            prob_noise = (1.0 - 1.0 * feats2d_net_mask).clamp(0, 1).flatten(1)
+            prob_noise[prob_noise.sum(dim=-1) <= 0.0] = 1.0
+            noise2d = xy.flatten(1)[
+                :,
+                torch.multinomial(prob_noise, self.config.num_noise, replacement=True),
+            ].permute(1, 2, 0)
+
+            vts2d_feats2d_net_mask = sample_pxl2d_pts(
+                feats2d_net_mask,
+                pxl2d=torch.cat([vts2d], dim=1),
+            )
+            vts2d_mask = vts2d_mask * (vts2d_feats2d_net_mask[:, :, 0] > 0.5)
+            net_feats = sample_pxl2d_pts(
+                feats2d_net,
+                pxl2d=torch.cat([vts2d, noise2d], dim=1),
+            )
+            net_feats = net_feats.reshape(1, -1, net_feats.shape[-1])
+            if i == 0:
+                net_feats_all = net_feats
+            else:
+                net_feats_all = torch.cat((net_feats_all, net_feats), dim=1)
 
         return net_feats_all
-           
-            
-            
-
 
     def train(
         self,
@@ -533,35 +531,37 @@ class NeMo(OD3D_Method):
             datasets_val["main"] = dataset_val_sub
         if self.config.model.head.pca.get("enable", False):
             from od3d.cv.cluster.embed import pca
-            dataset_pca, _ = dataset_train_sub.get_split(fraction1=self.config.model.head.pca.get("subset_fraction",1.0), fraction2=1.0-self.config.model.head.pca.get("subset_fraction",1.0), split="random")
-            batch_feature_vectors = self.extract_features(dataset = dataset_pca)
+
+            dataset_pca, _ = dataset_train_sub.get_split(
+                fraction1=self.config.model.head.pca.get("subset_fraction", 1.0),
+                fraction2=1.0 - self.config.model.head.pca.get("subset_fraction", 1.0),
+                split="random",
+            )
+            batch_feature_vectors = self.extract_features(dataset=dataset_pca)
             feature_vector_mean = batch_feature_vectors.mean(dim=1)
             logger.info(f"shape of mean feature vectors:{feature_vector_mean.shape}")
             self.net.head.mean_features = feature_vector_mean
-            logger.info(f"shape of accumulated feature vectors:{batch_feature_vectors.shape}")
+            logger.info(
+                f"shape of accumulated feature vectors:{batch_feature_vectors.shape}"
+            )
             pca_dim = self.config.model.head.pca.get("out_dim")
-            pca_V  = pca(batch_feature_vectors, C=pca_dim,return_V=True)
-            
-            pca_parameters = torch.nn.Parameter(pca_V.squeeze(0) ,requires_grad=False)
-            self.net.head.pca_layer.state_dict()['weight'] = pca_parameters.T
+            pca_V = pca(batch_feature_vectors, C=pca_dim, return_V=True)
+
+            pca_parameters = torch.nn.Parameter(pca_V.squeeze(0), requires_grad=False)
+            self.net.head.pca_layer.state_dict()["weight"] = pca_parameters.T
             self.net.head.pca_enabled = True
             del batch_feature_vectors
-            
-        #first validation
-        if (
-                self.config.train.val
-            ):
-                for dataset_val_key, dataset_val in datasets_val.items():
-                    results_val = self.test(dataset_val, val=True)
-                    results_val.log_with_prefix(prefix=f"val/{dataset_val.name}")
-                    if dataset_val_key == "main":
-                        score_latest = results_val[score_metric_name]
-                if (
-                    not self.config.train.early_stopping
-                    or score_latest > score_ckpt_val
-                ):
-                    score_ckpt_val = score_latest
-                    self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
+
+        # first validation
+        if self.config.train.val:
+            for dataset_val_key, dataset_val in datasets_val.items():
+                results_val = self.test(dataset_val, val=True)
+                results_val.log_with_prefix(prefix=f"val/{dataset_val.name}")
+                if dataset_val_key == "main":
+                    score_latest = results_val[score_metric_name]
+            if not self.config.train.early_stopping or score_latest > score_ckpt_val:
+                score_ckpt_val = score_latest
+                self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
         for epoch in range(self.config.train.epochs):
             results_epoch = self.train_epoch(dataset=dataset_train_sub)
@@ -584,7 +584,6 @@ class NeMo(OD3D_Method):
                     score_ckpt_val = score_latest
                     self.save_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
-            
         self.load_checkpoint(path_checkpoint=self.fpath_checkpoint)
 
     def test(self, dataset: OD3D_Dataset, val=False):
@@ -696,9 +695,6 @@ class NeMo(OD3D_Method):
                     self.optim.step()
                     self.normalize_feats()
                     self.optim.zero_grad()
-
-                
-                
 
             results_epoch += results_batch
 
@@ -925,7 +921,9 @@ class NeMo(OD3D_Method):
             else:
                 net_feats_to_update = net_feats
             sim = self.calc_sim(einsum_str, net_feats, bank_feats.detach())
-            bank_feats_new = self.mesh_feats_total[batch_vts_ids_with_acc] + net_feats_to_update
+            bank_feats_new = (
+                self.mesh_feats_total[batch_vts_ids_with_acc] + net_feats_to_update
+            )
             bank_feats_new = (
                 torch.einsum(
                     "nk,nc->kc",
@@ -992,8 +990,15 @@ class NeMo(OD3D_Method):
         results_batch["gt_cam_tform4x4_obj"] = batch.cam_tform4x4_obj
         if self.config.train.bank_feats_update == "average":
             result_visual = OD3D_Results(logging_dir=self.logging_dir)
-            bar_image = show_bar_chart(int(self.meshes.feats.shape[0]), self.mesh_update_count[: self.meshes.feats.shape[0]],pts2d_colors=self.feats_all_colors,return_visualization=True)
-            bar_image_wandb = image_as_wandb_image(bar_image,caption=f"number of vertices seen in epoch")
+            bar_image = show_bar_chart(
+                int(self.meshes.feats.shape[0]),
+                self.mesh_update_count[: self.meshes.feats.shape[0]],
+                pts2d_colors=self.feats_all_colors,
+                return_visualization=True,
+            )
+            bar_image_wandb = image_as_wandb_image(
+                bar_image, caption=f"number of vertices seen in epoch"
+            )
             result_visual["vertices_count"] = bar_image_wandb
             result_visual.log_with_prefix(prefix=f"train/visual")
 
@@ -2662,11 +2667,11 @@ class NeMo(OD3D_Method):
                 dist_shape = dist.shape
                 in_shape = azim_shape + elev_shape + theta_shape + dist_shape
                 azim = azim[:, None, None, None].expand(in_shape).reshape(-1)
-                
+
                 elev = elev[None, :, None, None].expand(in_shape).reshape(-1)
-        
+
                 theta = theta[None, None, :, None].expand(in_shape).reshape(-1)
-                
+
                 dist = dist[None, None, None, :].expand(in_shape).reshape(-1)
                 cams_multiview_tform4x4_cuboid = transf4x4_from_spherical(
                     azim=azim,

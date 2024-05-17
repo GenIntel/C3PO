@@ -181,11 +181,11 @@ class ResNet(OD3D_Head):
 
             self.downsample_rate = reduce(mul, [1] + self.conv_block_scaling, 1)
             self.fc_enabled = False
-        if config.pca.get("enable",False):
+        if config.pca.get("enable", False):
             self.pca_enabled = False
-            pca_dim = config.pca.get("out_dim",32)
-            self.pca_layer = nn.Linear(self.out_dim,pca_dim, bias=False)
-            self.mean_features = torch.zeros(1,self.out_dim)
+            pca_dim = config.pca.get("out_dim", 32)
+            self.pca_layer = nn.Linear(self.out_dim, pca_dim, bias=False)
+            self.mean_features = torch.zeros(1, self.out_dim)
             for param in self.pca_layer.parameters():
                 param.requires_grad = False
             nn.init.eye_(self.pca_layer.weight)
@@ -231,14 +231,11 @@ class ResNet(OD3D_Head):
 
         B, C, H, W = x_res.shape
         if self.pca_enabled:
-            
-            x_res = torch.flatten(x_res,2)
-            x_res = x_res.permute(0,2,1)
+            x_res = torch.flatten(x_res, 2)
+            x_res = x_res.permute(0, 2, 1)
             x_res = x_res - self.mean_features
             x_res = self.pca_layer(x_res)
-            x_res = x_res.permute(0,2,1)
-            x_res = x_res.view(B,self.out_dim,H,W)
-        
-
+            x_res = x_res.permute(0, 2, 1)
+            x_res = x_res.view(B, self.out_dim, H, W)
 
         return x_res

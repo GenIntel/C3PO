@@ -2,7 +2,7 @@ import torch
 from sklearn.manifold import TSNE
 
 
-def pca(X, C=2, center=True, return_V = False):
+def pca(X, C=2, center=True, return_V=False):
     """
     Principal Component Analysis (PCA) is a linear dimensionality reduction
     Args:
@@ -14,9 +14,9 @@ def pca(X, C=2, center=True, return_V = False):
 
     # if q==None: q=min(6,N)
     _, _, pca_V = torch.pca_lowrank(X, center=center, q=C)
-    
+
     if return_V:
-       return pca_V
+        return pca_V
     else:
         X_embedded = torch.mm(X, pca_V[:, :C])
         return X_embedded
