@@ -222,6 +222,28 @@ def show_scene2d(
         return img_tensor
     plt.show()
 
+def show_bar_chart(x: Union[int, List[int]], height: Union[torch.Tensor, List[torch.Tensor]], pts2d_colors: Union[torch.Tensor, List] = None,return_visualization=False):
+    import matplotlib.pyplot as plt
+    if isinstance(x, int):
+        x = range(x)
+    fig, ax = plt.subplots()
+    ax.bar(x, height.detach().cpu().numpy(), color=pts2d_colors)
+    if isinstance(pts2d_colors, torch.Tensor):
+        c = pts2d_colors.detach().cpu().numpy()
+    else:
+        c = pts2d_colors
+    
+    if return_visualization:
+        fig.canvas.draw()
+        img = PIL.Image.frombytes(
+            "RGB",
+            fig.canvas.get_width_height(),
+            fig.canvas.tostring_rgb(),
+        )
+        img_tensor = torchvision.transforms.ToTensor()(img)
+
+        return img_tensor
+    plt.show()
 
 from od3d.data import ExtEnum
 
