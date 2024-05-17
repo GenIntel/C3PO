@@ -7,11 +7,14 @@ import od3d.cv.visual.show as show
 
 app = typer.Typer()
 
+
 @app.command()
 def show_image_encoder():
     from od3d.cv.geometry.primitives import ImageEncoder
+
     meshes_image_encoder = ImageEncoder.init_with_size()
     show.show_scene(meshes=meshes_image_encoder)
+
 
 @app.command()
 def show_shapenet():

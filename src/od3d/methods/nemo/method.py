@@ -2,8 +2,6 @@ import logging
 import time
 
 import numpy as np
-import wandb
-
 import od3d.io
 import pandas as pd
 from od3d.benchmark.results import OD3D_Results
@@ -29,7 +27,6 @@ from od3d.cv.geometry.transform import (
 from od3d.cv.visual.show import show_img
 from od3d.cv.visual.show import show_bar_chart
 from od3d.cv.visual.blend import blend_rgb
-from od3d.cv.visual.sample import sample_pxl2d_pts
 from tqdm import tqdm
 from od3d.cv.geometry.objects3d.objects3d import PROJECT_MODALITIES
 
@@ -37,7 +34,7 @@ from od3d.cv.geometry.objects3d.objects3d import PROJECT_MODALITIES
 import math  # noqa
 from od3d.datasets.co3d import CO3D
 
-from od3d.cv.io import image_as_wandb_image, watch_model_in_wandb
+from od3d.cv.io import image_as_wandb_image
 from od3d.cv.visual.resize import resize
 from od3d.models.model import OD3D_Model
 
@@ -150,11 +147,12 @@ class NeMo(OD3D_Method):
             gaussian_splat_opacity=self.config.meshes_gaussian_splat_opacity,
             geodesic_prob_sigma=self.config.train.geodesic_prob_sigma,
             pt3d_raster_perspective_correct=self.config.meshes_pt3d_raster_perspective_correct,
-            gaussian_splat_pts3d_size_rel_to_neighbor_dist = self.config.meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist,
+            gaussian_splat_pts3d_size_rel_to_neighbor_dist=self.config.meshes_gaussian_splat_pts3d_size_rel_to_neighbor_dist,
             feats_objects=True,
             feat_clutter=True,
             feat_dim=self.net.out_dim,
-            feats_requires_grad=self.config.train.bank_feats_update != "moving_average" and self.config.train.bank_feats_update != "average"
+            feats_requires_grad=self.config.train.bank_feats_update != "moving_average"
+            and self.config.train.bank_feats_update != "average",
         )
 
         self.meshes_ranges = self.meshes.get_ranges().detach().cuda()
@@ -187,14 +185,17 @@ class NeMo(OD3D_Method):
         self.seq_obj_tform4x4_est_obj = {}
         self.seq_obj_tform4x4_est_obj_sim = {}
 
-        self.total_params_mesh_clutter = (
-            sum(p.numel() for p in self.meshes.parameters())
+        self.total_params_mesh_clutter = sum(
+            p.numel() for p in self.meshes.parameters()
         )
-        self.trainable_params_mesh_clutter = (
-            sum(p.numel() for p in self.meshes.parameters() if p.requires_grad)
+        self.trainable_params_mesh_clutter = sum(
+            p.numel() for p in self.meshes.parameters() if p.requires_grad
         )
 
-        if self.config.train.loss == "cross_entropy" or self.config.train.loss == "cross_entropy_smooth":
+        if (
+            self.config.train.loss == "cross_entropy"
+            or self.config.train.loss == "cross_entropy_smooth"
+        ):
             self.criterion = torch.nn.CrossEntropyLoss().cuda()
         elif self.config.train.loss == "nll_softmax":
             self.softmax = torch.nn.LogSoftmax(dim=1)
@@ -247,8 +248,7 @@ class NeMo(OD3D_Method):
             else:
                 self.optim = od3d.io.get_obj_from_config(
                     config=self.config.train.optimizer,
-                    params=list(self.meshes.parameters())
-                    + list(self.net.parameters()),
+                    params=list(self.meshes.parameters()) + list(self.net.parameters()),
                 )
 
         self.scheduler = od3d.io.get_obj_from_config(
@@ -277,8 +277,6 @@ class NeMo(OD3D_Method):
 
         # wandb.watch(self.meshes, log="all", log_freq=1)
         # wandb.watch(self.net, log="all", log_freq=1)
-
-
 
     def calc_sim(self, comb, featsA, featsB):
         """
@@ -387,14 +385,19 @@ class NeMo(OD3D_Method):
             )
 
             mods1d_sampled = self.meshes.sample_with_img2d(
-                img2d=feats2d_net, img2d_mask=feats2d_net_mask, modalities=[PROJECT_MODALITIES.IMG, PROJECT_MODALITIES.MASK],
-                cams_tform4x4_obj=batch.cam_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4,
-                                                            imgs_sizes=batch.size,
-                                                            objects_ids=batch.category_id,
-                                                    broadcast_batch_and_cams=False,
-                                                    down_sample_rate=self.down_sample_rate,
-                                                    sample_clutter_count=self.config.num_noise,
-                                                    dtype=feats2d_net.dtype, device=feats2d_net.device)
+                img2d=feats2d_net,
+                img2d_mask=feats2d_net_mask,
+                modalities=[PROJECT_MODALITIES.IMG, PROJECT_MODALITIES.MASK],
+                cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                cams_intr4x4=batch.cam_intr4x4,
+                imgs_sizes=batch.size,
+                objects_ids=batch.category_id,
+                broadcast_batch_and_cams=False,
+                down_sample_rate=self.down_sample_rate,
+                sample_clutter_count=self.config.num_noise,
+                dtype=feats2d_net.dtype,
+                device=feats2d_net.device,
+            )
 
             feats1d_sampled = mods1d_sampled[PROJECT_MODALITIES.IMG]
             feats1d_sampled_mask = mods1d_sampled[PROJECT_MODALITIES.MASK]
@@ -423,10 +426,13 @@ class NeMo(OD3D_Method):
                 split=self.config.train.split,
             )
             datasets_val["main"] = dataset_val_sub
-        if self.config.model.head.get("pca", None) is not None and self.config.model.head.pca.get("enable", False):
-            logger.info('calc pca ...')
+        if self.config.model.head.get(
+            "pca", None
+        ) is not None and self.config.model.head.pca.get("enable", False):
+            logger.info("calc pca ...")
             from od3d.cv.cluster.embed import pca
             from od3d.datasets.dataset import OD3D_DATASET_SPLITS
+
             dataset_pca, _ = dataset_train_sub.get_split(
                 fraction1=self.config.model.head.pca.get("subset_fraction", 1.0),
                 fraction2=1.0 - self.config.model.head.pca.get("subset_fraction", 1.0),
@@ -437,7 +443,7 @@ class NeMo(OD3D_Method):
             logger.info(f"shape of mean feature vectors:{feature_vector_mean.shape}")
             self.net.head.mean_features = feature_vector_mean
             logger.info(
-                f"shape of accumulated feature vectors:{batch_feature_vectors.shape}"
+                f"shape of accumulated feature vectors:{batch_feature_vectors.shape}",
             )
             pca_dim = self.config.model.head.pca.out_dim
             pca_V = pca(batch_feature_vectors, C=pca_dim, return_V=True)
@@ -613,15 +619,14 @@ class NeMo(OD3D_Method):
 
         batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
 
-        #logger.info(f"batch.category_id {batch.category_id}")
-        #logger.info(f"batch.size {batch.size}")
-
+        # logger.info(f"batch.category_id {batch.category_id}")
+        # logger.info(f"batch.size {batch.size}")
 
         # B x F+N x C
-        #logger.info(f"batch.size {batch.size}")
+        # logger.info(f"batch.size {batch.size}")
         feats2d_img = self.net(batch.rgb)
 
-        #logger.info(f"batch.size {batch.size}")
+        # logger.info(f"batch.size {batch.size}")
         feats2d_img_mask = torch.ones(
             size=(feats2d_img.shape[0], 1, feats2d_img.shape[2], feats2d_img.shape[3]),
         ).to(device=self.device)
@@ -635,13 +640,29 @@ class NeMo(OD3D_Method):
 
         add_other_objects = self.config.train.get("inter_class_loss", True)
         add_clutter = True
-        labels, labels_mask, noise_pxl2d, sim, feats = self.meshes.get_label_and_sim_feats2d_img_to_all(
-            feats2d_img=feats2d_img, imgs_sizes=batch.size, cams_tform4x4_obj=batch.cam_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4,
-            objects_ids=batch.category_id, broadcast_batch_and_cams=False, feats2d_img_mask=feats2d_img_mask,
-            down_sample_rate=self.down_sample_rate, add_clutter=add_clutter,
+        (
+            labels,
+            labels_mask,
+            noise_pxl2d,
+            sim,
+            feats,
+        ) = self.meshes.get_label_and_sim_feats2d_img_to_all(
+            feats2d_img=feats2d_img,
+            imgs_sizes=batch.size,
+            cams_tform4x4_obj=batch.cam_tform4x4_obj,
+            cams_intr4x4=batch.cam_intr4x4,
+            objects_ids=batch.category_id,
+            broadcast_batch_and_cams=False,
+            feats2d_img_mask=feats2d_img_mask,
+            down_sample_rate=self.down_sample_rate,
+            add_clutter=add_clutter,
             add_other_objects=add_other_objects,
-            sample_clutter_count=self.config.num_noise, dense=self.config.train.dense_loss,
-            smooth_labels='smooth' in self.config.train.loss, sim_temp=self.config.train.T, return_feats=True)
+            sample_clutter_count=self.config.num_noise,
+            dense=self.config.train.dense_loss,
+            smooth_labels="smooth" in self.config.train.loss,
+            sim_temp=self.config.train.T,
+            return_feats=True,
+        )
 
         if labels.isnan().any():
             logger.error("labels contains nan")
@@ -655,17 +676,33 @@ class NeMo(OD3D_Method):
             logger.error("feats contains nan")
 
         if self.config.train.bank_feats_update == "moving_average":
-            assert not self.config.train.dense_loss and not 'smooth' in self.config.train.loss
-            self.meshes.update_feats_moving_average(labels=labels, labels_mask=labels_mask, feats=feats,
-                                                    objects_ids=batch.category_id,
-                                                    alpha=self.config.train.alpha, add_clutter=add_clutter,
-                                                    add_other_objects=add_other_objects)
+            assert (
+                not self.config.train.dense_loss
+                and not "smooth" in self.config.train.loss
+            )
+            self.meshes.update_feats_moving_average(
+                labels=labels,
+                labels_mask=labels_mask,
+                feats=feats,
+                objects_ids=batch.category_id,
+                alpha=self.config.train.alpha,
+                add_clutter=add_clutter,
+                add_other_objects=add_other_objects,
+            )
 
         if self.config.train.bank_feats_update == "average":
-            assert not self.config.train.dense_loss and not 'smooth' in self.config.train.loss
-            self.meshes.update_feats_total_average(labels=labels, labels_mask=labels_mask, feats=feats,
-                                                   objects_ids=batch.category_id,
-                                                   add_clutter=add_clutter, add_other_objects=add_other_objects)
+            assert (
+                not self.config.train.dense_loss
+                and not "smooth" in self.config.train.loss
+            )
+            self.meshes.update_feats_total_average(
+                labels=labels,
+                labels_mask=labels_mask,
+                feats=feats,
+                objects_ids=batch.category_id,
+                add_clutter=add_clutter,
+                add_other_objects=add_other_objects,
+            )
 
         if labels.dim() == 2:
             labels = labels[labels_mask]
@@ -675,7 +712,9 @@ class NeMo(OD3D_Method):
                 labels = labels[labels_mask]
 
         if sim.dim() == 3:
-            sim_batchwise = (sim.max(dim=1).values * labels_mask).flatten(1).sum(dim=-1) / (labels_mask.flatten(1).sum(dim=-1) + 1e-6).detach()
+            sim_batchwise = (sim.max(dim=1).values * labels_mask).flatten(1).sum(
+                dim=-1
+            ) / (labels_mask.flatten(1).sum(dim=-1) + 1e-6).detach()
             sim = sim.permute(0, 2, 1)[labels_mask]
         else:
             sim_batchwise = sim.max(dim=1).values.flatten(1).mean(dim=-1)
@@ -805,8 +844,15 @@ class NeMo(OD3D_Method):
         results_batch["gt_cam_tform4x4_obj"] = batch.cam_tform4x4_obj
         if self.config.train.bank_feats_update == "average":
             result_visual = OD3D_Results(logging_dir=self.logging_dir)
-            bar_image = show_bar_chart(int(self.meshes.feats_objects.shape[0]), self.meshes.feats_total_count[:self.meshes.feats_objects.shape[0]], pts2d_colors=self.feats_all_colors,return_visualization=True)
-            bar_image_wandb = image_as_wandb_image(bar_image,caption=f"number of vertices seen in epoch")
+            bar_image = show_bar_chart(
+                int(self.meshes.feats_objects.shape[0]),
+                self.meshes.feats_total_count[: self.meshes.feats_objects.shape[0]],
+                pts2d_colors=self.feats_all_colors,
+                return_visualization=True,
+            )
+            bar_image_wandb = image_as_wandb_image(
+                bar_image, caption=f"number of vertices seen in epoch"
+            )
             result_visual["vertices_count"] = bar_image_wandb
             result_visual.log_with_prefix(prefix=f"train/visual")
 
@@ -869,24 +915,38 @@ class NeMo(OD3D_Method):
 
             meshes_scores = []
             for mesh_id in range(len(self.meshes)):
-
                 if self.config.inference.get("render_classify", False):
-                    sim = self.meshes.get_sim_render(feats2d_img=feats2d_net, cams_tform4x4_obj=batch.cam_tform4x4_obj,
-                                                     cams_intr4x4=batch.cam_intr4x4,
-                                                     objects_ids=torch.LongTensor([mesh_id] * B).
-                                                     to(device=batch.cam_tform4x4_obj.device,),
-                                                     broadcast_batch_and_cams=False,
-                                                     down_sample_rate=self.down_sample_rate,
-                       feats2d_img_mask=feats2d_net_mask, allow_clutter=self.config.inference.allow_clutter, return_sim_pxl=False,
-                       add_clutter=self.config.inference.allow_clutter, temp=self.config.T)
+                    sim = self.meshes.get_sim_render(
+                        feats2d_img=feats2d_net,
+                        cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                        cams_intr4x4=batch.cam_intr4x4,
+                        objects_ids=torch.LongTensor([mesh_id] * B).to(
+                            device=batch.cam_tform4x4_obj.device
+                        ),
+                        broadcast_batch_and_cams=False,
+                        down_sample_rate=self.down_sample_rate,
+                        feats2d_img_mask=feats2d_net_mask,
+                        allow_clutter=self.config.inference.allow_clutter,
+                        return_sim_pxl=False,
+                        add_clutter=self.config.inference.allow_clutter,
+                        temp=self.config.T,
+                    )
                     sim = sim.squeeze(1)
                 else:
                     # logger.info(f'calc score for mesh {self.config.categories[mesh_id]}')
                     sim_feats2d = self.meshes.get_sim_feats2d_img_to_all(
-                        feats2d_img=feats2d_net, imgs_sizes=batch.size, cams_tform4x4_obj=None, cams_intr4x4=None,
-                        objects_ids=mesh_id, broadcast_batch_and_cams=False, down_sample_rate=self.down_sample_rate,
-                        add_clutter=True, add_other_objects=False, dense=True,
-                        sim_temp=self.config.train.T)
+                        feats2d_img=feats2d_net,
+                        imgs_sizes=batch.size,
+                        cams_tform4x4_obj=None,
+                        cams_intr4x4=None,
+                        objects_ids=mesh_id,
+                        broadcast_batch_and_cams=False,
+                        down_sample_rate=self.down_sample_rate,
+                        add_clutter=True,
+                        add_other_objects=False,
+                        dense=True,
+                        sim_temp=self.config.train.T,
+                    )
                     sim = sim_feats2d.max(dim=1).values.flatten(1).mean(dim=-1)
 
                 meshes_scores.append(sim)
@@ -921,14 +981,19 @@ class NeMo(OD3D_Method):
             #                                                           brocacadcast_batch_and_cams=True)[0]).to(dtype=batch.rgb.dtype)), duration=-1)
 
             #  OPTION A: Use 2d gradient of rendered features
-            sim = self.meshes.get_sim_render(feats2d_img=feats2d_net, cams_tform4x4_obj=b_cams_multiview_tform4x4_obj,
-                                             cams_intr4x4=b_cams_multiview_intr4x4,
-                                             objects_ids=batch.category_id,
-                                             broadcast_batch_and_cams=True,
-                                             down_sample_rate=self.down_sample_rate,
-                                             feats2d_img_mask=feats2d_net_mask,
-                                             allow_clutter=self.config.inference.allow_clutter, return_sim_pxl=False,
-                                             add_clutter=self.config.inference.allow_clutter, temp=self.config.train.T)
+            sim = self.meshes.get_sim_render(
+                feats2d_img=feats2d_net,
+                cams_tform4x4_obj=b_cams_multiview_tform4x4_obj,
+                cams_intr4x4=b_cams_multiview_intr4x4,
+                objects_ids=batch.category_id,
+                broadcast_batch_and_cams=True,
+                down_sample_rate=self.down_sample_rate,
+                feats2d_img_mask=feats2d_net_mask,
+                allow_clutter=self.config.inference.allow_clutter,
+                return_sim_pxl=False,
+                add_clutter=self.config.inference.allow_clutter,
+                temp=self.config.train.T,
+            )
             # sim = self.get_sim_feats2d_net_with_cams(
             #     feats2d_net=feats2d_net,
             #     feats2d_net_mask=feats2d_net_mask,
@@ -995,17 +1060,19 @@ class NeMo(OD3D_Method):
                     se3_exp_map(obj_tform6_tmp),
                 )
 
-                sim, sim_pxl = self.meshes.get_sim_render(feats2d_img=feats2d_net,
-                                                 cams_tform4x4_obj=cam_tform4x4_obj,
-                                                 cams_intr4x4=batch.cam_intr4x4,
-                                                 objects_ids=batch.category_id,
-                                                 broadcast_batch_and_cams=False,
-                                                 down_sample_rate=self.down_sample_rate,
-                                                 feats2d_img_mask=feats2d_net_mask,
-                                                 allow_clutter=self.config.inference.allow_clutter,
-                                                 return_sim_pxl=True,
-                                                 add_clutter=self.config.inference.allow_clutter,
-                                                 temp=self.config.train.T)
+                sim, sim_pxl = self.meshes.get_sim_render(
+                    feats2d_img=feats2d_net,
+                    cams_tform4x4_obj=cam_tform4x4_obj,
+                    cams_intr4x4=batch.cam_intr4x4,
+                    objects_ids=batch.category_id,
+                    broadcast_batch_and_cams=False,
+                    down_sample_rate=self.down_sample_rate,
+                    feats2d_img_mask=feats2d_net_mask,
+                    allow_clutter=self.config.inference.allow_clutter,
+                    return_sim_pxl=True,
+                    add_clutter=self.config.inference.allow_clutter,
+                    temp=self.config.train.T,
+                )
 
                 # sim, sim_pxl = self.get_sim_feats2d_net_with_cams(
                 #     feats2d_net=feats2d_net,
@@ -1372,7 +1439,10 @@ class NeMo(OD3D_Method):
                 batch.cam_tform4x4_obj = results_batch["gt_cam_tform4x4_obj"].to(
                     device=self.device,
                 )[batch_result_ids]
-            if "noise2d" in results_batch.keys() and results_batch["noise2d"] is not None:
+            if (
+                "noise2d" in results_batch.keys()
+                and results_batch["noise2d"] is not None
+            ):
                 batch.noise2d = results_batch["noise2d"].to(device=self.device)[
                     batch_result_ids
                 ]
@@ -1411,8 +1481,16 @@ class NeMo(OD3D_Method):
                 imgs_sizes=batch.size,
                 objects_ids=batch.category_id,
                 down_sample_rate=self.down_sample_rate,
-                modalities=[PROJECT_MODALITIES.PXL2D, PROJECT_MODALITIES.MASK, PROJECT_MODALITIES.IMG])
-            vts2d, vts2d_mask = sample1d_mods[PROJECT_MODALITIES.PXL2D], sample1d_mods[PROJECT_MODALITIES.MASK]
+                modalities=[
+                    PROJECT_MODALITIES.PXL2D,
+                    PROJECT_MODALITIES.MASK,
+                    PROJECT_MODALITIES.IMG,
+                ],
+            )
+            vts2d, vts2d_mask = (
+                sample1d_mods[PROJECT_MODALITIES.PXL2D],
+                sample1d_mods[PROJECT_MODALITIES.MASK],
+            )
             net_feats = sample1d_mods[PROJECT_MODALITIES.IMG]
             N = vts2d.shape[1]
             C = net_feats.shape[2]
@@ -1431,16 +1509,18 @@ class NeMo(OD3D_Method):
 
             if VISUAL_MODALITIES.NET_FEATS_NEAREST_VERTS in modalities:
                 logger.info("create net_feats_nearest_verts ...")
-                nearest_pt3d_ncds = self.meshes.sample_nearest_to_feats2d_img(feats2d_img=feats2d_net,
-                                                                    objects_ids=batch.category_id,
-                                                                    modalities=PROJECT_MODALITIES.PT3D_NCDS,
-                                                                    add_clutter=True)
+                nearest_pt3d_ncds = self.meshes.sample_nearest_to_feats2d_img(
+                    feats2d_img=feats2d_net,
+                    objects_ids=batch.category_id,
+                    modalities=PROJECT_MODALITIES.PT3D_NCDS,
+                    add_clutter=True,
+                )
 
-                #verts3d = self.get_nearest_verts3d_to_feats2d_net(
+                # verts3d = self.get_nearest_verts3d_to_feats2d_net(
                 #    feats2d_net=feats2d_net,
                 #    categories_ids=batch.category_id,
                 #    zero_if_sim_clutter_larger=True,
-                #)
+                # )
                 nearest_pt3d_ncds = resize(
                     nearest_pt3d_ncds,
                     scale_factor=self.down_sample_rate / down_sample_rate,
@@ -1484,10 +1564,15 @@ class NeMo(OD3D_Method):
                                                          broadcast_batch_and_cams=True)
                 """
 
-                ncds = self.meshes.render(cams_tform4x4_obj=s_cam_tform4x4_obj, cams_intr4x4=s_cam_intr4x4,
-                                          imgs_sizes=batch.size, objects_ids=batch.category_id,
-                                          down_sample_rate=down_sample_rate, broadcast_batch_and_cams=True,
-                                          modalities=PROJECT_MODALITIES.PT3D_NCDS)
+                ncds = self.meshes.render(
+                    cams_tform4x4_obj=s_cam_tform4x4_obj,
+                    cams_intr4x4=s_cam_intr4x4,
+                    imgs_sizes=batch.size,
+                    objects_ids=batch.category_id,
+                    down_sample_rate=down_sample_rate,
+                    broadcast_batch_and_cams=True,
+                    modalities=PROJECT_MODALITIES.PT3D_NCDS,
+                )
 
                 for b in range(len(batch)):
                     imgs = ncds[b]
@@ -1616,10 +1701,15 @@ class NeMo(OD3D_Method):
                     device=self.device,
                 )[batch_result_ids]
 
-                pred_verts_ncds = self.meshes.render(cams_tform4x4_obj=batch_pred_cam_tform4x4, cams_intr4x4=batch.cam_intr4x4,
-                                          imgs_sizes=batch.size, objects_ids=batch.category_id,
-                                          down_sample_rate=down_sample_rate, broadcast_batch_and_cams=False,
-                                          modalities=PROJECT_MODALITIES.PT3D_NCDS)
+                pred_verts_ncds = self.meshes.render(
+                    cams_tform4x4_obj=batch_pred_cam_tform4x4,
+                    cams_intr4x4=batch.cam_intr4x4,
+                    imgs_sizes=batch.size,
+                    objects_ids=batch.category_id,
+                    down_sample_rate=down_sample_rate,
+                    broadcast_batch_and_cams=False,
+                    modalities=PROJECT_MODALITIES.PT3D_NCDS,
+                )
 
                 if VISUAL_MODALITIES.PRED_VERTS_NCDS_IN_RGB in modalities:
                     for b in range(len(batch)):
@@ -1643,9 +1733,14 @@ class NeMo(OD3D_Method):
                 logger.info("create gt verts ncds...")
 
                 gt_verts_ncds = self.meshes.render(
-                    cams_tform4x4_obj=batch.cam_tform4x4_obj, cams_intr4x4=batch.cam_intr4x4,
-                    imgs_sizes=batch.size, objects_ids=batch.category_id, down_sample_rate=down_sample_rate,
-                    broadcast_batch_and_cams=False, modalities=PROJECT_MODALITIES.PT3D_NCDS)
+                    cams_tform4x4_obj=batch.cam_tform4x4_obj,
+                    cams_intr4x4=batch.cam_intr4x4,
+                    imgs_sizes=batch.size,
+                    objects_ids=batch.category_id,
+                    down_sample_rate=down_sample_rate,
+                    broadcast_batch_and_cams=False,
+                    modalities=PROJECT_MODALITIES.PT3D_NCDS,
+                )
 
                 if VISUAL_MODALITIES.GT_VERTS_NCDS_IN_RGB in modalities:
                     for b in range(len(batch)):
@@ -1653,7 +1748,10 @@ class NeMo(OD3D_Method):
                             resize(batch.rgb[b], scale_factor=1.0 / down_sample_rate),
                             gt_verts_ncds[b],
                         )
-                        if "noise2d" in results_batch.keys() and results_batch["noise2d"] is not None:
+                        if (
+                            "noise2d" in results_batch.keys()
+                            and results_batch["noise2d"] is not None
+                        ):
                             from od3d.cv.visual.draw import draw_pixels
 
                             img = draw_pixels(
@@ -1720,7 +1818,9 @@ class NeMo(OD3D_Method):
                         [fg_feats.shape[0], bg_feats.shape[0]],
                     )
                     feats_tsne_all = tsne(
-                        torch.cat([self.meshes.feats_objects, fg_feats, bg_feats], dim=0),
+                        torch.cat(
+                            [self.meshes.feats_objects, fg_feats, bg_feats], dim=0
+                        ),
                         C=2,
                     )
                     print(len(mesh_and_image_feats_colors))

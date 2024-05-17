@@ -97,6 +97,7 @@ class CoordinateFrame:
             transf4x4=world_tform_frame,
         )
 
+
 class ImageEncoder(Meshes):
     def __int__(
         self,
@@ -106,31 +107,58 @@ class ImageEncoder(Meshes):
     ):
         super().__init__(verts=verts, faces=faces, rgb=rgb)
 
-
     @staticmethod
-    def init_with_cam(cam_intr4x4, cam_tform4x4_obj, img_size, depth_min=0.1, depth_max=1., downscale_factor=1.5,
-                      verts_count=1000, scale_frame=0.95):
+    def init_with_cam(
+        cam_intr4x4,
+        cam_tform4x4_obj,
+        img_size,
+        depth_min=0.1,
+        depth_max=1.0,
+        downscale_factor=1.5,
+        verts_count=1000,
+        scale_frame=0.95,
+    ):
         # u = (fx * x / z + cx)
         # v = (fy * y / z + cy)
         # width = depth_min / fx
         from od3d.cv.geometry.transform import inv_tform4x4
+
         fx = cam_intr4x4[0, 0]
         fy = cam_intr4x4[1, 1]
         cx = cam_intr4x4[0, 2]
         cy = cam_intr4x4[1, 2]
         y_max = (img_size[0] - 1 - cy) * depth_min / fy * scale_frame
-        y_min = (- cy) * depth_min / fy * scale_frame
+        y_min = (-cy) * depth_min / fy * scale_frame
         x_max = (img_size[1] - 1 - cx) * depth_min / fx * scale_frame
-        x_min = (- cx) * depth_min / fx * scale_frame
+        x_min = (-cx) * depth_min / fx * scale_frame
 
         logger.info(cam_intr4x4)
-        meshes = ImageEncoder.init_with_size(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, z_min=depth_min,
-                                             z_max=depth_max, downscale_factor=downscale_factor, verts_count=verts_count)
-        meshes.verts.data = transf3d_broadcast(meshes.verts, transf4x4=inv_tform4x4(cam_tform4x4_obj))
+        meshes = ImageEncoder.init_with_size(
+            x_min=x_min,
+            x_max=x_max,
+            y_min=y_min,
+            y_max=y_max,
+            z_min=depth_min,
+            z_max=depth_max,
+            downscale_factor=downscale_factor,
+            verts_count=verts_count,
+        )
+        meshes.verts.data = transf3d_broadcast(
+            meshes.verts, transf4x4=inv_tform4x4(cam_tform4x4_obj)
+        )
         return meshes
 
     @staticmethod
-    def init_with_size(x_min=-1., x_max=1., y_min=-1, y_max=1., z_min=0.1, z_max=1., downscale_factor=1.5, verts_count=1000):
+    def init_with_size(
+        x_min=-1.0,
+        x_max=1.0,
+        y_min=-1,
+        y_max=1.0,
+        z_min=0.1,
+        z_max=1.0,
+        downscale_factor=1.5,
+        verts_count=1000,
+    ):
         """
         The semantic axes of a camera are
             x: right (pytorch3d: left)
@@ -150,22 +178,34 @@ class ImageEncoder(Meshes):
         # z_min = depth_min
         # z_max = depth_max
 
-        meshes = Cuboids.create_dense_from_limits(limits=torch.tensor([[[x_min, y_min, z_min], [x_max, y_max, z_max]]]), verts_count=verts_count, device='cpu')
-        mask_not_front = (meshes.verts[:, 2] != z_max) + (meshes.verts[:, 0] == x_min) + (meshes.verts[:, 0] == x_max) \
-                         + (meshes.verts[:, 1] == y_min) + (meshes.verts[:, 1] == y_max)
+        meshes = Cuboids.create_dense_from_limits(
+            limits=torch.tensor([[[x_min, y_min, z_min], [x_max, y_max, z_max]]]),
+            verts_count=verts_count,
+            device="cpu",
+        )
+        mask_not_front = (
+            (meshes.verts[:, 2] != z_max)
+            + (meshes.verts[:, 0] == x_min)
+            + (meshes.verts[:, 0] == x_max)
+            + (meshes.verts[:, 1] == y_min)
+            + (meshes.verts[:, 1] == y_max)
+        )
 
         alpha = ((meshes.verts[:, 2] - z_min) / (z_max - z_min + 1e-10))[:, None]
-        meshes.verts[:, :2] = ((1. - alpha) + alpha * (1. / downscale_factor) ) * meshes.verts[:, :2]
+        meshes.verts[:, :2] = (
+            (1.0 - alpha) + alpha * (1.0 / downscale_factor)
+        ) * meshes.verts[:, :2]
 
-        #from od3d.cv.visual.show import get_colors
-        #meshes_rgb = get_colors(K=len(meshes.verts))[torch.randperm(len(meshes.verts))] * 0.9
-        #meshes_rgb[mask_not_front] = torch.tensor([0.9, 0.9, 0.5])
+        # from od3d.cv.visual.show import get_colors
+        # meshes_rgb = get_colors(K=len(meshes.verts))[torch.randperm(len(meshes.verts))] * 0.9
+        # meshes_rgb[mask_not_front] = torch.tensor([0.9, 0.9, 0.5])
 
         meshes_rgb = torch.zeros_like(meshes.verts.data)
         meshes_rgb[:] = torch.tensor([0.9, 0.9, 0.5])
         meshes.rgb = torch.nn.Parameter(meshes_rgb)
 
         return meshes
+
 
 class Cuboids(Meshes):
     def __int__(

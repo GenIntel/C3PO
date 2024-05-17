@@ -31,9 +31,14 @@ from od3d.cv.geometry.grid import get_pxl2d
 from typing import Union
 import open3d as o3d
 import numpy as np
-from od3d.cv.geometry.objects3d.objects3d import PROJECT_MODALITIES, OD3D_Objects3D, FEATS_DISTR
+from od3d.cv.geometry.objects3d.objects3d import (
+    PROJECT_MODALITIES,
+    OD3D_Objects3D,
+    FEATS_DISTR,
+)
 
 from typing import Optional
+
 
 class MESH_RENDER_MODALITIES(str, Enum):
     DEPTH = "depth"
@@ -175,20 +180,38 @@ class Mesh:
 
 
 class Meshes(OD3D_Objects3D):
-
     feats_objects: Optional[torch.Tensor]
 
-    def __init__(self, verts: List[torch.Tensor], faces: List[torch.Tensor], feat_dim=128, objects_count=0,
-                 feats_objects=False, feats_requires_grad=True, feat_clutter=False, feats_distribution=FEATS_DISTR.VON_MISES_FISHER,
-                 rgb: List[torch.Tensor] = None, verts_requires_grad = False,
-                 geodesic_prob_sigma=0.2, gaussian_splat_enabled=False, gaussian_splat_opacity=0.7,
-                 gaussian_splat_pts3d_size_rel_to_neighbor_dist=0.5, pt3d_raster_perspective_correct=False,
-                 device=None, dtype=None
+    def __init__(
+        self,
+        verts: List[torch.Tensor],
+        faces: List[torch.Tensor],
+        feat_dim=128,
+        objects_count=0,
+        feats_objects=False,
+        feats_requires_grad=True,
+        feat_clutter=False,
+        feats_distribution=FEATS_DISTR.VON_MISES_FISHER,
+        rgb: List[torch.Tensor] = None,
+        verts_requires_grad=False,
+        geodesic_prob_sigma=0.2,
+        gaussian_splat_enabled=False,
+        gaussian_splat_opacity=0.7,
+        gaussian_splat_pts3d_size_rel_to_neighbor_dist=0.5,
+        pt3d_raster_perspective_correct=False,
+        device=None,
+        dtype=None,
     ):
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        factory_kwargs = {"device": device, "dtype": dtype}
 
-        super().__init__(feat_dim=feat_dim, feat_clutter=feat_clutter, feats_requires_grad=feats_requires_grad,
-                         feats_distribution=feats_distribution, device=device, dtype=dtype)
+        super().__init__(
+            feat_dim=feat_dim,
+            feat_clutter=feat_clutter,
+            feats_requires_grad=feats_requires_grad,
+            feats_distribution=feats_distribution,
+            device=device,
+            dtype=dtype,
+        )
 
         self.meshes_count = len(verts)
         self.verts = torch.nn.Parameter(
@@ -246,7 +269,8 @@ class Meshes(OD3D_Objects3D):
                 torch.cat(
                     [
                         torch.empty(
-                            size=[self.verts_counts[i], self.feat_dim], **factory_kwargs
+                            size=[self.verts_counts[i], self.feat_dim],
+                            **factory_kwargs,
                         )
                         for i in range(len(self))
                     ],
@@ -265,6 +289,7 @@ class Meshes(OD3D_Objects3D):
 
     def to_o3d(self):
         import open3d
+
         vertices = open3d.utility.Vector3dVector(self.verts.detach().cpu().numpy())
         faces = open3d.utility.Vector3iVector(self.faces.detach().cpu().numpy())
         o3d_obj_mesh = open3d.geometry.TriangleMesh(vertices=vertices, triangles=faces)
@@ -280,6 +305,7 @@ class Meshes(OD3D_Objects3D):
         super().reset_parameters()
         if self.feats_objects is not None:
             import math
+
             # equals kaiming uniform
             bound = 1 / math.sqrt(self.feat_dim) if self.feat_dim > 0 else 0
             torch.nn.init.uniform_(self.feats_objects, a=-bound, b=bound)
@@ -288,9 +314,8 @@ class Meshes(OD3D_Objects3D):
     def normalize_feats(self):
         super().normalize_feats()
         if self.feats_objects is not None:
-            self.feats_objects.data = (
-                    self.feats_objects.detach()
-                    / (self.feats_objects.detach().norm(dim=-1, keepdim=True) + 1e-10)
+            self.feats_objects.data = self.feats_objects.detach() / (
+                self.feats_objects.detach().norm(dim=-1, keepdim=True) + 1e-10
             )
 
     def get_limits(self):
@@ -333,12 +358,20 @@ class Meshes(OD3D_Objects3D):
     def read_from_ply_files(
         fpaths_meshes: List[Path],
         fpaths_meshes_tforms: List[Path] = None,
-        feat_dim=128, objects_count=0,
-        feats_objects=False, feat_clutter=False, feats_distribution=FEATS_DISTR.VON_MISES_FISHER,
-        verts_requires_grad=False, geodesic_prob_sigma=0.2, gaussian_splat_enabled=False, gaussian_splat_opacity=0.7,
-            feats_requires_grad=True,
-        gaussian_splat_pts3d_size_rel_to_neighbor_dist=0.5, pt3d_raster_perspective_correct=False,
-        device=None, dtype=None
+        feat_dim=128,
+        objects_count=0,
+        feats_objects=False,
+        feat_clutter=False,
+        feats_distribution=FEATS_DISTR.VON_MISES_FISHER,
+        verts_requires_grad=False,
+        geodesic_prob_sigma=0.2,
+        gaussian_splat_enabled=False,
+        gaussian_splat_opacity=0.7,
+        feats_requires_grad=True,
+        gaussian_splat_pts3d_size_rel_to_neighbor_dist=0.5,
+        pt3d_raster_perspective_correct=False,
+        device=None,
+        dtype=None,
     ):
         meshes = []
         for i, fpath_mesh in enumerate(fpaths_meshes):
@@ -347,21 +380,42 @@ class Meshes(OD3D_Objects3D):
                 mesh_tform = torch.load(fpaths_meshes_tforms[i]).to(device)
                 mesh.verts = transf3d_broadcast(pts3d=mesh.verts, transf4x4=mesh_tform)
             meshes.append(mesh)
-        return Meshes.read_from_meshes(meshes=meshes, feat_dim=feat_dim, objects_count=objects_count,
-                                       feats_objects=feats_objects, feat_clutter=feat_clutter, feats_distribution=feats_distribution,
-                                       verts_requires_grad=verts_requires_grad, geodesic_prob_sigma=geodesic_prob_sigma,
-                                       gaussian_splat_enabled=gaussian_splat_enabled, gaussian_splat_opacity=gaussian_splat_opacity,
-                                       gaussian_splat_pts3d_size_rel_to_neighbor_dist=gaussian_splat_pts3d_size_rel_to_neighbor_dist,
-                                       pt3d_raster_perspective_correct=pt3d_raster_perspective_correct, device=device, dtype=dtype,
-                                       feats_requires_grad=feats_requires_grad)
+        return Meshes.read_from_meshes(
+            meshes=meshes,
+            feat_dim=feat_dim,
+            objects_count=objects_count,
+            feats_objects=feats_objects,
+            feat_clutter=feat_clutter,
+            feats_distribution=feats_distribution,
+            verts_requires_grad=verts_requires_grad,
+            geodesic_prob_sigma=geodesic_prob_sigma,
+            gaussian_splat_enabled=gaussian_splat_enabled,
+            gaussian_splat_opacity=gaussian_splat_opacity,
+            gaussian_splat_pts3d_size_rel_to_neighbor_dist=gaussian_splat_pts3d_size_rel_to_neighbor_dist,
+            pt3d_raster_perspective_correct=pt3d_raster_perspective_correct,
+            device=device,
+            dtype=dtype,
+            feats_requires_grad=feats_requires_grad,
+        )
 
     @staticmethod
-    def read_from_meshes(meshes: List[Mesh], feat_dim=128, objects_count=0,
-                         feats_objects=False, feat_clutter=False, feats_distribution=FEATS_DISTR.VON_MISES_FISHER,
-                         verts_requires_grad = False, feats_requires_grad=True, geodesic_prob_sigma=0.2, 
-                         gaussian_splat_enabled=False, gaussian_splat_opacity=0.7, 
-                         gaussian_splat_pts3d_size_rel_to_neighbor_dist=0.5, pt3d_raster_perspective_correct=False, 
-                         device=None, dtype=None):
+    def read_from_meshes(
+        meshes: List[Mesh],
+        feat_dim=128,
+        objects_count=0,
+        feats_objects=False,
+        feat_clutter=False,
+        feats_distribution=FEATS_DISTR.VON_MISES_FISHER,
+        verts_requires_grad=False,
+        feats_requires_grad=True,
+        geodesic_prob_sigma=0.2,
+        gaussian_splat_enabled=False,
+        gaussian_splat_opacity=0.7,
+        gaussian_splat_pts3d_size_rel_to_neighbor_dist=0.5,
+        pt3d_raster_perspective_correct=False,
+        device=None,
+        dtype=None,
+    ):
         if device is None:
             device = meshes[0].verts.device
         verts = [mesh.verts.to(device=device) for mesh in meshes]
@@ -371,13 +425,25 @@ class Meshes(OD3D_Objects3D):
             rgb = [mesh.rgb.to(device=device) for mesh in meshes]
         else:
             rgb = None
-        return Meshes(verts=verts, faces=faces, rgb=rgb, feat_dim=feat_dim, objects_count=objects_count,
-                      feats_objects=feats_objects, feat_clutter=feat_clutter, feats_distribution=feats_distribution,
-                      verts_requires_grad=verts_requires_grad, geodesic_prob_sigma=geodesic_prob_sigma,
-                      gaussian_splat_enabled=gaussian_splat_enabled, gaussian_splat_opacity=gaussian_splat_opacity,
-                      gaussian_splat_pts3d_size_rel_to_neighbor_dist=gaussian_splat_pts3d_size_rel_to_neighbor_dist,
-                      pt3d_raster_perspective_correct=pt3d_raster_perspective_correct, device=device, dtype=dtype,
-                      feats_requires_grad=feats_requires_grad)
+        return Meshes(
+            verts=verts,
+            faces=faces,
+            rgb=rgb,
+            feat_dim=feat_dim,
+            objects_count=objects_count,
+            feats_objects=feats_objects,
+            feat_clutter=feat_clutter,
+            feats_distribution=feats_distribution,
+            verts_requires_grad=verts_requires_grad,
+            geodesic_prob_sigma=geodesic_prob_sigma,
+            gaussian_splat_enabled=gaussian_splat_enabled,
+            gaussian_splat_opacity=gaussian_splat_opacity,
+            gaussian_splat_pts3d_size_rel_to_neighbor_dist=gaussian_splat_pts3d_size_rel_to_neighbor_dist,
+            pt3d_raster_perspective_correct=pt3d_raster_perspective_correct,
+            device=device,
+            dtype=dtype,
+            feats_requires_grad=feats_requires_grad,
+        )
 
     @staticmethod
     def load_by_name(name: str, device="cpu", faces_count=None):
@@ -1650,9 +1716,18 @@ class Meshes(OD3D_Objects3D):
 
         return mesh_feats2d_rendered
 
-    def render_batch(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, objects_ids=None,
-                     modalities: Union[PROJECT_MODALITIES, List[PROJECT_MODALITIES]]=PROJECT_MODALITIES.FEATS,
-                     add_clutter=False, add_other_objects=False):
+    def render_batch(
+        self,
+        cams_tform4x4_obj,
+        cams_intr4x4,
+        imgs_sizes,
+        objects_ids=None,
+        modalities: Union[
+            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+        ] = PROJECT_MODALITIES.FEATS,
+        add_clutter=False,
+        add_other_objects=False,
+    ):
         """
         Render the objects in the scene with the given camera parameters.
         Args:
@@ -1745,7 +1820,8 @@ class Meshes(OD3D_Objects3D):
                     num_classes = self.verts_count
                     verts_ids_from_faces = torch.cat(
                         [
-                            self.get_faces_with_mesh_id(object_id) + self.verts_counts_acc_from_0[object_id]
+                            self.get_faces_with_mesh_id(object_id)
+                            + self.verts_counts_acc_from_0[object_id]
                             for b, object_id in enumerate(objects_ids)
                         ],
                         dim=0,
@@ -1763,7 +1839,9 @@ class Meshes(OD3D_Objects3D):
                 if add_clutter:
                     num_classes += 1
 
-                verts_one_hot_from_faces = torch.nn.functional.one_hot(verts_ids_from_faces, num_classes=num_classes).to(device, dtype)
+                verts_one_hot_from_faces = torch.nn.functional.one_hot(
+                    verts_ids_from_faces, num_classes=num_classes
+                ).to(device, dtype)
 
                 mod2d_rendered = interpolate_face_attributes(
                     fragments.pix_to_face,
@@ -1772,11 +1850,19 @@ class Meshes(OD3D_Objects3D):
                 )[:, ..., 0, :].permute(0, 3, 1, 2)
 
                 if add_clutter:
-                    mask = (fragments.zbuf.permute(0, 3, 1, 2) > 0.0).expand(*mod2d_rendered.shape)
-                    clutter_onehot = self.get_clutter_label(add_other_objects=add_other_objects, one_hot=True,
-                                                           device=device)[:, :, None, None, ].expand(*mod2d_rendered.shape).to(dtype)
+                    mask = (fragments.zbuf.permute(0, 3, 1, 2) > 0.0).expand(
+                        *mod2d_rendered.shape
+                    )
+                    clutter_onehot = (
+                        self.get_clutter_label(
+                            add_other_objects=add_other_objects,
+                            one_hot=True,
+                            device=device,
+                        )[:, :, None, None]
+                        .expand(*mod2d_rendered.shape)
+                        .to(dtype)
+                    )
                     mod2d_rendered[~mask] = clutter_onehot[~mask]
-
 
             elif modality == PROJECT_MODALITIES.DEPTH:
                 mod2d_rendered = fragments.zbuf.permute(0, 3, 1, 2)
@@ -1784,7 +1870,10 @@ class Meshes(OD3D_Objects3D):
             elif modality == PROJECT_MODALITIES.MASK_VERTS_VSBL:
                 B = fragments.pix_to_face.shape[0]
                 faces_ids = torch.cat(
-                    [self.get_faces_with_mesh_id(object_id) for object_id in objects_ids],
+                    [
+                        self.get_faces_with_mesh_id(object_id)
+                        for object_id in objects_ids
+                    ],
                     dim=0,
                 )
                 # verts_ids_vsbl = torch.cat([self.get_faces_with_mesh_id(mesh_id) for mesh_id in meshes_ids], dim=0) [fragments.pix_to_face.reshape(B, -1)].reshape(B, -1)  # .unique(dim=1)
@@ -1811,9 +1900,9 @@ class Meshes(OD3D_Objects3D):
                     dim=0,
                 )
                 mod2d_rendered = interpolate_face_attributes(
-                    fragments.pix_to_face, # B x H x W x 1
-                    fragments.bary_coords, # B x H x W x 1 x 3
-                    feats_from_faces,      # F x 3 x C
+                    fragments.pix_to_face,  # B x H x W x 1
+                    fragments.bary_coords,  # B x H x W x 1 x 3
+                    feats_from_faces,  # F x 3 x C
                 )[:, ..., 0, :].permute(0, 3, 1, 2)
                 # mask = fragments.pix_to_face >= 0
                 # mesh_feats2d_prob = torch.sigmoid(-fragments.dists / blend_params.sigma) * mask
@@ -1840,10 +1929,22 @@ class Meshes(OD3D_Objects3D):
 
         return mods2d_rendered
 
-    def sample_batch(self, cams_tform4x4_obj, cams_intr4x4, imgs_sizes, objects_ids=None,
-                     modalities: Union[PROJECT_MODALITIES, List[PROJECT_MODALITIES]]=PROJECT_MODALITIES.FEATS,
-                     add_clutter=False, add_other_objects=False, device=None, dtype=None,
-                     sample_clutter=False, sample_other_objects=False):
+    def sample_batch(
+        self,
+        cams_tform4x4_obj,
+        cams_intr4x4,
+        imgs_sizes,
+        objects_ids=None,
+        modalities: Union[
+            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+        ] = PROJECT_MODALITIES.FEATS,
+        add_clutter=False,
+        add_other_objects=False,
+        device=None,
+        dtype=None,
+        sample_clutter=False,
+        sample_other_objects=False,
+    ):
         """
         Sample the objects' projection.
         Args:
@@ -1862,7 +1963,10 @@ class Meshes(OD3D_Objects3D):
             if modality in mods1d_sampled.keys():
                 continue
 
-            if modality == PROJECT_MODALITIES.MASK or modality == PROJECT_MODALITIES.MASK_VERTS_VSBL:
+            if (
+                modality == PROJECT_MODALITIES.MASK
+                or modality == PROJECT_MODALITIES.MASK_VERTS_VSBL
+            ):
                 mask_verts_vsbl = self.render(
                     cams_tform4x4_obj=cams_tform4x4_obj,
                     cams_intr4x4=cams_intr4x4,
@@ -1885,7 +1989,9 @@ class Meshes(OD3D_Objects3D):
                     sample_other_objects=False,
                 ).to(device)
 
-                mask_verts_vsbl *= (pxl2d_verts <= (imgs_sizes[None, None].to(device) - 1)).all(dim=-1)
+                mask_verts_vsbl *= (
+                    pxl2d_verts <= (imgs_sizes[None, None].to(device) - 1)
+                ).all(dim=-1)
                 mask_verts_vsbl *= (pxl2d_verts >= 0).all(dim=-1)
 
                 # if add_clutter or add_other_objects:
@@ -1909,36 +2015,81 @@ class Meshes(OD3D_Objects3D):
                 if add_other_objects:
                     B = len(objects_ids)
                     F = self.feat_dim
-                    mods1d_sampled[modality] = self.feats_objects[None, :, :].repeat(B, 1, 1)  # (B, O*V, F)
+                    mods1d_sampled[modality] = self.feats_objects[None, :, :].repeat(
+                        B, 1, 1
+                    )  # (B, O*V, F)
                 else:
-                    mods1d_sampled[modality] = self.get_feats_stacked_with_mesh_ids(mesh_ids=objects_ids).to(device)  # (B, V, F)
+                    mods1d_sampled[modality] = self.get_feats_stacked_with_mesh_ids(
+                        mesh_ids=objects_ids
+                    ).to(
+                        device
+                    )  # (B, V, F)
                 if add_clutter:
                     B = mods1d_sampled[modality].shape[0]
                     F = mods1d_sampled[modality].shape[-1]
-                    mods1d_sampled[modality] = torch.cat([mods1d_sampled[modality], self.feat_clutter[None, None,].expand(B, 1, F).to(device)], dim=1) # (B, V+1, F)
+                    mods1d_sampled[modality] = torch.cat(
+                        [
+                            mods1d_sampled[modality],
+                            self.feat_clutter[None, None].expand(B, 1, F).to(device),
+                        ],
+                        dim=1,
+                    )  # (B, V+1, F)
             elif modality == PROJECT_MODALITIES.ID:
                 if add_other_objects:
                     if not sample_other_objects:
-                        mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked(mesh_ids=objects_ids,
-                                                                                        count_noise_ids=0).to(device)  # (B, V(+1))
+                        mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked(
+                            mesh_ids=objects_ids,
+                            count_noise_ids=0,
+                        ).to(
+                            device
+                        )  # (B, V(+1))
                     else:
-                        mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked(mesh_ids=None,
-                                                                                        count_noise_ids=0).to(device)
-                        mods1d_sampled[modality] = mods1d_sampled[modality][None,].expand(len(objects_ids), *mods1d_sampled[modality].shape)
+                        mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked(
+                            mesh_ids=None,
+                            count_noise_ids=0,
+                        ).to(device)
+                        mods1d_sampled[modality] = mods1d_sampled[modality][
+                            None,
+                        ].expand(len(objects_ids), *mods1d_sampled[modality].shape)
                 else:
                     if not sample_other_objects:
-                        mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked_without_acc(mesh_ids=objects_ids,
-                                                                                        count_noise_ids=0).to(device)  # (B, V(+1))
+                        mods1d_sampled[
+                            modality
+                        ] = self.get_verts_and_noise_ids_stacked_without_acc(
+                            mesh_ids=objects_ids,
+                            count_noise_ids=0,
+                        ).to(
+                            device
+                        )  # (B, V(+1))
                     else:
-                        mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked_without_acc(mesh_ids=None,
-                                                                                        count_noise_ids=0).to(device)
-                        mods1d_sampled[modality] = mods1d_sampled[modality][None,].expand(len(objects_ids), *mods1d_sampled[modality].shape)
+                        mods1d_sampled[
+                            modality
+                        ] = self.get_verts_and_noise_ids_stacked_without_acc(
+                            mesh_ids=None,
+                            count_noise_ids=0,
+                        ).to(
+                            device
+                        )
+                        mods1d_sampled[modality] = mods1d_sampled[modality][
+                            None,
+                        ].expand(len(objects_ids), *mods1d_sampled[modality].shape)
 
                 if sample_clutter:
                     B = mods1d_sampled[modality].shape[0]
-                    mods1d_sampled[modality] = torch.cat([mods1d_sampled[modality], self.get_clutter_label(add_other_objects=add_other_objects).expand(B, 1,).to(device)], dim=1) # (B, V+1, F)
+                    mods1d_sampled[modality] = torch.cat(
+                        [
+                            mods1d_sampled[modality],
+                            self.get_clutter_label(add_other_objects=add_other_objects)
+                            .expand(B, 1)
+                            .to(device),
+                        ],
+                        dim=1,
+                    )  # (B, V+1, F)
 
-            elif modality == PROJECT_MODALITIES.ONEHOT or modality == PROJECT_MODALITIES.ONEHOT_SMOOTH:
+            elif (
+                modality == PROJECT_MODALITIES.ONEHOT
+                or modality == PROJECT_MODALITIES.ONEHOT_SMOOTH
+            ):
                 noise_count = 1 if add_clutter else 0
                 if modality == PROJECT_MODALITIES.ONEHOT:
                     if add_other_objects:
@@ -1957,51 +2108,91 @@ class Meshes(OD3D_Objects3D):
                     else:
                         label_onehot = self.get_geodesic_prob()
 
-                label_id = self.sample(cams_tform4x4_obj=cams_tform4x4_obj, cams_intr4x4=cams_intr4x4,
-                                       imgs_sizes=imgs_sizes, objects_ids=objects_ids,
-                                       modalities=PROJECT_MODALITIES.ID,
-                                       add_clutter=add_clutter, add_other_objects=add_other_objects,
-                                       sample_clutter=sample_clutter, sample_other_objects=sample_other_objects)
+                label_id = self.sample(
+                    cams_tform4x4_obj=cams_tform4x4_obj,
+                    cams_intr4x4=cams_intr4x4,
+                    imgs_sizes=imgs_sizes,
+                    objects_ids=objects_ids,
+                    modalities=PROJECT_MODALITIES.ID,
+                    add_clutter=add_clutter,
+                    add_other_objects=add_other_objects,
+                    sample_clutter=sample_clutter,
+                    sample_other_objects=sample_other_objects,
+                )
                 mods1d_sampled[modality] = label_onehot[label_id]  # B, V, V*O(+1)
 
             elif modality == PROJECT_MODALITIES.PXL2D:
                 cams_proj4x4_obj = torch.bmm(cams_intr4x4, cams_tform4x4_obj)
 
                 if sample_other_objects:
-                    verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=None).to(device)
+                    verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=None).to(
+                        device
+                    )
                     verts3d = verts3d[None,].expand(len(objects_ids), *verts3d.shape)
                 else:
-                    verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=objects_ids).to(device)
+                    verts3d = self.get_verts_stacked_with_mesh_ids(
+                        mesh_ids=objects_ids
+                    ).to(device)
 
                 if sample_clutter:
                     B = verts3d.shape[0]
-                    verts3d = torch.cat([verts3d, torch.zeros((B, 1, 3), device=verts3d.device, dtype=verts3d.dtype)], dim=1)
+                    verts3d = torch.cat(
+                        [
+                            verts3d,
+                            torch.zeros(
+                                (B, 1, 3), device=verts3d.device, dtype=verts3d.dtype
+                            ),
+                        ],
+                        dim=1,
+                    )
 
                 pxl2d = proj3d2d_broadcast(verts3d, proj4x4=cams_proj4x4_obj[:, None])
                 mods1d_sampled[modality] = pxl2d
             elif modality == PROJECT_MODALITIES.PT3D:
                 if sample_other_objects:
-                    verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=None).to(device)
+                    verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=None).to(
+                        device
+                    )
                     verts3d = verts3d[None,].expand(len(objects_ids), *verts3d.shape)
                 else:
-                    verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=objects_ids).to(device)
+                    verts3d = self.get_verts_stacked_with_mesh_ids(
+                        mesh_ids=objects_ids
+                    ).to(device)
 
                 if sample_clutter:
                     B = verts3d.shape[0]
-                    verts3d = torch.cat([verts3d, torch.zeros((B, 1, 3), device=verts3d.device, dtype=verts3d.dtype)],
-                                        dim=1)
+                    verts3d = torch.cat(
+                        [
+                            verts3d,
+                            torch.zeros(
+                                (B, 1, 3), device=verts3d.device, dtype=verts3d.dtype
+                            ),
+                        ],
+                        dim=1,
+                    )
                 mods1d_sampled[modality] = verts3d
             elif modality == PROJECT_MODALITIES.PT3D_NCDS:
                 if sample_other_objects:
-                    verts3d = self.get_verts_ncds_stacked_with_mesh_ids(mesh_ids=None).to(device)
+                    verts3d = self.get_verts_ncds_stacked_with_mesh_ids(
+                        mesh_ids=None
+                    ).to(device)
                     verts3d = verts3d[None,].expand(len(objects_ids), *verts3d.shape)
                 else:
-                    verts3d = self.get_verts_ncds_stacked_with_mesh_ids(mesh_ids=objects_ids).to(device)
+                    verts3d = self.get_verts_ncds_stacked_with_mesh_ids(
+                        mesh_ids=objects_ids
+                    ).to(device)
 
                 if sample_clutter:
                     B = verts3d.shape[0]
-                    verts3d = torch.cat([verts3d, torch.zeros((B, 1, 3), device=verts3d.device, dtype=verts3d.dtype)],
-                                        dim=1)
+                    verts3d = torch.cat(
+                        [
+                            verts3d,
+                            torch.zeros(
+                                (B, 1, 3), device=verts3d.device, dtype=verts3d.dtype
+                            ),
+                        ],
+                        dim=1,
+                    )
                 mods1d_sampled[modality] = verts3d
             else:
                 raise ValueError(f"Unknown modality {modality}")
@@ -2016,8 +2207,16 @@ class Meshes(OD3D_Objects3D):
             clutter_label = torch.nn.functional.one_hot(clutter_label, num_classes=-1)
         return clutter_label
 
-    def update_feats_moving_average(self, labels, labels_mask, feats, alpha, objects_ids=None,
-                                    add_clutter=True, add_other_objects=True):
+    def update_feats_moving_average(
+        self,
+        labels,
+        labels_mask,
+        feats,
+        alpha,
+        objects_ids=None,
+        add_clutter=True,
+        add_other_objects=True,
+    ):
         """
         Args:
             labels (torch.Tensor): BxN (or BxVxN)
@@ -2028,9 +2227,15 @@ class Meshes(OD3D_Objects3D):
         device = feats.device
         dtype = feats.dtype
         feats_count = len(self.feats_objects) + 1
-        if not hasattr(self, 'feats_moving_average') or self.feats_moving_average is None:
-            self.feats_moving_average = torch.zeros((feats_count, self.feat_dim), dtype=dtype, device=device)
+        if (
+            not hasattr(self, "feats_moving_average")
+            or self.feats_moving_average is None
+        ):
+            self.feats_moving_average = torch.zeros(
+                (feats_count, self.feat_dim), dtype=dtype, device=device
+            )
             import math
+
             # equals kaiming uniform
             bound = 1 / math.sqrt(self.feat_dim) if self.feat_dim > 0 else 0
             torch.nn.init.uniform_(self.feats_moving_average, a=-bound, b=-bound)
@@ -2043,7 +2248,7 @@ class Meshes(OD3D_Objects3D):
             if not add_other_objects:
                 for b in range(objects_ids.shape[0]):
                     labels[b] = labels[b] + self.verts_counts_acc_from_0[objects_ids[b]]
-            labels[labels >= feats_count] = feats_count-1
+            labels[labels >= feats_count] = feats_count - 1
             labels_onehot = torch.nn.functional.one_hot(labels, num_classes=feats_count)
         else:
             raise NotImplementedError
@@ -2057,31 +2262,49 @@ class Meshes(OD3D_Objects3D):
             #         labels_onehot_ext[:, :, self.verts_counts_acc_from_0[objects_ids+1]:self.verts_counts_acc_from_0[objects_ids+2]] = labels_onehot
             #     labels_onehot = labels_onehot_ext
 
-        feats_update = torch.einsum("nf,nv->vf", feats[labels_mask], labels_onehot[labels_mask] * 1.) / (
-                    labels_onehot[labels_mask].sum(dim=0)[:, None,] + 1e-10)
+        feats_update = torch.einsum(
+            "nf,nv->vf", feats[labels_mask], labels_onehot[labels_mask] * 1.0
+        ) / (labels_onehot[labels_mask].sum(dim=0)[:, None] + 1e-10)
         feats_update = feats_update.detach()
         feats_update_mask = labels_onehot[labels_mask].sum(dim=0) > 0
-        self.feats_moving_average[feats_update_mask] = alpha * self.feats_moving_average[feats_update_mask] + (1. - alpha) * feats_update[feats_update_mask]
+        self.feats_moving_average[feats_update_mask] = (
+            alpha * self.feats_moving_average[feats_update_mask]
+            + (1.0 - alpha) * feats_update[feats_update_mask]
+        )
 
         self.feats_objects.data = self.feats_moving_average[:-1].clone()
         self.feat_clutter.data = self.feats_moving_average[-1].clone()
         self.normalize_feats()
 
-    def update_feats_total_average(self, labels, labels_mask, feats, objects_ids=None,
-                                   add_clutter=True, add_other_objects=True):
+    def update_feats_total_average(
+        self,
+        labels,
+        labels_mask,
+        feats,
+        objects_ids=None,
+        add_clutter=True,
+        add_other_objects=True,
+    ):
         device = feats.device
         dtype = feats.dtype
         feats_count = len(self.feats_objects) + 1
-        if not hasattr(self, 'feats_total_average_sum') or self.feats_total_average_sum is None:
-            self.feats_total_average_sum = torch.zeros((feats_count, self.feat_dim), dtype=dtype, device=device)
-            self.feats_total_count = torch.zeros((feats_count, ), dtype=torch.long, device=device)
+        if (
+            not hasattr(self, "feats_total_average_sum")
+            or self.feats_total_average_sum is None
+        ):
+            self.feats_total_average_sum = torch.zeros(
+                (feats_count, self.feat_dim), dtype=dtype, device=device
+            )
+            self.feats_total_count = torch.zeros(
+                (feats_count,), dtype=torch.long, device=device
+            )
 
         labels = labels.clone()
         if labels.dim() == 2:
             if not add_other_objects:
                 for b in range(objects_ids.shape[0]):
                     labels[b] = labels[b] + self.verts_counts_acc_from_0[objects_ids[b]]
-            labels[labels >= feats_count] = feats_count-1
+            labels[labels >= feats_count] = feats_count - 1
             labels_onehot = torch.nn.functional.one_hot(labels, num_classes=feats_count)
         else:
             raise NotImplementedError
@@ -2096,11 +2319,15 @@ class Meshes(OD3D_Objects3D):
             #             objects_ids + 2]] = labels_onehot
             #     labels_onehot = labels_onehot_ext
 
-        feats_update = torch.einsum("nf,nv->vf", feats[labels_mask], labels_onehot[labels_mask] * 1.) / (
-                    labels_onehot[labels_mask].sum(dim=0)[:, None,] + 1e-10)
+        feats_update = torch.einsum(
+            "nf,nv->vf", feats[labels_mask], labels_onehot[labels_mask] * 1.0
+        ) / (labels_onehot[labels_mask].sum(dim=0)[:, None] + 1e-10)
         feats_update = feats_update.detach()
         feats_update_mask = labels_onehot[labels_mask].sum(dim=0) > 0
-        self.feats_total_average_sum[feats_update_mask] = self.feats_total_average_sum[feats_update_mask] + feats_update[feats_update_mask]
+        self.feats_total_average_sum[feats_update_mask] = (
+            self.feats_total_average_sum[feats_update_mask]
+            + feats_update[feats_update_mask]
+        )
         self.feats_total_count[feats_update_mask] += 1
 
         self.feats_objects.data = self.feats_total_average_sum[:-1].clone()
