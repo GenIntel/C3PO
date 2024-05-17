@@ -98,7 +98,7 @@ def visualize_selfsup(
         batch.to(device=device)
 
         feats = model(batch.rgb)
-        feats = feats - all_feats_mean[:, None, None,]
+        feats = feats - all_feats_mean[:, None, None]
         feats_pca = (
             torch.mm(
                 feats.permute(0, 2, 3, 1).reshape(-1, model.out_dim),

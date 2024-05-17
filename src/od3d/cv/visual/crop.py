@@ -167,7 +167,10 @@ def crop(
     # b) first resize then crop (preferred if scale < 1. -> pad on lower-resolution image)
     else:
         img_res = resize(
-            img, scale_factor=scale, mode=mode, align_corners=align_corners
+            img,
+            scale_factor=scale,
+            mode=mode,
+            align_corners=align_corners,
         )
         bbox_in_res = ((bbox_in.reshape(2, 2) * scale_WH[None,]).flatten()).to(
             torch.long,
@@ -209,7 +212,11 @@ def crop(
             ],
         ).to(device)
         ctx = resize(
-            ctx, H_out=H_out, W_out=W_out, mode=mode, align_corners=align_corners
+            ctx,
+            H_out=H_out,
+            W_out=W_out,
+            mode=mode,
+            align_corners=align_corners,
         )
         ctx[:, bbox_out[1] : bbox_out[3], bbox_out[0] : bbox_out[2]] = img_out[
             :,

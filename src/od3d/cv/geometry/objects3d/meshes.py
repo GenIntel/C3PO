@@ -1723,7 +1723,8 @@ class Meshes(OD3D_Objects3D):
         imgs_sizes,
         objects_ids=None,
         modalities: Union[
-            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+            PROJECT_MODALITIES,
+            List[PROJECT_MODALITIES],
         ] = PROJECT_MODALITIES.FEATS,
         add_clutter=False,
         add_other_objects=False,
@@ -1840,7 +1841,8 @@ class Meshes(OD3D_Objects3D):
                     num_classes += 1
 
                 verts_one_hot_from_faces = torch.nn.functional.one_hot(
-                    verts_ids_from_faces, num_classes=num_classes
+                    verts_ids_from_faces,
+                    num_classes=num_classes,
                 ).to(device, dtype)
 
                 mod2d_rendered = interpolate_face_attributes(
@@ -1851,7 +1853,7 @@ class Meshes(OD3D_Objects3D):
 
                 if add_clutter:
                     mask = (fragments.zbuf.permute(0, 3, 1, 2) > 0.0).expand(
-                        *mod2d_rendered.shape
+                        *mod2d_rendered.shape,
                     )
                     clutter_onehot = (
                         self.get_clutter_label(
@@ -1936,7 +1938,8 @@ class Meshes(OD3D_Objects3D):
         imgs_sizes,
         objects_ids=None,
         modalities: Union[
-            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+            PROJECT_MODALITIES,
+            List[PROJECT_MODALITIES],
         ] = PROJECT_MODALITIES.FEATS,
         add_clutter=False,
         add_other_objects=False,
@@ -2016,13 +2019,15 @@ class Meshes(OD3D_Objects3D):
                     B = len(objects_ids)
                     F = self.feat_dim
                     mods1d_sampled[modality] = self.feats_objects[None, :, :].repeat(
-                        B, 1, 1
+                        B,
+                        1,
+                        1,
                     )  # (B, O*V, F)
                 else:
                     mods1d_sampled[modality] = self.get_feats_stacked_with_mesh_ids(
-                        mesh_ids=objects_ids
+                        mesh_ids=objects_ids,
                     ).to(
-                        device
+                        device,
                     )  # (B, V, F)
                 if add_clutter:
                     B = mods1d_sampled[modality].shape[0]
@@ -2041,7 +2046,7 @@ class Meshes(OD3D_Objects3D):
                             mesh_ids=objects_ids,
                             count_noise_ids=0,
                         ).to(
-                            device
+                            device,
                         )  # (B, V(+1))
                     else:
                         mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked(
@@ -2059,7 +2064,7 @@ class Meshes(OD3D_Objects3D):
                             mesh_ids=objects_ids,
                             count_noise_ids=0,
                         ).to(
-                            device
+                            device,
                         )  # (B, V(+1))
                     else:
                         mods1d_sampled[
@@ -2068,7 +2073,7 @@ class Meshes(OD3D_Objects3D):
                             mesh_ids=None,
                             count_noise_ids=0,
                         ).to(
-                            device
+                            device,
                         )
                         mods1d_sampled[modality] = mods1d_sampled[modality][
                             None,
@@ -2126,12 +2131,12 @@ class Meshes(OD3D_Objects3D):
 
                 if sample_other_objects:
                     verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=None).to(
-                        device
+                        device,
                     )
                     verts3d = verts3d[None,].expand(len(objects_ids), *verts3d.shape)
                 else:
                     verts3d = self.get_verts_stacked_with_mesh_ids(
-                        mesh_ids=objects_ids
+                        mesh_ids=objects_ids,
                     ).to(device)
 
                 if sample_clutter:
@@ -2140,7 +2145,9 @@ class Meshes(OD3D_Objects3D):
                         [
                             verts3d,
                             torch.zeros(
-                                (B, 1, 3), device=verts3d.device, dtype=verts3d.dtype
+                                (B, 1, 3),
+                                device=verts3d.device,
+                                dtype=verts3d.dtype,
                             ),
                         ],
                         dim=1,
@@ -2151,12 +2158,12 @@ class Meshes(OD3D_Objects3D):
             elif modality == PROJECT_MODALITIES.PT3D:
                 if sample_other_objects:
                     verts3d = self.get_verts_stacked_with_mesh_ids(mesh_ids=None).to(
-                        device
+                        device,
                     )
                     verts3d = verts3d[None,].expand(len(objects_ids), *verts3d.shape)
                 else:
                     verts3d = self.get_verts_stacked_with_mesh_ids(
-                        mesh_ids=objects_ids
+                        mesh_ids=objects_ids,
                     ).to(device)
 
                 if sample_clutter:
@@ -2165,7 +2172,9 @@ class Meshes(OD3D_Objects3D):
                         [
                             verts3d,
                             torch.zeros(
-                                (B, 1, 3), device=verts3d.device, dtype=verts3d.dtype
+                                (B, 1, 3),
+                                device=verts3d.device,
+                                dtype=verts3d.dtype,
                             ),
                         ],
                         dim=1,
@@ -2174,12 +2183,12 @@ class Meshes(OD3D_Objects3D):
             elif modality == PROJECT_MODALITIES.PT3D_NCDS:
                 if sample_other_objects:
                     verts3d = self.get_verts_ncds_stacked_with_mesh_ids(
-                        mesh_ids=None
+                        mesh_ids=None,
                     ).to(device)
                     verts3d = verts3d[None,].expand(len(objects_ids), *verts3d.shape)
                 else:
                     verts3d = self.get_verts_ncds_stacked_with_mesh_ids(
-                        mesh_ids=objects_ids
+                        mesh_ids=objects_ids,
                     ).to(device)
 
                 if sample_clutter:
@@ -2188,7 +2197,9 @@ class Meshes(OD3D_Objects3D):
                         [
                             verts3d,
                             torch.zeros(
-                                (B, 1, 3), device=verts3d.device, dtype=verts3d.dtype
+                                (B, 1, 3),
+                                device=verts3d.device,
+                                dtype=verts3d.dtype,
                             ),
                         ],
                         dim=1,
@@ -2232,7 +2243,9 @@ class Meshes(OD3D_Objects3D):
             or self.feats_moving_average is None
         ):
             self.feats_moving_average = torch.zeros(
-                (feats_count, self.feat_dim), dtype=dtype, device=device
+                (feats_count, self.feat_dim),
+                dtype=dtype,
+                device=device,
             )
             import math
 
@@ -2263,7 +2276,9 @@ class Meshes(OD3D_Objects3D):
             #     labels_onehot = labels_onehot_ext
 
         feats_update = torch.einsum(
-            "nf,nv->vf", feats[labels_mask], labels_onehot[labels_mask] * 1.0
+            "nf,nv->vf",
+            feats[labels_mask],
+            labels_onehot[labels_mask] * 1.0,
         ) / (labels_onehot[labels_mask].sum(dim=0)[:, None] + 1e-10)
         feats_update = feats_update.detach()
         feats_update_mask = labels_onehot[labels_mask].sum(dim=0) > 0
@@ -2293,10 +2308,14 @@ class Meshes(OD3D_Objects3D):
             or self.feats_total_average_sum is None
         ):
             self.feats_total_average_sum = torch.zeros(
-                (feats_count, self.feat_dim), dtype=dtype, device=device
+                (feats_count, self.feat_dim),
+                dtype=dtype,
+                device=device,
             )
             self.feats_total_count = torch.zeros(
-                (feats_count,), dtype=torch.long, device=device
+                (feats_count,),
+                dtype=torch.long,
+                device=device,
             )
 
         labels = labels.clone()
@@ -2320,7 +2339,9 @@ class Meshes(OD3D_Objects3D):
             #     labels_onehot = labels_onehot_ext
 
         feats_update = torch.einsum(
-            "nf,nv->vf", feats[labels_mask], labels_onehot[labels_mask] * 1.0
+            "nf,nv->vf",
+            feats[labels_mask],
+            labels_onehot[labels_mask] * 1.0,
         ) / (labels_onehot[labels_mask].sum(dim=0)[:, None] + 1e-10)
         feats_update = feats_update.detach()
         feats_update_mask = labels_onehot[labels_mask].sum(dim=0) > 0

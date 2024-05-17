@@ -144,7 +144,8 @@ class ImageEncoder(Meshes):
             verts_count=verts_count,
         )
         meshes.verts.data = transf3d_broadcast(
-            meshes.verts, transf4x4=inv_tform4x4(cam_tform4x4_obj)
+            meshes.verts,
+            transf4x4=inv_tform4x4(cam_tform4x4_obj),
         )
         return meshes
 

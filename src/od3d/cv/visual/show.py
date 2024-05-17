@@ -592,10 +592,11 @@ def show_scene(
                 size = 1.0
                 origin = np.array([0.0, 0.0, 0.0])
             coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
-                size=size, origin=origin
+                size=size,
+                origin=origin,
             )
             geometries.append(
-                {"name": "coordinate_frame", "geometry": coordinate_frame}
+                {"name": "coordinate_frame", "geometry": coordinate_frame},
             )
 
     engine_geometries_for_cams = get_engine_geometries_for_cams(
@@ -1062,12 +1063,13 @@ def get_engine_geometries_for_cams(
                         cam_wireframe_engine = cam_wireframe_engine.to_o3d()
                         # H, W, 3
                         cam_img = get_colors(
-                            cam_img.shape[1:].numel(), randperm=True
+                            cam_img.shape[1:].numel(),
+                            randperm=True,
                         ).reshape(*cam_img.shape[1:], 3)
                         cam_img *= 255.0
                         img = open3d.geometry.Image(
                             (cam_img.contiguous().cpu().detach().numpy()).astype(
-                                np.uint8
+                                np.uint8,
                             ),
                         )
 
