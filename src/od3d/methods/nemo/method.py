@@ -427,7 +427,8 @@ class NeMo(OD3D_Method):
             )
             datasets_val["main"] = dataset_val_sub
         if self.config.model.head.get(
-            "pca", None
+            "pca",
+            None,
         ) is not None and self.config.model.head.pca.get("enable", False):
             logger.info("calc pca ...")
             from od3d.cv.cluster.embed import pca
@@ -713,7 +714,7 @@ class NeMo(OD3D_Method):
 
         if sim.dim() == 3:
             sim_batchwise = (sim.max(dim=1).values * labels_mask).flatten(1).sum(
-                dim=-1
+                dim=-1,
             ) / (labels_mask.flatten(1).sum(dim=-1) + 1e-6).detach()
             sim = sim.permute(0, 2, 1)[labels_mask]
         else:
@@ -851,7 +852,8 @@ class NeMo(OD3D_Method):
                 return_visualization=True,
             )
             bar_image_wandb = image_as_wandb_image(
-                bar_image, caption=f"number of vertices seen in epoch"
+                bar_image,
+                caption=f"number of vertices seen in epoch",
             )
             result_visual["vertices_count"] = bar_image_wandb
             result_visual.log_with_prefix(prefix=f"train/visual")
@@ -921,7 +923,7 @@ class NeMo(OD3D_Method):
                         cams_tform4x4_obj=batch.cam_tform4x4_obj,
                         cams_intr4x4=batch.cam_intr4x4,
                         objects_ids=torch.LongTensor([mesh_id] * B).to(
-                            device=batch.cam_tform4x4_obj.device
+                            device=batch.cam_tform4x4_obj.device,
                         ),
                         broadcast_batch_and_cams=False,
                         down_sample_rate=self.down_sample_rate,
@@ -1819,7 +1821,8 @@ class NeMo(OD3D_Method):
                     )
                     feats_tsne_all = tsne(
                         torch.cat(
-                            [self.meshes.feats_objects, fg_feats, bg_feats], dim=0
+                            [self.meshes.feats_objects, fg_feats, bg_feats],
+                            dim=0,
                         ),
                         C=2,
                     )

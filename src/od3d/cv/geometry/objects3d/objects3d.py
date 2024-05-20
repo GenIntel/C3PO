@@ -191,7 +191,8 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         imgs_sizes,
         objects_ids=None,
         modalities: Union[
-            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+            PROJECT_MODALITIES,
+            List[PROJECT_MODALITIES],
         ] = PROJECT_MODALITIES.FEATS,
         broadcast_batch_and_cams=False,
         down_sample_rate=1.0,
@@ -228,7 +229,9 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         self.to(device)
 
         cams_intr4x4, imgs_sizes = self.cams_downsample(
-            cams_intr4x4, imgs_sizes, down_sample_rate
+            cams_intr4x4,
+            imgs_sizes,
+            down_sample_rate,
         )
 
         if objects_ids is None:
@@ -297,7 +300,8 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         imgs_sizes,
         objects_ids=None,
         modalities: Union[
-            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+            PROJECT_MODALITIES,
+            List[PROJECT_MODALITIES],
         ] = PROJECT_MODALITIES.FEATS,
         add_clutter=False,
         add_other_objects=False,
@@ -327,7 +331,8 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         imgs_sizes=None,
         objects_ids=None,
         modalities: Union[
-            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+            PROJECT_MODALITIES,
+            List[PROJECT_MODALITIES],
         ] = PROJECT_MODALITIES.FEATS,
         broadcast_batch_and_cams=False,
         down_sample_rate=1.0,
@@ -438,7 +443,8 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
                 device=feats1d_obj_mask.device,
             )
             feats1d_obj_mask = torch.cat(
-                [feats1d_obj_mask, feats1d_clutter_mask], dim=-1
+                [feats1d_obj_mask, feats1d_clutter_mask],
+                dim=-1,
             )
 
         # mods1d_sampled = {}
@@ -468,19 +474,24 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
                     sample_clutter_count,
                 )
                 mods1d_sampled[modality] = torch.cat(
-                    [mods1d_sampled[modality], label1d_clutter], dim=-1
+                    [mods1d_sampled[modality], label1d_clutter],
+                    dim=-1,
                 )
             elif modality == PROJECT_MODALITIES.ID:
                 B = mods1d_sampled[modality].shape[0]
                 label1d_clutter = self.get_clutter_label(
-                    add_other_objects=add_other_objects, one_hot=False, device=device
+                    add_other_objects=add_other_objects,
+                    one_hot=False,
+                    device=device,
                 )[
                     None,
                 ].expand(
-                    B, sample_clutter_count
+                    B,
+                    sample_clutter_count,
                 )
                 mods1d_sampled[modality] = torch.cat(
-                    [mods1d_sampled[modality], label1d_clutter], dim=-1
+                    [mods1d_sampled[modality], label1d_clutter],
+                    dim=-1,
                 )
             elif modality == PROJECT_MODALITIES.FEATS:
                 mods1d_sampled[modality] = mods1d_sampled[modality]
@@ -502,7 +513,8 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         imgs_sizes=None,
         objects_ids=None,
         modalities: Union[
-            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+            PROJECT_MODALITIES,
+            List[PROJECT_MODALITIES],
         ] = PROJECT_MODALITIES.FEATS,
         broadcast_batch_and_cams=False,
         down_sample_rate=1.0,
@@ -545,7 +557,9 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         self.to(device)
 
         cams_intr4x4, imgs_sizes = self.cams_downsample(
-            cams_intr4x4, imgs_sizes, down_sample_rate
+            cams_intr4x4,
+            imgs_sizes,
+            down_sample_rate,
         )
 
         if objects_ids is None:
@@ -618,7 +632,8 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         imgs_sizes,
         objects_ids=None,
         modalities: Union[
-            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+            PROJECT_MODALITIES,
+            List[PROJECT_MODALITIES],
         ] = PROJECT_MODALITIES.FEATS,
         add_clutter=False,
         add_other_objects=False,
@@ -711,7 +726,8 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         imgs_sizes=None,
         objects_ids=None,
         modalities: Union[
-            PROJECT_MODALITIES, List[PROJECT_MODALITIES]
+            PROJECT_MODALITIES,
+            List[PROJECT_MODALITIES],
         ] = PROJECT_MODALITIES.FEATS,
         broadcast_batch_and_cams=False,
         down_sample_rate=1.0,
@@ -746,7 +762,8 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         )
 
         label_feats2d_nearest = sim_feats2d.argmax(
-            dim=1, keepdim=True
+            dim=1,
+            keepdim=True,
         )  # (B, V(+1), V+N) or (B, V(+1), H, W) if dense=True
 
         nearest_mods2d = self.sample(
@@ -768,7 +785,9 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         B, _, H, W = label_feats2d_nearest.shape
         nearest_mods2d = (
             batched_index_select(
-                input=nearest_mods2d, index=label_feats2d_nearest.flatten(1), dim=1
+                input=nearest_mods2d,
+                index=label_feats2d_nearest.flatten(1),
+                dim=1,
             )
             .permute(0, 2, 1)
             .reshape(B, 3, H, W)
@@ -1058,7 +1077,11 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         pass
 
     def get_sim_feats1d_img_and_feats1d_obj(
-        self, feats1d_img, feats1d_obj, add_clutter=False, temp=1.0
+        self,
+        feats1d_img,
+        feats1d_obj,
+        add_clutter=False,
+        temp=1.0,
     ):
         """
         Args:
@@ -1080,7 +1103,11 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         return sim_feats1d
 
     def get_sim_feats2d_img_and_feats1d_obj(
-        self, feats2d_img, feats1d_obj, add_clutter=False, temp=1.0
+        self,
+        feats2d_img,
+        feats1d_obj,
+        add_clutter=False,
+        temp=1.0,
     ):
         """
         Args:
