@@ -101,16 +101,17 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
 
             # equals kaiming uniform
             bound = 1 / math.sqrt(self.feat_dim) if self.feat_dim > 0 else 0
-            #torch.nn.init.uniform_(self.feat_clutter, a=-bound, b=bound)
-            torch.nn.init.uniform_(self.feat_clutter, a=0., b=1.) # note: somehow better at least without head
+            # torch.nn.init.uniform_(self.feat_clutter, a=-bound, b=bound)
+            torch.nn.init.uniform_(
+                self.feat_clutter, a=0.0, b=1.0
+            )  # note: somehow better at least without head
 
         self.normalize_feats()
 
     def normalize_feats(self):
         if self.feat_clutter is not None:
-            self.feat_clutter.data = (
-                self.feat_clutter.detach()
-                / (self.feat_clutter.detach().norm(dim=-1, keepdim=True) + 1e-10)
+            self.feat_clutter.data = self.feat_clutter.detach() / (
+                self.feat_clutter.detach().norm(dim=-1, keepdim=True) + 1e-10
             )
 
     def __len__(self):

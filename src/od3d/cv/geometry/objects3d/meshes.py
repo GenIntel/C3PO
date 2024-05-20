@@ -309,7 +309,9 @@ class Meshes(OD3D_Objects3D):
             # equals kaiming uniform
             bound = 1 / math.sqrt(self.feat_dim) if self.feat_dim > 0 else 0
             # torch.nn.init.uniform_(self.feats_objects, a=-bound, b=bound)
-            torch.nn.init.uniform_(self.feats_objects, a=0., b=1.) # note: somehow better at least without head
+            torch.nn.init.uniform_(
+                self.feats_objects, a=0.0, b=1.0
+            )  # note: somehow better at least without head
 
         self.normalize_feats()
 
