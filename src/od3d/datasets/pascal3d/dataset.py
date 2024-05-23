@@ -20,6 +20,7 @@ from od3d.datasets.pascal3d.enum import (
 )
 from od3d.datasets.object import OD3D_MESH_TYPES
 
+
 class Pascal3D(OD3D_Dataset):
     map_od3d_categories = MAP_CATEGORIES_OD3D_TO_PASCAL3D
     all_categories = list(PASCAL3D_CATEGORIES)
@@ -144,7 +145,7 @@ class Pascal3D(OD3D_Dataset):
                     remove_previous=remove_previous,
                 )
 
-    def preprocess_cuboid(self, override=False, remove_previous=False, quantile = 0.95):
+    def preprocess_cuboid(self, override=False, remove_previous=False, quantile=0.95):
         logger.info("preprocess cuboid...")
 
         scale_pascal3d_to_od3d = {}
@@ -199,7 +200,8 @@ class Pascal3D(OD3D_Dataset):
 
                 from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
                 from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
-                if 'cuboid' in mesh_type:
+
+                if "cuboid" in mesh_type:
                     cuboids, tform_obj = fit_cuboid_to_pts3d(
                         pts3d=pts3d,
                         optimize_rot=False,
@@ -212,15 +214,18 @@ class Pascal3D(OD3D_Dataset):
                         ],
                     )
 
-                    scale_pascal3d_to_od3d[category] = tform_obj[:3, :3].norm(dim=-1).mean()
+                    scale_pascal3d_to_od3d[category] = (
+                        tform_obj[:3, :3].norm(dim=-1).mean()
+                    )
                     # show:
                     # meshes.verts *= scale_pascal3d_to_od3d[category]
                     # Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
 
                     obj_mesh = cuboids.get_mesh_with_id(0)
 
-                elif 'sphere' in mesh_type:
+                elif "sphere" in mesh_type:
                     import torch
+
                     pts3d_limits = torch.cat(
                         [
                             pts3d.quantile(q=(1.0 - quantile) / 2.0, dim=0),
@@ -230,12 +235,18 @@ class Pascal3D(OD3D_Dataset):
                     )
                     pts3d_size = (pts3d_limits[1] - pts3d_limits[0]).max()
 
-                    scale_pascal3d_to_od3d[category] = OD3D_CATEGORIES_SIZES_IN_M[
+                    scale_pascal3d_to_od3d[category] = (
+                        OD3D_CATEGORIES_SIZES_IN_M[
                             MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]
-                        ] / pts3d_size
+                        ]
+                        / pts3d_size
+                    )
                     spheres = Meshes.create_sphere(
                         verts_count=mesh_vertices_count,
-                        radius=OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]] / 2.
+                        radius=OD3D_CATEGORIES_SIZES_IN_M[
+                            MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]
+                        ]
+                        / 2.0,
                     )
                     obj_mesh = spheres.get_mesh_with_id(0)
                 else:

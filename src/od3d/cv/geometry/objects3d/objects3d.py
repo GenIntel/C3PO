@@ -101,7 +101,7 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
 
             # equals kaiming uniform
             bound = 1 / math.sqrt(self.feat_dim) if self.feat_dim > 0 else 0
-            #torch.nn.init.uniform_(self.feat_clutter, a=-bound, b=bound)
+            # torch.nn.init.uniform_(self.feat_clutter, a=-bound, b=bound)
             # torch.nn.init.uniform_(self.feat_clutter, a=0., b=1.) # note: somehow better at least without head
             torch.nn.init.normal_(self.feat_clutter)
 
@@ -112,7 +112,7 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
             with torch.no_grad():
                 self.feat_clutter.copy_(
                     self.feat_clutter
-                    / (self.feat_clutter.norm(dim=-1, keepdim=True) + 1e-10)
+                    / (self.feat_clutter.norm(dim=-1, keepdim=True) + 1e-10),
                 )
 
     def __len__(self):
@@ -470,7 +470,7 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
                     add_other_objects=add_other_objects,
                     one_hot=True,
                     device=device,
-                )[:, :, None, ].expand(
+                )[:, :, None].expand(
                     B,
                     V,
                     sample_clutter_count,
@@ -874,7 +874,6 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
                 return sim_feats1d, mods1d_sampled[PROJECT_MODALITIES.IMG]
             else:
                 return sim_feats1d
-
 
     def get_label_feats2d_img(
         self,

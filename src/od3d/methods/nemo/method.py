@@ -275,8 +275,8 @@ class NeMo(OD3D_Method):
         for i, cat in enumerate(config.categories):
             self.feats_all_colors.extend([color_(i)] * self.meshes.verts_counts[i])
 
-        #import wandb
-        #wandb.watch(self.meshes, log="all", log_freq=1)
+        # import wandb
+        # wandb.watch(self.meshes, log="all", log_freq=1)
         # wandb.watch(self.net, log="all", log_freq=1)
 
     def calc_sim(self, comb, featsA, featsB):
@@ -644,8 +644,7 @@ class NeMo(OD3D_Method):
 
         add_clutter = True
 
-        if 'cross_entropy' in self.config.train.loss:
-
+        if "cross_entropy" in self.config.train.loss:
             add_other_objects = self.config.train.get("inter_class_loss", True)
             (
                 labels,
@@ -727,8 +726,9 @@ class NeMo(OD3D_Method):
                 sim_batchwise = sim.max(dim=1).values.flatten(1).mean(dim=-1)
             loss = self.criterion(sim, labels)
 
-        elif 'sim_max' in self.config.train.loss:
-            sim_batchwise = self.meshes.get_sim_render(feats2d_img=feats2d_img,
+        elif "sim_max" in self.config.train.loss:
+            sim_batchwise = self.meshes.get_sim_render(
+                feats2d_img=feats2d_img,
                 cams_tform4x4_obj=batch.cam_tform4x4_obj,
                 cams_intr4x4=batch.cam_intr4x4,
                 objects_ids=batch.category_id,
@@ -739,9 +739,10 @@ class NeMo(OD3D_Method):
                 return_sim_pxl=False,
                 add_clutter=True,
                 add_other_objects=False,
-                temp=self.config.train.T, )
+                temp=self.config.train.T,
+            )
             sim = sim_batchwise.mean()
-            loss = -sim * 10.
+            loss = -sim * 10.0
             noise_pxl2d = None
         else:
             raise ValueError(f"Unknown loss {self.config.train.loss}")
