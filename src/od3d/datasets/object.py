@@ -59,6 +59,9 @@ class OD3D_MESH_TYPES(str, Enum):
     CUBOID250 = "cuboid250"
     CUBOID500 = "cuboid500"
     CUBOID1000 = "cuboid1000"
+    SPHERE250 = "sphere250"
+    SPHERE500 = "sphere500"
+    SPHERE1000 = "sphere1000"
 
 
 class OD3D_MESH_FEATS_TYPES(str, Enum):

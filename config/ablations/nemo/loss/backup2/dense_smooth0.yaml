@@ -1,0 +1,9 @@
+# @package _global_
+
+method:
+  nemo:
+    train:
+      bank_feats_update: loss_gradient # loss_gradient, normalize_loss_gradient, moving_average, loss
+      dense_loss: True
+      loss: cross_entropy_smooth # cross_entropy, cross_entropy_smooth, negative_sim
+      geodesic_prob_sigma: 0.

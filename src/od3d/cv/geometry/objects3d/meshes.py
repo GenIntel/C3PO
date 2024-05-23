@@ -301,6 +301,38 @@ class Meshes(OD3D_Objects3D):
             o3d_obj_mesh.vertex_colors = vertex_colors
         return o3d_obj_mesh
 
+    @staticmethod
+    def create_sphere(verts_count=1000, radius=1., device="cpu"):
+
+        # verts_count = 2 * resolution * (resolution-1) + 2
+        # (verts_count - 2) / 2  = resolution **2 - resolution
+        # (verts_count - 2) / 2  <= resolution **2
+        import math
+        resolution = int(math.floor(math.sqrt((verts_count - 2.) / 2.)))
+        o3d_mesh = o3d.geometry.TriangleMesh.create_sphere(radius=radius, resolution=resolution, create_uv_map=True)
+        return Meshes.from_o3d(o3d_mesh)
+
+
+    @staticmethod
+    def from_o3d(mesh_o3d: Union[List, o3d.geometry.TriangleMesh], device="cpu", **kwargs):
+        if not isinstance(mesh_o3d, List):
+            meshes_o3d = [mesh_o3d]
+        else:
+            meshes_o3d = mesh_o3d
+
+        vertices = []
+        faces = []
+        for _mesh_o3d in meshes_o3d:
+            vertices.append(torch.from_numpy(np.asarray(_mesh_o3d.vertices)).to(
+                dtype=torch.float,
+                device=device,
+            ))
+            faces.append(torch.from_numpy(np.asarray(_mesh_o3d.triangles)).to(
+                dtype=torch.long,
+                device=device,
+            ))
+        return Meshes(verts=vertices, faces=faces, **kwargs)
+
     def reset_parameters(self) -> None:
         super().reset_parameters()
         if self.feats_objects is not None:
@@ -308,19 +340,19 @@ class Meshes(OD3D_Objects3D):
 
             # equals kaiming uniform
             bound = 1 / math.sqrt(self.feat_dim) if self.feat_dim > 0 else 0
-            # torch.nn.init.uniform_(self.feats_objects, a=-bound, b=bound)
-            torch.nn.init.uniform_(
-                self.feats_objects, a=0.0, b=1.0
-            )  # note: somehow better at least without head
+            #torch.nn.init.uniform_(self.feats_objects, a=-bound, b=bound)
+            # torch.nn.init.uniform_(self.feats_objects, a=0., b=1.) # note: somehow better at least without head
+            torch.nn.init.normal_(self.feats_objects)
 
         self.normalize_feats()
 
     def normalize_feats(self):
         super().normalize_feats()
         if self.feats_objects is not None:
-            self.feats_objects.data = self.feats_objects.detach() / (
-                self.feats_objects.detach().norm(dim=-1, keepdim=True) + 1e-10
-            )
+            with torch.no_grad():
+                self.feats_objects.copy_(self.feats_objects / (
+                    self.feats_objects.norm(dim=-1, keepdim=True) + 1e-10
+                ))
 
     def get_limits(self):
         meshes_limits = []
@@ -541,11 +573,11 @@ class Meshes(OD3D_Objects3D):
         else:
             rgb = self.get_rgb_with_mesh_id(mesh_id)
 
-        if self.feats is None:
-            feats = None
+        if self.feats_objects is None:
+            feats_objects = None
         else:
-            feats = self.get_feats_with_mesh_id(mesh_id=mesh_id)
-        return Mesh(verts=verts, faces=faces, feats=feats, rgb=rgb)
+            feats_objects = self.get_feats_with_mesh_id(mesh_id=mesh_id)
+        return Mesh(verts=verts, faces=faces, feats=feats_objects, rgb=rgb)
 
     def get_meshes_with_ids(self, meshes_ids=None, clone=False):
         if meshes_ids is None:
@@ -639,6 +671,7 @@ class Meshes(OD3D_Objects3D):
         )
         # replace inf with 0
         _geodesic_prob[torch.isinf(_geodesic_dist)] = 0.0
+        _geodesic_prob = _geodesic_prob / _geodesic_prob.sum(dim=-1, keepdim=True)
         return _geodesic_prob
 
     def get_geodesic_prob_with_noise(self):
@@ -1683,9 +1716,6 @@ class Meshes(OD3D_Objects3D):
 
             return verts_vsbl_mask
 
-        if modality == MESH_RENDER_MODALITIES.VERTS_ONEHOT:
-            B = fragments.pix_to_face.shape[0]
-
         if modality == MESH_RENDER_MODALITIES.FEATS:
             feats_from_faces = torch.cat(
                 [
@@ -1820,34 +1850,47 @@ class Meshes(OD3D_Objects3D):
             if modality == PROJECT_MODALITIES.MASK:
                 mod2d_rendered = fragments.zbuf.permute(0, 3, 1, 2) > 0.0
 
-            elif modality == PROJECT_MODALITIES.ONEHOT:
-                if add_other_objects:
-                    num_classes = self.verts_count
-                    verts_ids_from_faces = torch.cat(
+            elif modality == PROJECT_MODALITIES.ONEHOT or modality == PROJECT_MODALITIES.ONEHOT_SMOOTH:
+                if modality == PROJECT_MODALITIES.ONEHOT:
+                    if add_other_objects:
+                        num_classes = self.verts_count
+                        verts_ids_from_faces = torch.cat(
+                            [
+                                self.get_faces_with_mesh_id(object_id)
+                                + self.verts_counts_acc_from_0[object_id]
+                                for b, object_id in enumerate(objects_ids)
+                            ],
+                            dim=0,
+                        )
+                    else:
+                        num_classes = self.verts_counts_max
+                        verts_ids_from_faces = torch.cat(
+                            [
+                                self.get_faces_with_mesh_id(object_id)
+                                for b, object_id in enumerate(objects_ids)
+                            ],
+                            dim=0,
+                        )
+
+                    if add_clutter:
+                        num_classes += 1
+
+
+                    verts_one_hot_from_faces = torch.nn.functional.one_hot(
+                        verts_ids_from_faces,
+                        num_classes=num_classes,
+                    ).to(device, dtype)
+
+                elif modality == PROJECT_MODALITIES.ONEHOT_SMOOTH:
+                    from od3d.cv.select import batched_index_select
+
+                    verts_one_hot_from_faces = torch.cat(
                         [
-                            self.get_faces_with_mesh_id(object_id)
-                            + self.verts_counts_acc_from_0[object_id]
+                            self.get_smooth_label_from_object_id(object_id=object_id, add_other_objects=add_other_objects, add_clutter=add_clutter, device=device)[self.get_faces_with_mesh_id(object_id).to(device=device)]
                             for b, object_id in enumerate(objects_ids)
                         ],
                         dim=0,
                     )
-                else:
-                    num_classes = self.verts_counts_max
-                    verts_ids_from_faces = torch.cat(
-                        [
-                            self.get_faces_with_mesh_id(object_id)
-                            for b, object_id in enumerate(objects_ids)
-                        ],
-                        dim=0,
-                    )
-
-                if add_clutter:
-                    num_classes += 1
-
-                verts_one_hot_from_faces = torch.nn.functional.one_hot(
-                    verts_ids_from_faces,
-                    num_classes=num_classes,
-                ).to(device, dtype)
 
                 mod2d_rendered = interpolate_face_attributes(
                     fragments.pix_to_face,
@@ -1860,7 +1903,7 @@ class Meshes(OD3D_Objects3D):
                         *mod2d_rendered.shape,
                     )
                     clutter_onehot = (
-                        self.get_clutter_label(
+                        self.get_label_clutter(
                             add_other_objects=add_other_objects,
                             one_hot=True,
                             device=device,
@@ -2022,7 +2065,7 @@ class Meshes(OD3D_Objects3D):
                 if add_other_objects:
                     B = len(objects_ids)
                     F = self.feat_dim
-                    mods1d_sampled[modality] = self.feats_objects[None, :, :].repeat(
+                    mods1d_sampled[modality] = self.feats_objects.clone()[None, :, :].repeat(
                         B,
                         1,
                         1,
@@ -2030,8 +2073,6 @@ class Meshes(OD3D_Objects3D):
                 else:
                     mods1d_sampled[modality] = self.get_feats_stacked_with_mesh_ids(
                         mesh_ids=objects_ids,
-                    ).to(
-                        device,
                     )  # (B, V, F)
                 if add_clutter:
                     B = mods1d_sampled[modality].shape[0]
@@ -2039,96 +2080,25 @@ class Meshes(OD3D_Objects3D):
                     mods1d_sampled[modality] = torch.cat(
                         [
                             mods1d_sampled[modality],
-                            self.feat_clutter[None, None].expand(B, 1, F).to(device),
+                            self.feat_clutter.clone()[None, None].expand(B, 1, F),
                         ],
                         dim=1,
                     )  # (B, V+1, F)
             elif modality == PROJECT_MODALITIES.ID:
-                if add_other_objects:
-                    if not sample_other_objects:
-                        mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked(
-                            mesh_ids=objects_ids,
-                            count_noise_ids=0,
-                        ).to(
-                            device,
-                        )  # (B, V(+1))
-                    else:
-                        mods1d_sampled[modality] = self.get_verts_and_noise_ids_stacked(
-                            mesh_ids=None,
-                            count_noise_ids=0,
-                        ).to(device)
-                        mods1d_sampled[modality] = mods1d_sampled[modality][
-                            None,
-                        ].expand(len(objects_ids), *mods1d_sampled[modality].shape)
-                else:
-                    if not sample_other_objects:
-                        mods1d_sampled[
-                            modality
-                        ] = self.get_verts_and_noise_ids_stacked_without_acc(
-                            mesh_ids=objects_ids,
-                            count_noise_ids=0,
-                        ).to(
-                            device,
-                        )  # (B, V(+1))
-                    else:
-                        mods1d_sampled[
-                            modality
-                        ] = self.get_verts_and_noise_ids_stacked_without_acc(
-                            mesh_ids=None,
-                            count_noise_ids=0,
-                        ).to(
-                            device,
-                        )
-                        mods1d_sampled[modality] = mods1d_sampled[modality][
-                            None,
-                        ].expand(len(objects_ids), *mods1d_sampled[modality].shape)
-
-                if sample_clutter:
-                    B = mods1d_sampled[modality].shape[0]
-                    mods1d_sampled[modality] = torch.cat(
-                        [
-                            mods1d_sampled[modality],
-                            self.get_clutter_label(add_other_objects=add_other_objects)
-                            .expand(B, 1)
-                            .to(device),
-                        ],
-                        dim=1,
-                    )  # (B, V+1, F)
+                mods1d_sampled[modality] = self.get_labels_ids(
+                    objects_ids=objects_ids, add_other_objects= add_other_objects, sample_clutter=sample_clutter,
+                    sample_other_objects=sample_other_objects, device=device)
 
             elif (
                 modality == PROJECT_MODALITIES.ONEHOT
                 or modality == PROJECT_MODALITIES.ONEHOT_SMOOTH
             ):
-                noise_count = 1 if add_clutter else 0
-                if modality == PROJECT_MODALITIES.ONEHOT:
-                    if add_other_objects:
-                        label_onehot = torch.eye(
-                            self.verts_count + noise_count,
-                            device=self.device,
-                        )  # V*O(+1), V*O(+1)
-                    else:
-                        label_onehot = torch.eye(
-                            self.verts_count + noise_count,
-                            device=self.device,
-                        )
-                else:
-                    if add_other_objects:
-                        label_onehot = self.get_geodesic_prob_with_noise()
-                    else:
-                        label_onehot = self.get_geodesic_prob()
 
-                label_id = self.sample(
-                    cams_tform4x4_obj=cams_tform4x4_obj,
-                    cams_intr4x4=cams_intr4x4,
-                    imgs_sizes=imgs_sizes,
-                    objects_ids=objects_ids,
-                    modalities=PROJECT_MODALITIES.ID,
-                    add_clutter=add_clutter,
-                    add_other_objects=add_other_objects,
-                    sample_clutter=sample_clutter,
-                    sample_other_objects=sample_other_objects,
-                )
-                mods1d_sampled[modality] = label_onehot[label_id]  # B, V, V*O(+1)
+                labels_onehot = self.get_labels_onehot(smooth=modality == PROJECT_MODALITIES.ONEHOT_SMOOTH,
+                                                       objects_ids=objects_ids, add_other_objects=add_other_objects,
+                                                       add_clutter=add_clutter, sample_clutter=sample_clutter,
+                                                       sample_other_objects=sample_other_objects, device=device)
+                mods1d_sampled[modality] = labels_onehot.permute(0, 2, 1)
 
             elif modality == PROJECT_MODALITIES.PXL2D:
                 cams_proj4x4_obj = torch.bmm(cams_intr4x4, cams_tform4x4_obj)
@@ -2214,8 +2184,20 @@ class Meshes(OD3D_Objects3D):
 
         return mods1d_sampled
 
-    def get_clutter_label(self, add_other_objects=False, one_hot=False, device=None):
-        clutter_label = self.verts_count if add_other_objects else self.verts_counts_max
+    def get_label_max(self, add_other_objects=True, add_clutter=True):
+        if add_other_objects:
+            if add_clutter:
+                return self.verts_count
+            else:
+                return self.verts_count - 1
+        else:
+            if add_clutter:
+                return self.verts_counts_max
+            else:
+                return self.verts_counts_max - 1
+
+    def get_label_clutter(self, add_other_objects=False, one_hot=False, device=None):
+        clutter_label = self.get_label_max(add_other_objects=add_other_objects, add_clutter=True)
         clutter_label = torch.LongTensor([clutter_label]).to(device)
 
         if one_hot:
@@ -2358,3 +2340,173 @@ class Meshes(OD3D_Objects3D):
         self.feats_objects.data = self.feats_total_average_sum[:-1].clone()
         self.feat_clutter.data = self.feats_total_average_sum[-1].clone()
         self.normalize_feats()
+
+    def get_labels_ids(self, objects_ids=None, add_other_objects=True, sample_clutter=False,
+                       sample_other_objects=True, device=None):
+        """
+        Args:
+            objects_ids (torch.Tensor): B
+            add_other_objects (bool): whether to add other objects.
+            sample_clutter (bool): whether to sample clutter.
+            sample_other_objects (bool): whether to sample other objects.
+        Returns:
+            labels_ids (torch.Tensor): BxV(*O)(+1) depending on sample clutter/sample other objects
+                                       from 0 to V(*O)(+1) or 0 to V(+1) if not add other objects.
+        """
+        if objects_ids is None:
+            objects_ids = list(range(len(self)))
+
+        if device is None:
+            device = self.device
+
+        if add_other_objects:
+            if not sample_other_objects:
+                labels_ids = self.get_verts_and_noise_ids_stacked(
+                    mesh_ids=objects_ids,
+                    count_noise_ids=0,
+                ).to(
+                    device,
+                )  # (B, V(+1))
+            else:
+                labels_ids = self.get_verts_and_noise_ids_stacked(
+                    mesh_ids=None,
+                    count_noise_ids=0,
+                ).to(device)
+                labels_ids = labels_ids[
+                    None,
+                ].expand(len(objects_ids), *labels_ids.shape)
+        else:
+            if not sample_other_objects:
+                labels_ids = self.get_verts_and_noise_ids_stacked_without_acc(
+                    mesh_ids=objects_ids,
+                    count_noise_ids=0,
+                ).to(
+                    device,
+                )  # (B, V(+1))
+            else:
+                labels_ids = self.get_verts_and_noise_ids_stacked_without_acc(
+                    mesh_ids=None,
+                    count_noise_ids=0,
+                ).to(
+                    device,
+                )
+                labels_ids = labels_ids[
+                    None,
+                ].expand(len(objects_ids), *labels_ids.shape)
+
+        if sample_clutter:
+            B = labels_ids.shape[0]
+            labels_ids = torch.cat(
+                [
+                    labels_ids,
+                    self.get_label_clutter(add_other_objects=add_other_objects)
+                    .expand(B, 1)
+                    .to(device),
+                ],
+                dim=1,
+            )  # (B, V+1, F)
+        return labels_ids
+
+    def get_labels_onehot(self, smooth=False, objects_ids=None, add_other_objects=True, add_clutter=True,
+                          sample_clutter=False, sample_other_objects=True, device=None):
+        """
+        Args:
+            objects_ids (torch.Tensor): B
+            smooth (bool): whether to use smooth labels.
+        Returns:
+            labels_onehot (torch.Tensor): VxV
+        """
+
+        if device is None:
+            device = self.device
+
+        if objects_ids is None:
+            objects_ids = list(range(len(self)))
+
+        if not smooth:
+            labels_ids = self.get_labels_ids(
+                objects_ids=objects_ids,
+                add_other_objects=add_other_objects,
+                sample_clutter=sample_clutter,
+                sample_other_objects=sample_other_objects,
+                device=device,
+            )  # BxV(*O)(+1) in range 0 to V(*O)(+1) or 0 to V(+1) if not add other objects.
+            label_max = self.get_label_max(add_other_objects=add_other_objects, add_clutter=add_clutter)
+            labels_onehot = torch.eye(label_max+1, device=device)
+
+            labels_ids_out_of_range = labels_ids >= labels_onehot.shape[0]
+            labels_ids[labels_ids_out_of_range] = 0
+            labels_onehot = labels_onehot[labels_ids]
+            labels_onehot[labels_ids_out_of_range] = 0
+        else:
+            labels_ids = self.get_labels_ids(
+                objects_ids=objects_ids,
+                add_other_objects=True,
+                sample_clutter=sample_clutter,
+                sample_other_objects=sample_other_objects,
+                device=device,
+            )  # BxV(*O)(+1) in range 0 to V(*O)(+1) or 0 to V(+1) if not add other objects.
+            if add_other_objects:
+                if add_clutter:
+                    labels_onehot = self.get_geodesic_prob_with_noise().clone().to(device=device)
+
+                else:
+                    labels_onehot = self.get_geodesic_prob().clone().to(device=device)
+
+                labels_ids_out_of_range = labels_ids >= labels_onehot.shape[0]
+                labels_ids[labels_ids_out_of_range] = 0
+                labels_onehot = labels_onehot[labels_ids]
+                labels_onehot[labels_ids_out_of_range] = 0
+            else:
+                from od3d.cv.select import batched_index_select
+                labels_onehot = self.get_smooth_label_from_objects_ids(objects_ids=objects_ids, add_other_objects=add_other_objects,
+                                                                       add_clutter=add_clutter, device=device)
+                labels_onehot = batched_index_select(index=labels_ids, input=labels_onehot, dim=1)
+
+        return labels_onehot
+
+    def get_smooth_label_from_objects_ids(self, objects_ids=None, add_other_objects=True, add_clutter=True, device=None):
+        if objects_ids is None:
+            objects_ids = list(range(len(self)))
+
+        label_max = self.get_label_max(add_other_objects=add_other_objects, add_clutter=add_clutter)
+        labels_onehot_smooth = torch.zeros((len(objects_ids), label_max+1, label_max+1), device=device)
+
+        for b, object_id in enumerate(objects_ids):
+            if add_clutter:
+                labels_onehot_all = self.get_geodesic_prob_with_noise()
+            else:
+                labels_onehot_all = self.get_geodesic_prob()
+
+            if add_other_objects:
+                labels_onehot_smooth[b, :self.verts_counts[object_id], :labels_onehot_all.shape[-1]] = \
+                    labels_onehot_all[self.verts_counts_acc_from_0[object_id]:self.verts_counts_acc_from_0[object_id+1]]
+            else:
+                labels_onehot_smooth[b, :self.verts_counts[object_id], :self.verts_counts[object_id]] = \
+                    labels_onehot_all[
+                    self.verts_counts_acc_from_0[object_id]:self.verts_counts_acc_from_0[object_id+1],
+                    self.verts_counts_acc_from_0[object_id]:self.verts_counts_acc_from_0[object_id+1]]
+
+            if add_clutter:
+                labels_onehot_smooth[b, -1, -1] = 1.
+
+        return labels_onehot_smooth
+
+    def get_smooth_label_from_object_id(self, object_id, add_other_objects=True, add_clutter=True, device=None):
+        if device is None:
+            device = self.device
+
+        labels_onehot_all = self.get_geodesic_prob().clone().to(device)
+
+        if add_other_objects:
+            labels_onehot_smooth = labels_onehot_all[self.verts_counts_acc_from_0[object_id]:self.verts_counts_acc_from_0[object_id+1]]
+        else:
+            labels_onehot_smooth = labels_onehot_all[
+            self.verts_counts_acc_from_0[object_id]:self.verts_counts_acc_from_0[object_id + 1],
+            self.verts_counts_acc_from_0[object_id]:self.verts_counts_acc_from_0[object_id + 1]]
+
+        if add_clutter:
+            _labels_onehot_smooth = torch.zeros((labels_onehot_smooth.shape[0], labels_onehot_smooth.shape[1]+1)).to(labels_onehot_smooth.device, labels_onehot_smooth.dtype)
+            _labels_onehot_smooth[:, :-1] = labels_onehot_smooth
+            labels_onehot_smooth = _labels_onehot_smooth
+        return labels_onehot_smooth

@@ -101,18 +101,19 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
 
             # equals kaiming uniform
             bound = 1 / math.sqrt(self.feat_dim) if self.feat_dim > 0 else 0
-            # torch.nn.init.uniform_(self.feat_clutter, a=-bound, b=bound)
-            torch.nn.init.uniform_(
-                self.feat_clutter, a=0.0, b=1.0
-            )  # note: somehow better at least without head
+            #torch.nn.init.uniform_(self.feat_clutter, a=-bound, b=bound)
+            # torch.nn.init.uniform_(self.feat_clutter, a=0., b=1.) # note: somehow better at least without head
+            torch.nn.init.normal_(self.feat_clutter)
 
         self.normalize_feats()
 
     def normalize_feats(self):
         if self.feat_clutter is not None:
-            self.feat_clutter.data = self.feat_clutter.detach() / (
-                self.feat_clutter.detach().norm(dim=-1, keepdim=True) + 1e-10
-            )
+            with torch.no_grad():
+                self.feat_clutter.copy_(
+                    self.feat_clutter
+                    / (self.feat_clutter.norm(dim=-1, keepdim=True) + 1e-10)
+                )
 
     def __len__(self):
         return self.objects_count
@@ -162,7 +163,7 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
         else:
             raise ValueError(f"Set `cams_tform4x4_obj.dim()` must be 3 or 4")
 
-        objects_ids = objects_ids
+        objects_ids = objects_ids.clone()
         if cams_tform4x4_obj.dim() == 3:
             cams_tform4x4_obj = cams_tform4x4_obj[None, :]
         if cams_intr4x4.dim() == 3:
@@ -465,11 +466,11 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
             ):
                 B = mods1d_sampled[modality].shape[0]
                 V = mods1d_sampled[modality].shape[1]
-                label1d_clutter = self.get_clutter_label(
+                label1d_clutter = self.get_label_clutter(
                     add_other_objects=add_other_objects,
                     one_hot=True,
                     device=device,
-                )[None, :, None].expand(
+                )[:, :, None, ].expand(
                     B,
                     V,
                     sample_clutter_count,
@@ -480,7 +481,7 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
                 )
             elif modality == PROJECT_MODALITIES.ID:
                 B = mods1d_sampled[modality].shape[0]
-                label1d_clutter = self.get_clutter_label(
+                label1d_clutter = self.get_label_clutter(
                     add_other_objects=add_other_objects,
                     one_hot=False,
                     device=device,
@@ -874,6 +875,7 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
             else:
                 return sim_feats1d
 
+
     def get_label_feats2d_img(
         self,
         feats2d_img,
@@ -951,7 +953,7 @@ class OD3D_Objects3D(abc.ABC, nn.Module):
                 mods1d_sampled[PROJECT_MODALITIES.CLUTTER_PXL2D],
             )
 
-    def get_clutter_label(self, add_other_objects=False, one_hot=False, device=None):
+    def get_label_clutter(self, add_other_objects=False, one_hot=False, device=None):
         raise NotImplementedError
 
     def get_label_and_sim_feats2d_img_to_all(

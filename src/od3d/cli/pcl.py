@@ -7,7 +7,55 @@ import od3d.cv.visual.show as show
 
 app = typer.Typer()
 
+@app.command()
+def show_sphere():
+    import open3d as o3d
+    resolution = 10
+    o3d_mesh = o3d.geometry.TriangleMesh.create_sphere(radius=1.0, resolution=resolution, create_uv_map=True)
+    from pytorch3d.renderer import TexturesUV
+    import torch
+    from od3d.cv.geometry.objects3d.meshes import Meshes
+    import numpy as np
+    triangle_uvs = torch.from_numpy(np.asarray(o3d_mesh.triangle_uvs)).to(dtype=torch.float)
 
+    meshes = Meshes.from_o3d(o3d_mesh)
+
+
+    pt3dmesh = meshes.pt3dmeshes[0]
+    B = 1
+    V = pt3dmesh.num_verts_per_mesh()[0]
+    F = pt3dmesh.num_faces_per_mesh()[0]
+    H, W = 100, 100
+    texture_map = torch.randn((B, H, W, 3))
+    verts_uvs = torch.zeros((V, 2))
+    verts_uvs[pt3dmesh.faces_padded().flatten(), :] = triangle_uvs[:, :]
+
+    pt3dtextures = TexturesUV(maps=texture_map, faces_uvs=pt3dmesh.faces_padded(), verts_uvs=verts_uvs[None,])
+
+    import matplotlib.pyplot as plt
+    import matplotlib
+    matplotlib.use("TkAgg")
+
+    # plt.figure(figsize=(7, 7))
+    # texture_image = pt3dtextures.clone().maps_padded()
+    # plt.imshow(texture_image.squeeze().cpu().numpy())
+    # plt.grid("off")
+    # plt.axis("off")
+    # plt.show()
+
+    from pytorch3d.vis.texture_vis import texturesuv_image_matplotlib
+    plt.figure(figsize=(7, 7))
+    texturesuv_image_matplotlib(pt3dtextures, subsample=None)
+    plt.grid("off")
+    plt.axis("off")
+    plt.show()
+
+    #verts_count = 2 * resolution * (resolution-1) + 2
+    #print()
+    #print(meshes.verts_count)
+
+    show.show_scene(meshes=meshes)
+    pass
 @app.command()
 def show_image_encoder():
     from od3d.cv.geometry.primitives import ImageEncoder

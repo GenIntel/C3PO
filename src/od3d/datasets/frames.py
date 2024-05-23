@@ -85,7 +85,7 @@ class OD3D_Frames:
             ][0]
 
         if OD3D_FRAME_MODALITIES.MESH in modality_kwargs.keys():
-            modality_kwargs[OD3D_FRAME_MODALITIES.MESH] = Meshes.load_from_meshes(
+            modality_kwargs[OD3D_FRAME_MODALITIES.MESH] = Meshes.read_from_meshes(
                 modality_kwargs[OD3D_FRAME_MODALITIES.MESH],
             )
 

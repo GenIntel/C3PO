@@ -20,7 +20,6 @@ from od3d.datasets.pascal3d.enum import (
 )
 from od3d.datasets.object import OD3D_MESH_TYPES
 
-
 class Pascal3D(OD3D_Dataset):
     map_od3d_categories = MAP_CATEGORIES_OD3D_TO_PASCAL3D
     all_categories = list(PASCAL3D_CATEGORIES)
@@ -145,7 +144,7 @@ class Pascal3D(OD3D_Dataset):
                     remove_previous=remove_previous,
                 )
 
-    def preprocess_cuboid(self, override=False, remove_previous=False):
+    def preprocess_cuboid(self, override=False, remove_previous=False, quantile = 0.95):
         logger.info("preprocess cuboid...")
 
         scale_pascal3d_to_od3d = {}
@@ -153,6 +152,9 @@ class Pascal3D(OD3D_Dataset):
             if category not in self.all_categories:
                 continue
             mesh_types = [
+                OD3D_MESH_TYPES.SPHERE250,
+                OD3D_MESH_TYPES.SPHERE500,
+                OD3D_MESH_TYPES.SPHERE1000,
                 OD3D_MESH_TYPES.CUBOID250,
                 OD3D_MESH_TYPES.CUBOID500,
                 OD3D_MESH_TYPES.CUBOID1000,
@@ -167,7 +169,7 @@ class Pascal3D(OD3D_Dataset):
 
                 if fpath_mesh_out.exists() and not override:
                     logger.warning(f"mesh already exists {fpath_mesh_out}")
-                    return
+                    continue
                 else:
                     logger.info(
                         f"preprocessing mesh for {category} with type {mesh_type}",
@@ -191,32 +193,54 @@ class Pascal3D(OD3D_Dataset):
                         ),
                     ).iterdir()
                 ]
-                meshes = Meshes.load_from_files(fpaths_meshes_category)
+                meshes = Meshes.read_from_ply_files(fpaths_meshes_category)
                 meshes.verts.data = meshes.verts
                 pts3d = meshes.verts
 
                 from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
                 from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
+                if 'cuboid' in mesh_type:
+                    cuboids, tform_obj = fit_cuboid_to_pts3d(
+                        pts3d=pts3d,
+                        optimize_rot=False,
+                        optimize_transl=False,
+                        vertices_max_count=mesh_vertices_count,
+                        optimize_steps=0,
+                        q=0.95,
+                        size=OD3D_CATEGORIES_SIZES_IN_M[
+                            MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]
+                        ],
+                    )
 
-                cuboids, tform_obj = fit_cuboid_to_pts3d(
-                    pts3d=pts3d,
-                    optimize_rot=False,
-                    optimize_transl=False,
-                    vertices_max_count=mesh_vertices_count,
-                    optimize_steps=0,
-                    q=0.95,
-                    size=OD3D_CATEGORIES_SIZES_IN_M[
-                        MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]
-                    ],
-                )
+                    scale_pascal3d_to_od3d[category] = tform_obj[:3, :3].norm(dim=-1).mean()
+                    # show:
+                    # meshes.verts *= scale_pascal3d_to_od3d[category]
+                    # Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
 
-                scale_pascal3d_to_od3d[category] = tform_obj[:3, :3].norm(dim=-1).mean()
+                    obj_mesh = cuboids.get_mesh_with_id(0)
 
-                # show:
-                # meshes.verts *= scale_pascal3d_to_od3d[category]
-                # Meshes.load_from_meshes([meshes.get_mesh_with_id(i) for i in range(meshes.meshes_count)] + [cuboids.get_mesh_with_id(0)]).show(meshes_add_translation=False)
+                elif 'sphere' in mesh_type:
+                    import torch
+                    pts3d_limits = torch.cat(
+                        [
+                            pts3d.quantile(q=(1.0 - quantile) / 2.0, dim=0),
+                            pts3d.quantile(q=1.0 - (1.0 - quantile) / 2.0, dim=0),
+                        ],
+                        dim=0,
+                    )
+                    pts3d_size = (pts3d_limits[1] - pts3d_limits[0]).max()
 
-                obj_mesh = cuboids.get_mesh_with_id(0)
+                    scale_pascal3d_to_od3d[category] = OD3D_CATEGORIES_SIZES_IN_M[
+                            MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]
+                        ] / pts3d_size
+                    spheres = Meshes.create_sphere(
+                        verts_count=mesh_vertices_count,
+                        radius=OD3D_CATEGORIES_SIZES_IN_M[MAP_CATEGORIES_PASCAL3D_TO_OD3D[category]] / 2.
+                    )
+                    obj_mesh = spheres.get_mesh_with_id(0)
+                else:
+                    raise ValueError(f"mesh type {mesh_type} not recognized")
+
                 obj_mesh.write_to_file(fpath=fpath_mesh_out)
 
         log_str = "\n"

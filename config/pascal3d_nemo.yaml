@@ -53,7 +53,8 @@ method:
     # checkpoint: ${platform.path_exps}/12-08_10-37-47_Pascal3D_NeMo_epochs50_slurm/nemo.ckpt
     # checkpoint: ${platform.path_exps}/11-20_19-29-23_Pascal3D_NeMo_local/nemo.ckpt # 08-28_09-14-15_Pascal3D_NeMo_slurm, 08-25_17-08-51_Pascal3D_NeMo_slurm
     train:
-      # dense_loss: True
+      #      dense_loss: True
+      #      loss: cross_entropy_smooth
       val: True
       epochs: 50 # artur: 200  wufei: 800
       dataloader:
