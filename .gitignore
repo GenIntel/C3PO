@@ -151,6 +151,11 @@ config/platform/torque.yaml
 
 # vscode
 .vscode/launch.json
+datasets
+
+#yuchi
+jobs
+cub-1.10.0
 
 datasets
 jobs
