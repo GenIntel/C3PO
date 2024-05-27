@@ -2,10 +2,10 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo_align3d
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.src: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
-  - datasets@train_datasets.labeled: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
+  - datasets@train_datasets.src: co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
+  - datasets@train_datasets.labeled: co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
   - datasets@val_datasets.main:
-  - datasets@test_datasets.co3d: co3d_no_zsp_5s_labeled_ref # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
+  - datasets@test_datasets.co3d: co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
@@ -15,33 +15,33 @@ seed_number: 0
 
 categories:
   - bicycle
-  - truck
-  - train
-  - teddybear
-  - car
-  - bus
-  - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - airplane
-  - toilet
-  - hairdryer
-  - mouse
-  - toaster
-  - hydrant
-  - chair
-  - laptop
-  - book
-  - backpack
-  - cellphone # from cellphone on, no zsp categories
-  - microwave
-  - bench
-  - bottle
-  - couch
-  - cup
-  - suitcase
-  - tv
+  # - truck
+  # - train
+  # - teddybear
+  # - car
+  # - bus
+  # - motorcycle
+  # - keyboard
+  # - handbag
+  # - remote
+  # - airplane
+  # - toilet
+  # - hairdryer
+  # - mouse
+  # - toaster
+  # - hydrant
+  # - chair
+  # - laptop
+  # - book
+  # - backpack
+  # - cellphone # from cellphone on, no zsp categories
+  # - microwave
+  # - bench
+  # - bottle
+  # - couch
+  # - cup
+  # - suitcase
+  # - tv
 
 metrics:
   - metricA
@@ -71,7 +71,7 @@ method:
     use_only_first_reference: False
     geo_cyclic_weight_temp: 0.9  # 0.9
     app_cyclic_weight_temp: 0.9  # 0.9
-    gt_cam_tform_obj_source: labeled_cuboid # zsp_labeled, labeled, labeled_cuboid or '' for only align
+    gt_cam_tform_obj_source: labeled_cuboid_meta # zsp_labeled, labeled, labeled_cuboid or '' for only align
     dist_appear_weight: 0.2
     global_optimization_steps: 1
     categories: ${categories}
@@ -79,19 +79,19 @@ method:
 
     preprocess:
       pcl:
-        enabled: True
+        enabled: False
         override: False
       tform_obj:
-        enabled: True
+        enabled: False
         override: False
       mesh:
-        enabled: True
+        enabled: False
         override: False
       mesh_feats:
-        enabled: True
+        enabled: False
         override: False
       mesh_feats_dist:
-        enabled: True
+        enabled: False
         override: False
 
 

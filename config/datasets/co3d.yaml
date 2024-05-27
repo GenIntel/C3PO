@@ -17,15 +17,28 @@ modalities:
     - 'mask'
     - 'sequence_name_unique'
     - 'sequence'
-    # - 'mesh's
+    - 'mesh'
+
+partial_ratio: 0.5
+pcl_type: 'sfm_mask'
+sfm_type: 'colmap50'
+cam_tform_obj_type: 'sfm'
+# cam_tform_obj_type: 'meta'
+
+# pcl_type: 'meta_mask'
+# sfm_type: 'meta'
+# pcl_type: 'meta'
+# sfm_type: 'meta'
+tform_obj_type:  'label3d_cuboid_meta'
+# tform_obj_type: 'label3d_cuboid'
 
 mesh_type: 'alpha500' # 'cuboid500' 'convex500', 'voxel500' 'poisson500', 'alpha500', 'cuboid1000'
 
-mesh_feats_type: 'M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc' # dinov2_vitb14_frozen_base_no_norm M_dinov2_frozen_base_T_centerzoom512_R_acc, M_nemo_old_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm'
+mesh_feats_type: 'M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc' # dinov2_vitb14_frozen_base_no_norm M_dinov2_frozen_base_T_centerzoom512_R_acc, M_nemo_old_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm'
 
 mesh_feats_dist_reduce_type: 'min_avg' # 'avg', 'min', 'min_avg'
 
-# tform_obj_type: 'label3d_cuboid' # 'label3d_cuboid' 'aligned_N_alpha500_dinov2b/r0'
+# tform_obj_type: 'label3d_cuboid' # 'label3d_cuboid' 'aligned_N_alpha500_dinov2b/r0', 'label3d_cuboid_meta'
 
 frames_count_max_per_sequence:
 sequences_count_max_per_category:
@@ -55,13 +68,13 @@ preprocess:
     enabled: True
     override: False
   tform_obj:
-    enabled: True
+    enabled: False
     override: False
   mesh:
     enabled: True
     override: False
   mesh_feats:
-    enabled: True
+    enabled: False
     override: False
   mesh_feats_dist:
     enabled: False
@@ -71,6 +84,10 @@ preprocess:
 #sequences_require_pcl: True # False
 #sequences_sort_pcl_score: False # False
 #sequences_count_max_per_category: None # None
+
+# dict_nested_frames:
+#   bicycle:
+#     '136_15656_31168':
 
 dict_nested_frames_ban:
   car:
@@ -229,7 +246,7 @@ categories:
 #  - baseballbat
 #  - baseballglove
 #  - bench
-#  - bicycle
+ - bicycle
 #  - book
 #  - bottle
 #  - bowl
