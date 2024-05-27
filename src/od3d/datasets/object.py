@@ -109,13 +109,14 @@ class OD3D_TFROM_OBJ_TYPES(str, Enum):
     LABEL3D = "label3d"
     LABEL3D_CUBOID = "label3d_cuboid"
     # ALIGNED7D = 'aligned7d'
+    LABEL3D_CUBOID_META = 'label3d_cuboid_meta'
 
 
 class OD3D_SEQUENCE_SFM_TYPES(str, Enum):
     META = "meta"
     DROID = "droid"
     COLMAP = "colmap"
-
+    COLMAP50 = 'colmap50'
 
 @dataclass
 class OD3D_TformObjMixin:
