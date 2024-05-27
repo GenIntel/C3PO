@@ -8,6 +8,7 @@ from od3d.datasets.sequence import (
     OD3D_SequenceMeshMixin,
     OD3D_Sequence,
     OD3D_SequenceCategoryMixin,
+    OD3D_SequencePartialMixin,
 )
 from od3d.datasets.sequence_meta import (
     OD3D_SequenceMeta,
@@ -60,6 +61,7 @@ class CO3D_SequenceMeta(OD3D_SequenceMetaCategoryMixin, OD3D_SequenceMeta):
 
 @dataclass
 class CO3D_Sequence(
+    OD3D_SequencePartialMixin,
     OD3D_SequenceMeshMixin,
     OD3D_SequenceCategoryMixin,
     OD3D_DepthTypeMixin,

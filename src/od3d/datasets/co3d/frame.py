@@ -205,6 +205,8 @@ class CO3D_Frame(
 ):
     meta_type = CO3D_FrameMeta
     map_categories_to_od3d = MAP_CATEGORIES_CO3D_TO_OD3D
+    from dataclasses import field
+    partial_ratio: float = field(default=1.0)  # Default value for partial_ratio
 
     def __post_init__(self):
         # hack: prevents circular import

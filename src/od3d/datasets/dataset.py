@@ -127,6 +127,7 @@ class OD3D_Dataset(Dataset):
         subset_fraction=1.0,
         dict_nested_frames: Dict = None,
         dict_nested_frames_ban: Dict = None,
+        partial_ratio = 1.0
     ):
         logger.info(f"init dataset {name}...")
 
@@ -147,7 +148,8 @@ class OD3D_Dataset(Dataset):
         self.path_raw: Path = Path(path_raw)
         self.path_preprocess: Path = Path(path_preprocess)
         self.subset_fraction: float = subset_fraction
-
+        self.partial_ratio = partial_ratio
+        
         if transform is None:
             from od3d.cv.transforms.rgb_uint8_to_float import RGB_UInt8ToFloat
 
@@ -960,6 +962,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             sequence = self.get_sequence_by_name_unique(
                 name_unique=sequence_name_unique,
             )
+            #sequence.partial_ratio = self.partial_ratio
             sequence.preprocess_sfm(override=override)
 
     def preprocess_pcl(self, override=False):
@@ -973,7 +976,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                 name_unique=sequence_name_unique,
             )
             sequence.preprocess_pcl(override=override)
-
+            
     def preprocess_mesh(self, override=False):
         logger.info("preprocess mesh...")
         from od3d.datasets.sequence_meta import OD3D_SequenceMeta
@@ -1215,7 +1218,7 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         sequences = self.get_sequences()
         from od3d.cv.visual.resize import resize
         from od3d.cv.visual.show import show_scene
-
+        
         categorical_fpaths = {category: [] for category in self.categories}
         for category in tqdm(self.categories):
             for sequence in tqdm(sequences):

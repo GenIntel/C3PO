@@ -74,6 +74,10 @@ class CO3D(OD3D_SequenceDataset):
         mesh_feats_type=OD3D_MESH_FEATS_TYPES.M_DINOV2_VITB14_FROZEN_BASE_NO_NORM_T_CENTERZOOM512_R_ACC,
         mesh_feats_dist_reduce_type=OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG,
         tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID,
+        sfm_type = OD3D_SEQUENCE_SFM_TYPES.META,
+        pcl_type = OD3D_PCL_TYPES.META_MASK,
+        cam_tform_obj_type = OD3D_CAM_TFORM_OBJ_TYPES.META,
+        partial_ratio = 1.0
     ):
         super().__init__(
             categories=categories,
@@ -94,6 +98,13 @@ class CO3D(OD3D_SequenceDataset):
         self.mesh_feats_type = mesh_feats_type
         self.mesh_feats_dist_reduce_type = mesh_feats_dist_reduce_type
         self.tform_obj_type = tform_obj_type
+        self.sfm_type = sfm_type
+        self.pcl_type = pcl_type
+        self.cam_tform_obj_type = cam_tform_obj_type
+        if sfm_type == OD3D_SEQUENCE_SFM_TYPES.COLMAP50:
+            self.partial_ratio = partial_ratio
+        else:
+            self.partial_ratio = 1.0
 
     def get_frame_by_name_unique(self, name_unique):
         return self.frame_type(
@@ -111,6 +122,7 @@ class CO3D(OD3D_SequenceDataset):
             modalities=self.modalities,
             tform_obj_type=self.tform_obj_type,
             depth_type=OD3D_FRAME_DEPTH_TYPES.META,
+            partial_ratio = self.partial_ratio,
         )
 
     def get_sequence_by_name_unique(self, name_unique):
@@ -129,6 +141,7 @@ class CO3D(OD3D_SequenceDataset):
             modalities=self.modalities,
             tform_obj_type=self.tform_obj_type,
             depth_type=OD3D_FRAME_DEPTH_TYPES.META,
+            partial_ratio= self.partial_ratio
         )
 
     @staticmethod
