@@ -2,6 +2,8 @@ import numpy as np
 from scipy.linalg import eigh
 from sklearn.cluster import KMeans
 from sklearn.cluster import MeanShift
+
+
 def spectral_clustering_mean_shift(weight_matrix):
     """
     Perform spectral clustering on a given weight matrix and use Mean Shift for clustering.
@@ -25,18 +27,23 @@ def spectral_clustering_mean_shift(weight_matrix):
     # Step 2: Compute the first few eigenvectors of the Laplacian
     # Use a reasonable number of eigenvectors (e.g., 10 or N, whichever is smaller)
     n_eigenvectors = min(10, N)
-    eigenvalues, eigenvectors = eigh(laplacian_matrix, subset_by_index=[0, n_eigenvectors - 1])
+    eigenvalues, eigenvectors = eigh(
+        laplacian_matrix, subset_by_index=[0, n_eigenvectors - 1]
+    )
 
     # Step 3: Use the eigenvectors as the new feature space
     embedding = eigenvectors
 
     # Step 4: Perform Mean Shift clustering on the embedding
-    mean_shift = MeanShift(bandwidth=None, bin_seeding=True)  # Let Mean Shift automatically determine bandwidth
+    mean_shift = MeanShift(
+        bandwidth=None, bin_seeding=True
+    )  # Let Mean Shift automatically determine bandwidth
     mean_shift.fit(embedding)
     labels = mean_shift.labels_
     n_clusters = len(np.unique(labels))  # Number of clusters found
 
     return labels, n_clusters
+
 
 def spectral_clustering(weight_matrix, n_clusters):
     """
@@ -59,7 +66,9 @@ def spectral_clustering(weight_matrix, n_clusters):
     laplacian_matrix = degree_matrix - weight_matrix  # Unnormalized Laplacian
 
     # Step 2: Compute the first `n_clusters` eigenvectors of the Laplacian
-    eigenvalues, eigenvectors = eigh(laplacian_matrix, subset_by_index=[0, n_clusters - 1])
+    eigenvalues, eigenvectors = eigh(
+        laplacian_matrix, subset_by_index=[0, n_clusters - 1]
+    )
 
     # Step 3: Use the eigenvectors as the new feature space
     embedding = eigenvectors
@@ -69,6 +78,7 @@ def spectral_clustering(weight_matrix, n_clusters):
     labels = kmeans.fit_predict(embedding)
 
     return labels
+
 
 # Example usage
 if __name__ == "__main__":

@@ -1,14 +1,20 @@
+import os
+
 import numpy as np
+import torch
+from od3d.cv.metric.pose import get_pose_diff_in_rad
+from od3d.cv.optimization.masked_posegraph import (
+    WeightedPoseGraphOptimizationRotationMatrixMasking,
+)
+from scipy.linalg import eig
 from scipy.optimize import minimize
 from scipy.special import ive  # Modified Bessel function of the first kind, order v
-import torch
-from scipy.linalg import eig
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
-from od3d.cv.optimization.masked_posegraph import WeightedPoseGraphOptimizationRotationMatrixMasking
-from od3d.cv.metric.pose import get_pose_diff_in_rad
-import os
+
 MIN_SAMPLE = 1
+
+
 def filter(tensor):
     isnan = torch.isnan(tensor)
     row_with_all_nan = isnan.all(dim=1)
@@ -17,36 +23,50 @@ def filter(tensor):
     original_indices = torch.arange(tensor.size(0))[valid_rows]  # Keep original indices
     return filtered_tensor, original_indices
 
+
 def filter_mesh_feats_acc(list, ref_indices):
     result = []
     for i in ref_indices:
         x = list[i]
         result.append(x)
-        
+
     return result
+
+
 def get_max_cossine_similarity(tensor1, tensor2):
-    tensor1 = tensor1 /  tensor1.norm(dim=1, keepdim = True)
-    tensor2 = tensor2 /  tensor2.norm(dim=1, keepdim = True)
+    tensor1 = tensor1 / tensor1.norm(dim=1, keepdim=True)
+    tensor2 = tensor2 / tensor2.norm(dim=1, keepdim=True)
     cosine_similarities = torch.mm(tensor1, tensor2.t())
     return cosine_similarities.max()
 
+
 def get_min_cossine_similarity(tensor1, tensor2):
-    tensor1 = tensor1 /  tensor1.norm(dim=1, keepdim = True)
-    tensor2 = tensor2 /  tensor2.norm(dim=1, keepdim = True)
+    tensor1 = tensor1 / tensor1.norm(dim=1, keepdim=True)
+    tensor2 = tensor2 / tensor2.norm(dim=1, keepdim=True)
     cosine_similarities = torch.mm(tensor1, tensor2.t())
     return cosine_similarities.min()
 
+
 def get_mean_cossine_similarity(tensor1, tensor2):
-    tensor1 = tensor1 /  tensor1.norm(dim=1, keepdim = True)
-    tensor2 = tensor2 /  tensor2.norm(dim=1, keepdim = True)
+    tensor1 = tensor1 / tensor1.norm(dim=1, keepdim=True)
+    tensor2 = tensor2 / tensor2.norm(dim=1, keepdim=True)
     cosine_similarities = torch.mm(tensor1, tensor2.t())
     return torch.mean(cosine_similarities)
 
+
 def preprocess_mesh_feats_acc(mesh_feat_acc):
-    
     mesh_feats_acc_cluster = MeshFeatsVertexClustering(mesh_feat_acc)
-    mesh_feats_acc_cluster_mean, original_indices, mesh_feats_filtered = mesh_feats_acc_cluster.preprocess()
-    return mesh_feats_acc_cluster_mean,torch.tensor( np.array(original_indices)).cuda(), mesh_feats_filtered
+    (
+        mesh_feats_acc_cluster_mean,
+        original_indices,
+        mesh_feats_filtered,
+    ) = mesh_feats_acc_cluster.preprocess()
+    return (
+        mesh_feats_acc_cluster_mean,
+        torch.tensor(np.array(original_indices)).cuda(),
+        mesh_feats_filtered,
+    )
+
 
 def get_shared_region_mesh_vertex_feat_cluster_mean(list_A, list_B, threshold):
     list_A_index_list = []
@@ -62,30 +82,33 @@ def get_shared_region_mesh_vertex_feat_cluster_mean(list_A, list_B, threshold):
                 continue  # Skip this iteration if list_B[j] is empty
 
             # Calculate the maximum dot product between features and check against the threshold
-            #if np.min(list_A[i] @ list_B[j].T) > threshold:
+            # if np.min(list_A[i] @ list_B[j].T) > threshold:
             if np.max(list_A[i] @ list_B[j].T) > threshold:
                 list_A_index_list.append(i)
                 list_B_index_list.append(j)
 
     return list_A_index_list, list_B_index_list
 
+
 def get_max_cosine_similarity_vertex_pairs(vertex_A_feat, vertex_B_feat):
     tmp = -2.0
     for i in range(len(vertex_A_feat)):
         for j in range(len(vertex_B_feat)):
             if vertex_A_feat[i].T @ vertex_B_feat[j] > tmp:
-                tmp =  vertex_A_feat[i].T @ vertex_B_feat[j]
-                #assert -1 <= tmp <= 1, "Cosine similarity out of range [-1, 1]"
+                tmp = vertex_A_feat[i].T @ vertex_B_feat[j]
+                # assert -1 <= tmp <= 1, "Cosine similarity out of range [-1, 1]"
     return tmp
+
 
 def get_min_cosine_similarity_vertex_pairs(vertex_A_feat, vertex_B_feat):
     tmp = 2.0
     for i in range(len(vertex_A_feat)):
         for j in range(len(vertex_B_feat)):
             if vertex_A_feat[i].T @ vertex_B_feat[j] < tmp:
-                tmp =  vertex_A_feat[i].T @ vertex_B_feat[j]
-                #assert -1 <= tmp <= 1, "Cosine similarity out of range [-1, 1]"
+                tmp = vertex_A_feat[i].T @ vertex_B_feat[j]
+                # assert -1 <= tmp <= 1, "Cosine similarity out of range [-1, 1]"
     return tmp
+
 
 class MeshFeatsVertexClustering:
     def __init__(self, mesh_feats):
@@ -100,7 +123,7 @@ class MeshFeatsVertexClustering:
 
             # Convert to NumPy array and ensure it's not empty
             if vertex_mesh_feat.shape[0] == 0:
-                #print(f"Skipping empty vertex feature at index {i}.")
+                # print(f"Skipping empty vertex feature at index {i}.")
                 continue
 
             self.original_indices.append(i)
@@ -115,7 +138,7 @@ class MeshFeatsVertexClustering:
             distance = np.clip(1 - similarity, 0, None)
 
             # Perform DBSCAN clustering
-            dbscan = DBSCAN(eps=0.1, min_samples=MIN_SAMPLE, metric='precomputed')
+            dbscan = DBSCAN(eps=0.1, min_samples=MIN_SAMPLE, metric="precomputed")
             clusters = dbscan.fit_predict(distance)
 
             mean_vectors = []
@@ -138,23 +161,36 @@ class MeshFeatsVertexClustering:
             mean_vectors = np.array(mean_vectors)
             self.mesh_feats_cluster_mean.append(mean_vectors)
 
-        return self.mesh_feats_cluster_mean, self.original_indices, self.mesh_feats_filtered
-    
+        return (
+            self.mesh_feats_cluster_mean,
+            self.original_indices,
+            self.mesh_feats_filtered,
+        )
+
+
 class TemperatureScaling:
-    def __init__(self, rotation_matrics, weighted_matrics, temperature, annotated_idx, seq_list ):
+    def __init__(
+        self, rotation_matrics, weighted_matrics, temperature, annotated_idx, seq_list
+    ):
         self.rotation_matrics = rotation_matrics
         self.weighted_matrics = weighted_matrics
         self.temperature = temperature
         self.annotated_idx = annotated_idx
         self.seq_list = seq_list
+
     def preprocess_weight_entire_matrix(self):
-        diagonal_mask = torch.eye(self.weighted_matrics.shape[0], dtype = torch.bool)
+        diagonal_mask = torch.eye(self.weighted_matrics.shape[0], dtype=torch.bool)
         self.weighted_matrics[diagonal_mask] = 1
         off_diagonal_mask = (~diagonal_mask).cuda()
         weighted_matrics_flat = self.weighted_matrics[off_diagonal_mask].view(-1)
-        weighted_matrics_softmax = torch.nn.functional.softmax( weighted_matrics_flat /self.temperature , dim=0)
-        self.weighted_matrics[off_diagonal_mask] = weighted_matrics_softmax.view(self.weighted_matrics[off_diagonal_mask].shape)
+        weighted_matrics_softmax = torch.nn.functional.softmax(
+            weighted_matrics_flat / self.temperature, dim=0
+        )
+        self.weighted_matrics[off_diagonal_mask] = weighted_matrics_softmax.view(
+            self.weighted_matrics[off_diagonal_mask].shape
+        )
         return self.weighted_matrics
+
     # def preprocess_weight_row_wise(self):
     #     diagonal_mask = torch.eye(self.weighted_matrics.shape[0], dtype=torch.bool).to(self.weighted_matrics.device)
     #     # Keep diagonal values safe (store original or set them very high to ensure they turn to 1 after softmax)
@@ -176,45 +212,49 @@ class TemperatureScaling:
         errors = 0
         for i in range(rad.shape[0]):
             for j in range(rad.shape[1]):
-                if i!=j:
-                    errors +=  rad[i,j]
-                    if rad[i,j] < torch.pi/6:
+                if i != j:
+                    errors += rad[i, j]
+                    if rad[i, j] < torch.pi / 6:
                         num_pi_6 += 1
-                        if rad[i,j] < torch.pi/12:
+                        if rad[i, j] < torch.pi / 12:
                             num_pi_12 += 1
-                            if rad[i,j] < torch.pi/18:
+                            if rad[i, j] < torch.pi / 18:
                                 num_pi_18 += 1
 
-        pi_6_acc = num_pi_6 / (rad.shape[0] * (rad.shape[0] -1 ))
-        pi_12_acc = num_pi_12 / (rad.shape[0] * (rad.shape[0] -1 ))
-        pi_18_acc = num_pi_18 / (rad.shape[0] * (rad.shape[0] -1 ))
-        error_mean = errors /  (rad.shape[0] * (rad.shape[0] -1 ))
+        pi_6_acc = num_pi_6 / (rad.shape[0] * (rad.shape[0] - 1))
+        pi_12_acc = num_pi_12 / (rad.shape[0] * (rad.shape[0] - 1))
+        pi_18_acc = num_pi_18 / (rad.shape[0] * (rad.shape[0] - 1))
+        error_mean = errors / (rad.shape[0] * (rad.shape[0] - 1))
 
-        print('pi_6_acc ', pi_6_acc)
-        print('pi_12_acc ' , pi_12_acc)
-        print('pi_18_acc ', pi_18_acc)
-        print('error mean ', error_mean * 180 / torch.pi)
+        print("pi_6_acc ", pi_6_acc)
+        print("pi_12_acc ", pi_12_acc)
+        print("pi_18_acc ", pi_18_acc)
+        print("error mean ", error_mean * 180 / torch.pi)
 
     def run_pgo(self):
         # print('Wihout PGO')
         # self.calculate(self.rotation_matrics)
         # print('---------------------------------------------------------')
         # self.preprocess_weight()
-        #self.preprocess_weight_row_wise()
+        # self.preprocess_weight_row_wise()
         self.preprocess_weight_entire_matrix()
-        pgo = WeightedPoseGraphOptimizationRotationMatrixMasking(self.rotation_matrics, weighted_matrices= self.weighted_matrics, seq_list = self.seq_list)
-        #pgo = WeightedPoseGraphOptimizationRotationMatrixMaskingTop10(self.rotation_matrics, weighted_matrices= self.weighted_matrics)
+        pgo = WeightedPoseGraphOptimizationRotationMatrixMasking(
+            self.rotation_matrics,
+            weighted_matrices=self.weighted_matrics,
+            seq_list=self.seq_list,
+        )
+        # pgo = WeightedPoseGraphOptimizationRotationMatrixMaskingTop10(self.rotation_matrics, weighted_matrices= self.weighted_matrics)
 
         updated_rad = pgo.optimization()
         updated_rad = updated_rad[self.annotated_idx, :][:, self.annotated_idx]
-        #print('updated_rad ', updated_rad)
+        # print('updated_rad ', updated_rad)
 
         init_rad = pgo.return_pose_graph_init_transformations()
         init_rad = init_rad[self.annotated_idx, :][:, self.annotated_idx]
-        print('PGO INIT')
+        print("PGO INIT")
         self.calculate(init_rad)
-        print('---------------------------------------------------------')
-        print('PGO UPDATED')
+        print("---------------------------------------------------------")
+        print("PGO UPDATED")
         self.calculate(updated_rad)
 
 
@@ -228,32 +268,40 @@ class BaselineAlignmentToCanonicalization:
             pose_node = {}
             alignments = self.baseline_alignments[i]
             for j in range(self.baseline_alignments.shape[0]):
-                pose_node[f'{j}'] = torch.linalg.inv(alignments[j])
+                pose_node[f"{j}"] = torch.linalg.inv(alignments[j])
             result.append(pose_node)
 
         return result
-                
 
 
-if __name__ == '__main__':
-    #category = ''
+if __name__ == "__main__":
+    # category = ''
     import json
-    category = 'toytruck'
+
+    category = "toytruck"
     # for temperature in [1.0, 5.0, 10.0,15.0]:
     # for temperature in [1.0, 10.0]:
     temperature = 10.0
-    print('THE TEMPERATURE IS ', temperature)
-    base_path = '/CT/3D_DST_Scene/work/od3d'
-    weight_path = f'scripts/vis_meshes/align_with_unannotated/category_{category}/ratio_25/threshold_90/use_sph_sph_excludes_co3d_with_dino_mixing_ratio_0.2/pgo_init/weighted_matrics.pt'
-    rotation_path = f'scripts/vis_meshes/align_with_unannotated/category_{category}/ratio_25/threshold_90/use_sph_sph_excludes_co3d_with_dino_mixing_ratio_0.2/pgo_init/input_alignments.pt'
-    annotated_idx_path = f'scripts/vis_meshes/align_with_unannotated/category_{category}/ratio_25/threshold_90/use_sph_sph_excludes_co3d_with_dino_mixing_ratio_0.2/pgo_init/annotated_idx.pt'
-    seq_list_path = f'scripts/vis_meshes/align_with_unannotated/category_{category}/ratio_25/threshold_90/use_sph_sph_excludes_co3d_with_dino_mixing_ratio_0.2/pgo_init/seq_list.json'
-    with open(os.path.join(base_path, seq_list_path), 'r') as json_file:
+    print("THE TEMPERATURE IS ", temperature)
+    base_path = "/CT/3D_DST_Scene/work/od3d"
+    weight_path = f"scripts/vis_meshes/align_with_unannotated/category_{category}/ratio_25/threshold_90/use_sph_sph_excludes_co3d_with_dino_mixing_ratio_0.2/pgo_init/weighted_matrics.pt"
+    rotation_path = f"scripts/vis_meshes/align_with_unannotated/category_{category}/ratio_25/threshold_90/use_sph_sph_excludes_co3d_with_dino_mixing_ratio_0.2/pgo_init/input_alignments.pt"
+    annotated_idx_path = f"scripts/vis_meshes/align_with_unannotated/category_{category}/ratio_25/threshold_90/use_sph_sph_excludes_co3d_with_dino_mixing_ratio_0.2/pgo_init/annotated_idx.pt"
+    seq_list_path = f"scripts/vis_meshes/align_with_unannotated/category_{category}/ratio_25/threshold_90/use_sph_sph_excludes_co3d_with_dino_mixing_ratio_0.2/pgo_init/seq_list.json"
+    with open(os.path.join(base_path, seq_list_path)) as json_file:
         seq_list = json.load(json_file)
-    
+
     weight = torch.load(os.path.join(base_path, weight_path))
-    input_alignment = torch.load(os.path.join(base_path,rotation_path ))
+    input_alignment = torch.load(os.path.join(base_path, rotation_path))
     annotated_idx_list = torch.load(os.path.join(base_path, annotated_idx_path))
-    tmp = TemperatureScaling(rotation_matrics = input_alignment, weighted_matrics = weight, temperature = temperature, annotated_idx = annotated_idx_list, seq_list = seq_list )
+    tmp = TemperatureScaling(
+        rotation_matrics=input_alignment,
+        weighted_matrics=weight,
+        temperature=temperature,
+        annotated_idx=annotated_idx_list,
+        seq_list=seq_list,
+    )
     pgo_run = tmp.run_pgo()
-    print('------------------------------------------------------------------------------------------------------------------')
+    print(
+        "------------------------------------------------------------------------------------------------------------------"
+    )

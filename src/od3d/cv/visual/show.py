@@ -528,7 +528,7 @@ def show_scene(
                 and pts3d_colors[i] is not None
             ):
                 pts3d_i_color = pts3d_colors[i]
-                print('if pts3d_i_color ', pts3d_i_color.size())
+                print("if pts3d_i_color ", pts3d_i_color.size())
             else:
                 pts3d_i_color = get_colors(len(pts3d))[i]
 
@@ -736,7 +736,6 @@ def show_scene(
             vis.update_renderer()
             # view_control = vis.get_view_control()
 
-
             # open3d version 0.17.0 bug, view control does not work
             # camera_orig = view_control.convert_to_pinhole_camera_parameters()
             # cam_tform4x4_obj = torch.from_numpy(camera_orig.extrinsic).to(dtype=objs_new_tform4x4_obj.dtype, device=objs_new_tform4x4_obj.device)
@@ -799,7 +798,6 @@ def show_scene(
 
             vis.update_renderer()
             vis.destroy_window()
-
 
         elif renderer == OD3D_RENDERER.PYTORCH3D:
             from od3d.cv.geometry.fit.depth_from_mesh_and_box import (
@@ -894,55 +892,55 @@ def show_scene(
             geometries_vertices_orig = []
             color_vertices = []
             for geometry in geometries:
-                #vis.add_geometry(geometry["geometry"])
+                # vis.add_geometry(geometry["geometry"])
                 if isinstance(geometry["geometry"], open3d.geometry.PointCloud):
-                    print('It is point cloud')
+                    print("It is point cloud")
                     geometries_vertices_orig.append(
                         torch.from_numpy(np.asarray(geometry["geometry"].points))
                         .clone()
                         .to(device=device, dtype=dtype),
                     )
-                    color_vertices.append(   
+                    color_vertices.append(
                         torch.from_numpy(np.asarray(geometry["geometry"].colors))
                         .clone()
                         .to(device=device, dtype=dtype),
                     )
                 elif isinstance(geometry["geometry"], open3d.geometry.TriangleMesh):
-                    print('It is triangle mesh')
+                    print("It is triangle mesh")
                     geometries_vertices_orig.append(
                         torch.from_numpy(np.asarray(geometry["geometry"].vertices))
                         .clone()
                         .to(device=device, dtype=dtype),
                     )
-                    color_vertices.append(   
+                    color_vertices.append(
                         torch.from_numpy(np.asarray(geometry["geometry"].vertex_colors))
                         .clone()
                         .to(device=device, dtype=dtype),
                     )
                 elif isinstance(geometry["geometry"], open3d.geometry.LineSet):
-                    print('It is line set')
+                    print("It is line set")
                     geometries_vertices_orig.append(
                         torch.from_numpy(np.asarray(geometry["geometry"].points))
                         .clone()
                         .to(device=device, dtype=dtype),
                     )
-                    color_vertices.append(   
+                    color_vertices.append(
                         torch.from_numpy(np.asarray(geometry["geometry"].colors))
                         .clone()
                         .to(device=device, dtype=dtype),
                     )
                 else:
                     geometries_vertices_orig.append(None)
-                    
+
                 # vis.update_geometry(geometry['geometry'])
- 
+
             if return_visualization or fpath is not None:
                 imgs = []
                 cams_new_tform4x4_obj = get_cam_tform4x4_obj_for_viewpoints_count(
                     viewpoints_count=viewpoints_count,
                     dist=0.0,
                     # spiral=is_fpath_video(fpath),
-                    spiral= False,
+                    spiral=False,
                 ).to(dtype=dtype, device=device)
                 # open3d version 0.17.0 bug, view control does not work
                 # camera_orig = view_control.convert_to_pinhole_camera_parameters()
@@ -999,15 +997,14 @@ def show_scene(
                     #             )
                     #         vis.update_geometry(geometry["geometry"])
 
-                    
-                    imgs = render_gaussians_without_mask(torch.stack(cams_tform4x4_world, axis = 0), 
-                                                  torch.stack(cams_intr4x4, axis = 0), 
-                                                  (H,W),  
-                                                  torch.stack(geometries_vertices_orig[:5], dim = 0),
-                                                  torch.stack(color_vertices[:5], dim=0)
-                                                  )
-                    
-                    
+                    imgs = render_gaussians_without_mask(
+                        torch.stack(cams_tform4x4_world, axis=0),
+                        torch.stack(cams_intr4x4, axis=0),
+                        (H, W),
+                        torch.stack(geometries_vertices_orig[:5], dim=0),
+                        torch.stack(color_vertices[:5], dim=0),
+                    )
+
                     # vis.update_renderer()
                     # img = vis.capture_screen_float_buffer(do_render=True)
                     # img = torch.from_numpy(np.array(img)).permute(2, 0, 1)
@@ -1040,8 +1037,8 @@ def show_scene(
                 #         logger.info(imgs.shape)
                 #     else:
                 #         imgs = torch.stack(imgs, dim=0)
-                print('fpath is ', fpath)
-                print('return visualization ', return_visualization)
+                print("fpath is ", fpath)
+                print("return visualization ", return_visualization)
                 if fpath is not None:
                     if is_fpath_video(fpath):
                         from od3d.cv.visual.video import save_video
@@ -1055,7 +1052,6 @@ def show_scene(
                 else:
                     return 0
 
-            
             # print('render_gaussians_without_mask size ', render_gaussians_without_mask.size())
             # return [
             #     torch.zeros(size=(3, 480, 640)).to(device=device),
@@ -1618,6 +1614,7 @@ def get_img_from_plot(ax, fig, axis_off=True, margins=1, pad=1):
 
     return torch.from_numpy(image_from_plot.copy()).permute(2, 0, 1)
 
+
 from od3d.cv.geometry.transform import inv_tform4x4
 from od3d.cv.metric.pose import get_pose_diff_in_rad
 import matplotlib.pyplot as plt
@@ -1625,11 +1622,14 @@ import matplotlib.pyplot as plt
 import torch
 import os
 
+
 def plot_score_rotation_error(models, scores, folder_path):
     plot_diff_rot_angle_rad_list = []
     for model in models:
-        plot_tform = inv_tform4x4(model.clone())  # Assuming inv_tform4x4 is defined elsewhere
-        plot_gt_ref_tform_src = torch.eye(4).to('cuda')
+        plot_tform = inv_tform4x4(
+            model.clone()
+        )  # Assuming inv_tform4x4 is defined elsewhere
+        plot_gt_ref_tform_src = torch.eye(4).to("cuda")
 
         plot_diff_rot_angle_rad = get_pose_diff_in_rad(
             pred_tform4x4=plot_tform,
@@ -1639,16 +1639,22 @@ def plot_score_rotation_error(models, scores, folder_path):
     plot_diff_rot_angle_rad_list = torch.stack(plot_diff_rot_angle_rad_list, dim=0)
     # Calculate max values
     max_score = scores.max()
-    
+
     plt.figure(figsize=(10, 6))
-    plt.scatter(scores.detach().cpu().numpy(), plot_diff_rot_angle_rad_list.detach().cpu().numpy(), color='blue', label='Original')
-    plt.title('Plot of Scores vs Rotational Error')
-    plt.xlabel('Scores')
-    plt.ylabel('Rotational Error in Rad')
+    plt.scatter(
+        scores.detach().cpu().numpy(),
+        plot_diff_rot_angle_rad_list.detach().cpu().numpy(),
+        color="blue",
+        label="Original",
+    )
+    plt.title("Plot of Scores vs Rotational Error")
+    plt.xlabel("Scores")
+    plt.ylabel("Rotational Error in Rad")
     plt.legend()
     plt.grid(True)
-    
+
     plt.savefig(folder_path)
     plt.show()
+
+
 # def plot_score_rotation_error_correspondences(models, pts_ids, pts_ref_ids, dist_ref_src):
-    

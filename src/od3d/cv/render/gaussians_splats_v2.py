@@ -163,7 +163,6 @@ def render_gaussians(
     return rendered_imgs
 
 
-
 def render_gaussians_without_mask(
     cams_tform4x4_obj: torch.Tensor,
     cams_intr4x4: torch.Tensor,
@@ -204,13 +203,15 @@ def render_gaussians_without_mask(
     rendered_imgs = []
 
     for b in range(B):
-        #N = int(pts3d_mask[b].sum())
+        # N = int(pts3d_mask[b].sum())
         N = pts3d[b].size(0)
         cam_tform4x4_obj_b = cams_tform4x4_obj[b]
         cam_intr4x4_b = cams_intr4x4[b]
-        #pts3d_b = pts3d[b, pts3d_mask[b]].clone()
+        # pts3d_b = pts3d[b, pts3d_mask[b]].clone()
         pts3d_b = pts3d[b].clone()
-        pts3d_b_cam = transf3d_broadcast(pts3d=pts3d_b.cuda(), transf4x4=cam_tform4x4_obj_b.cuda())
+        pts3d_b_cam = transf3d_broadcast(
+            pts3d=pts3d_b.cuda(), transf4x4=cam_tform4x4_obj_b.cuda()
+        )
 
         pts3d_b_dists = torch.cdist(
             pts3d_b_cam.clone().detach(),
@@ -230,9 +231,11 @@ def render_gaussians_without_mask(
         # pts3d_size_b = pts3d_b_dists.min(dim=-1).values[:, None].expand(N, 3) pts3d_size_rel_to_neighbor_dist
 
         pts3d_size_b = pts3d_size_b.clamp(1e-5, 1e5)  # otherwise illegal access memory
-        #feats_b = feats[b, pts3d_mask[b]]
+        # feats_b = feats[b, pts3d_mask[b]]
         feats_b = feats[b]
-        means2d = proj3d2d_broadcast(pts3d=pts3d_b_cam.cuda(), proj4x4=cam_intr4x4_b.cuda())
+        means2d = proj3d2d_broadcast(
+            pts3d=pts3d_b_cam.cuda(), proj4x4=cam_intr4x4_b.cuda()
+        )
 
         # print(means2d[:10])
 

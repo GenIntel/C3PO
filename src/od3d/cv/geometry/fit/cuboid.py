@@ -42,7 +42,9 @@ def fit_cuboid_to_pts3d(
     pts3d = pts3d.clone() / normalize_scale
 
     if tform_obj_label is not None:
-        cuboid_tform4x4_obj = transf4x4_to_rot4x4_without_scale(tform_obj_label).to(dtype=dtype, device=device)
+        cuboid_tform4x4_obj = transf4x4_to_rot4x4_without_scale(tform_obj_label).to(
+            dtype=dtype, device=device
+        )
     else:
         cuboid_tform4x4_obj = torch.eye(4).to(dtype=dtype, device=device)
     tmp_tform6_cuboid = torch.zeros(6).to(dtype=dtype, device=device)

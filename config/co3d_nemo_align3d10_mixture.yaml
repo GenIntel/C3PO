@@ -30,7 +30,7 @@ categories:
   - mouse  # mesh dist problem
   - toaster
   - hydrant
-  #- chair # mesh dist problem ???? NO SEQ? SFM! 
+  #- chair # mesh dist problem ???? NO SEQ? SFM!
   - laptop #mesh dist problem
   - book
   - backpack

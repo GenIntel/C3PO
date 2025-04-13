@@ -58,6 +58,7 @@ class CO3D_SequenceMeta(OD3D_SequenceMetaCategoryMixin, OD3D_SequenceMeta):
             viewpoint_quality_score=viewpoint_quality_score,
         )
 
+
 @dataclass
 class CO3D_Sequence(
     OD3D_SequencePartialMixin,
@@ -71,12 +72,15 @@ class CO3D_Sequence(
     frame_type = CO3D_Frame
     map_categories_to_od3d = MAP_CATEGORIES_CO3D_TO_OD3D
     meta_type = CO3D_SequenceMeta
+
     def __eq__(self, other):
-        return isinstance(other, CO3D_Sequence) and self.name_unique == other.name_unique
+        return (
+            isinstance(other, CO3D_Sequence) and self.name_unique == other.name_unique
+        )
 
     def __hash__(self):
         return hash(self.name_unique)
-    
+
     #
     # @property
     # def fname_sfm_pcl(self):

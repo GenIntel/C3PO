@@ -48,7 +48,7 @@ use_sd: False
 flip_sfm: False
 
 frames_count_max_per_sequence:
-sequences_count_max_per_category: 
+sequences_count_max_per_category:
 block_negative_depth: False
 
 path_raw: /CT/CO3D-dataset/nobackup/CO3D_V2/

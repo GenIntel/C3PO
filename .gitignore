@@ -162,7 +162,7 @@ Mask2Former
 ODISE
 results
 scripts
-sd-dino 
+sd-dino
 ConDor
 detectron2
 gtsam

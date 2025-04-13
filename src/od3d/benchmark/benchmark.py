@@ -21,7 +21,7 @@ class OD3D_Benchmark:
         if self.config.logger.use_wandb:
             wandb.login()
             formatted_name = (
-                f'category_{self.config.train_datasets.labeled.categories}'
+                f"category_{self.config.train_datasets.labeled.categories}"
                 f"_partial_ratio_{self.config.train_datasets.labeled.partial_ratio}"
                 f"_start_frame_id_{self.config.train_datasets.labeled.start_frame_id}"
                 f"_use_sph_{str(self.config.train_datasets.labeled.use_sph)}"
@@ -33,7 +33,7 @@ class OD3D_Benchmark:
                 config=OmegaConf.to_container(self.config, resolve=True),
                 dir=Path(self.config.logger.local_dir),
                 # name=self.config.run_name,
-                name= formatted_name,
+                name=formatted_name,
                 reinit=True,
             )
 

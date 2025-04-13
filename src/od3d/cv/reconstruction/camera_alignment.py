@@ -1,7 +1,8 @@
-import torch
-import open3d as o3d
 import matplotlib.pyplot as plt
+import open3d as o3d
+import torch
 from mpl_toolkits.mplot3d import Axes3D
+
 
 def skew(vector: torch.Tensor) -> torch.Tensor:
     return torch.stack(
@@ -26,7 +27,7 @@ def skew(vector: torch.Tensor) -> torch.Tensor:
 def logarithmic_map(rotation: torch.Tensor) -> torch.Tensor:
     # rotation torch.Tensor of shape (B, 3, 3)
     angle = torch.arccos(
-        (torch.diagonal(rotation, dim1=-2, dim2=-1).sum(-1) - 1) / 2.0
+        (torch.diagonal(rotation, dim1=-2, dim2=-1).sum(-1) - 1) / 2.0,
     ).unsqueeze(-1)
     axis = (
         1
@@ -41,6 +42,8 @@ def logarithmic_map(rotation: torch.Tensor) -> torch.Tensor:
         )
     )
     return angle * axis
+
+
 def safe_logarithmic_map(R: torch.Tensor, eps=1e-7) -> torch.Tensor:
     # R: [3, 3]
     def vee(S: torch.Tensor) -> torch.Tensor:
@@ -56,25 +59,28 @@ def safe_logarithmic_map(R: torch.Tensor, eps=1e-7) -> torch.Tensor:
         y = S[..., 0, 2] - S[..., 2, 0]
         z = S[..., 1, 0] - S[..., 0, 1]
         return torch.stack([x, y, z], dim=-1)
+
     trace = R.trace()
     # clamp trace-based cos_theta to [-1, 1]
     cos_theta = max(min((trace - 1.0) / 2.0, 1.0), -1.0)
 
     theta = torch.arccos(cos_theta)
     if theta < eps:
-        # Use small-angle approximation: 
+        # Use small-angle approximation:
         # R ~ I + skew(omega), so (R - I) ~ skew(omega)
         # => omega ~ vee(R - I)/2
         return 0.5 * vee(R - torch.eye(3, device=R.device))
     else:
         # Standard formula
-        axis = (1.0 / (2.0 * torch.sin(theta))) * torch.stack([
-            R[2, 1] - R[1, 2],
-            R[0, 2] - R[2, 0],
-            R[1, 0] - R[0, 1]
-        ], dim=0)
+        axis = (1.0 / (2.0 * torch.sin(theta))) * torch.stack(
+            [
+                R[2, 1] - R[1, 2],
+                R[0, 2] - R[2, 0],
+                R[1, 0] - R[0, 1],
+            ],
+            dim=0,
+        )
         return theta * axis
-
 
 
 def exponential_map(so3: torch.Tensor) -> torch.Tensor:
@@ -96,11 +102,11 @@ def calculate_rotational_offset(co3d_transforms, colmap_transforms):
         torch.mean(
             logarithmic_map(
                 co3d_transforms[..., :3, :3]
-                @ colmap_transforms[:, :3, :3].transpose(-2, -1)
+                @ colmap_transforms[:, :3, :3].transpose(-2, -1),
             ),
             dim=0,
             keepdim=True,
-        )
+        ),
     )
     # return exponential_map(
     #     torch.mean(
@@ -112,7 +118,6 @@ def calculate_rotational_offset(co3d_transforms, colmap_transforms):
     #         keepdim=True,
     #     )
     # )
-    
 
 
 def calulate_scale_offset(co3d_transforms, colmap_transforms):
@@ -131,7 +136,7 @@ def calulate_scale_offset(co3d_transforms, colmap_transforms):
     # # version 2
     s = torch.mean(
         torch.norm(co3d_translations - co3d_mean)
-        / torch.norm(colmap_translations - colmap_mean)
+        / torch.norm(colmap_translations - colmap_mean),
     )
 
     return s
@@ -141,15 +146,20 @@ def calculate_translational_offset(co3d_transforms, colmap_transforms):
     # co3d_transforms torch.Tensor of shape (B, 4, 4)
     # colmap_transforms torch.Tensor of shape (B, 4, 4)
     return torch.mean(
-        co3d_transforms[:, :3, 3] - colmap_transforms[:, :3, 3], dim=0, keepdim=True
+        co3d_transforms[:, :3, 3] - colmap_transforms[:, :3, 3],
+        dim=0,
+        keepdim=True,
     )
+
+
 def is_3x3_with_nans(tensor: torch.Tensor) -> bool:
     # Check shape is (1, 3, 3)
     if tensor.shape != (1, 3, 3):
         return False
-    
+
     # Check if there are any NaNs in the tensor
     return torch.isnan(tensor).any().item()
+
 
 def calculate_offset(co3d_transforms, colmap_transforms):
     rotational_offset = calculate_rotational_offset(co3d_transforms, colmap_transforms)
@@ -162,7 +172,8 @@ def calculate_offset(co3d_transforms, colmap_transforms):
     rotated_co3d = co3d_transforms.clone()
     rotated_co3d[:, :3, :3] = rotational_offset @ rotated_co3d[:, :3, :3]
     rotated_co3d[:, :3, 3] = (rotational_offset @ rotated_co3d[:, :3, 3].unsqueeze(-1))[
-        ..., 0
+        ...,
+        0,
     ]
     scale_offset = calulate_scale_offset(co3d_transforms, new_transforms)
     new_transforms[:, :3, 3] = scale_offset * new_transforms[:, :3, 3]
