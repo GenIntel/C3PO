@@ -207,7 +207,12 @@ class CO3D_Frame(
     map_categories_to_od3d = MAP_CATEGORIES_CO3D_TO_OD3D
     from dataclasses import field
     partial_ratio: float = field(default=1.0)  # Default value for partial_ratio
-
+    mixing_ratio: float = field(default = 0.8)
+    start_frame_id: int = field(default=0)
+    use_sph: bool = field(default= False)
+    use_flipped_feature: bool = field(default=False)
+    use_sd: bool = field(default=False)
+    flip_sfm: bool = field(default=False)
     def __post_init__(self):
         # hack: prevents circular import
         from od3d.datasets.co3d.sequence import CO3D_Sequence
@@ -218,6 +223,12 @@ class CO3D_Frame(
         if self.depth is None:
             self.depth = read_co3d_depth_image(self.fpath_depth) * self.meta.depth_scale
         return self.depth
+    
+    def __eq__(self, other):
+        return isinstance(other, CO3D_Frame) and self.name_unique == other.name_unique
+
+    def __hash__(self):
+        return hash(self.name_unique)
 
 
 # from od3d.datasets.co3d.enum import CAM_TFORM_OBJ_SOURCES, CUBOID_SOURCES

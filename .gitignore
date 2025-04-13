@@ -151,11 +151,22 @@ config/platform/torque.yaml
 
 # vscode
 .vscode/launch.json
-datasets
+/datasets
 
 #yuchi
 jobs
 cub-1.10.0
 
-datasets
 jobs
+Mask2Former
+ODISE
+results
+scripts
+sd-dino 
+ConDor
+detectron2
+gtsam
+results_spair
+src/od3d/SphericalMaps/
+benchmark_dataset_partial_views
+benchmark_dataset_partial_views.zip

@@ -65,6 +65,9 @@ class CO3D(OD3D_SequenceDataset):
         categories: List[CO3D_CATEGORIES] = None,
         dict_nested_frames: Dict[str, Dict[str, List[str]]] = None,
         dict_nested_frames_ban: Dict[str, Dict[str, List[str]]] = None,
+        dict_nested_frames_annotated: Dict[str, Dict[str, List[str]]] = None,
+        dict_nested_frames_ratio_50_mixture: Dict[str, Dict[str, List[str]]] = None,
+        dict_nested_frames_ratio_100_mixture: Dict[str, Dict[str, List[str]]] = None,
         frames_count_max_per_sequence=None,
         sequences_count_max_per_category=None,
         transform=None,
@@ -77,7 +80,13 @@ class CO3D(OD3D_SequenceDataset):
         sfm_type = OD3D_SEQUENCE_SFM_TYPES.META,
         pcl_type = OD3D_PCL_TYPES.META_MASK,
         cam_tform_obj_type = OD3D_CAM_TFORM_OBJ_TYPES.META,
-        partial_ratio = 1.0
+        partial_ratio = 1.0,
+        start_frame_id = 0,
+        use_sph = False,
+        use_flipped_feature= False,
+        use_sd = False,
+        flip_sfm = False,
+        mixing_ratio = 0.8,
     ):
         super().__init__(
             categories=categories,
@@ -90,6 +99,7 @@ class CO3D(OD3D_SequenceDataset):
             index_shift=index_shift,
             dict_nested_frames=dict_nested_frames,
             dict_nested_frames_ban=dict_nested_frames_ban,
+            # dict_nested_frames_annotated=dict_nested_frames_annotated,
             frames_count_max_per_sequence=frames_count_max_per_sequence,
             sequences_count_max_per_category=sequences_count_max_per_category,
         )
@@ -105,7 +115,15 @@ class CO3D(OD3D_SequenceDataset):
             self.partial_ratio = partial_ratio
         else:
             self.partial_ratio = 1.0
-
+        self.start_frame_id = start_frame_id
+        self.use_sph = use_sph
+        self.use_flipped_feature = use_flipped_feature
+        self.use_sd = use_sd
+        self.flip_sfm = flip_sfm
+        self.mixing_ratio = mixing_ratio
+        self.dict_nested_frames_annotated = dict_nested_frames_annotated
+        self.dict_nested_frames_ratio_50_mixture = dict_nested_frames_ratio_50_mixture
+        self.dict_nested_frames_ratio_100_mixture = dict_nested_frames_ratio_100_mixture
     def get_frame_by_name_unique(self, name_unique):
         return self.frame_type(
             path_raw=self.path_raw,
@@ -123,6 +141,12 @@ class CO3D(OD3D_SequenceDataset):
             tform_obj_type=self.tform_obj_type,
             depth_type=OD3D_FRAME_DEPTH_TYPES.META,
             partial_ratio = self.partial_ratio,
+            start_frame_id = self.start_frame_id,
+            use_sph=self.use_sph,
+            use_flipped_feature = self.use_flipped_feature,
+            use_sd= self.use_sd,
+            flip_sfm = self.flip_sfm,
+            mixing_ratio = self.mixing_ratio,
         )
 
     def get_sequence_by_name_unique(self, name_unique):
@@ -141,7 +165,75 @@ class CO3D(OD3D_SequenceDataset):
             modalities=self.modalities,
             tform_obj_type=self.tform_obj_type,
             depth_type=OD3D_FRAME_DEPTH_TYPES.META,
-            partial_ratio= self.partial_ratio
+            partial_ratio= self.partial_ratio,
+            start_frame_id = self.start_frame_id,
+            use_sph = self.use_sph,
+            use_flipped_feature = self.use_flipped_feature,
+            use_sd= self.use_sd,
+            flip_sfm= self.flip_sfm,
+            mixing_ratio = self.mixing_ratio
+        )
+    def get_sequence_by_name_unique_with_partial_ratio(self, name_unique, 
+            partial_ratio,
+            cam_tform_obj_type = None,
+            pcl_type = None,
+            sfm_type =  None,):
+        if cam_tform_obj_type == None:
+            cam_tform_obj_type = self.cam_tform_obj_type
+        if pcl_type == None:
+            pcl_type = self.pcl_type
+        if sfm_type == None:
+            sfm_type = self.sfm_type
+        return self.sequence_type(
+            name_unique=name_unique,
+            path_raw=self.path_raw,
+            path_preprocess=self.path_preprocess,
+            all_categories=self.categories,
+            mask_type=self.mask_type,
+            # cam_tform4x4_obj_type=self.cam_tform_obj_type,
+            cam_tform4x4_obj_type= cam_tform_obj_type,
+            mesh_type=self.mesh_type,
+            mesh_feats_type=self.mesh_feats_type,
+            mesh_feats_dist_reduce_type=self.mesh_feats_dist_reduce_type,
+            # pcl_type=self.pcl_type,
+            pcl_type = pcl_type,
+            # sfm_type=self.sfm_type,
+            sfm_type= sfm_type,
+            modalities=self.modalities,
+            tform_obj_type=self.tform_obj_type,
+            depth_type=OD3D_FRAME_DEPTH_TYPES.META,
+            partial_ratio= partial_ratio,
+            start_frame_id = self.start_frame_id,
+            use_sph = self.use_sph,
+            use_flipped_feature = self.use_flipped_feature,
+            use_sd= self.use_sd,
+            flip_sfm= self.flip_sfm,
+            mixing_ratio = self.mixing_ratio
+        )
+    def get_sequence_by_name_unique_with_frame_id(self, name_unique, start_frame_id):
+        return self.sequence_type(
+            name_unique=name_unique,
+            path_raw=self.path_raw,
+            path_preprocess=self.path_preprocess,
+            all_categories=self.categories,
+            mask_type=self.mask_type,
+            cam_tform4x4_obj_type=self.cam_tform_obj_type,
+            mesh_type=self.mesh_type,
+            mesh_feats_type=self.mesh_feats_type,
+            mesh_feats_dist_reduce_type=self.mesh_feats_dist_reduce_type,
+            pcl_type=self.pcl_type,
+            sfm_type=self.sfm_type,
+            modalities=self.modalities,
+            tform_obj_type=self.tform_obj_type,
+            depth_type=OD3D_FRAME_DEPTH_TYPES.META,
+            partial_ratio= self.partial_ratio,
+            # start_frame_id = self.start_frame_id,
+            start_frame_id = start_frame_id,
+            use_sph = self.use_sph,
+            use_flipped_feature = self.use_flipped_feature,
+            use_sd= self.use_sd,
+            flip_sfm= self.flip_sfm,
+            mixing_ratio = self.mixing_ratio
         )
 
     @staticmethod

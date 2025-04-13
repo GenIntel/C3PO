@@ -111,7 +111,7 @@ def fit_tform4x4(
     ## end single batch dimension
     pts_ref_tform4x4_pts = pts_ref_tform4x4_pts.view(pts_sampled.shape[:-2] + (4, 4))
 
-    return pts_ref_tform4x4_pts
+    return pts_ref_tform4x4_pts, pts_ids, pts_ref_ids
 
 
 def score_tform4x4_fit(

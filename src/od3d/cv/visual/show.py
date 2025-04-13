@@ -1617,3 +1617,38 @@ def get_img_from_plot(ax, fig, axis_off=True, margins=1, pad=1):
     )
 
     return torch.from_numpy(image_from_plot.copy()).permute(2, 0, 1)
+
+from od3d.cv.geometry.transform import inv_tform4x4
+from od3d.cv.metric.pose import get_pose_diff_in_rad
+import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+import torch
+import os
+
+def plot_score_rotation_error(models, scores, folder_path):
+    plot_diff_rot_angle_rad_list = []
+    for model in models:
+        plot_tform = inv_tform4x4(model.clone())  # Assuming inv_tform4x4 is defined elsewhere
+        plot_gt_ref_tform_src = torch.eye(4).to('cuda')
+
+        plot_diff_rot_angle_rad = get_pose_diff_in_rad(
+            pred_tform4x4=plot_tform,
+            gt_tform4x4=plot_gt_ref_tform_src,
+        )
+        plot_diff_rot_angle_rad_list.append(plot_diff_rot_angle_rad)
+    plot_diff_rot_angle_rad_list = torch.stack(plot_diff_rot_angle_rad_list, dim=0)
+    # Calculate max values
+    max_score = scores.max()
+    
+    plt.figure(figsize=(10, 6))
+    plt.scatter(scores.detach().cpu().numpy(), plot_diff_rot_angle_rad_list.detach().cpu().numpy(), color='blue', label='Original')
+    plt.title('Plot of Scores vs Rotational Error')
+    plt.xlabel('Scores')
+    plt.ylabel('Rotational Error in Rad')
+    plt.legend()
+    plt.grid(True)
+    
+    plt.savefig(folder_path)
+    plt.show()
+# def plot_score_rotation_error_correspondences(models, pts_ids, pts_ref_ids, dist_ref_src):
+    

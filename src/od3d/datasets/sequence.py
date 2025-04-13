@@ -22,16 +22,16 @@ from od3d.datasets.object import (
     OD3D_MESH_FEATS_DIST_REDUCE_TYPES,
 )
 from od3d.data.ext_dicts import rollup_flattened_dict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 import numpy as np
 from pathlib import Path
 import torch
-from od3d.cv.reconstruction.clean import get_pcl_clean_with_masks
+from od3d.cv.reconstruction.clean import get_pcl_clean_with_masks, remove_floater_by_camera_position, remove_floater_by_median_points
 from od3d.cv.io import write_pts3d_with_colors_and_normals
 from od3d.datasets.object import OD3D_CAM_TFORM_OBJ_TYPES
 from torch.utils.data import Dataset
-
+import os
 import re
 from od3d.cv.io import read_pts3d_with_colors_and_normals
 import open3d
@@ -49,7 +49,15 @@ from od3d.cv.geometry.transform import (
 )
 from od3d.datasets.object import OD3D_TFROM_OBJ_TYPES
 from od3d.datasets.path_utils import find_start_directory
-
+from pytorch3d.renderer import PerspectiveCameras
+import pytorch3d
+from od3d.cv.reconstruction import camera_alignment
+import random
+import os
+import trimesh
+from PIL import Image
+from od3d.cv.reconstruction.backproject_co3d import _load_16bit_png_depth, backproject, read_from_depth_binary_array, backproject_with_rgb, backproject_with_feat, tell_left_from_right_sd_feature
+import time
 @dataclass
 class OD3D_Sequence(OD3D_FrameModalitiesMixin, OD3D_Object, Dataset):
     frame_type = OD3D_Frame
@@ -294,7 +302,7 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
     #     return self.path_sfm.joinpath(self.dname_sfm_cams_tform4x4_obj)
     @property
     def path_sfm_cams_tform4x4_obj(self):
-        return self.path_sfm.joinpath(f'Partial_Ratio_{100* self.partial_ratio}_Percent')
+        return self.path_sfm.joinpath(f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}')
 
     @property
     def dname_sfm_cams_tform4x4_obj(self):
@@ -310,7 +318,10 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
 
     @property
     def fpath_sfm_rays_center3d(self):
-        return self.path_sfm.joinpath(self.fname_sfm_rays_center3d)
+        if self.sfm_type == 'colmap50':
+            return self.path_sfm.joinpath(f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}', self.fname_sfm_rays_center3d)
+        else:
+            return self.path_sfm.joinpath(self.fname_sfm_rays_center3d)
 
     @property
     def fname_sfm_rays_center3d(self):
@@ -320,14 +331,20 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
     #     return torch.load(self.path_sfm_cams_tform4x4_obj.joinpath(f"{frame_name}.pt"))
     def get_sfm_cam_tform4x4_obj(self, frame_name):
         import os
-        return torch.load(self.path_sfm_cams_tform4x4_obj.joinpath(os.path.join('extrinsic', f'frame{str(frame_name).zfill(6)}.pt')))
-
+        if os.path.exists(self.path_sfm_cams_tform4x4_obj.joinpath(os.path.join('extrinsic', f'frame{str(frame_name).zfill(6)}.pt'))):
+            return torch.load(self.path_sfm_cams_tform4x4_obj.joinpath(os.path.join('extrinsic', f'frame{str(frame_name).zfill(6)}.pt')))
+        else:
+            if os.path.exists(self.path_sfm_cams_tform4x4_obj.joinpath(os.path.join('extrinsic', f'frame{str(int(frame_name) + 1).zfill(6)}.pt'))):
+                return torch.load(self.path_sfm_cams_tform4x4_obj.joinpath(os.path.join('extrinsic', f'frame{str(int(frame_name) + 1).zfill(6)}.pt')))
+            
     def get_sfm_rays_center3d(self):
         return torch.load(self.fpath_sfm_rays_center3d)
 
     def preprocess_sfm(self, override=False):
-        if not override and self.path_sfm.exists():
-            logger.info(f"path sfm already exists at {self.path_sfm}")
+        path_sfm = self.path_sfm.joinpath(f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}')
+      
+        if not override and path_sfm.exists():
+            logger.info(f"path sfm already exists at {path_sfm}")
             return
         else:
             logger.info(
@@ -419,9 +436,13 @@ class OD3D_SequenceSfMMixin(OD3D_SequenceSfMTypeMixin, OD3D_Sequence):
 @dataclass
 class OD3D_SequencePartialMixin(OD3D_SequenceSfMMixin, OD3D_Sequence):
     # frame_type = OD3D_FrameCamIntr4x4Mixin
-    from dataclasses import dataclass, field
     partial_ratio: float 
-
+    start_frame_id: int
+    use_sph: bool
+    use_flipped_feature: bool
+    use_sd: bool
+    flip_sfm: bool
+    mixing_ratio: float
     @property
     def frames_names_unique(self):
         if self._frames_names_unique is None:
@@ -433,7 +454,7 @@ class OD3D_SequencePartialMixin(OD3D_SequenceSfMMixin, OD3D_Sequence):
             self._frames_names_unique = OD3D_FrameMeta.unroll_nested_metas(
                 dict_nested_meta=dict_nested_frames,
             )
-        return self._frames_names_unique[:int(len(self._frames_names_unique) * self.partial_ratio)]
+        return self._frames_names_unique[self.start_frame_id: self.start_frame_id + int(len(self._frames_names_unique) * self.partial_ratio)]
 
     @property
     def frames_names(self):
@@ -583,8 +604,13 @@ class OD3D_SequencePartialMixin(OD3D_SequenceSfMMixin, OD3D_Sequence):
         return cams_tform4x4_world, cams_intr4x4, cams_imgs
 
     def preprocess_sfm(self, override=False):
-        if not override and self.path_sfm.exists():
-            logger.info(f"path sfm already exists at {self.path_sfm}")
+        # if not override and self.path_sfm.exists():
+        #     logger.info(f"path sfm already exists at {self.path_sfm}")
+        #     return
+        path_sfm = self.path_sfm.joinpath(f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}', 'dense', 'stereo','depth_maps' )
+      
+        if not override and path_sfm.exists():
+            logger.info(f"path sfm already exists at {path_sfm}")
             return
         else:
             logger.info(
@@ -657,9 +683,9 @@ class OD3D_SequencePartialMixin(OD3D_SequenceSfMMixin, OD3D_Sequence):
         elif self.sfm_type == OD3D_SEQUENCE_SFM_TYPES.COLMAP50:
             from od3d.cv.reconstruction.colmap_pipeline import ColmapPipeline
             logger.info("calling COLMAP for partial view videos")
-            colmap_pipeline_for_partial_view = ColmapPipeline(self.path_raw.joinpath(self.name_unique), self.path_sfm, self.frames_count , ratio = self.partial_ratio )
+            colmap_pipeline_for_partial_view = ColmapPipeline(self.path_raw.joinpath(self.name_unique), self.path_sfm, self.frames_count , ratio = self.partial_ratio, start_frame_id= self.start_frame_id, flip_sfm = self.flip_sfm)
             colmap_pipeline_for_partial_view.run_colmap(logger)
-            colmap_pipeline_for_partial_view.save_ray_center_3d()
+            #colmap_pipeline_for_partial_view.save_ray_center_3d()
             # self.start = colmap_pipeline_for_partial_view.start
             # self.end = colmap_pipeline_for_partial_view.end
             # self.current_folder = colmap_pipeline_for_partial_view.sfm_dir
@@ -674,7 +700,37 @@ class OD3D_SequencePartialMixin(OD3D_SequenceSfMMixin, OD3D_Sequence):
     # @property
     # def path_droid_slam(self):
     #     return self.path_preprocess.joinpath(OD3D_SequenceDroidSlamMixin.get_rfpath_droid_slam(), self.name_unique)
+from typing import List, Dict
+@dataclass
+class OD3D_Multiple_SequencesPartialMixin():
+    sequence_dict: Dict[str, List[OD3D_SequencePartialMixin]] = field(default_factory=dict)
+    def add_sequence(self, sequence: OD3D_SequencePartialMixin):
+        """Add a sequence to the appropriate category list in the dictionary."""
+        if sequence.category not in self.sequence_dict:
+            self.sequence_dict[sequence.category] = []
+        self.sequence_dict[sequence.category].append(sequence)
 
+    def get_sequences_by_category(self, category: str) -> List[OD3D_SequencePartialMixin]:
+        """Retrieve a list of sequences by category."""
+        return self.sequence_dict.get(category, [])
+    
+    def get_sequence_partial_ratio(self):
+            """Retrieve the partial ratio of the first sequence in the first category."""
+            if self.sequence_dict:
+                first_category = next(iter(self.sequence_dict))
+                if self.sequence_dict[first_category]:
+                    return self.sequence_dict[first_category][0].partial_ratio
+            return None
+
+    def display_sequences(self):
+        """Optional method to display all sequences grouped by categories."""
+        for category, sequences in self.sequence_dict.items():
+            print(f"Category: {category}")
+            for sequence in sequences:
+                print(sequence)
+
+    def get_sequences_length(self, category):
+        return len(self.sequence_dict[category])
 
 @dataclass
 class OD3D_SequencePCLMixin(
@@ -699,7 +755,9 @@ class OD3D_SequencePCLMixin(
         elif pcl_type == OD3D_PCL_TYPES.SFM:
             return self.fpath_sfm_pcl
         elif pcl_type == OD3D_PCL_TYPES.SFM_MASK:
-            base_path = self.path_preprocess.joinpath("pcl", str(pcl_type), self.sfm_type, self.name_unique)
+            # base_path = self.path_preprocess.joinpath("pcl", str(pcl_type), self.sfm_type, self.name_unique, f'Partial_Ratio_{100* self.partial_ratio}_Percent' )
+            base_path = self.path_preprocess.joinpath("pcl", str(pcl_type), self.sfm_type, self.name_unique, f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}' )
+            #base_path = self.path_preprocess.joinpath("sfm", self.sfm_type, self.name_unique, f'Partial_Ratio_{100* self.partial_ratio}_Percent' )
             return base_path.joinpath('pcl.ply')
         else:
             return self.path_preprocess.joinpath(
@@ -712,34 +770,39 @@ class OD3D_SequencePCLMixin(
 
     def read_pcl(
         self,
+        fpath_pcl=None,
         pcl_type=None,
         device="cuda:0",
         tform_obj_type: OD3D_TFROM_OBJ_TYPES = None,
     ):
-        fpath_pcl = self.get_fpath_pcl(pcl_type=pcl_type)
-        pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(
-            fpath=fpath_pcl,
-            device=device,
-        )
-
-        tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
-        if tform_obj is not None:
-            tform_obj = tform_obj.to(device=device)
-            pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
-            pts3d_normals = transf3d_normal_broadcast(
-                normals3d=pts3d_normals,
-                transf4x4=tform_obj,
+        if fpath_pcl is None:
+            fpath_pcl = self.get_fpath_pcl(pcl_type=pcl_type)
+        if os.path.exists(fpath_pcl):
+            pts3d, pts3d_colors, pts3d_normals = read_pts3d_with_colors_and_normals(
+                fpath=fpath_pcl,
+                device=device,
             )
 
-        if (pcl_type is None or pcl_type == self.pcl_type) and (
-            tform_obj_type == self.tform_obj_type or tform_obj_type is None
-        ):
-            self.pts3d, self.pts3d_colors, self.pts3d_normals = (
-                pts3d,
-                pts3d_colors,
-                pts3d_normals,
-            )
-        return pts3d, pts3d_colors, pts3d_normals
+            tform_obj = self.get_tform_obj(tform_obj_type=tform_obj_type)
+            if tform_obj is not None:
+                tform_obj = tform_obj.to(device=device)
+                pts3d = transf3d_broadcast(pts3d=pts3d, transf4x4=tform_obj)
+                pts3d_normals = transf3d_normal_broadcast(
+                    normals3d=pts3d_normals,
+                    transf4x4=tform_obj,
+                )
+
+            if (pcl_type is None or pcl_type == self.pcl_type) and (
+                tform_obj_type == self.tform_obj_type or tform_obj_type is None
+            ):
+                self.pts3d, self.pts3d_colors, self.pts3d_normals = (
+                    pts3d,
+                    pts3d_colors,
+                    pts3d_normals,
+                )
+            return pts3d, pts3d_colors, pts3d_normals
+        else:
+            return None, None, None
 
     def get_pcl(
         self,
@@ -870,78 +933,102 @@ class OD3D_SequencePCLMixin(
             # else:
             #     raise NotImplementedError
 
-            fpath_pcl_out = self.get_fpath_pcl(pcl_type=self.pcl_type)
+            def extract_indices_from_filenames(directory):
+                # Define the regex pattern to match the file names and extract indices
+                pattern = re.compile(r'frame(\d+)\.pt')
+                # List directory contents
+                files = os.listdir(directory)
+                # Extract indices from file names using the regex pattern
+                indices = [int(pattern.search(file).group(1)) for file in files if pattern.search(file)]
+                return indices
+            device = get_default_device()
+            # dirname = f'Partial_Ratio_{100* self.partial_ratio}_Percent'
+            dirname = f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}'
+            fpath_pcl_out = self.path_preprocess.joinpath(
+                "pcl",
+                f"{self.pcl_type}",
+                f"{self.sfm_type}",
+                self.name_unique,
+                dirname,
+                "pcl.ply",)
 
             if not override and fpath_pcl_out.exists():
                 logger.info(f"fpath sfm mask pcl already exists at {fpath_pcl_out}")
                 return
-            #start_index, end_index = str(fpath_pcl_out).split('/')[-3].split('_')[1], str(fpath_pcl_out).split('/')[-3].split('_')[3]
-            #start_index, end_index = self.start, self.end
 
             base_path = self.path_preprocess.joinpath('sfm', self.sfm_type, self.name_unique)
-            dirname = f'Partial_Ratio_{100* self.partial_ratio}_Percent'
-
+            if not os.path.exists(base_path.joinpath(dirname, 'dense', 'images')):
+                return
+            
+            #if len(os.listdir(base_path.joinpath(dirname, 'dense', 'images'))) == len(os.listdir(base_path.joinpath(dirname, 'images'))) and len(os.listdir(base_path.joinpath(dirname).joinpath(f'dense/stereo/depth_maps/')))!=0:
+            indices = sorted(extract_indices_from_filenames(base_path.joinpath(dirname).joinpath('extrinsic'))) 
             frames = self.get_frames()
-            device = get_default_device()
-
+            
             H, W = self.get_min_HW()
             # note: this is only required if the frames have different sizes
             if H is not None and W is not None:
-                masks = torch.stack(
+                masks = torch.stack( 
                     [frame.read_mask()[:, :H, :W] for frame in frames],
                     dim=0,
                 ).to(device=device)
             else:
                 masks = torch.stack([frame.read_mask() for frame in frames], dim=0).to(
                     device=device,
-                )
+                )   
 
             cams_intr4x4 = torch.stack(
-                [torch.load(base_path.joinpath(dirname).joinpath('intrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in range(1, 1 + self.frames_count)],
+                [torch.load(base_path.joinpath(dirname).joinpath('intrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in indices ],
                 dim=0,
             ).to(device=device).to(dtype=torch.float32)
             
             cams_tform4x4_obj = torch.stack(
-                [torch.load(base_path.joinpath(dirname).joinpath('extrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in range(1, 1 + self.frames_count)],
+                [torch.load(base_path.joinpath(dirname).joinpath('extrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in indices ],
                 dim=0,
             ).to(device=device).to(dtype=torch.float32)
-            # from od3d.cv.geometry.fit.rays_center3d import fit_rays_center3d
-            # center3d = fit_rays_center3d(cams_tform4x4_obj=cams_tform4x4_obj)
-            # self.fpath_sfm_rays_center3d.parent.mkdir(parents=True, exist_ok=True)
-            # torch.save(center3d.detach().cpu(), f=self.fpath_sfm_rays_center3d)
-
-
-            pts3d, pts3d_colors, pts3d_normals = self.read_pcl(
-                pcl_type=pcl_type_in,
-                device=device,
-                tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,
-            )
-            pts3d, pts3d_mask = get_pcl_clean_with_masks(
-                pcl=pts3d,
-                masks=masks,
-                cams_intr4x4=cams_intr4x4,
-                cams_tform4x4_obj=cams_tform4x4_obj,
-                pts3d_prob_thresh=0.6,
-                pts3d_max_count=20000,
-                pts3d_count_min=10,
-                return_mask=True,
-            )
-            pts3d_colors = pts3d_colors[pts3d_mask]
-            pts3d_normals = pts3d_normals[pts3d_mask]
-
-            write_pts3d_with_colors_and_normals(
-                fpath=self.path_preprocess.joinpath(
+            points_3d_list = []
+            for k in range(len(indices)):
+                index = indices[k]
+                start = time.time()
+                depth_path = base_path.joinpath(dirname).joinpath(f'dense/stereo/depth_maps/frame{str(index).zfill(6)}.jpg.geometric.bin')
+                if not os.path.exists(depth_path):
+                    continue
+                depth_mask_path = self.path_raw.joinpath(self.name_unique).joinpath(f'depth_masks/frame{str(index).zfill(6)}.png')
+                rgb_path = base_path.joinpath(dirname).joinpath(f'dense/images/frame{str(index).zfill(6)}.jpg')
+                depth = read_from_depth_binary_array(depth_path)
+                depth_mask = Image.open(depth_mask_path)
+                H = depth.shape[0]
+                W = depth.shape[1]
+                rgb = np.array(Image.open(rgb_path).resize((W,H), Image.NEAREST))
+                depth_mask = np.array(depth_mask.resize((W,H), Image.NEAREST))
+                if self.flip_sfm:
+                    depth_mask = np.flip(depth_mask, axis=1)
+                    
+                masked_depth = depth * depth_mask
+                masked_rgb = rgb *  np.expand_dims(depth_mask, axis=2)
+                points_3d = backproject_with_rgb(masked_depth, masked_rgb, cams_intr4x4[k].cpu().numpy(), np.linalg.inv(cams_tform4x4_obj[k].cpu().numpy()))
+                points_3d_list.append(points_3d)
+                end = time.time()
+                print('time is ', end - start)
+                
+            points_3d_list = np.vstack(points_3d_list)
+            pts3d_max_count = 20000
+            index_list = np.random.randint(0, len(points_3d_list),size = pts3d_max_count )
+            points_3d_list = points_3d_list[index_list]
+            
+            pcd = open3d.geometry.PointCloud()
+            pcd.points = open3d.utility.Vector3dVector(points_3d_list[:,:3])
+            pcd.colors = open3d.utility.Vector3dVector(points_3d_list[:,3:]/255)
+            cl, ind = pcd.remove_statistical_outlier(nb_neighbors=100, std_ratio= 0.5 )
+            folder_path = str(self.path_preprocess.joinpath(
                 "pcl",
                 f"{self.pcl_type}",
                 f"{self.sfm_type}",
                 self.name_unique,
-                "pcl.ply",
-            ),
-                pts3d=pts3d.detach().cpu(),
-                pts3d_colors=pts3d_colors.detach().cpu(),
-                pts3d_normals=pts3d_normals.detach().cpu(),
-            )
-
+                dirname))
+            os.makedirs(folder_path, exist_ok= True)
+            open3d.io.write_point_cloud(os.path.join(folder_path, 'pcl.ply'), cl)
+            # else:
+            #     logger.info('No Valid SFM detected!')
     # @dataclass
     # class OD3D_SequenceTformObjMixin(OD3D_TformObjMixin, OD3D_SequencePCLMixin):
     #
@@ -960,14 +1047,25 @@ class OD3D_SequencePCLMixin(
     def get_fpath_tform_obj(self, tform_obj_type=None):
         if tform_obj_type is None:
             tform_obj_type = self.tform_obj_type
-        return self.path_preprocess.joinpath(
-            "tform_obj",
-            f"{tform_obj_type}",
-            f"{self.pcl_type}",
-            f"{self.sfm_type}",
-            self.name_unique,
-            "tform_obj.pt",
-        )
+        if tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID_META: 
+            return self.path_preprocess.joinpath(
+                "tform_obj",
+                f"{tform_obj_type}",
+                f"{self.pcl_type}",
+                f"{self.sfm_type}",
+                self.name_unique,
+                f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}',
+                "tform_obj.pt",
+            )
+        else:
+            return self.path_preprocess.joinpath(
+                "tform_obj",
+                f"{tform_obj_type}",
+                f"{self.pcl_type}",
+                f"{self.sfm_type}",
+                self.name_unique,
+                "tform_obj.pt",
+            )            
 
     def get_sequence_by_name_unique(self, sequence_name_unique: str):
         from dataclasses import fields
@@ -983,7 +1081,21 @@ class OD3D_SequencePCLMixin(
             name_unique=sequence_name_unique,
             **all_attrs_except_name_unique,
         )
+    def get_sequence_by_name_unique_with_start_id(self, sequence_name_unique: str, id):
+        from dataclasses import fields
 
+        frame_fields = fields(self)
+        sequence_fields_names = [field.name for field in fields(self.__class__)]
+        all_attrs_except_name_unique = {
+            field.name: getattr(self, field.name)
+            for field in frame_fields
+            if field.name != "name_unique" and field.name in sequence_fields_names
+        }
+        return self.__class__(
+            name_unique=sequence_name_unique,
+            start_frame_id = id,
+            **all_attrs_except_name_unique,
+        )
     def preprocess_tform_obj(self, override=False, tform_obj_type=None):
         if tform_obj_type is None:
             tform_obj_type = self.tform_obj_type
@@ -1213,163 +1325,86 @@ class OD3D_SequencePCLMixin(
         elif tform_obj_type == OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID_META:
             from copy import deepcopy
             from od3d.cv.geometry.transform import tform4x4, inv_tform4x4
+            
+            def extract_indices_from_filenames(directory):
+                pattern = re.compile(r'frame(\d+)\.pt')
+                files = os.listdir(directory)
+                indices = [int(pattern.search(file).group(1)) for file in files if pattern.search(file)]
+
+                return indices
+            dirname = f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}'
             sequence_meta = deepcopy(self)
             sequence_meta.cam_tform4x4_obj_type = OD3D_CAM_TFORM_OBJ_TYPES.META
             sequence_meta.pcl_type = OD3D_PCL_TYPES.META_MASK
             sequence_meta.sfm_type = OD3D_SEQUENCE_SFM_TYPES.META 
-            sequence_meta.preprocess_tform_obj(
-                override=override,
-                tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID,
-            )
-            # cams_tform4x4_world, cams_intr4x4_world, cams_imgs = sequence_meta.read_cams(
-            #     cams_count=-1,
-            #     show_imgs=True,
-            #     # tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,
-            #     tform_obj_type= OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID,
-            # )  # inverse 
-            
-            # from_co3d_colmap_to_reference_mesh = torch.stack(
-            #     [inv_tform4x4(cams_tform4x4_world_element) for cams_tform4x4_world_element in cams_tform4x4_world],
-            #     dim = 0
-            # ).to(device= device).to(dtype = torch.float32)
+            # sequence_meta.preprocess_tform_obj(
+            #     override=override,
+            #     tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID,
+            # )
             device = get_default_device()
             base_path = self.path_preprocess.joinpath('sfm', self.sfm_type, self.name_unique)
-            dirname = f'Partial_Ratio_{100* self.partial_ratio}_Percent'
-           
+            # if len(os.listdir(base_path.joinpath(dirname, 'dense', 'images'))) != len(os.listdir(base_path.joinpath(dirname, 'images'))):
+            #     return
+            indices = sorted(extract_indices_from_filenames(base_path.joinpath(dirname).joinpath('extrinsic'))) 
+            if len(indices) ==0:
+                return
             cams_intr4x4 = torch.stack(
-                [torch.load(base_path.joinpath(dirname).joinpath('intrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in range(1, 1 + self.frames_count)],
+                [torch.load(base_path.joinpath(dirname).joinpath('intrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in indices ],
                 dim=0,
             ).to(device=device).to(dtype=torch.float32)
             
             cams_tform4x4_obj = torch.stack(
-                [torch.load(base_path.joinpath(dirname).joinpath('extrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in range(1, 1 + self.frames_count)],
+                [torch.load(base_path.joinpath(dirname).joinpath('extrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in indices ],
                 dim=0,
             ).to(device=device).to(dtype=torch.float32)
-            
-            from od3d.datasets.enum import OD3D_CATEGORIES_SIZES_IN_M
-            from od3d.cv.geometry.fit.cuboid import fit_cuboid_to_pts3d
-
-            from pytorch3d.renderer import PerspectiveCameras
-            def create_cameras_from_transforms(transforms):
-                # Assuming transforms are a list of 4x4 matrices
-                Rs = [t[:3, :3] for t in transforms]  # Rotation matrices
-                Ts = [t[:3, 3] for t in transforms]   # Translation vectors
-                # Convert lists to tensors
-                R_tensors = torch.stack(Rs)
-                T_tensors = torch.stack(Ts)
-                # Create PyTorch3D camera objects
-                cameras = PerspectiveCameras(R=R_tensors, T=T_tensors, device=device)
-                return cameras
-
-            co3d_cam_pose, _, _ = sequence_meta.read_cams(
-                cams_count= -1 ,
+         
+            co3d_cam_pose_meta, co3d_intr4x4_meta, _ = sequence_meta.read_cams(
+                cams_count= -1,
                 show_imgs=True,
                 tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,
             ) 
-            # Convert your transformation matrices to camera objects
-            target = create_cameras_from_transforms(co3d_cam_pose[:self.frames_count])
-            source = create_cameras_from_transforms(cams_tform4x4_obj)
+        
+            # co3d_cam_pose = torch.stack(co3d_cam_pose[:self.frames_count], dim = 0).to(device= device)
+            # co3d_cam_pose = torch.stack(
+            #     [co3d_cam_pose_meta[index] for index in range(self.frames_count)],
+            #     dim=0,
+            # ).to(device=device).to(dtype=torch.float32)
+            # co3d_intr4x4 = torch.stack(
+            #     [co3d_intr4x4_meta[index] for index in  range(self.frames_count)],
+            #     dim=0,
+            # ).to(device=device).to(dtype=torch.float32)
+            co3d_cam_pose = torch.stack(
+                [co3d_cam_pose_meta[k] for k in range(len(indices))],
+                dim=0,
+            ).to(device=device).to(dtype=torch.float32)
+            co3d_intr4x4 = torch.stack(
+                [co3d_intr4x4_meta[k] for k in  range(len(indices))],
+                dim=0,
+            ).to(device=device).to(dtype=torch.float32)
+            
+            inv_co3d_cam_pose = torch.linalg.inv(co3d_cam_pose)  # transform co3d cam to ref world 
+            inv_cams_tform4x4_obj = torch.linalg.inv(cams_tform4x4_obj) # transform from co3d cam to my colmap world 
+            
+            intr_scale = torch.mean(cams_intr4x4, dim= 0)[0,0] / torch.mean(co3d_intr4x4, dim = 0)[0,0]
+            est_transformations, rotation, scale, shift = camera_alignment.calculate_offset(inv_cams_tform4x4_obj, inv_co3d_cam_pose) # transform from my colmap to co3d colmap
+            print('scale is ', scale)
+            transformtion = torch.eye(4).cuda()  
+            transformtion[:3,:3] = rotation * scale * intr_scale
+            transformtion[:3,-1] = shift * scale * intr_scale
 
-            from od3d.cv.transforms.camera_alignment import corresponding_cameras_alignment
-            cameras_src_aligned, align_t_R, align_t_T, align_t_s = corresponding_cameras_alignment(source, target)
-            from_my_colmap_to_co3d_colmap_trafo = torch.eye(4,4)
-            from_my_colmap_to_co3d_colmap_trafo[:3,:3] = align_t_R
-            from_my_colmap_to_co3d_colmap_trafo[:3,-1] = align_t_T
-            
-            fpath_pcl_out = self.get_fpath_pcl(pcl_type=self.pcl_type)
-            import open3d as o3d
-            my_colmap_cleaned_point = o3d.io.read_point_cloud( str(fpath_pcl_out))
-            points = np.asarray(my_colmap_cleaned_point.points)
-            points_homogeneous = np.hstack((points, np.ones((points.shape[0], 1))))
-            from od3d.cv.geometry.transform import inv_tform4x4
-            # x = (from_my_colmap_to_co3d_colmap_trafo @ points_homogeneous.T).T 
-
-            for i in range(19):
-                scale =torch.norm(co3d_cam_pose[i].cuda().to(dtype = torch.float32) - co3d_cam_pose[i+1].cuda().to(dtype = torch.float32) ) / torch.norm(cams_tform4x4_obj[i].cuda().to(dtype = torch.float32) - cams_tform4x4_obj[i+1].cuda().to(dtype = torch.float32) )
-                print(f'{i} ', scale)
-            
-            T = inv_tform4x4( co3d_cam_pose[0].cuda().to(dtype = torch.float32)) @ cams_tform4x4_obj[0].cuda().to(dtype = torch.float32)
-            x = T @ torch.tensor(points_homogeneous.T).cuda().to(dtype = torch.float32)
-            # / align_t_s.detach().cpu()
-            x = x * scale
-            x_np = x.cpu().numpy().T
-            
-            point_cloud = o3d.geometry.PointCloud()
-            point_cloud.points = o3d.utility.Vector3dVector(x_np[:, :3])
-
-            new_path = 'cleaned_pcl.ply'
-            o3d.io.write_point_cloud(new_path, point_cloud)
-            
             from_co3d_colmap_to_reference_mesh_trafo = torch.load(sequence_meta.get_fpath_tform_obj(tform_obj_type= OD3D_TFROM_OBJ_TYPES.LABEL3D_CUBOID )).to(device)
-            T[:3] = T[:3] * scale
-            from_my_colmap_to_reference_mesh_trafo = tform4x4(from_co3d_colmap_to_reference_mesh_trafo, T)
-            
+            from_my_colmap_to_reference_mesh_trafo = tform4x4(from_co3d_colmap_to_reference_mesh_trafo , transformtion)
             logger.info('Writing tform_obj for Label_3D_Cuboid_Meta...')
             self.write_tform_obj(
                 tform_obj=from_my_colmap_to_reference_mesh_trafo,
                 fpath_tform_obj=fpath_tform_obj,
             )
+            # print('from_my_colmap_to_reference_mesh_trafo is ', from_my_colmap_to_reference_mesh_trafo)
+            #torch.save(from_my_colmap_to_reference_mesh_trafo,str(fpath_tform_obj) )
+            # x = torch.load(str(fpath_tform_obj))
+            # print('saved tensor is ', x)
+           
             
-            # size = OD3D_CATEGORIES_SIZES_IN_M[
-            #     self.map_categories_to_od3d[self.category]
-            # ]
-
-            # tform_obj = self.get_tform_obj(tform_obj_type=OD3D_TFROM_OBJ_TYPES.LABEL3D)
-            # pts3d, pts3d_colors, pts3d_normals = self.read_pcl(
-            #     tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW, 
-            # )
-            # from od3d.cv.geometry.transform import inv_tform4x4
-            # trafo = inv_tform4x4( cams_intr4x4_world[int(start_index)].cuda() @ cams_tform4x4_world[int(start_index)].to(device=device).to(dtype=torch.float32)) @ cams_intr4x4[0].cuda()@ cams_tform4x4_obj[0]
-            # ones = torch.ones((pts3d.shape[0], 1), device=pts3d.device, dtype=pts3d.dtype)
-            # pts3d_homogeneous = torch.cat((pts3d, ones), dim=1).to(device=device).to(dtype=torch.float32)  # Convert to [N, 4]
-            # transformed_pts3d = (trafo @ pts3d_homogeneous.T).T
-            # import open3d as o3d
-
-            # # Assuming transformed_pts3d is your tensor [N, 4] including homogeneous coordinates
-            # # You may want to convert homogeneous coordinates back to normal 3D coordinates
-            # transformed_pts3d = transformed_pts3d[:, :3] / transformed_pts3d[:, 3].unsqueeze(1)
-
-            # # Convert tensor to numpy array
-            # points_np = transformed_pts3d.cpu().numpy()  # Ensure tensor is on CPU
-
-            # # Create an Open3D PointCloud object
-            # pcd = o3d.geometry.PointCloud()
-            # pcd.points = o3d.utility.Vector3dVector(points_np)
-
-            # # Save the PointCloud in .ply format
-            # o3d.io.write_point_cloud("transformed_pts3d.ply", pcd)
-
-            # print("Saved the point cloud to 'transformed_pts3d.ply'")
-            # for i in range(1, len(cams_tform4x4_obj)):
-            #     print(f'Camera {i}')
-            #     # tmp = torch.inverse(cams_tform4x4_world[int(start_index) + i].to(device=device).to(dtype=torch.float32)) @ cams_tform4x4_obj[i]
-            #     tmp = inv_tform4x4( cams_intr4x4_world[int(start_index) + i].cuda() @ cams_tform4x4_world[int(start_index) + i].to(device=device).to(dtype=torch.float32)) @ cams_intr4x4[i].cuda()@ cams_tform4x4_obj[i]
-            
-            #     #assert is_close_enough(tmp, trafo), "Transformation matrices are not close enough"
-            #     is_close_enough(tmp, trafo)
-
-            
-            # _, obj_cuboid_tform_obj = fit_cuboid_to_pts3d(
-            #     pts3d=transformed_pts3d[:,:3],
-            #     size=size,
-            #     optimize_rot=False,
-            #     optimize_transl=True,
-            #     optimize_steps=100,
-            #     tform_obj_label=tform_obj,
-            # )
-            # logger.info(obj_cuboid_tform_obj)
-
-            # # tform_obj = tform4x4(obj_cuboid_tform_obj, tform_obj)
-
-            # logger.info(f"write at {fpath_tform_obj}")
-            # self.write_tform_obj(
-            #     tform_obj=obj_cuboid_tform_obj,
-            #     fpath_tform_obj=fpath_tform_obj,
-            # )
-            
-            
-            #raise NotImplementedError
-        
         else:
             raise NotImplementedError(
                 f"tform_obj_type {tform_obj_type} not implemented",
@@ -1436,6 +1471,7 @@ class OD3D_SequenceMeshMixin(
                 "mesh",
                 self.get_mesh_type_unique(mesh_type),
                 self.name_unique,
+                f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}',
                 "mesh.ply",
             )
 
@@ -1469,6 +1505,11 @@ class OD3D_SequenceMeshMixin(
         return self.get_fpath_mesh()
 
     def read_mesh(self, mesh_type=None, device="cpu", tform_obj_type=None):
+        path = self.get_fpath_mesh(mesh_type=mesh_type)
+        # print('path is ', path)
+        if not os.path.exists(path):
+            print('the seq without mesh is ', self)
+            return
         mesh = Mesh.load_from_file(
             fpath=self.get_fpath_mesh(mesh_type=mesh_type),
             device=device,
@@ -1536,6 +1577,8 @@ class OD3D_SequenceMeshMixin(
             tform_obj_type=OD3D_TFROM_OBJ_TYPES.RAW,
             device=device,
         )
+        if pts3d is None:
+            return
         N = pts3d.shape[0]
         if N < 4:
             logger.warning(
@@ -1939,12 +1982,16 @@ class OD3D_SequenceMeshMixin(
         # show_scene(meshes=[obj_mesh], pts3d=[pts3d], pts3d_colors=[pts3d_colors], cams_tform4x4_world=cams_tform4x4_obj[::scams], cams_intr4x4=cams_intr4x4[::scams], cams_imgs=rgb[::scams])
         # ## DEBUG BLOCK END
 
-    def get_fpath_mesh_feats(self, mesh_type=None, mesh_feats_type=None):
+    def get_fpath_mesh_feats(self, mesh_type=None, mesh_feats_type=None, sph_type = None, ratio = None):
+
         if mesh_type is None:
             mesh_type = self.mesh_type
         if mesh_feats_type is None:
             mesh_feats_type = self.mesh_feats_type
-
+        if sph_type is None:
+            sph_type=  self.use_sph
+        if ratio is None:
+            ratio = self.partial_ratio
         return self.path_preprocess.joinpath(
             "feats",
             f"{mesh_feats_type}",
@@ -1952,6 +1999,7 @@ class OD3D_SequenceMeshMixin(
             f"{self.pcl_type}",
             f"{self.sfm_type}",
             self.name_unique,
+            f'Partial_Ratio_{100* ratio}_Percent_start_frame_{self.start_frame_id}_use_sph_{sph_type}_use_flipped_feature_{self.use_flipped_feature}_use_sd_{self.use_sd}_flip_sfm_{self.flip_sfm}_mixing_ratio_{100 * self.mixing_ratio}',
             "mesh_feats.pt",
         )
 
@@ -1968,6 +2016,7 @@ class OD3D_SequenceMeshMixin(
             f"{self.pcl_type}",
             f"{self.sfm_type}",
             self.name_unique,
+            f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_use_sph_{self.use_sph}_use_flipped_feature_{self.use_flipped_feature}_use_sd_{self.use_sd}_flip_sfm_{self.flip_sfm}_mixing_ratio_{100 * self.mixing_ratio}',
             "mesh_feats_viewpoint.pt",
         )
 
@@ -1979,11 +2028,15 @@ class OD3D_SequenceMeshMixin(
     def fpath_mesh_feats_viewpoint(self):
         return self.get_fpath_mesh_feats_viewpoint()
 
-    def read_mesh_feats(self, mesh_type=None, mesh_feats_type=None, cache=True):
+    def read_mesh_feats(self, mesh_type=None, mesh_feats_type=None, cache=True, sph_type = None):
         fpath_mesh_feats = self.get_fpath_mesh_feats(
             mesh_type=mesh_type,
             mesh_feats_type=mesh_feats_type,
+            sph_type = sph_type,
         )
+        if not os.path.exists(fpath_mesh_feats):
+            print('the path is not existing! ', fpath_mesh_feats)
+            return
         mesh_feats = torch.load(fpath_mesh_feats)
         if (
             cache is True
@@ -2098,7 +2151,12 @@ class OD3D_SequenceMeshMixin(
         import re
         from od3d.cv.geometry.objects3d.meshes import Meshes
         from od3d.cv.visual.sample import sample_pxl2d_pts
+        from od3d.SphericalMaps.get_feature import get_feature, my_get_feature
+        from od3d.SphericalMaps.dino_mapper import DINOMapper, MyDINOMapper
 
+        # import detectron2
+        # from detectron2.config import LazyConfig
+        from od3d.models.sd_feature import load_model, process_features_and_mask, get_mask, co_pca, pca_process
         if (
             not override
             and self.fpath_mesh_feats.exists()
@@ -2134,18 +2192,33 @@ class OD3D_SequenceMeshMixin(
         transform = SequentialTransform(
             [OD3D_Transform.create_by_name(transform_name), model.transform],
         )
-
+        if self.use_sd:
+            sd_model, sd_aug = load_model(diffusion_ver='v1-3', image_size=960, num_timesteps=100, block_indices=[2,5,8,11])
+            #sd_model, sd_aug = None, None
         dataloader = self.get_dataloader_partial(
-            batch_size=6,
+            batch_size= 6,
             shuffle=False,
             transform=transform,
         )  # 11 GB
 
         down_sample_rate = model.downsample_rate
-        feature_dim = model.out_dim
-        mesh = self.get_mesh()
+        if self.use_sph:
+            feature_dim = 3
+            if self.use_sph == 'sph_excludes_co3d_with_dino':
+                feature_dim = 3 + model.out_dim 
+                if self.use_sd:
+                    feature_dim += 384
+        else:
+            feature_dim = model.out_dim
+            if self.use_sd:
+                feature_dim = feature_dim + 384
+                #feature_dim = 768
+        self.mesh = None
+        mesh = self.get_mesh()  # already transfered the mesh coordiniate into ref mesh coordinaate system
+        if mesh is None:
+            return
         meshes = Meshes.read_from_meshes([mesh], device=device)
-
+        
         ## DEBUG BLOCK START
         # cams_tform4x4_world, cams_intr4x4, cams_imgs = self.get_cams(CAM_TFORM_OBJ_SOURCES.PCL)
         # show_scene(meshes=meshes, cams_tform4x4_world=cams_tform4x4_world, cams_intr4x4=cams_intr4x4, cams_imgs=cams_imgs )
@@ -2154,13 +2227,19 @@ class OD3D_SequenceMeshMixin(
         meshes_verts_aggregated_features = [
             torch.zeros((0, feature_dim), device="cpu"),
         ] * meshes.verts.shape[0]
+        
+        meshes_verts_aggregated_features_test = [
+            torch.zeros((0, feature_dim), device="cpu"),
+        ] * meshes.verts.shape[0]
+        
         meshes_verts_aggregated_viewpoints = [
             torch.zeros((0, 3), device="cpu"),
         ] * meshes.verts.shape[0]
         vertices_count = len(meshes_verts_aggregated_features)
         print('vertices_count', vertices_count)
+        feats2d_net_list = []
         for batch in tqdm(iter(dataloader)):
-            B = len(batch)
+            B = len(batch)  # 6, 3, 512, 512
             batch.to(device=device)
 
             batch.cam_tform4x4_obj = batch.cam_tform4x4_obj.detach()
@@ -2200,9 +2279,113 @@ class OD3D_SequenceMeshMixin(
             viewpoints3d = viewpoints3d[vts2d_mask]
 
             N = vts2d.shape[1]
+            if not self.use_sph:
+                # B x C x H x W
+                feats2d_net = model(batch.rgb)
+                if self.flip_sfm:
+                    feats2d_net = model(torch.flip(batch.rgb, dims = [3]))
+                    # feats2d_net = torch.flip(feats2d_net, dims = [3])
+            else:
+                #sph_mapper = MyDINOMapper(backbone='dinov2_vitb14_frozen_base_no_norm', n_cats=18)
+                # sph_mapper.load_checkpoint('/CT/3D_DST_Scene/work/od3d/src/od3d/SphericalMaps/exps/baseline_od3d_modelexp_cuda:0_2024_08_18_15:56:55/ckpts/200.pth', device=device)
+                if self.use_sph ==  'sph_baseline':
+                    sph_mapper = MyDINOMapper(backbone='dinov2_vitb14_frozen_base_no_norm', n_cats=18)
+                    sph_mapper.load_checkpoint('/CT/3D_DST_Scene/work/od3d/src/od3d/SphericalMaps/exps/olaf/baseline_sph_200.pth', device = device)
+                if self.use_sph == 'sph_sam2':
+                    sph_mapper = MyDINOMapper(backbone='dinov2_vitb14_frozen_base_no_norm', n_cats=229)
+                    sph_mapper.load_checkpoint('/CT/3D_DST_Scene/work/od3d/src/od3d/SphericalMaps/exps/olaf/in3d_wo_sym_sam2_170.pth', device = device)
+                if self.use_sph == 'sph_coco':
+                    sph_mapper = MyDINOMapper(backbone='dinov2_vitb14_frozen_base_no_norm', n_cats=28)
+                    sph_mapper.load_checkpoint('/CT/3D_DST_Scene/work/od3d/src/od3d/SphericalMaps/exps/olaf/in3d_coco_mrcnn_200.pth', device = device)
+                if self.use_sph == 'sph_my_baseline':
+                    sph_mapper = MyDINOMapper(backbone='dinov2_vitb14_frozen_base_no_norm', n_cats=18)
+                    sph_mapper.load_checkpoint('/CT/3D_DST_Scene/work/od3d/src/od3d/SphericalMaps/exps/baseline_od3d_modelexp_cuda:0_2024_08_18_15:56:55/ckpts/200.pth', device=device)
+                if self.use_sph == 'sph_excludes_co3d':
+                    sph_mapper = MyDINOMapper(backbone='dinov2_vitb14_frozen_base_no_norm', n_cats=114)
+                    sph_mapper.load_checkpoint('/CT/3D_DST_Scene/work/od3d/src/od3d/SphericalMaps/exps/olaf/exp_002_in3d_wo_sym_and_co3d_200.pth', device=device)
+                    sph_mapper.to(device)
+                if self.use_sph == 'sph_excludes_co3d_with_dino':
+                    sph_mapper = MyDINOMapper(backbone='dinov2_vitb14_frozen_base_no_norm', n_cats=114)
+                    sph_mapper.load_checkpoint('/CT/3D_DST_Scene/work/od3d/src/od3d/SphericalMaps/exps/olaf/exp_002_in3d_wo_sym_and_co3d_200.pth', device=device)
+                    sph_mapper.to(device)
+                    
+                sph_mapper = sph_mapper.to(device)
+                from od3d.SphericalMaps.sd_dino.utils.utils_correspondence import resize
+                from sklearn.decomposition import PCA
+                feats2d_net = my_get_feature(batch.rgb, sph_mapper)
+                feats2d_net = feats2d_net / torch.norm(feats2d_net,dim=1, keepdim = True)
+                if self.use_sph == 'sph_excludes_co3d_with_dino':
+                    mixing_ratio = self.mixing_ratio
+                    if self.use_sd:
+                        category = self.category
+                        input_text = 'a photo of ' + category
+                        mean = torch.tensor([0.485, 0.456, 0.406]).cuda()
+                        std = torch.tensor([0.229, 0.224, 0.225]).cuda()
+                        sd_feature_list = []
+                        idx = 0
+                        for img in batch.rgb:
+                            img = (img * std[:, None, None] + mean[:, None, None]) * 255.0
+                            img = img.permute([1,2,0])
+                            # img = img[:, :, [2,1,0]]
+                            img = img.cpu().numpy().astype(np.uint8)
+                            print('img shape ', img.shape)
+                            image = Image.fromarray(img)
+                            img = resize(image, 512, resize=True, to_pil=True)
+                            img.save(f'img_{idx}.png')
 
-            # B x C x H x W
-            feats2d_net = model(batch.rgb)
+                            features1 = process_features_and_mask(sd_model, sd_aug, img, input_text=input_text,  mask=False, raw=True)
+                            #print('features 1 ', features1)
+                            #features1 = co_pca(features1, [256, 256, 256])
+                            features1 = pca_process(features1)
+                            features1 = torch.cat([features1['s4'], torch.nn.functional.interpolate(features1['s5'], size=(features1['s4'].shape[-2:]), mode='bilinear')], dim=1)
+                            
+                            def vis_feature(features1, path_name, dim, width):
+                                X = features1.view(dim, -1).T 
+                                pca = PCA(n_components=3)
+                                X = X.cpu().numpy()
+                                X_reduced = pca.fit_transform(X)
+                                X_reduced = X_reduced.T.reshape(3, width, width)  # Shape (3, 32, 32)
+                                # Convert to a format suitable for visualization
+                                X_reduced = X_reduced - X_reduced.min()
+                                X_reduced = X_reduced / X_reduced.max()
+                                X_reduced = (X_reduced * 255).astype(np.uint8)
+                                X_reduced = np.transpose(X_reduced, (1, 2, 0))
+                                featmap = Image.fromarray(X_reduced)
+                                featmap.save(path_name) 
+                            print('features1 shape ', features1.shape)
+                            vis_feature(features1, f'sd_feature_{idx}.png', 384, 60)
+                            feats2d_net_dino = model(batch.rgb)
+                            print('feats2d_net_dino shape ', feats2d_net_dino.shape)
+                            vis_feature(feats2d_net_dino[idx], f'dino_feature_{idx}.png', 768, 32)
+                            print('features1 shape ', features1.shape)
+                            idx += 1 
+                            # features1_rescaled = features1
+                            features1_rescaled = torch.nn.functional.interpolate(features1, size = feats2d_net.shape[-2:], mode = 'bilinear', align_corners =  False).squeeze(0)        
+                            features1_rescaled_norm = features1_rescaled / features1_rescaled.norm(dim=0, keepdim = True)
+                            sd_feature_list.append(features1_rescaled_norm)
+                            
+                        sd_feature = torch.stack(sd_feature_list, dim=0)
+                        sd_feature = sd_feature / torch.norm(sd_feature, dim=1, keepdim=True )
+                        feats2d_net_dino = model(batch.rgb)
+                        sd_dino_combined = torch.concat([sd_feature, feats2d_net_dino], dim=1)
+                        sd_dino_combined = sd_dino_combined / torch.norm(sd_dino_combined, dim=1, keepdim=True)
+                        print('sd dino combined shape', sd_dino_combined.shape)
+                        print('feats2d_net shape ', feats2d_net.shape)
+                        feats2d_net = torch.concat([feats2d_net * torch.sqrt(torch.tensor(mixing_ratio)), sd_dino_combined * torch.sqrt( torch.tensor(1.0 - mixing_ratio))], dim = 1)
+                        feats2d_net = feats2d_net / torch.norm(feats2d_net, dim=1, keepdim= True)
+                    else:
+                        feats2d_net_dino = model(batch.rgb)
+
+                        feats2d_net_dino = feats2d_net_dino / torch.norm(feats2d_net_dino, dim=1, keepdim = True)
+                        feats2d_net = torch.concat([feats2d_net * torch.sqrt(torch.tensor(mixing_ratio)), feats2d_net_dino * torch.sqrt( torch.tensor(1.0 - mixing_ratio))], dim = 1)
+                        feats2d_net = feats2d_net / torch.norm(feats2d_net, dim=1, keepdim= True)
+                        assert torch.allclose(torch.norm(feats2d_net, dim=1).cuda(), torch.ones(torch.norm(feats2d_net, dim=1).shape[0],32,32).cuda(), atol=1e-6), "Vectors are not properly normalized"
+                        #print(' ')
+                if self.flip_sfm:
+                    feats2d_net = my_get_feature(torch.flip(batch.rgb, dims = [3]), sph_mapper)
+   
+                
+            feats2d_net_list.append(feats2d_net)
             H, W = feats2d_net.shape[-2:]
             xy = torch.stack(
                 torch.meshgrid(
@@ -2276,7 +2459,95 @@ class OD3D_SequenceMeshMixin(
         #     viewpoints3d = transf3d_broadcast(viewpoints3d, normal3d_transf_obj)
         #     verts3d = transf3d_broadcast(verts3d, normal3d_transf_obj)
         #     show_scene(pts3d=[verts3d, viewpoints3d], lines3d=[torch.Tensor([[[0., 0., 0.], [0., -1., 0.]]])])
+        if self.name_unique.split('/')[1] not in self.sequence_annotated: 
+            def extract_indices_from_filenames(directory):
+                    # Define the regex pattern to match the file names and extract indices
+                    pattern = re.compile(r'frame(\d+)\.pt')
+                    # List directory contents
+                    files = os.listdir(directory)
+                    # Extract indices from file names using the regex pattern
+                    indices = [int(pattern.search(file).group(1)) for file in files if pattern.search(file)]
+                    return indices
+            device = get_default_device()
+            feats2d_net_list = torch.cat(feats2d_net_list , dim=0)
+            # feats2d_net_list = feats2d_net_list.detach().cpu().numpy()
+            # dirname = f'Partial_Ratio_{100* self.partial_ratio}_Percent'
+            dirname = f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_flip_sfm_{self.flip_sfm}'
+            # fpath_pcl_out = self.path_preprocess.joinpath(
+            #     "pcl",
+            #     f"{self.pcl_type}",
+            #     f"{self.sfm_type}",
+            #     self.name_unique,
+            #     dirname,
+            #     "pcl.ply",)
 
+            # if not override and fpath_pcl_out.exists():
+            #     logger.info(f"fpath sfm mask pcl already exists at {fpath_pcl_out}")
+            #     return
+
+            base_path = self.path_preprocess.joinpath('sfm', self.sfm_type, self.name_unique)
+            indices = sorted(extract_indices_from_filenames(base_path.joinpath(dirname).joinpath('extrinsic'))) 
+            frames = self.get_frames()
+            
+            H, W = self.get_min_HW()
+            # note: this is only required if the frames have different sizes
+            if H is not None and W is not None:
+                masks = torch.stack( 
+                    [frame.read_mask()[:, :H, :W] for frame in frames],
+                    dim=0,
+                ).to(device=device)
+            else:
+                masks = torch.stack([frame.read_mask() for frame in frames], dim=0).to(
+                    device=device,
+                )   
+
+            cams_intr4x4 = torch.stack(
+                [torch.load(base_path.joinpath(dirname).joinpath('intrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in indices ],
+                dim=0,
+            ).to(device=device).to(dtype=torch.float32)
+            
+            cams_tform4x4_obj = torch.stack(
+                [torch.load(base_path.joinpath(dirname).joinpath('extrinsic').joinpath(f'frame{str(index).zfill(6)}.pt')) for index in indices ],
+                dim=0,
+            ).to(device=device).to(dtype=torch.float32)
+
+            exact_mesh = Mesh.load_from_file(
+                fpath=self.get_fpath_mesh(mesh_type='alpha500'),
+                device=device,
+            )
+            exact_mesh_vertices = exact_mesh.verts
+            for k in range(len(indices)):
+                # print('index ', index)
+                index = indices[k]
+                start = time.time()
+                depth_path = base_path.joinpath(dirname).joinpath(f'dense/stereo/depth_maps/frame{str(index).zfill(6)}.jpg.geometric.bin')
+                depth_mask_path = self.path_raw.joinpath(self.name_unique).joinpath(f'depth_masks/frame{str(index).zfill(6)}.png')
+                depth = read_from_depth_binary_array(depth_path)
+                depth_mask = Image.open(depth_mask_path)
+                H = depth.shape[0]
+                W = depth.shape[1]
+                
+                depth_mask = np.array(depth_mask.resize((W,H), Image.NEAREST))
+                depth_mask = np.flip(depth_mask, axis=1)
+                    
+                masked_depth = depth * depth_mask
+                backproject_with_feat(masked_depth, 
+                                    feats2d_net_list[k], 
+                                    cams_intr4x4[k].cpu().numpy(), 
+                                    np.linalg.inv(cams_tform4x4_obj[k].cpu().numpy()),
+                                    exact_mesh_vertices.cpu().numpy(),
+                                    meshes_verts_aggregated_features_test)
+
+                end = time.time()
+                print('time is ', end - start)
+            
+        # for i in range(len(meshes_verts_aggregated_features_test)):
+        #     feat_i  = torch.mean(meshes_verts_aggregated_features_test[i], dim=0)
+        #     meshes_verts_aggregated_features_test[i] = feat_i
+            
+        # meshes_verts_aggregated_features_test = torch.stack(meshes_verts_aggregated_features_test, dim =0)
+        # torch.save(meshes_verts_aggregated_features_test,self.fpath_mesh_feats )
+            
         logger.info(f"save mesh feats at {self.fpath_mesh_feats}")
         logger.info(f"save mesh feats viewpoint at {self.fpath_mesh_feats_viewpoint}")
 
@@ -2288,7 +2559,34 @@ class OD3D_SequenceMeshMixin(
                 meshes_verts_aggregated_viewpoints,
                 f=self.fpath_mesh_feats_viewpoint,
             )
-            meshes_verts_aggregated_features.clear()
+            #meshes_verts_aggregated_features.clear()
+            avg_path = self.get_fpath_mesh_feats(mesh_feats_type = 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_avg')
+            if not avg_path.parent.exists():
+                avg_path.parent.mkdir(parents=True, exist_ok=True)
+            meshes_verts_aggregated_features_avg = torch.stack(
+                [
+                    agg_feats.mean(dim=0)
+                    for agg_feats in meshes_verts_aggregated_features
+                ],
+                dim=0,
+            )
+            torch.save(
+                meshes_verts_aggregated_features_avg.detach().cpu(),
+                f=avg_path,
+            )
+            # meshes_verts_aggregated_viewpoints_avg = torch.stack(
+            #     [
+            #         agg_viewpoints.mean(dim=0)
+            #         for agg_viewpoints in meshes_verts_aggregated_viewpoints
+            #     ],
+            #     dim=0,
+            # )
+            # torch.save(
+            #     meshes_verts_aggregated_viewpoints_avg.detach().cpu(),
+            #     f=self.fpath_mesh_feats_viewpoint,
+            # )
+
+            del meshes_verts_aggregated_features_avg
         elif reduce_type == "avg":
             if not self.fpath_mesh_feats.parent.exists():
                 self.fpath_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
@@ -2401,6 +2699,58 @@ class OD3D_SequenceMeshMixin(
         sequence: OD3D_Sequence,
         mesh_type=None,
         mesh_feats_type=None,
+        sph_type = None,
+    ):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_feats_type is None:
+            mesh_feats_type = self.mesh_feats_type
+        if sph_type is None:
+            sph_type = self.use_sph
+        return self.path_preprocess.joinpath(
+            "feats_dist",
+            f"{self.mesh_feats_dist_reduce_type}",
+            f"{mesh_feats_type}",
+            f"{mesh_type}",
+            f"{self.pcl_type}",
+            f"{self.sfm_type}",
+            self.name_unique,
+            sequence.name_unique,
+            f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_ref_flip_sfm_{self.flip_sfm}_src_flip_sfm_{sequence.flip_sfm}_use_sph_{self.use_sph}_mixing_ratio_{self.mixing_ratio}',
+            #f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_ref_flip_sfm_{self.flip_sfm}_src_flip_sfm_{sequence.flip_sfm}',
+            "mesh_feats_dist.pt",
+        )
+    def get_fpath_mesh_feats_dist_mixture(
+        self,
+        sequence: OD3D_Sequence,
+        mesh_type=None,
+        mesh_feats_type=None,
+        sph_type = None,
+    ):
+        if mesh_type is None:
+            mesh_type = self.mesh_type
+        if mesh_feats_type is None:
+            mesh_feats_type = self.mesh_feats_type
+        if sph_type is None:
+            sph_type = self.use_sph
+        return self.path_preprocess.joinpath(
+            "feats_dist",
+            f"{self.mesh_feats_dist_reduce_type}",
+            f"{mesh_feats_type}",
+            f"{mesh_type}",
+            f"{self.pcl_type}",
+            f"{self.sfm_type}",
+            self.name_unique,
+            sequence.name_unique,
+            f'Partial_Ratio_ref_{100* self.partial_ratio}_src_{100 * sequence.partial_ratio}_use_sph_{self.use_sph}_mixing_ratio_{self.mixing_ratio}',
+            #f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_ref_flip_sfm_{self.flip_sfm}_src_flip_sfm_{sequence.flip_sfm}',
+            "mesh_feats_dist.pt",
+        )
+    def get_fpath_mesh_feats_dist_multi_start(
+        self,
+        sequence: OD3D_Sequence,
+        mesh_type=None,
+        mesh_feats_type=None,
     ):
         if mesh_type is None:
             mesh_type = self.mesh_type
@@ -2416,6 +2766,8 @@ class OD3D_SequenceMeshMixin(
             f"{self.sfm_type}",
             self.name_unique,
             sequence.name_unique,
+            f'Partial_Ratio_{100* self.partial_ratio}_Percent_ref_start_{self.start_frame_id}_src_start_{sequence.start_frame_id}_use_sph_{self.use_sph}_mixing_ratio_{self.mixing_ratio}',
+            #f'Partial_Ratio_{100* self.partial_ratio}_Percent_start_frame_{self.start_frame_id}_ref_flip_sfm_{self.flip_sfm}_src_flip_sfm_{sequence.flip_sfm}',
             "mesh_feats_dist.pt",
         )
 
@@ -2424,18 +2776,54 @@ class OD3D_SequenceMeshMixin(
         sequence: OD3D_Sequence,
         mesh_type=None,
         mesh_feats_type=None,
+        sph_type=None,
     ):
         fpath_mesh_feats_dist = self.get_fpath_mesh_feats_dist(
+            sequence,
+            mesh_type=mesh_type,
+            mesh_feats_type=mesh_feats_type,
+            sph_type = sph_type,
+        )
+        mesh_feats_dist = torch.load(fpath_mesh_feats_dist)
+        return mesh_feats_dist
+
+    def read_mesh_feats_dist_mixture(
+        self,
+        sequence: OD3D_Sequence,
+        mesh_type=None,
+        mesh_feats_type=None,
+        sph_type=None,
+    ):
+        fpath_mesh_feats_dist = self.get_fpath_mesh_feats_dist_mixture(
+            sequence,
+            mesh_type=mesh_type,
+            mesh_feats_type=mesh_feats_type,
+            sph_type = sph_type,
+        )
+        mesh_feats_dist = torch.load(fpath_mesh_feats_dist)
+        return mesh_feats_dist
+
+    def read_mesh_feats_dist_multi_start(
+        self,
+        sequence: OD3D_Sequence,
+        mesh_type=None,
+        mesh_feats_type=None,
+    ):
+        fpath_mesh_feats_dist = self.get_fpath_mesh_feats_dist_multi_start(
             sequence,
             mesh_type=mesh_type,
             mesh_feats_type=mesh_feats_type,
         )
         mesh_feats_dist = torch.load(fpath_mesh_feats_dist)
         return mesh_feats_dist
+    
 
-    def preprocess_mesh_feats_dist(self, sequence: OD3D_Sequence, override=False):
-        fpath_dist_verts_mesh_feats = self.get_fpath_mesh_feats_dist(sequence)
-
+    def preprocess_mesh_feats_dist_mixture(self, sequence: OD3D_Sequence, override=False):
+        # if self.start_frame_id == sequence.start_frame_id:
+        #     fpath_dist_verts_mesh_feats = self.get_fpath_mesh_feats_dist(sequence)
+        # else:
+        #     fpath_dist_verts_mesh_feats = self.get_fpath_mesh_feats_dist_multi_start(sequence)
+        fpath_dist_verts_mesh_feats = self.get_fpath_mesh_feats_dist_mixture(sequence)
         if not override and fpath_dist_verts_mesh_feats.exists():
             logger.info(
                 f"mesh feats dist already exist at {fpath_dist_verts_mesh_feats}",
@@ -2448,11 +2836,15 @@ class OD3D_SequenceMeshMixin(
         device = get_default_device()
 
         seq1_feats = self.read_mesh_feats(cache=False)
+        if seq1_feats is None:
+            return
         seq2_feats = sequence.read_mesh_feats(
             cache=False,
             mesh_type=self.mesh_type,
             mesh_feats_type=self.mesh_feats_type,
         )
+        if seq2_feats is None:
+            return
 
         from od3d.cv.cluster.embed import pca
 
@@ -2531,8 +2923,8 @@ class OD3D_SequenceMeshMixin(
                 seq1_verts_partial_count = len(seq1_verts_partial)
                 # logger.info(seq1_verts_partial)
                 # Vertices1 x Viewpoints x F
-                seq1_feats_padded = seq12_feats_padded[seq1_verts_partial].clone()
-                seq2_feats_padded = seq12_feats_padded[seq1_verts_count:].clone()
+                seq1_feats_padded = seq12_feats_padded[seq1_verts_partial].clone()  # 1, 69, 384
+                seq2_feats_padded = seq12_feats_padded[seq1_verts_count:].clone() # 452, 69, 384
 
                 seq1_feats_padded_mask = seq12_feats_padded_mask[
                     seq1_verts_partial
@@ -2540,6 +2932,329 @@ class OD3D_SequenceMeshMixin(
                 seq2_feats_padded_mask = seq12_feats_padded_mask[
                     seq1_verts_count:
                 ].clone()
+
+                # Vertices1 x Viewpoints x Vertices2 x Viewpoints
+                if reduce_type.startswith("negdot"):
+                    dists_verts_feats_seq1_seq2 = -torch.einsum(
+                        "bnf,bkf->bnk",
+                        seq1_feats_padded.reshape(-1, F)[None,],
+                        seq2_feats_padded.reshape(-1, F)[None,],
+                    ).reshape(
+                        seq1_verts_partial_count,
+                        V,
+                        seq2_verts_count,
+                        V,
+                    )
+                else:
+                    dists_verts_feats_seq1_seq2 = torch.cdist(
+                        seq1_feats_padded.reshape(-1, F)[None,],
+                        seq2_feats_padded.reshape(-1, F)[None,],
+                    ).reshape(
+                        seq1_verts_partial_count,
+                        V,
+                        seq2_verts_count,
+                        V,
+                    )
+                dists_verts_feats_seq1_seq2_mask = (
+                    seq1_feats_padded_mask[:, :, None, None]
+                    * seq2_feats_padded_mask[None, None, :, :]
+                )
+                dist_verts_seq1_seq2_inf_mask = (
+                    dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)
+                    .flatten(
+                        2,
+                    )
+                    .sum(
+                        dim=-1,
+                    )
+                    == 0.0
+                )
+
+                if (
+                    reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN
+                    or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN
+                ):
+                    # replace nan values with inf
+                    dists_verts_feats_seq1_seq2 = (
+                        dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
+                    )
+                    dist_verts_seq1_seq2[seq1_verts_partial] = (
+                        dists_verts_feats_seq1_seq2.permute(
+                            0,
+                            2,
+                            1,
+                            3,
+                        )
+                        .flatten(
+                            2,
+                        )
+                        .min(dim=-1)
+                        .values
+                    )
+                elif (
+                    reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.AVG
+                    or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_AVG
+                ):
+                    dists_verts_feats_seq1_seq2 = (
+                        dists_verts_feats_seq1_seq2.nan_to_num(0.0)
+                    )
+                    dists_verts_feats_seq1_seq2_mask = (
+                        dists_verts_feats_seq1_seq2_mask.nan_to_num(0.0)
+                    )
+
+                    dist_verts_seq1_seq2_partial = (
+                        dists_verts_feats_seq1_seq2.permute(0, 2, 1, 3).flatten(
+                            2,
+                        )
+                        * dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3).flatten(
+                            2,
+                        )
+                    ).sum(dim=-1) / (
+                        dists_verts_feats_seq1_seq2_mask.permute(
+                            0,
+                            2,
+                            1,
+                            3,
+                        )
+                        .flatten(2)
+                        .sum(
+                            dim=-1,
+                        )
+                        + 1e-10
+                    )
+                    dist_verts_seq1_seq2_partial[
+                        dist_verts_seq1_seq2_inf_mask
+                    ] = torch.inf
+                    dist_verts_seq1_seq2[
+                        seq1_verts_partial
+                    ] = dist_verts_seq1_seq2_partial
+                    del dist_verts_seq1_seq2_partial
+                elif (
+                    reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.MIN_AVG
+                    or reduce_type == OD3D_MESH_FEATS_DIST_REDUCE_TYPES.NEGDOT_MIN_AVG
+                ):
+                    dists_verts_feats_seq1_seq2 = (
+                        dists_verts_feats_seq1_seq2.nan_to_num(torch.inf)
+                    )
+                    dists_verts_feats_seq1_seq2_mask = (
+                        dists_verts_feats_seq1_seq2_mask.nan_to_num(0.0)
+                    )
+                    dist_verts_seq1_seq2_partial = (
+                        (
+                            dists_verts_feats_seq1_seq2.permute(
+                                0,
+                                2,
+                                1,
+                                3,
+                            )
+                            .min(
+                                dim=-1,
+                            )
+                            .values.nan_to_num(
+                                posinf=0.0,
+                            )
+                            * dists_verts_feats_seq1_seq2_mask.permute(
+                                0,
+                                2,
+                                1,
+                                3,
+                            )[:, :, :, 0]
+                        ).sum(dim=-1)
+                        + (
+                            dists_verts_feats_seq1_seq2.permute(
+                                0,
+                                2,
+                                1,
+                                3,
+                            )
+                            .min(
+                                dim=-2,
+                            )
+                            .values.nan_to_num(
+                                posinf=0.0,
+                            )
+                            * dists_verts_feats_seq1_seq2_mask.permute(
+                                0,
+                                2,
+                                1,
+                                3,
+                            )[:, :, 0, :]
+                        ).sum(dim=-1)
+                    ) / (
+                        dists_verts_feats_seq1_seq2_mask.permute(0, 2, 1, 3)[
+                            :,
+                            :,
+                            0,
+                            :,
+                        ].sum(
+                            dim=-1,
+                        )
+                        + dists_verts_feats_seq1_seq2_mask.permute(
+                            0,
+                            2,
+                            1,
+                            3,
+                        )[
+                            :,
+                            :,
+                            :,
+                            0,
+                        ].sum(dim=-1)
+                        + 1e-10
+                    )
+                    dist_verts_seq1_seq2_partial[
+                        dist_verts_seq1_seq2_inf_mask
+                    ] = torch.inf
+                    dist_verts_seq1_seq2[
+                        seq1_verts_partial
+                    ] = dist_verts_seq1_seq2_partial
+                    del dist_verts_seq1_seq2_partial
+                else:
+                    logger.warning(f"Unknown reduce type {reduce_type}.")
+
+                del dists_verts_feats_seq1_seq2
+                del dists_verts_feats_seq1_seq2_mask
+                del dist_verts_seq1_seq2_inf_mask
+                del seq1_verts_partial
+            del seq12_feats_padded
+            del seq12_feats_padded_mask
+            seq1_feats.clear()
+            seq2_feats.clear()
+        else:
+            if reduce_type.startswith("negdot"):
+                dist_verts_seq1_seq2 = -torch.einsum(
+                    "nf,kf->nk",
+                    seq1_feats.to(device=device),
+                    seq2_feats.to(device=device),
+                )
+            else:
+                dist_verts_seq1_seq2 = torch.cdist(
+                    seq1_feats.to(device=device),
+                    seq2_feats.to(device=device),
+                )
+
+        if not fpath_dist_verts_mesh_feats.parent.exists():
+            fpath_dist_verts_mesh_feats.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(dist_verts_seq1_seq2.detach().cpu(), fpath_dist_verts_mesh_feats)
+        logger.info(f"save mesh feats dist at {fpath_dist_verts_mesh_feats}")
+        del dist_verts_seq1_seq2
+        del seq1_feats
+        del seq2_feats
+        torch.cuda.empty_cache()
+
+    def preprocess_mesh_feats_dist(self, sequence: OD3D_Sequence, override=False):
+        if self.start_frame_id == sequence.start_frame_id:
+            fpath_dist_verts_mesh_feats = self.get_fpath_mesh_feats_dist(sequence)
+        else:
+            fpath_dist_verts_mesh_feats = self.get_fpath_mesh_feats_dist_multi_start(sequence)
+        if not override and fpath_dist_verts_mesh_feats.exists():
+            logger.info(
+                f"mesh feats dist already exist at {fpath_dist_verts_mesh_feats}",
+            )
+            return
+
+        if override and fpath_dist_verts_mesh_feats.exists():
+            logger.info(f"overriding mesh feats dist at {fpath_dist_verts_mesh_feats}")
+
+        device = get_default_device()
+
+        seq1_feats = self.read_mesh_feats(cache=False)
+        if seq1_feats is None:
+            return
+        seq2_feats = sequence.read_mesh_feats(
+            cache=False,
+            mesh_type=self.mesh_type,
+            mesh_feats_type=self.mesh_feats_type,
+        )
+        if seq2_feats is None:
+            return
+
+        from od3d.cv.cluster.embed import pca
+
+        dist_verts_mesh_feats_reduce_type = self.mesh_feats_dist_reduce_type
+        match = re.match(
+            r"(pca)?([0-9]*)_?([a-z_]*)",
+            dist_verts_mesh_feats_reduce_type,
+            re.I,
+        )
+
+        if match:
+            embed_type, embed_dim, reduce_type = match.groups()
+            if len(embed_dim) > 0:
+                embed_dim = int(embed_dim)
+            # print(embed_type, embed_dim, reduce_type)
+        else:
+            msg = f"could not retrieve embed_type, embed_dim, and reduce type from mesh feats type {dist_verts_mesh_feats_reduce_type}"
+            raise Exception(msg)
+
+        # perform pca on seq1_feats and seq2_feats and visualize
+        if isinstance(seq1_feats, list):
+            seq1_verts_count = len(seq1_feats)
+            seq2_verts_count = len(seq2_feats)
+            dist_verts_seq1_seq2 = (
+                torch.ones(size=(seq1_verts_count, seq2_verts_count)).to(
+                    device=device,
+                )
+                * torch.inf
+            )
+
+            # Vertices1+2 x Viewpoints x F
+            seq12_feats_padded = torch.nn.utils.rnn.pad_sequence(
+                seq1_feats + seq2_feats,
+                batch_first=True,
+                padding_value=torch.nan,
+            ).to(device=device)  # 904, 69, 384
+            F = seq12_feats_padded.shape[-1]  # 384
+            V = seq12_feats_padded.shape[-2]   # 69
+            seq12_feats_padded_mask = ~seq12_feats_padded.isnan().all(dim=-1)
+
+            if embed_type is None:
+                pass
+            elif embed_type == "pca":
+                seq12_feats_padded_embed = torch.zeros(
+                    size=(seq12_feats_padded.shape[:-1] + (embed_dim,)),
+                ).to(
+                    device=device,
+                    dtype=seq12_feats_padded.dtype,
+                )
+                seq12_feats_padded_embed[:] = torch.nan
+                seq12_feats_padded_embed[seq12_feats_padded_mask] = pca(
+                    seq12_feats_padded[seq12_feats_padded_mask],
+                    C=embed_dim,
+                )
+                seq12_feats_padded = seq12_feats_padded_embed
+                F = embed_dim
+            else:
+                logger.warning(f"unknown embed type {embed_type}")
+
+            P = seq1_verts_count  # ensures that 11 GB are enough    # 452
+            logger.info(
+                f"seq1 verts {seq1_verts_count}, seq2 verts {seq2_verts_count}, seq1 partial {(seq1_verts_count // P)}, viewpoints max {V}",
+            )
+
+            for p in range(P):
+                if p < P - 1:
+                    seq1_verts_partial = torch.arange(seq1_verts_count)[
+                        (seq1_verts_count // P) * p : (seq1_verts_count // P) * (p + 1)
+                    ].to(device=device)
+                else:
+                    seq1_verts_partial = torch.arange(seq1_verts_count)[
+                        (seq1_verts_count // P) * p :
+                    ].to(
+                        device=device,
+                    )
+                seq1_verts_partial_count = len(seq1_verts_partial)
+                # logger.info(seq1_verts_partial)
+                # Vertices1 x Viewpoints x F
+                seq1_feats_padded = seq12_feats_padded[seq1_verts_partial].clone()  # 1, 69, 384
+                seq2_feats_padded = seq12_feats_padded[seq1_verts_count:].clone() # 452, 69, 384
+
+                seq1_feats_padded_mask = seq12_feats_padded_mask[
+                    seq1_verts_partial
+                ].clone() # 1, 69
+                seq2_feats_padded_mask = seq12_feats_padded_mask[
+                    seq1_verts_count:
+                ].clone() # 452, 69
 
                 # Vertices1 x Viewpoints x Vertices2 x Viewpoints
                 if reduce_type.startswith("negdot"):

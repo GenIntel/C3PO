@@ -3,7 +3,8 @@ import logging
 logger = logging.getLogger(__name__)
 import torch
 from od3d.cv.select import batched_index_select
-
+from od3d.cv.geometry.transform import inv_tform4x4, tform4x4
+from od3d.cv.metric.pose import get_pose_diff_in_rad
 
 def sample_models(
     pts,
@@ -62,6 +63,9 @@ def ransac(
     pts_dist=None,
     pts_affinity=None,
     return_score=False,
+    ref_sph_feat = None,
+    src_sph_feat = None,
+    return_pts_id = False,
 ):
     """
     Args:
@@ -78,7 +82,7 @@ def ransac(
     batch_dims = pts.shape[:-2]
     batch_dims_count = len(batch_dims)
 
-    models = sample_models(
+    models, pts_ids, pts_ref_ids = sample_models(
         pts=pts,
         fit_func=fit_func,
         fit_pts_count=fit_pts_count,
@@ -87,10 +91,14 @@ def ransac(
         pts_affinity=pts_affinity,
     )
     # ...xP
-    scores = score_func(pts, models)
+    # dot_products = torch.einsum('mij,mij->m', src_sph_feat[pts_ids.cpu()], ref_sph_feat[pts_ref_ids.cpu()])
+    # best_sph_id = dot_products.argmax(dim = -1)
 
+    scores,proposal_dist_ref_geo_avg,proposal_dist_ref_appear_avg, proposal_dist_ref_geometry_weight,proposal_dist_ref_appear_weight = score_func(pts, models,  return_dists=True, return_weights=True,)
+    
     # B...
     best_id = scores.argmax(dim=-1)
+    # best_id = best_model_id
 
     best_model = batched_index_select(input=models, index=best_id[..., None]).squeeze(
         dim=batch_dims_count,
@@ -98,9 +106,18 @@ def ransac(
     best_score = batched_index_select(input=scores, index=best_id[..., None]).squeeze(
         dim=batch_dims_count,
     )
-
-    if return_score:
-        return best_model, best_score
-
+    best_correspondence = pts_ids[best_id]
+    best_ref_correspondence = pts_ref_ids[best_id]
+    
+    best_geo_dist = proposal_dist_ref_geo_avg[best_id]
+    best_appear_dist = proposal_dist_ref_appear_avg[best_id]
+    # print('src_sph_feat[best_correspondence.cpu()] ', src_sph_feat[best_correspondence.cpu()])
+    # print('ref_sph_feat[best_ref_correspondence.cpu()] ', ref_sph_feat[best_ref_correspondence.cpu()])
+    # if return_score:
+    #     return best_model, best_score
+    #else:
+        #return best_model, models, scores, best_correspondence, best_ref_correspondence, best_geo_dist, best_appear_dist, best_score, models[best_sph_id]
+    if return_pts_id:
+        return best_model, models, scores, best_correspondence, best_ref_correspondence, best_geo_dist, best_appear_dist, best_score, pts_ids, pts_ref_ids, proposal_dist_ref_geo_avg, proposal_dist_ref_appear_avg
     else:
-        return best_model
+        return best_model, models, scores, best_correspondence, best_ref_correspondence, best_geo_dist, best_appear_dist, best_score

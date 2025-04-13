@@ -20,32 +20,34 @@ modalities:
     - 'mesh'
 
 start_frame_id: 0
-partial_ratio: 1.0
-# pcl_type: 'sfm_mask'
-# sfm_type: 'colmap50'
-# cam_tform_obj_type: 'sfm'
-cam_tform_obj_type: 'meta'
+partial_ratio: 0.10
+mixing_ratio:  0.2
+pcl_type: 'sfm_mask'
+sfm_type: 'colmap50'
+cam_tform_obj_type: 'sfm'
+# cam_tform_obj_type: 'meta'
 
-pcl_type: 'meta_mask'
-sfm_type: 'meta'
+# pcl_type: 'meta_mask'
+# sfm_type: 'meta'
 # pcl_type: 'meta'
 # sfm_type: 'meta'
-# tform_obj_type:  'label3d_cuboid_meta'
-tform_obj_type: 'label3d_cuboid'
+tform_obj_type:  'label3d_cuboid_meta'
+# tform_obj_type: 'label3d_cuboid'
 
-mesh_type: 'alpha500' # 'cuboid500' 'convex500', 'voxel500' 'poisson500', 'alpha500', 'cuboid1000'
+# mesh_type: 'alpha500' # 'cuboid500' 'convex500', 'voxel500' 'poisson500', 'alpha500', 'cuboid1000'
 
-# mesh_feats_type: 'M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc' # dinov2_vitb14_frozen_base_no_norm M_dinov2_frozen_base_T_centerzoom512_R_acc, M_nemo_old_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm'
-mesh_feats_type: 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_acc'
+mesh_type: 'alpha500' 
+ 
+#mesh_feats_type: 'M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc' # dinov2_vitb14_frozen_base_no_norm M_dinov2_frozen_base_T_centerzoom512_R_acc, M_nemo_old_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm'
+mesh_feats_type: 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_acc' # dinov2_vitb14_frozen_base_no_norm M_dinov2_frozen_base_T_centerzoom512_R_acc, M_nemo_old_T_centerzoom512_R_acc 'R_acc' # 'R_avg', 'R_avg_norm'
+#mesh_feats_type: 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_avg'
 mesh_feats_dist_reduce_type: 'min_avg' # 'avg', 'min', 'min_avg'
-
-# tform_obj_type: 'label3d_cuboid' # 'label3d_cuboid' 'aligned_N_alpha500_dinov2b/r0', 'label3d_cuboid_meta'
 #use_sph: False
-mixing_ratio: 0.2
 use_sph: 'sph_excludes_co3d_with_dino'
 use_flipped_feature: False
 use_sd: False
 flip_sfm: False
+# tform_obj_type: 'label3d_cuboid' # 'label3d_cuboid' 'aligned_N_alpha500_dinov2b/r0', 'label3d_cuboid_meta'
 
 frames_count_max_per_sequence:
 sequences_count_max_per_category: 
@@ -71,10 +73,10 @@ preprocess:
   mask:
     enabled: False
     override: False
-  pcl:
+  tform_obj:
     enabled: False
     override: False
-  tform_obj:
+  pcl:
     enabled: False
     override: False
   mesh:
@@ -86,15 +88,31 @@ preprocess:
   mesh_feats_dist:
     enabled: False
     override: False
-
+  mesh_feats_dist_mixture:
+    enabled: False
+    override: False
 #sequences_require_good_cam_movement: False
 #sequences_require_pcl: True # False
 #sequences_sort_pcl_score: False # False
 #sequences_count_max_per_category: None # None
 
-# dict_nested_frames:
-#   bicycle:
-#     '136_15656_31168':
+#dict_nested_frames:
+  # mouse:
+  #   '14_189_1165':
+  #bicycle:
+    # '354_37645_70054':
+    # '372_41153_81941':
+    #'373_41715_83384':
+    # '136_15656_31168':
+    #'270_28771_56661':
+#   microwave:
+#     '404_53420_104078':
+#     '48_2753_8230':
+#     '422_58682_113779':
+#     '410_55797_108431':
+#     '405_53949_105173':
+  # teddybear:
+  #   '187_20219_38873':
 
 dict_nested_frames_ban:
   car:
@@ -244,56 +262,32 @@ path_cuboids: ${.path_preprocess}/cuboids/avg/co3d_50s_train # ${.name}
 fpaths_cuboids:
     car: ${..path_cuboids}/car.ply # car/106_12650_23736.ply /cuboid_max_1000.ply
 
-categories:
+# categories:
+# - bicycle
+#  - truck
+#  - train
+#  - teddybear
 #  - car
-#  - apple
-#  - backpack
-#  - ball
-#  - banana
-#  - baseballbat
-#  - baseballglove
-#  - bench
- - bicycle
-#  - book
-#  - bottle
-#  - bowl
-#  - broccoli
-#  - cake
-#  - car
-#  - carrot
-#  - cellphone
+#  - bus
+#  - motorcycle
+#  - keyboard
+#  - handbag
+#  - remote
+#  - airplane
+#  - toilet
+#  - hairdryer
+#  - mouse
+#  - toaster
+#  - hydrant
 #  - chair
+#  - laptop
+#  - book
+#  - backpack
+#  - cellphone # from cellphone on, no zsp categories
+#  - microwave
+#  - bench
+#  - bottle
 #  - couch
 #  - cup
-#  - donut
-#  - frisbee
-#  - hairdryer
-#  - handbag
-#  - hotdog
-#  - hydrant
-#  - keyboard
-#  - kite
-#  - laptop
-#  - microwave
-#  - motorcycle
-#  - mouse
-#  - orange
-#  - parkingmeter
-#  - pizza
-#  - plant
-#  - remote
-#  - sandwich
-#  - skateboard
-#  - stopsign
 #  - suitcase
-#  - teddybear
-#  - toaster
-#  - toilet
-#  - toybus
-#  - toyplane
-#  - toytrain
-#  - toytruck
 #  - tv
-#  - umbrella
-#  - vase
-#  - wineglass

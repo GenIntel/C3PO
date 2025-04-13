@@ -20,8 +20,8 @@ from od3d.datasets.frame import OD3D_FRAME_MASK_TYPES, OD3D_FRAME_DEPTH_TYPES
 from od3d.cv.geometry.transform import proj3d2d_broadcast
 from od3d.datasets.sequence import OD3D_Sequence
 from od3d.datasets.sequence_meta import OD3D_SequenceMeta
-
-
+from copy import deepcopy
+import yaml
 class OD3D_SEQ_MODALITIES(str, Enum):
     PCL = "pcl"
 
@@ -127,7 +127,12 @@ class OD3D_Dataset(Dataset):
         subset_fraction=1.0,
         dict_nested_frames: Dict = None,
         dict_nested_frames_ban: Dict = None,
-        partial_ratio = 1.0
+        dict_nested_frames_annotated: Dict = None,
+        dict_nested_frames_ratio_50_mixture: Dict = None,
+        partial_ratio = 1.0,
+        start_frame_id = 0,
+        use_sph = False,
+        mixing_ratio = 0.8,
     ):
         logger.info(f"init dataset {name}...")
 
@@ -149,7 +154,9 @@ class OD3D_Dataset(Dataset):
         self.path_preprocess: Path = Path(path_preprocess)
         self.subset_fraction: float = subset_fraction
         self.partial_ratio = partial_ratio
-        
+        self.start_frame_id = start_frame_id
+        self.use_sph = use_sph
+        self.mixing_ratio = mixing_ratio
         if transform is None:
             from od3d.cv.transforms.rgb_uint8_to_float import RGB_UInt8ToFloat
 
@@ -964,7 +971,86 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             )
             #sequence.partial_ratio = self.partial_ratio
             sequence.preprocess_sfm(override=override)
+            # copied_sequence = deepcopy(sequence)
+            # copied_sequence.flip_sfm = ( not sequence.flip_sfm)
+            # copied_sequence.preprocess_sfm(override=override)
+            
 
+    def preprocess_dust3r(self, override = False):
+        logger.info('preprocess dust3r...')
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        from od3d.datasets.sequence import OD3D_Multiple_SequencesPartialMixin
+        from od3d.cv.reconstruction.dust3r.run_dust3r import dust3r_runner
+        from od3d.cv.reconstruction.dust3r.dust3r_optimizer import dust3r_optimizer
+        from od3d.cv.reconstruction import camera_alignment
+        from od3d.cv.geometry.transform import inv_tform4x4, tform4x4, tform4x4_broadcast
+        from od3d.cv.io import get_default_device
+        from od3d.cv.metric import pose 
+        device = get_default_device()
+        sequence_list = OD3D_Multiple_SequencesPartialMixin()  
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        ):
+            sequence = self.get_sequence_by_name_unique(
+                name_unique=sequence_name_unique,
+            )  # make it as a dict 
+            sequence_list.add_sequence(sequence)
+        gap = 24
+        sequence_list.display_sequences()
+        dic_frame_to_poses_ref_mesh, dic_frame_to_intr = sequence_list.get_frames_poses_in_canonical_reference_space(gap)# a dict which maps different frames to different frame poses in reference mesh canonical space 
+        dust3r_optimizer = dust3r_optimizer(sequence_list, gap)
+        
+        for category, sequences in sequence_list.sequence_dict.items():
+            dic_frame_to_poses_dust3r = dust3r_optimizer.run_category(category)
+            for sequence in sequences:
+                frames = sequence_list.frames_dic[sequence]
+                poses_for_sequence_ref_mesh = []
+                poses_for_sequence_dust3r = []
+                for frame in frames:
+                    pose_co3d_ref_to_co3dcam = dic_frame_to_poses_ref_mesh[frame]  # mapping from frame to the pose that transforms co3d ref coordinate to co3d frame camera coordinate 
+                    pose_co3d_ref_to_co3dcam = inv_tform4x4(pose_co3d_ref_to_co3dcam)  # this is the pose that transforms co3d frame camera coordinate to co3d ref coordinate 
+                    pose_co3dcam_to_dust3r = dic_frame_to_poses_dust3r[frame]  # mapping from frame to pose that transforms co3d frame camera coordinate to dust3r coordinate 
+                    poses_for_sequence_ref_mesh.append(pose_co3d_ref_to_co3dcam)
+                    poses_for_sequence_dust3r.append(pose_co3dcam_to_dust3r)
+                poses_for_sequence_ref_mesh_tensor = torch.stack([poses_for_sequence_ref_mesh[i] for i in range(len(poses_for_sequence_ref_mesh))], dim = 0).to(device).to(torch.float32)
+                poses_for_sequence_dust3r_tensor = torch.stack([poses_for_sequence_dust3r[i] for i in range(len(poses_for_sequence_dust3r))], dim =0).to(device).to(torch.float32)
+                est_transformations, rotation, scale, shift = camera_alignment.calculate_offset(poses_for_sequence_dust3r_tensor, poses_for_sequence_ref_mesh_tensor)  # transform from ref to dust3r
+
+                transformation = torch.eye(4).cuda()
+                transformation[:3,:3] = rotation * scale 
+                transformation[:3,-1] = shift * scale 
+                
+                remaining_sequences = [x for x in sequences if x!= sequence]
+                print('the target sequence  is ', sequence)
+                for other_sequence in remaining_sequences:
+                    other_frames = sequence_list.frames_dic[other_sequence]
+                    other_poses_for_sequence_ref_mesh = []
+                    other_poses_for_sequence_dust3r = []
+                    
+                    degree_offset_list = []
+                    for other_frame in other_frames:
+                        other_poses_co3d_ref_to_co3dcam = dic_frame_to_poses_ref_mesh[other_frame]
+                        other_poses_co3dcam_to_co3d_ref = inv_tform4x4(other_poses_co3d_ref_to_co3dcam).to(device).to(torch.float32)
+                        other_poses_co3dcam_to_dust3r = dic_frame_to_poses_dust3r[other_frame]
+                        transformed_to_co3d_ref_from_dust3r = (  other_poses_co3dcam_to_dust3r @ inv_tform4x4( transformation)).to(device).to(torch.float32)
+                        degree_offset =  pose.get_pose_diff_in_rad(other_poses_co3dcam_to_co3d_ref, transformed_to_co3d_ref_from_dust3r)
+                        degree_offset_list.append(degree_offset)
+                    
+                    print('the sequence that is aligning to the target sequence is ', other_sequence)
+                    print('the degree offset of poses are ', torch.mean(torch.stack(degree_offset_list)))
+                    print('---------------------------------------------')
+                
+        print('done')    
+        
+        # selected_frames_for_each_sequence = 8
+        # selected_frames = sequence_list.select_frames(selected_frames_for_each_sequence = selected_frames_for_each_sequence)
+        # print('All sequences added.')
+        # for category in selected_frames.keys():
+        #     runner = dust3r_runner(selected_frames[category])
+        #     poses = runner.run(category= category, frames = selected_frames_for_each_sequence, sequences_num = sequence_list.get_sequences_length(category), ratio = sequence.partial_ratio )
+        #     c2w_poses_from_dust3r = torch.stack(list(poses.values()), dim=0)
+        # print('the first c2w pose ', c2w_poses_from_dust3r[0])
+        
     def preprocess_pcl(self, override=False):
         logger.info("preprocess pcl...")
         from od3d.datasets.sequence_meta import OD3D_SequenceMeta
@@ -976,6 +1062,9 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                 name_unique=sequence_name_unique,
             )
             sequence.preprocess_pcl(override=override)
+            #copied_sequence = deepcopy(sequence)
+            #copied_sequence.flip_sfm = ( not sequence.flip_sfm)
+            #copied_sequence.preprocess_pcl(override=override)
             
     def preprocess_mesh(self, override=False):
         logger.info("preprocess mesh...")
@@ -988,9 +1077,13 @@ class OD3D_SequenceDataset(OD3D_Dataset):
                 name_unique=sequence_name_unique,
             )
             sequence.preprocess_mesh(override=override)
+            #copied_sequence = deepcopy(sequence)
+            #copied_sequence.flip_sfm = ( not sequence.flip_sfm)
+            #copied_sequence.preprocess_mesh(override=override)
 
     def preprocess_mesh_feats(self, override=False):
         logger.info("preprocess mesh feats...")
+
         from od3d.datasets.sequence_meta import OD3D_SequenceMeta
 
         for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(
@@ -999,8 +1092,122 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             sequence = self.get_sequence_by_name_unique(
                 name_unique=sequence_name_unique,
             )
+            category = sequence.category
+            sequences_annotated = self.dict_nested_frames_annotated[category].keys()
+            sequence.sequence_annotated = sequences_annotated
             sequence.preprocess_mesh_feats(override=override)
 
+            #copied_sequence = deepcopy(sequence)
+            #copied_sequence.flip_sfm = ( not sequence.flip_sfm)
+            #copied_sequence.preprocess_mesh_feats(override=override)
+            
+    def preprocess_mesh_feats_clustering(self, override = False):
+        logger.info('Preprocess Mesh Feats Clustering...')
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        from sklearn.cluster import KMeans
+        from od3d.cv.cluster.neural_mesh_vertices_clustering import filter, Neural_Mesh_Vertices_Cluster
+        mesh_feats_list = []
+        index_list = []
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        ):
+            sequence = self.get_sequence_by_name_unique(
+                name_unique=sequence_name_unique,
+            )
+            mesh_feats = sequence.get_mesh_feats(mesh_feats_type = 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_avg')[:,:3]
+            tensor, index = filter(mesh_feats)
+            mesh_feats_list.append( tensor.numpy())
+            index_list.append(index)
+            
+        cluster = Neural_Mesh_Vertices_Cluster(tensor_list= mesh_feats_list)
+        label_list = cluster.filter_vertices()
+        print('done')
+        idx = 0
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        ):
+            sequence = self.get_sequence_by_name_unique(
+                name_unique=sequence_name_unique,
+            )
+            fpath_mesh_feats_label = sequence.get_fpath_mesh_feats_label(mesh_feats_type = 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_avg')
+            mesh_feats = sequence.get_mesh_feats(mesh_feats_type = 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_avg')[:,:3]
+            label = np.ones(mesh_feats.shape[0]) * 100
+            label[index_list[idx]] = label_list[idx]
+            idx = idx + 1
+            np.save(str(fpath_mesh_feats_label), label)
+            print('done')
+    def preprocess_mesh_feats_pairwise(self, override = True):
+        logger.info('preprocess mesh feats pairwise...')
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+
+        # with open('graph.yaml') as file:
+        #     config = yaml.safe_load(file)
+        with open('graph_all_categories.yaml') as file:
+            config = yaml.safe_load(file)
+            
+        sequences_names_unique = OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        )
+        dict_category_sequences_names = self.dict_category_sequences_names
+        for category in dict_category_sequences_names.keys():
+            sequences_names_unique =  dict_category_sequences_names[category]
+            for sequence_name_unique1 in sequences_names_unique:
+                sequence_name_unique1 = category + '/' + sequence_name_unique1
+                for sequence_name_unique2 in sequences_names_unique:
+                 
+                    sequence_name_unique2 = category + '/' + sequence_name_unique2
+
+                    sequence1 = self.get_sequence_by_name_unique(
+                        name_unique=sequence_name_unique1,
+                    )
+                    sequence2 = self.get_sequence_by_name_unique(
+                        name_unique=sequence_name_unique2,
+                    )
+                    if sequence_name_unique1 != sequence_name_unique2:
+                        pair = config['category'][category][sequence1.name][sequence2.name]
+                        path_seq_1 = sequence1.get_fpath_mesh_feats_pairwise_ref(sequence2)
+                        path_seq_2 = sequence1.get_fpath_mesh_feats_pairwise_src(sequence2)
+                        if pair[0] != None:
+                            sequence1.preprocess_mesh_feats_pairwise( override=override, save_path = path_seq_1, range = pair[0])
+                            sequence2.preprocess_mesh_feats_pairwise( override=override, save_path = path_seq_2, range = pair[1])
+                    else:
+                        sequence1.preprocess_mesh_feats(override=override)
+                        
+    def preprocess_mesh_feats_dist_pairwise(self, override = True):
+        logger.info('preprocess mesh feats pairwise...')
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+        # with open('graph.yaml') as file:
+        #     config = yaml.safe_load(file)
+        with open('graph_all_categories.yaml') as file:
+            config = yaml.safe_load(file)
+        sequences_names_unique = OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        )
+        dict_category_sequences_names = self.dict_category_sequences_names
+        for category in dict_category_sequences_names.keys():
+            sequences_names_unique =  dict_category_sequences_names[category]
+            for sequence_name_unique1 in sequences_names_unique:
+                sequence_name_unique1 = category + '/' + sequence_name_unique1
+                for sequence_name_unique2 in sequences_names_unique:
+                 
+                    sequence_name_unique2 = category + '/' + sequence_name_unique2
+                    #if sequence_name_unique1 != sequence_name_unique2:
+                    sequence1 = self.get_sequence_by_name_unique(
+                        name_unique=sequence_name_unique1,
+                    )
+                    sequence2 = self.get_sequence_by_name_unique(
+                        name_unique=sequence_name_unique2,
+                    )
+                    if sequence_name_unique1 != sequence_name_unique2 and  config['category'][category][sequence1.name][sequence2.name][0]!= None:
+                        sequence1.preprocess_mesh_feats_dist_pairwise(
+                        sequence=sequence2,
+                        override=override,
+                )     
+                    else:
+                        sequence1.preprocess_mesh_feats_dist(
+                            sequence=sequence2,
+                            override=override
+                        )
     def preprocess_mesh_feats_dist(self, override=False):
         logger.info("preprocess mesh feats dist...")
         from od3d.datasets.sequence_meta import OD3D_SequenceMeta
@@ -1008,28 +1215,145 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         sequences_names_unique = OD3D_SequenceMeta.unroll_nested_metas(
             self.dict_category_sequences_names,
         )
-        for sequence_name_unique1 in sequences_names_unique:
-            for sequence_name_unique2 in sequences_names_unique:
-                sequence1 = self.get_sequence_by_name_unique(
-                    name_unique=sequence_name_unique1,
-                )
-                sequence2 = self.get_sequence_by_name_unique(
-                    name_unique=sequence_name_unique2,
-                )
-                sequence1.preprocess_mesh_feats_dist(
-                    sequence=sequence2,
-                    override=override,
-                )
+        dict_category_sequences_names = self.dict_category_sequences_names
+        for category in dict_category_sequences_names.keys():
+            sequences_names_unique =  dict_category_sequences_names[category]
+            for sequence_name_unique1 in sequences_names_unique:
+                sequence_name_unique1 = category + '/' + sequence_name_unique1
+                for sequence_name_unique2 in sequences_names_unique:
+                 
+                    sequence_name_unique2 = category + '/' + sequence_name_unique2
+                    sequence1 = self.get_sequence_by_name_unique(
+                        name_unique=sequence_name_unique1,
+                    )
+                    sequence2 = self.get_sequence_by_name_unique(
+                        name_unique=sequence_name_unique2,
+                    )
+                    sequence1.preprocess_mesh_feats_dist(
+                        sequence=sequence2,
+                        override=override,
+                    )     
+
+    def preprocess_mesh_feats_dist_mixture(self, override = False):
+
+        logger.info("preprocess mesh feats dist...")
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+
+        sequences_names_unique = OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        )
+        dict_category_sequences_names = self.dict_category_sequences_names
+        for category in dict_category_sequences_names.keys():
+            sequences_names_unique =  dict_category_sequences_names[category]
+            for sequence_name_unique1 in sequences_names_unique:
+                if sequence_name_unique1 in self.dict_nested_frames_ratio_50_mixture[category].keys():
+                    sequence_name_unique1 = category + '/' + sequence_name_unique1
+                    sequence1 = self.get_sequence_by_name_unique_with_partial_ratio(
+                        name_unique=sequence_name_unique1,
+                        partial_ratio = 0.5
+                    )
+        
+                # elif sequence_name_unique1 in self.dict_nested_frames_ratio_100_mixture[category].keys():
+                # if sequence_name_unique1 in self.dict_nested_frames_ratio_100_mixture[category].keys():
+                #     sequence_name_unique1 = category + '/' + sequence_name_unique1
+                #     sequence1 = self.get_sequence_by_name_unique_with_partial_ratio(
+                #         name_unique=sequence_name_unique1, 
+                #         partial_ratio = 1.0,
+                #         cam_tform_obj_type = 'meta',
+                #         pcl_type = 'meta_mask',
+                #         sfm_type = 'meta',)
+                else:
+                    sequence_name_unique1 = category + '/' + sequence_name_unique1
+                    sequence1 = self.get_sequence_by_name_unique(
+                        name_unique=sequence_name_unique1,)
+                     
+                for sequence_name_unique2 in sequences_names_unique:
+                    if sequence_name_unique2 in self.dict_nested_frames_ratio_50_mixture[category].keys():
+                        sequence_name_unique2 = category + '/' + sequence_name_unique2
+                        sequence2 = self.get_sequence_by_name_unique_with_partial_ratio(
+                            name_unique=sequence_name_unique2,
+                            partial_ratio = 0.5,
+                        )
+                    # # elif sequence_name_unique1 in self.dict_nested_frames_ratio_100_mixture[category].keys():
+                    # if sequence_name_unique2 in self.dict_nested_frames_ratio_100_mixture[category].keys():
+                    #     sequence_name_unique2 = category + '/' + sequence_name_unique2
+                    #     sequence2 = self.get_sequence_by_name_unique_with_partial_ratio(
+                    #         name_unique=sequence_name_unique2, 
+                    #         partial_ratio = 1.0,
+                    #         cam_tform_obj_type = 'meta',
+                    #         pcl_type = 'meta_mask',
+                    #         sfm_type = 'meta',)
+                    else:
+                        sequence_name_unique2 = category + '/' + sequence_name_unique2
+                        sequence2 = self.get_sequence_by_name_unique(
+                            name_unique=sequence_name_unique2,
+                        )
+                    sequence1.preprocess_mesh_feats_dist_mixture(
+                        sequence=sequence2,
+                        override=override,
+                    )     
+    def preprocess_mesh_feats_dist_multi_start_frame_id(self, override=False):
+        logger.info("preprocess mesh feats dist...")
+        from od3d.datasets.sequence_meta import OD3D_SequenceMeta
+
+        sequences_names_unique = OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        )
+        dict_category_sequences_names = self.dict_category_sequences_names
+        for category in dict_category_sequences_names.keys():
+            sequences_names_unique =  dict_category_sequences_names[category]
+            for sequence_name_unique1 in sequences_names_unique:
+                sequence_name_unique1 = category + '/' + sequence_name_unique1
+
+                for sequence_name_unique2 in sequences_names_unique:
+                    sequence_name_unique2 = category + '/' + sequence_name_unique2
+                    for start_frame_id in [0, 50]: # to be modified
+
+                        sequence1 = self.get_sequence_by_name_unique_with_frame_id(
+                            name_unique=sequence_name_unique1,
+                            start_frame_id = start_frame_id,
+                        )
+                        for start_frame_id in [0, 50]: # to be modified
+                            sequence2 = self.get_sequence_by_name_unique_with_frame_id(
+                                name_unique=sequence_name_unique2,
+                                start_frame_id = start_frame_id, 
+                            ) 
+                            sequence1.preprocess_mesh_feats_dist(sequence = sequence2, override = override)
+                    # flipped_sequence2 = deepcopy(sequence2)
+                    # flipped_sequence2.flip_sfm = ( not sequence1.flip_sfm)
+                    # sequence1.preprocess_mesh_feats_dist(
+                    #     sequence=flipped_sequence2,
+                    #     override=override,
+                    # )     
+ 
+
+            # for sequence_name_unique1 in sequences_names_unique:
+            #     for sequence_name_unique2 in sequences_names_unique:
+            #         sequence1 = self.get_sequence_by_name_unique(
+            #             name_unique=sequence_name_unique1,
+            #         )
+            #         sequence2 = self.get_sequence_by_name_unique(
+            #             name_unique=sequence_name_unique2,
+            #         )
+            #         sequence1.preprocess_mesh_feats_dist(
+            #             sequence=sequence2,
+            #             override=override,
+            #         )
 
     def preprocess_tform_obj(self, override=False):
         logger.info("preprocess tform obj...")
         for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(
             self.dict_category_sequences_names,
         ):
+            
             sequence = self.get_sequence_by_name_unique(
                 name_unique=sequence_name_unique,
             )
-            sequence.preprocess_tform_obj(override=override)
+            sequences_annotated = list(self.dict_nested_frames_annotated[sequence.category].keys())
+            if sequence.name in sequences_annotated:
+                sequence.preprocess_tform_obj(override=override, tform_obj_type = 'label3d_cuboid_meta')
+            else:
+                sequence.preprocess_tform_obj(override=override, tform_obj_type = 'raw')
 
     def preprocess(self, config_preprocess: DictConfig):
         logger.info("preprocess")
@@ -1055,12 +1379,41 @@ class OD3D_SequenceDataset(OD3D_Dataset):
             ):
                 override = config_preprocess.mesh_feats.get("override", False)
                 self.preprocess_mesh_feats(override=override)
+            if key == 'mesh_feats_clustering' and config_preprocess.mesh_feats_clustering.get(
+                'enabled',
+                False
+            ):
+                override = config_preprocess.mesh_feats_clustering.get('override', False)
+                self.preprocess_mesh_feats_clustering(override = override)
+            
             if key == "mesh_feats_dist" and config_preprocess.mesh_feats_dist.get(
                 "enabled",
                 False,
             ):
                 override = config_preprocess.mesh_feats_dist.get("override", False)
                 self.preprocess_mesh_feats_dist(override=override)
+            if key == 'mesh_feats_pairwise' and config_preprocess.mesh_feats_pairwise.get(
+                'enabled',
+                False,
+            ):
+                override = config_preprocess.mesh_feats_pairwise.get("override", False)
+                self.preprocess_mesh_feats_pairwise(override=override)
+
+            if key == 'mesh_feats_dist_multi_start' and config_preprocess.mesh_feats_dist_multi_start.get(
+                'enabled',
+                False,
+            ):
+                override = config_preprocess.mesh_feats_dist_multi_start.get("override", False)
+                self.preprocess_mesh_feats_dist_multi_start_frame_id(override=override)
+            if key == 'dust3r' and config_preprocess.dust3r.get("enabled", False):
+                override = config_preprocess.dust3r.get('enabled', False)
+                self.preprocess_dust3r(override=override)
+            if key == 'mesh_feats_dist_mixture' and config_preprocess.mesh_feats_dist_mixture.get(
+                'enabled',
+                False,
+            ):
+                override = config_preprocess.mesh_feats_dist_mixture.get("override", False)
+                self.preprocess_mesh_feats_dist_mixture(override=override)
 
     def get_sequence_by_name_unique(self, name_unique: str):
         raise NotImplementedError
@@ -1072,6 +1425,60 @@ class OD3D_SequenceDataset(OD3D_Dataset):
         ):
             sequences.append(
                 self.get_sequence_by_name_unique(name_unique=sequence_name_unique),
+            )
+        return sequences
+    
+    def get_sequences_multi_start(self, start_ids):
+        sequences = []
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        ):
+            for id in start_ids:
+                sequences.append(
+                    self.get_sequence_by_name_unique_with_frame_id(name_unique=sequence_name_unique, start_frame_id = id),
+                )
+        return sequences
+
+    def get_sequences_mixture(self):
+        sequences = []
+        partial_ratios_50 = self.dict_nested_frames_ratio_50_mixture
+        #partial_ratios_100 = self.dict_nested_frames_ratio_100_mixture
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        ):
+            category = sequence_name_unique.split('/')[0]
+            name = sequence_name_unique.split('/')[1]
+            
+            if name in partial_ratios_50[category].keys():
+                sequences.append(
+                    self.get_sequence_by_name_unique_with_partial_ratio(name_unique=sequence_name_unique, partial_ratio = 0.5),
+                )
+            # elif name in partial_ratios_100[category].keys():
+            # if name in partial_ratios_100[category].keys():
+            #     sequences.append(
+            #         self.get_sequence_by_name_unique_with_partial_ratio(
+            #             name_unique=sequence_name_unique, 
+            #             partial_ratio = 1.0,
+            #             cam_tform_obj_type = 'meta',
+            #             pcl_type = 'meta_mask',
+            #             sfm_type = 'meta',),
+            #     )
+
+            else:
+                sequences.append(
+                self.get_sequence_by_name_unique(name_unique=sequence_name_unique),
+            )
+        return sequences
+            
+        return sequences
+    def get_flipped_sequences(self):
+        sequences = []
+        for sequence_name_unique in OD3D_SequenceMeta.unroll_nested_metas(
+            self.dict_category_sequences_names,
+        ):
+            seq = self.get_sequence_by_name_unique(name_unique=sequence_name_unique)
+            seq.flip_sfm = True
+            sequences.append(seq,
             )
         return sequences
 

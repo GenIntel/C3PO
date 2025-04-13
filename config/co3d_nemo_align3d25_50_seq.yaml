@@ -2,10 +2,10 @@ defaults:
   - logger: wandb
   - methods@method.nemo: nemo_align3d
   - methods/dataset@method.nemo: co3d
-  - datasets@train_datasets.src: co3d_no_zsp_5s_labeled_ref #co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
-  - datasets@train_datasets.labeled: co3d_no_zsp_5s_labeled_ref #co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
+  - datasets@train_datasets.src: co3d_no_zsp_50s_unlabeled_25 #co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
+  - datasets@train_datasets.labeled: co3d_no_zsp_50s_unlabeled_25 #co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
   - datasets@val_datasets.main:
-  - datasets@test_datasets.co3d: co3d_no_zsp_5s_labeled_ref #co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
+  - datasets@test_datasets.co3d: co3d_no_zsp_50s_unlabeled_25 #co3d_no_zsp_5s_labeled_ref_50_percent # co3d_no_zsp_5s_labeled_ref, co3dv1_zsp_10s, co3d_no_zsp_50s_unlabeled
   - platform@platform_local: local
   - datasets@texture_dataset: dtd
   - platform: local
@@ -14,41 +14,41 @@ defaults:
 seed_number: 0
 
 categories:
-  - bicycle
-  - truck
-  - train
+  - bicycle # s
+  - truck # s
   - teddybear
-  - car
-  - bus
-  - motorcycle
-  - keyboard
-  - handbag
-  - remote
-  - airplane
-  - toilet
-  - hairdryer
+  - car  # s
+  - bus # s
+  - motorcycle #
+  - keyboard #
+  - handbag #
+  - remote #
+  - airplane #
+  - toilet #
+  - hairdryer #
   - mouse
   - toaster
   - hydrant
-  - chair
+  - chair #
   - laptop
   - book
-  - backpack
-  #- cellphone # from cellphone on, no zsp categories
+  - backpack # s
+  # - cellphone # from cellphone on, no zsp categories
   # - microwave
-  # - bench
+  #- bench
   # - bottle
-  #- couch
-  #- cup
+  # - couch
+  # - cup
   # - suitcase
   # - tv
+
 
 metrics:
   - metricA
   - metricB
 
-# mesh_feats_type: 'M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc'
 mesh_feats_type: 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_acc'
+#mesh_feats_type: 'M_dinov2_vitb14_frozen_base_T_centerzoom512_R_avg'
 # M_dinov2_vitb14_frozen_base_no_norm_T_centerzoom512_R_acc
 # M_dinov2_vits14_frozen_base_no_norm_T_centerzoom512_R_acc
 # M_dino_vits8_frozen_base_no_norm_T_centerzoom512_R_acc
@@ -65,6 +65,14 @@ method:
     refine_arap_weight: 1. # 1.
     refine_reg_weight: 0. # 0.1
     refine_arap_geo_std: 0.05 # 0.05 - 0.1
+    weight:
+      ransac_estimation: False
+      transformation_score: True
+      sph_weight: False
+    ratio: 0.25
+    name: co3d_nemo_align3d25_50_seq
+    pgo_weight: no_weighting
+    # instances_num: 6
 
     ransac:
       samples: 1000
@@ -74,9 +82,11 @@ method:
     app_cyclic_weight_temp: 0.9  # 0.9
     gt_cam_tform_obj_source: labeled_cuboid # zsp_labeled, labeled, labeled_cuboid or '' for only align
     dist_appear_weight: 0.2
+    #dist_appear_weight: 1.0
     global_optimization_steps: 1
     categories: ${categories}
     aligned_name: ${aligned_name}
+
 
     preprocess:
       pcl:
